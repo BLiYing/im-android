@@ -32,12 +32,21 @@
 >   **已做变异验证**：关掉 `ignoreUnknownKeys` → 未知字段用例变红；`redact` 改成原样返回
 >   → 3 条脱敏用例变红；恢复后 12/12 绿。
 >
-> **一件事故（已按用户决定处理）**：clone 后另有一个并行会话在 01:02 往同一个仓
-> 搭了套 `com.bliyingapps.im` 骨架，我 01:11 写构建文件时用 `cat >` **覆盖掉了它的 6 个
-> 构建文件**（未入 git，不可恢复）。经用户拍板保留本套、删除对方那套（源码已备份到
-> scratchpad）。对方那份 `IMProtocol.kt` 的信封是 `{msg_id,msg_type,data}`、与后端不符，
-> 错误码表也把 `500001` 当成"内部错误"（实为"文件过大"）并混入了 HTTP 状态码，均未沿用。
-> **教训**：多会话并行同一个仓时，写文件前要重新确认目录状态，别拿 clone 那一刻的印象当准。
+> **一件事故**：我 00:56 clone 后确认是空仓（只有 `.git`/`.gitignore`/`LICENSE`）；
+> **01:02–01:03 目录里出现了一套 `com.bliyingapps.im` 骨架**（Android Studio 新建工程模板
+> + 三个手写的 IM SDK 桩文件）；我 01:11 写构建文件时用 `cat >` **覆盖掉了它的 6 个构建文件**
+> （`settings/build/app-build.gradle.kts`、`gradle.properties`、`libs.versions.toml`、
+> `proguard-rules.pro`；均未入 git，不可恢复）。经用户拍板保留本套、删除那套（源码已备份）。
+> 未沿用它的实现是有依据的：`IMProtocol.kt` 的信封写成 `{msg_id,msg_type,data}`、与后端
+> `envelope.go` 的 `{type,seq,data}` 不符；错误码表把 `500001` 当"内部错误"（实为"文件过大"，
+> 内部错误是 `100003`）并把 HTTP 401/403/404 混进了业务码表。
+>
+> **那套文件是谁写的，至今没查出来**（2026-09-07 查过：全局 Claude 转录搜 `bliyingapps`
+> 零命中、Codex 该时段无活动、用户 shell 当时在跑 im-rtc、Android Studio 日志显示它在真机调
+> `com.imrtc.demo`、远端仓只有停在 Initial commit 的 main）。**别把"另一个会话干的"当结论**
+> ——那只是我当时的推测。
+> **教训与归因无关，照样成立**：在一个目录里第一次批量写文件前，紧挨着写操作再确认一次
+> 目录状态，别拿几分钟前 `ls` 的印象当准；新仓文件未入 git，覆盖即不可恢复。
 
 ## 下一步
 
