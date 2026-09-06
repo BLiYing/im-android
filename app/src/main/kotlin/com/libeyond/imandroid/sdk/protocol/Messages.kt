@@ -128,6 +128,52 @@ data class TypingData(
     val from: String? = null,
 )
 
+/**
+ * msg_op 上下行（§6.7）。对既有消息的操作，**只追加事件**：
+ * 服务端不物理改/删原消息，而是更新派生状态列 + 登记事件行 + 广播本帧。
+ */
+@Serializable
+data class MsgOpData(
+    /** recall | edit | pin | delete */
+    val op: String,
+    @SerialName("conv_id") val convId: String,
+    @SerialName("target_conv_seq") val targetConvSeq: Long,
+    /** 幂等键：重发命中即不重复应用。 */
+    @SerialName("client_msg_id") val clientMsgId: String,
+    /** 仅 edit。 */
+    val content: String? = null,
+    /**
+     * 仅 pin。**下行恒带此字段（非 omitempty）**——取消置顶时 false 若被省略，
+     * 端上分不清「取消」与「未带」，会残留已置顶态。
+     */
+    val pinned: Boolean? = null,
+    /** 下行追加：本事件自身的 conv_seq，供离线端排序。 */
+    @SerialName("op_conv_seq") val opConvSeq: Long = 0,
+    /** 下行追加：操作者。 */
+    val by: String = "",
+    val timestamp: Long = 0,
+)
+
+/** conv_update 下行（§6.8）。**携带变更后的完整状态（非增量）**，收端直接覆盖本地。 */
+@Serializable
+data class ConvUpdateData(
+    @SerialName("conv_id") val convId: String = "",
+    /** settings | delete */
+    val action: String = "",
+    @SerialName("pinned_at") val pinnedAt: Long = 0,
+    val muted: Boolean = false,
+    @SerialName("marked_unread") val markedUnread: Boolean = false,
+    /** 仅 action=delete 带。 */
+    @SerialName("cleared_at") val clearedAt: Long = 0,
+)
+
+/** msg_hidden 下行（§6.7.1）：仅为我删除，收端**物理移除**该消息。 */
+@Serializable
+data class MsgHiddenData(
+    @SerialName("conv_id") val convId: String = "",
+    @SerialName("conv_seq") val convSeq: Long = 0,
+)
+
 /** presence 下行广播（§5.5 租约模型）。 */
 @Serializable
 data class PresenceFrame(

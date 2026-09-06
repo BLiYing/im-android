@@ -45,7 +45,7 @@ class IMClient(context: Context) {
 
     private val auth = AuthApi(http, device)
     private val devices = DevicesApi(http)
-    private val conversationsApi = ConversationsApi(http)
+    val conversationsApi = ConversationsApi(http)
     val contacts = ContactApi(http)
 
     private val db = IMDatabase.get(context)

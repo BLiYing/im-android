@@ -4,6 +4,8 @@ import com.libeyond.imandroid.sdk.http.HttpClient
 import com.libeyond.imandroid.sdk.protocol.MessageData
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * 会话摘要（对齐后端 `internal/conversation.Summary`）。
@@ -53,4 +55,32 @@ class ConversationsApi(private val http: HttpClient) {
 
     suspend fun list(): List<ConversationSummary> =
         decode(http.call("GET", "/api/v1/conversations"), ConversationsResp.serializer()).conversations
+
+    /**
+     * 会话设置（§6.8）。**整体替换**三项——不是增量，漏传一项等于把它清零。
+     * 成功后服务端推 conv_update 给本人全部设备，本端也从帧里收敛。
+     */
+    suspend fun updateSettings(convId: String, pinnedAt: Long, muted: Boolean, markedUnread: Boolean) {
+        http.call("PUT", "/api/v1/conversations/$convId/settings", buildJsonObject {
+            put("pinned_at", pinnedAt)
+            put("muted", muted)
+            put("marked_unread", markedUnread)
+        })
+    }
+
+    /**
+     * 删除会话。**不物理删消息**：记 cleared_at + deleted=1，会话从列表隐藏，
+     * 对方再发消息即复现，复现后仅新消息计未读。
+     */
+    suspend fun delete(convId: String) {
+        http.call("DELETE", "/api/v1/conversations/$convId")
+    }
+
+    /** 「仅为我删除」一条消息（§6.7.1）。服务端随后推 msg_hidden 给本人全部设备。 */
+    suspend fun hideMessage(convId: String, convSeq: Long) {
+        http.call("POST", "/api/v1/messages/hide", buildJsonObject {
+            put("conv_id", convId)
+            put("conv_seq", convSeq)
+        })
+    }
 }

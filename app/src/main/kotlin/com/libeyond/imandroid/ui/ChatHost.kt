@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -9,7 +11,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import com.libeyond.imandroid.data.MessageAction
+import com.libeyond.imandroid.data.MessageActions
 import com.libeyond.imandroid.data.Presence
+import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.sdk.protocol.MsgOp
+import com.libeyond.imandroid.ui.components.ActionSheet
+import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.ui.screens.ChatScreen
@@ -27,6 +38,7 @@ private const val TYPING_THROTTLE_MS = 3_000L
 @Composable
 fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
     val owner = client.uid.orEmpty()
     var input by remember(conv.convId) { mutableStateOf("") }
 
@@ -97,7 +109,15 @@ fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
     }
 
     var lastTypingSent by remember(conv.convId) { mutableStateOf(0L) }
+    var menuFor by remember { mutableStateOf<MessageEntity?>(null) }
+    var replyTo by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
 
+    // 群里我是不是管理员——决定能否删他人的消息。
+    // TODO(P10 群聊)：接 GET /groups/{id} 的 my_role 后换成真值；
+    //   现在恒 false，最坏结果是**少给**一个菜单项，不会越权（服务端也会拦）。
+    val iAmManager = false
+
+    Box(Modifier.fillMaxSize()) {
     ChatScreen(
         convId = conv.convId,
         title = conv.title.ifBlank { conv.convId },
@@ -119,12 +139,15 @@ fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
         onSend = {
             val text = input.trim()
             if (text.isNotEmpty()) {
+                val quoted = replyTo
                 input = ""
+                replyTo = null
                 scope.launch {
                     client.messages.sendText(
                         convId = conv.convId,
                         to = if (conv.isGroup) conv.convId else conv.peerUid,
                         text = text,
+                        replyToConvSeq = quoted?.convSeq,
                     )
                 }
             }
@@ -132,5 +155,37 @@ fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
         onBack = onBack,
         onRetry = { cid -> scope.launch { client.messages.resend(cid) } },
         onVisibleSeq = { seq -> scope.launch { client.messages.markRead(conv.convId, seq) } },
+        onLongPress = { menuFor = it },
+        replyTo = replyTo,
+        onCancelReply = { replyTo = null },
     )
+
+    // —— 消息长按菜单 ——
+    val target = menuFor
+    if (target != null) {
+        val actions = MessageActions.availableFor(target, owner, conv.isGroup, iAmManager)
+        ActionSheet(
+            title = target.content.take(30),
+            items = actions.map { a ->
+                SheetItem(a.label, a.destructive) {
+                    when (a) {
+                        MessageAction.Copy -> clipboard.setText(AnnotatedString(target.content))
+                        MessageAction.Reply -> replyTo = target
+                        MessageAction.Recall ->
+                            client.messages.sendMsgOp(conv.convId, MsgOp.RECALL, target.convSeq)
+                        MessageAction.DeleteForEveryone ->
+                            client.messages.sendMsgOp(conv.convId, MsgOp.DELETE, target.convSeq)
+                        MessageAction.HideForMe -> scope.launch {
+                            // 走 REST，不是 msg_op——「仅为我删除」是每用户私有偏好，
+                            // 不进会话事件流、不占 conv_seq、不广播给其他成员（§6.7.1）
+                            runCatching { client.conversationsApi.hideMessage(conv.convId, target.convSeq) }
+                            client.repo.applyMsgHidden(owner, conv.convId, target.convSeq)
+                        }
+                    }
+                }
+            },
+            onDismiss = { menuFor = null },
+        )
+    }
+    }
 }

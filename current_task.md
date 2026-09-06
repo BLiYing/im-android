@@ -7,65 +7,33 @@
 
 ## 当前焦点
 
-> **工程初始化 ✅ 2026-09-07**。空仓 → 可构建、可测试、带门禁的 Kotlin + Compose 骨架。
+> **P1~P8 已落地并实测（2026-09-07 一夜）**。空仓 → 能登录、能收发、能看会话列表、能加好友的
+> Kotlin + Compose 客户端。每个 P 一个 commit，全部已 push。
 >
-> **已落地**：
-> - **构建**：Gradle 8.13 + AGP 8.12.1 + Kotlin 2.0.21 + Compose BOM 2024.10.01，
->   Version Catalog 收口版本号（`gradle/libs.versions.toml`，模块里不写死版本）。
->   `minSdk 26 / targetSdk 36 / compileSdk 36`，`applicationId = com.libeyond.imandroid`。
-> - **设计令牌**（`ui/theme/Tokens.kt`）：颜色/尺寸/可调外观三组，**逐值抄自**
->   `../IMServer/docs/UI_COLOR.md` §2 总表与 `../im-web/src/styles.css`，深浅两套。
->   刻意**不开 Material You 动态取色**——那会让壁纸决定主色，与 iOS/Web 当场分叉。
->   令牌同时喂进 `MaterialTheme.colorScheme`，否则直接用的 M3 组件会落在默认紫上。
-> - **协议地基**（`sdk/protocol/`）：`Envelope`（`{type,seq,data}`，data 延迟解析）
->   + 24 个帧类型常量 + `ErrCode`。**两处都按后端源码核对，没照文档抄**：
->   PROTOCOL §2 正文那行枚举漏了 `conv_bump` 与 `voice_transcript`（文档自己写明"以
->   `envelope.go` 为准"）；错误码按 `internal/errcode/errcode.go` 逐条核。
-> - **日志入口**（`sdk/logging/IMLog.kt`）：tag + 稳定事件名 + 脱敏 + 16KB 截断。
->   **刻意不做 `android.util.Log` 兼容桥接**——Go 端就是因为有桥接兜底、"看起来没坏"
->   才攒到 54 处违规无人察觉。
-> - **门禁**：`check-file-size.sh`（600 行，同 im-web 阈值）、`check-logging.sh`、
->   `install-hooks.sh` + `pre-commit`（体量 + 日志 + 调 IMServer 的对称路径提醒）、
->   `test.sh`（唯一测试入口，**自愈本机坏掉的 JAVA_HOME**）。
-> - **测试 12 例**：`EnvelopeTest` 7（含 PROTOCOL §2「未知 type/字段不得崩」这条红线）
->   + `IMLogRedactTest` 5（脱敏 + 大小写 + 超长边界）。
->   **已做变异验证**：关掉 `ignoreUnknownKeys` → 未知字段用例变红；`redact` 改成原样返回
->   → 3 条脱敏用例变红；恢复后 12/12 绿。
+> | 阶段 | 内容 | 实测 |
+> |---|---|---|
+> | P1 | HTTP 层：业务码保真、Request ID、会话生命周期（探活→续期→重登） | Request ID 与后端日志对上账 |
+> | P2 | WebSocket：Bearer 握手、25s 心跳、退避重连、探活看门狗、401/403 停重连 | 唤醒重连不再被看门狗掐断 |
+> | P3 | 登录闭环 + lucide 图标 | 真账号登录 → WS 连上 |
+> | P4 | Room 本地库 + 协议 DTO + 同步游标判据 | — |
+> | P5 | 收发链路：先落库再发帧、幂等重发、帧分派、同步编排 | — |
+> | P6 | 会话列表 + 聊天页 | 22 条真实会话、发送 seq=130013 落库 |
+> | P7 | presence 租约 / typing / 已读双勾 / ↓N | 副标题显示「在线」 |
+> | P8 | 通讯录 / 好友 / 找人 + 底部 Tab | 好友列表与 @句柄正确 |
 >
-> **一件事故**：我 00:56 clone 后确认是空仓（只有 `.git`/`.gitignore`/`LICENSE`）；
-> **01:02–01:03 目录里出现了一套 `com.bliyingapps.im` 骨架**（Android Studio 新建工程模板
-> + 三个手写的 IM SDK 桩文件）；我 01:11 写构建文件时用 `cat >` **覆盖掉了它的 6 个构建文件**
-> （`settings/build/app-build.gradle.kts`、`gradle.properties`、`libs.versions.toml`、
-> `proguard-rules.pro`；均未入 git，不可恢复）。经用户拍板保留本套、删除那套（源码已备份）。
-> 未沿用它的实现是有依据的：`IMProtocol.kt` 的信封写成 `{msg_id,msg_type,data}`、与后端
-> `envelope.go` 的 `{type,seq,data}` 不符；错误码表把 `500001` 当"内部错误"（实为"文件过大"，
-> 内部错误是 `100003`）并把 HTTP 401/403/404 混进了业务码表。
+> **抽成纯函数 + 单测的判据（74 例，每条都做过变异验证）**：
+> `RestoreDecision`（会话恢复三判据）· `wakeActionFor`/`handshakeFailureFor`（唤醒与握手）·
+> `SyncCursorRule`（游标只认 covered_conv_seq）· `ChatEntry`（进会话定位只认真实未读数）·
+> `Presence`（租约到期不得显示在线）· `ReadCursor`（已读位点单调）· `ConvId`（字典序推导）。
 >
-> **那套文件是谁写的，至今没查出来**（2026-09-07 查过：全局 Claude 转录搜 `bliyingapps`
-> 零命中、Codex 该时段无活动、用户 shell 当时在跑 im-rtc、Android Studio 日志显示它在真机调
-> `com.imrtc.demo`、远端仓只有停在 Initial commit 的 main）。**别把"另一个会话干的"当结论**
-> ——那只是我当时的推测。
-> **教训与归因无关，照样成立**：在一个目录里第一次批量写文件前，紧挨着写操作再确认一次
-> 目录状态，别拿几分钟前 `ls` 的印象当准；新仓文件未入 git，覆盖即不可恢复。
-
-## 下一步
-
-按 `../IMServer/docs/CLIENT_PARITY.md` 的 Android 列**从 M0 起**，顺序与 iOS/Web 当年一致：
-
-1. **网络层地基**：`sdk/http/`（OkHttp + Request ID + 统一错误码解析）
-   + `sdk/IMSocketManager.kt`（WS 连接/心跳 25s/指数退避重连）。
-   握手走 `Authorization: Bearer`（PROTOCOL §1 首选，OkHttp 能设头，别学 Web 用 `?token=`）。
-2. **M0 登录**：`POST /api/v1/login` → JWT → 连 `/ws`。
-   **必带稳定 `device_id`**（生产缺它直接 400），按 `(uid,device_id)` 顶替去重。
-3. **M0 收发**：`send_msg → ack → new_msg`，`client_msg_id` 幂等 + 发送态三档 + 超时重发。
-4. **M0 本地落库**：Room（对应 iOS 的 SQLite、Web 的 IndexedDB），
-   **按账号隔离**、持久化连续同步游标；**禁止用 `MAX(conv_seq)` 当游标**（三端同一条纪律）。
-5. **M0 离线同步**：`sync_req/sync_resp` + 空洞回补。
-6. 之后才轮到会话列表 / 聊天 UI。
-
-**接 UI 前先补的两件**：
-- 图标库接入 **lucide**（ISC，与 Web 同一套），别先用 Material Icons 铺开再换。
-- 应用内主题偏好落地（持久化 + 实时生效 + 重启恢复 + 深浅两套取值，`UI_COLOR.md` §1.3 五件事）。
+> **实测抓出、文档里查不到的两条**：
+> ① **Go 的 nil slice marshal 成 `null` 不是 `[]`** —— 没有新消息的会话下发 `"messages": null`，
+>    kotlinx 对非空 List 收到 null 直接抛，**整帧 sync_resp 报废**，界面表现为
+>    「会话列表有，点进去一条消息都没有」。修法是 `coerceInputValues = true`。
+> ② **openSocket 只挡 Connecting 没挡 Connected** —— NetworkMonitor 启动瞬间已连上，
+>    restore 成功后又 connect 一次，旧连接被字段覆盖孤儿化，同一设备挂两条连接。
+>
+> 自审两轮共修 11 条（详见 `git log` 的两条 fix commit）。
 
 ## 已知坑 / 限制
 

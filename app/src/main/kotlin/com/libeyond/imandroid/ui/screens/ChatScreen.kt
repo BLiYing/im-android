@@ -1,7 +1,9 @@
 package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -122,6 +124,7 @@ fun buildChatRows(
     return rows
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(
     convId: String,
@@ -137,6 +140,11 @@ fun ChatScreen(
     peerReadSeq: Long,
     /** 输入变化时回调，供节流上报 typing。 */
     onTyping: () -> Unit,
+    /** 长按一条消息。 */
+    onLongPress: (MessageEntity) -> Unit,
+    /** 当前引用的目标；null=没在引用。 */
+    replyTo: MessageEntity?,
+    onCancelReply: () -> Unit,
     rows: List<ChatRow>,
     input: String,
     onInputChange: (String) -> Unit,
@@ -235,6 +243,8 @@ fun ChatScreen(
                     is ChatRow.UnreadDivider -> UnreadDividerRow()
                     is ChatRow.Confirmed -> Bubble(
                         text = r.msg.content,
+                        msg = r.msg,
+                        onLongPress = { onLongPress(r.msg) },
                         mine = r.msg.sender == myUid,
                         timestamp = r.msg.timestamp,
                         senderName = if (r.msg.sender != myUid) r.msg.fromNickname else null,
@@ -283,6 +293,26 @@ fun ChatScreen(
         }
         }
 
+        // —— 引用条（正在引用某条消息）——
+        if (replyTo != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth().background(c.surface)
+                    .padding(horizontal = d.space3, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.width(2.dp).height(28.dp).background(c.accent))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = replyTo.content.take(60).ifBlank { "[媒体]" },
+                    color = c.textSecondary,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                Text("✕", color = c.textTertiary, modifier = Modifier.clickable { onCancelReply() })
+            }
+        }
+
         Composer(
             input = input,
             onInputChange = {
@@ -291,113 +321,6 @@ fun ChatScreen(
             },
             onSend = onSend,
         )
-    }
-}
-
-@Composable
-private fun DaySeparator(ts: Long) {
-    val c = IMTheme.colors
-    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(c.datePillBackground)
-                .padding(horizontal = 10.dp, vertical = 3.dp),
-        ) {
-            Text(TimeFormat.dayLabel(ts), color = c.onMedia, fontSize = 11.sp)
-        }
-    }
-}
-
-@Composable
-private fun UnreadDividerRow() {
-    val c = IMTheme.colors
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.weight(1f).height(0.5.dp).background(c.separator))
-        Text(
-            text = "以下为新消息",
-            color = c.textTertiary,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(horizontal = 8.dp),
-        )
-        Box(Modifier.weight(1f).height(0.5.dp).background(c.separator))
-    }
-}
-
-@Composable
-private fun Bubble(
-    text: String,
-    mine: Boolean,
-    timestamp: Long,
-    senderName: String?,
-    sending: Boolean = false,
-    failed: Boolean = false,
-    delivered: Boolean = false,
-    read: Boolean = false,
-    onRetry: (() -> Unit)? = null,
-) {
-    val c = IMTheme.colors
-    val appearance = IMTheme.appearance
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
-    ) {
-        if (failed && onRetry != null) {
-            // 红❗点击重发。放气泡外侧，不遮正文。
-            Text(
-                text = "❗",
-                fontSize = 16.sp,
-                modifier = Modifier.clickable { onRetry() }.padding(end = 4.dp),
-            )
-        }
-        Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
-            if (!senderName.isNullOrBlank()) {
-                Text(
-                    text = senderName,
-                    color = c.textSecondary,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .widthIn(max = 280.dp)
-                    .clip(RoundedCornerShape(appearance.bubbleRadius))
-                    .background(if (mine) c.bubbleMe else c.bubbleThem)
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
-            ) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = text,
-                        color = c.textPrimary,
-                        fontSize = appearance.chatFontSize,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = TimeFormat.bubbleTime(timestamp),
-                            color = if (mine) c.metaTime else c.textTertiary,
-                            fontSize = 10.sp,
-                        )
-                        if (sending) {
-                            Spacer(Modifier.width(3.dp))
-                            Text("🕐", fontSize = 9.sp)
-                        } else if (delivered) {
-                            Spacer(Modifier.width(3.dp))
-                            // 已读=绿双勾 / 未读=灰单勾，与 iOS/Web 同一表意
-                            Text(
-                                text = if (read) "✓✓" else "✓",
-                                color = if (read) c.checkRead else c.textTertiary,
-                                fontSize = 10.sp,
-                            )
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -448,3 +371,5 @@ private fun Composer(input: String, onInputChange: (String) -> Unit, onSend: () 
         }
     }
 }
+
+

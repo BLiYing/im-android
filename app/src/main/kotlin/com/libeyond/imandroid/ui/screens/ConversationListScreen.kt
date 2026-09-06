@@ -1,7 +1,9 @@
 package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,10 +41,12 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  *
  * 纯展示：数据与动作全经参数注入，不持业务状态（CODING_STYLE §7②）。
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ConversationListScreen(
     conversations: List<ConversationEntity>,
     onOpen: (ConversationEntity) -> Unit,
+    onLongPress: (ConversationEntity) -> Unit,
     onSettings: () -> Unit,
     connected: Boolean,
 ) {
@@ -90,15 +94,16 @@ fun ConversationListScreen(
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(conversations, key = { it.convId }) { conv ->
-                    ConversationRow(conv, onClick = { onOpen(conv) })
+                    ConversationRow(conv, onClick = { onOpen(conv) }, onLongClick = { onLongPress(conv) })
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit) {
+private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLongClick: () -> Unit) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val title = conv.title.ifBlank { conv.convId }
@@ -107,7 +112,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .background(c.pageBackground)
-            .clickable { onClick() }
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = d.space4, vertical = d.space3),
         verticalAlignment = Alignment.CenterVertically,
     ) {

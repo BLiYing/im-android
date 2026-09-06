@@ -12,7 +12,10 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.protocol.ErrorData
+import com.libeyond.imandroid.sdk.protocol.ConvUpdateData
 import com.libeyond.imandroid.sdk.protocol.MessageData
+import com.libeyond.imandroid.sdk.protocol.MsgOp
+import com.libeyond.imandroid.sdk.protocol.MsgOpData
 import com.libeyond.imandroid.sdk.protocol.ReceiptData
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
@@ -235,6 +238,60 @@ class MessageRepository(
         } else {
             conversations.upsert(c.copy(peerReadSeq = maxOf(c.peerReadSeq, r.upToConvSeq)))
         }
+    }
+
+    /**
+     * 应用一条 msg_op（§6.7）。
+     *
+     * **recall 与 delete 的收端行为完全不同**：
+     * - `recall` → 置 `recalledAt`，**保留行**渲染成墓碑（"XX 撤回了一条消息"）
+     * - `delete` → **物理移除该消息**，不显墓碑
+     * 搞反了就是「撤回后消息消失得无影无踪」或「删除后留了个墓碑」，两种都不对。
+     */
+    suspend fun applyMsgOp(owner: String, op: MsgOpData) {
+        val target = messages.byConvSeq(owner, op.convId, op.targetConvSeq)
+        when (op.op) {
+            MsgOp.RECALL -> {
+                if (target == null) return
+                messages.upsert(target.copy(recalledAt = op.timestamp.takeIf { it > 0 } ?: System.currentTimeMillis()))
+            }
+            MsgOp.DELETE -> messages.delete(owner, op.convId, op.targetConvSeq)
+            MsgOp.EDIT -> {
+                if (target == null) return
+                messages.upsert(
+                    target.copy(
+                        content = op.content ?: target.content,
+                        editedAt = op.timestamp.takeIf { it > 0 } ?: System.currentTimeMillis(),
+                    )
+                )
+            }
+            MsgOp.PIN -> {
+                if (target == null) return
+                // pinned 恒带（非 omitempty）；null 只可能是老服务端，按"不变"处理
+                val p = op.pinned ?: return
+                messages.upsert(target.copy(pinnedAt = if (p) (op.timestamp.takeIf { it > 0 } ?: System.currentTimeMillis()) else null))
+            }
+        }
+        log.i("msg_op_applied", "op" to op.op, "convId" to op.convId, "target" to op.targetConvSeq)
+    }
+
+    /** 应用 conv_update（§6.8）。下行**携带变更后的完整状态**，直接覆盖本地。 */
+    suspend fun applyConvUpdate(owner: String, u: ConvUpdateData) {
+        val c = conversations.byId(owner, u.convId) ?: return
+        conversations.upsert(
+            c.copy(
+                pinnedAt = u.pinnedAt,
+                muted = u.muted,
+                markedUnread = u.markedUnread,
+            )
+        )
+        log.i("conv_update_applied", "convId" to u.convId, "action" to u.action)
+    }
+
+    /** 「仅为我删除」：收端**物理移除**（§6.7.1）。 */
+    suspend fun applyMsgHidden(owner: String, convId: String, convSeq: Long) {
+        messages.delete(owner, convId, convSeq)
+        log.i("msg_hidden_applied", "convId" to convId, "seq" to convSeq)
     }
 
     suspend fun clearAccount(owner: String) {

@@ -35,7 +35,12 @@ import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.data.ConversationAction
+import com.libeyond.imandroid.data.ConversationActions
+import com.libeyond.imandroid.ui.components.ActionSheet
+import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.ui.screens.ConversationListScreen
+import kotlinx.coroutines.launch
 import com.libeyond.imandroid.ui.theme.IMTheme
 import kotlinx.coroutines.flow.emptyFlow
 
@@ -76,12 +81,17 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
         return
     }
 
+    var menuFor by remember { mutableStateOf<ConversationEntity?>(null) }
+    val scope = rememberCoroutineScope()
+
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(IMTheme.colors.groupedBackground)) {
         Box(Modifier.weight(1f)) {
             when (tab) {
                 Tab.Chats -> ConversationListScreen(
                     conversations = conversations,
                     onOpen = { openConv = it },
+                    onLongPress = { menuFor = it },
                     onSettings = { tab = Tab.Me },
                     connected = connState == ConnState.Connected,
                 )
@@ -91,6 +101,50 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
         }
         BottomBar(current = tab, unread = totalUnread, onSelect = { tab = it })
     }
+
+    // —— 会话长按菜单（CHAT_UX §12/§14）——
+    val target = menuFor
+    if (target != null) {
+        ActionSheet(
+            title = target.title,
+            items = ConversationActions
+                .availableFor(target.pinnedAt, target.muted, target.markedUnread, target.unread)
+                .map { a ->
+                    SheetItem(a.label, a.destructive) {
+                        scope.launch {
+                            runCatching {
+                                when (a) {
+                                    ConversationAction.Pin -> settings(client, target, pinnedAt = System.currentTimeMillis())
+                                    ConversationAction.Unpin -> settings(client, target, pinnedAt = 0)
+                                    ConversationAction.Mute -> settings(client, target, muted = true)
+                                    ConversationAction.Unmute -> settings(client, target, muted = false)
+                                    ConversationAction.MarkUnread -> settings(client, target, markedUnread = true)
+                                    ConversationAction.MarkRead -> settings(client, target, markedUnread = false)
+                                    ConversationAction.Delete -> client.conversationsApi.delete(target.convId)
+                                }
+                            }
+                            client.messages.refreshConversations()
+                        }
+                    }
+                },
+            onDismiss = { menuFor = null },
+        )
+    }
+    }
+}
+
+/**
+ * 改会话设置。**整体替换三项**（§6.8），所以未指定的项要用当前值填回去——
+ * 漏传一项等于把它清零，「置顶一下顺手把免打扰关了」就是这么来的。
+ */
+private suspend fun settings(
+    client: IMClient,
+    conv: ConversationEntity,
+    pinnedAt: Long = conv.pinnedAt,
+    muted: Boolean = conv.muted,
+    markedUnread: Boolean = conv.markedUnread,
+) {
+    client.conversationsApi.updateSettings(conv.convId, pinnedAt, muted, markedUnread)
 }
 
 @Composable
