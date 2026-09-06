@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.sdk.api.ConversationsApi
+import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -39,6 +40,7 @@ class MessageService(
     private val repo: MessageRepository,
     val presence: PresenceStore,
     private val conversationsApi: ConversationsApi,
+    private val upload: UploadApi,
     /** 当前账号；未登录为 null。切账号时必须换掉，否则新账号会写进旧账号的行。 */
     private val ownerProvider: () -> String?,
 ) {
@@ -149,11 +151,54 @@ class MessageService(
         transmit(p.clientMsgId, convId, to, ContentType.TEXT, text, replyToConvSeq)
     }
 
+    /**
+     * 发一条媒体消息（图片/视频/文件/语音）。
+     *
+     * **先落一条待发消息再上传**：上传可能几十秒，这期间用户得看得见「发送中」，
+     * 而且杀进程后那张图不能凭空消失。iOS 有一类长期欠账正是「粘贴图/相机拍照
+     * 那两条路的失败气泡不落库，重进会话就没了」，本端不重蹈。
+     *
+     * 上传失败 → 标 Failed（红❗可重试）；成功 → 把本地 uri 换成服务端 url 再发帧。
+     */
+    suspend fun sendMedia(
+        convId: String,
+        to: String,
+        bytes: ByteArray,
+        fileName: String,
+        mimeType: String,
+        contentType: String,
+        caption: String? = null,
+        localPreviewUri: String = "",
+    ) {
+        val owner = ownerProvider() ?: return
+        val p = repo.createPending(
+            owner = owner, convId = convId, to = to,
+            content = localPreviewUri, contentType = contentType,
+        )
+        val r = try {
+            upload.upload(bytes, fileName, mimeType, asVoice = contentType == ContentType.VOICE)
+        } catch (e: com.libeyond.imandroid.sdk.http.ApiException) {
+            repo.onSendRejected(
+                owner,
+                com.libeyond.imandroid.sdk.protocol.ErrorData(
+                    code = e.code, message = e.message, clientMsgId = p.clientMsgId,
+                ),
+            )
+            log.w("media_upload_failed", "cid" to p.clientMsgId, "code" to e.code)
+            return
+        }
+        repo.updatePendingContent(owner, p.clientMsgId, r.url, r.size)
+        transmit(p.clientMsgId, convId, to, contentType, r.url, null, fileName, r.size, caption)
+    }
+
     /** 重发（红❗点击 / 重连后补发）。**沿用同一个 client_msg_id**，服务端幂等去重。 */
     suspend fun resend(clientMsgId: String) {
         val owner = ownerProvider() ?: return
         val p = repo.inFlight(owner).firstOrNull { it.clientMsgId == clientMsgId } ?: return
-        transmit(p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq)
+        transmit(
+            p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
+            p.fileName, p.fileSize, p.caption,
+        )
     }
 
     private fun transmit(
@@ -163,6 +208,9 @@ class MessageService(
         contentType: String,
         content: String,
         replyToConvSeq: Long?,
+        fileName: String? = null,
+        fileSize: Long? = null,
+        caption: String? = null,
     ) {
         val payload = ProtocolJson.encodeToJsonElement(
             SendMsgData.serializer(),
@@ -172,6 +220,9 @@ class MessageService(
                 to = to,
                 contentType = contentType,
                 content = content,
+                fileName = fileName,
+                fileSize = fileSize,
+                caption = caption,
                 replyToConvSeq = replyToConvSeq,
             ),
         )
@@ -340,6 +391,11 @@ class MessageService(
         val list = repo.inFlight(owner)
         if (list.isEmpty()) return
         log.i("resend_in_flight", "count" to list.size)
-        list.forEach { transmit(it.clientMsgId, it.convId, it.to, it.contentType, it.content, it.replyToConvSeq) }
+        list.forEach {
+            transmit(
+                it.clientMsgId, it.convId, it.to, it.contentType, it.content, it.replyToConvSeq,
+                it.fileName, it.fileSize, it.caption,
+            )
+        }
     }
 }

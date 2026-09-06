@@ -71,6 +71,12 @@ class MessageRepository(
 
     // ————————————————— 发 —————————————————
 
+    /** 更新待发消息的正文（上传完把本地 uri 换成服务端 url）。 */
+    suspend fun updatePendingContent(owner: String, cid: String, content: String, fileSize: Long?) {
+        val p = pending.byClientId(owner, cid) ?: return
+        pending.put(p.copy(content = content, fileSize = fileSize ?: p.fileSize))
+    }
+
     /** 生成一条待发消息并落库。调用方拿返回值去发帧。 */
     suspend fun createPending(
         owner: String,

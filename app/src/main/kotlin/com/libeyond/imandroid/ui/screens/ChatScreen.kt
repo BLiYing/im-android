@@ -45,6 +45,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.SendHorizontal
 import com.libeyond.imandroid.data.ChatEntry
@@ -150,6 +151,8 @@ fun ChatScreen(
     onCancelReply: () -> Unit,
     /** 滚到顶部附近时回调，加载更早的消息。 */
     onLoadOlder: () -> Unit,
+    /** 点「+」选图片。 */
+    onPickMedia: () -> Unit,
     /** 媒体地址补全用。 */
     host: String,
     useTls: Boolean,
@@ -337,12 +340,18 @@ fun ChatScreen(
                 if (it.isNotEmpty()) onTyping()
             },
             onSend = onSend,
+            onPickMedia = onPickMedia,
         )
     }
 }
 
 @Composable
-private fun Composer(input: String, onInputChange: (String) -> Unit, onSend: () -> Unit) {
+private fun Composer(
+    input: String,
+    onInputChange: (String) -> Unit,
+    onSend: () -> Unit,
+    onPickMedia: () -> Unit,
+) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Row(
@@ -352,6 +361,13 @@ private fun Composer(input: String, onInputChange: (String) -> Unit, onSend: () 
             .padding(horizontal = d.space3, vertical = d.space2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Image(
+            imageVector = Lucide.Plus,
+            contentDescription = "发送图片",
+            modifier = Modifier.size(24.dp).clickable { onPickMedia() },
+            colorFilter = ColorFilter.tint(c.textSecondary),
+        )
+        Spacer(Modifier.width(d.space2))
         Box(
             modifier = Modifier
                 .weight(1f)

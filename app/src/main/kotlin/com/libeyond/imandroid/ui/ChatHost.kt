@@ -1,6 +1,14 @@
 package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.sdk.protocol.ContentType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -50,6 +58,33 @@ fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
 
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+
+    // 系统相册选择器。**用 PickVisualMedia 而不是 GetContent**：
+    // 前者是 Android 13+ 的 Photo Picker，**不需要读取全部相册的权限**——
+    // 用户只把选中的那张授权给你。声明 READ_MEDIA_IMAGES 去换一个选图功能
+    // 是典型的权限过度索取，商店审核也会问。
+    val pickMedia = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val picked = withContext(Dispatchers.IO) { readPickedImage(context, uri) }
+            if (picked == null) {
+                IMLog.tag("IM.Media").w("pick_read_failed")
+                return@launch
+            }
+            client.messages.sendMedia(
+                convId = conv.convId,
+                to = if (conv.isGroup) conv.convId else conv.peerUid,
+                bytes = picked.bytes,
+                fileName = picked.name,
+                mimeType = picked.mime,
+                contentType = ContentType.IMAGE,
+                localPreviewUri = uri.toString(),
+            )
+        }
+    }
     val owner = client.uid.orEmpty()
     var input by remember(conv.convId) { mutableStateOf("") }
 
@@ -171,6 +206,7 @@ fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
         onBack = onBack,
         onRetry = { cid -> scope.launch { client.messages.resend(cid) } },
         onVisibleSeq = { seq -> scope.launch { client.messages.markRead(conv.convId, seq) } },
+        onPickMedia = { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         onLoadOlder = {
             // 只有窗口已经装满时才继续加——没装满说明本地就这么多，
             // 再加只会让同一批数据反复重查
@@ -212,3 +248,38 @@ fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
     }
     }
 }
+
+
+/** 从相册 uri 读出的图片。 */
+private class PickedImage(val bytes: ByteArray, val name: String, val mime: String)
+
+/**
+ * 把选中的图读进内存。
+ *
+ * **有大小闸门**：服务端图片上限 20MB，超了会回 500001。在端上先挡一道，
+ * 免得用户等上传等半天才被拒——而且真读进内存也可能 OOM。
+ * 压缩待做（TODO），当前只挡不压。
+ */
+private fun readPickedImage(context: android.content.Context, uri: android.net.Uri): PickedImage? {
+    val cr = context.contentResolver
+    val mime = cr.getType(uri) ?: "image/jpeg"
+    val name = cr.query(uri, null, null, null, null)?.use { cursor ->
+        val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+        if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
+    } ?: ("image_" + System.currentTimeMillis() + "." + mime.substringAfterLast('/'))
+
+    return try {
+        val bytes = cr.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        if (bytes.size > MAX_IMAGE_BYTES) {
+            IMLog.tag("IM.Media").w("pick_too_large", "size" to bytes.size)
+            return null
+        }
+        PickedImage(bytes, name, mime)
+    } catch (e: Exception) {
+        IMLog.tag("IM.Media").w("pick_read_error", "err" to e.javaClass.simpleName)
+        null
+    }
+}
+
+/** 服务端图片上限 20MB（uploadLimitByKind）。 */
+private const val MAX_IMAGE_BYTES = 20 * 1024 * 1024
