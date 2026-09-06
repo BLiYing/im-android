@@ -14,7 +14,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.libeyond.imandroid.data.DisplayName
+import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.ui.theme.LocalMediaHost
 
 /**
  * 头像取色板——**与 iOS `IMTheme.avatarColorForSeed:` 逐值对齐**。
@@ -64,12 +68,23 @@ fun IMAvatar(
             .background(avatarColorForSeed(seed)),
         contentAlignment = Alignment.Center,
     ) {
-        // TODO(P7)：avatarUrl 非空时加载图片（data:/http 两种），失败回退本圈
+        // 首字母圈永远在底下：图片没加载出来/加载失败时它就是兜底，
+        // 不需要额外的失败回调（Coil 的 error 回退还得再写一份同样的东西）
         Text(
             text = DisplayName.initials(displayName),
             color = Color.White,
             fontSize = (size.value * 0.34f).sp,
             fontWeight = FontWeight.Medium,
         )
+        val mediaHost = LocalMediaHost.current
+        val resolved = MediaUrl.absolute(avatarUrl, mediaHost.host, mediaHost.useTls)
+        if (resolved.isNotBlank()) {
+            AsyncImage(
+                model = resolved,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(size).clip(CircleShape),
+            )
+        }
     }
 }

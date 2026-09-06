@@ -70,6 +70,9 @@ internal fun Bubble(
     mine: Boolean,
     msg: MessageEntity? = null,
     onLongPress: (() -> Unit)? = null,
+    /** 媒体地址补全用的当前 host。 */
+    host: String = "",
+    useTls: Boolean = false,
     timestamp: Long,
     senderName: String?,
     sending: Boolean = false,
@@ -134,11 +137,20 @@ internal fun Bubble(
                         }
                         Spacer(Modifier.height(3.dp))
                     }
-                    Text(
-                        text = if (recalled) "你撤回了一条消息" else text,
-                        color = if (recalled) c.textTertiary else c.textPrimary,
-                        fontSize = appearance.chatFontSize,
-                    )
+                    val isMedia = msg != null && msg.contentType in MEDIA_TYPES
+                    when {
+                        recalled -> Text(
+                            text = "你撤回了一条消息",
+                            color = c.textTertiary,
+                            fontSize = appearance.chatFontSize,
+                        )
+                        isMedia -> MediaContent(msg!!, host, useTls)
+                        else -> Text(
+                            text = text,
+                            color = c.textPrimary,
+                            fontSize = appearance.chatFontSize,
+                        )
+                    }
                     Spacer(Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -182,3 +194,7 @@ internal fun localizeReplySnapshot(raw: String): String = when {
     raw.startsWith("[voice]") -> raw.replaceFirst("[voice]", "[语音]")
     else -> raw
 }
+
+
+/** 走媒体渲染而不是纯文本的内容类型。 */
+private val MEDIA_TYPES = setOf("image", "video", "voice", "file")

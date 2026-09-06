@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +54,9 @@ fun ContactsHost(client: IMClient, onOpenChat: (ConversationEntity) -> Unit) {
     val pending = remember(friends) { friends.filter { it.status == FriendEntry.PENDING } }
     val requested = remember(friends) { friends.filter { it.status == FriendEntry.REQUESTED } }
     val relations = remember(friends) { friends.associate { it.userId to it.status } }
+
+    // 二级页的返回键回到通讯录列表，不退出 App
+    if (page != ContactsPage.List) BackHandler { page = ContactsPage.List }
 
     when (page) {
         ContactsPage.List -> ContactsScreen(

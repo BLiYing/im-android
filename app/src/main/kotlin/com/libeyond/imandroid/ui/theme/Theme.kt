@@ -9,6 +9,18 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 
+/**
+ * 媒体地址补全用的服务器地址（`host:port` + 是否 TLS）。
+ *
+ * 用 CompositionLocal 而不是逐层传参：头像出现在会话列表、通讯录、聊天气泡、
+ * 资料页……每处都把 host 穿一遍，加一个页面就漏一个。
+ * 它是**稳定值**（只在用户改服务器地址时变），放 CompositionLocal 不会引起
+ * 高频重组——高频变化的 state 才不该进（CODING_STYLE §7）。
+ */
+data class MediaHost(val host: String = "", val useTls: Boolean = false)
+
+val LocalMediaHost = staticCompositionLocalOf { MediaHost() }
+
 /** 显示模式：跟随系统 / 浅色 / 深色。默认跟随系统（UI_COLOR.md §1.2）。 */
 enum class IMThemeMode { System, Light, Dark }
 

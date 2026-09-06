@@ -18,6 +18,7 @@ import com.libeyond.imandroid.sdk.protocol.MsgOp
 import com.libeyond.imandroid.sdk.protocol.MsgOpData
 import com.libeyond.imandroid.sdk.protocol.ReceiptData
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.util.UUID
 
 /**
@@ -49,8 +50,16 @@ class MessageRepository(
     fun observeConversations(owner: String): Flow<List<ConversationEntity>> =
         conversations.observeList(owner)
 
-    fun observeMessages(owner: String, convId: String): Flow<List<MessageEntity>> =
-        messages.observeAll(owner, convId)
+    /**
+     * 观察一个会话的**最近 [limit] 条**消息，返回显示序（旧→新）。
+     *
+     * DAO 按 DESC 取最新 N 条，这里反转。**不要在 SQL 里用 ASC + LIMIT**——
+     * 那会取到最旧的 N 条。
+     */
+    fun observeMessages(owner: String, convId: String, limit: Int): Flow<List<MessageEntity>> =
+        messages.observeWindow(owner, convId, limit).map { it.asReversed() }
+
+    suspend fun messageCount(owner: String, convId: String): Int = messages.countIn(owner, convId)
 
     fun observePending(owner: String, convId: String): Flow<List<PendingMessageEntity>> =
         pending.observe(owner, convId)

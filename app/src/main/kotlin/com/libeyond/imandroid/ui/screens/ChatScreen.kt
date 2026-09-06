@@ -54,6 +54,9 @@ import com.libeyond.imandroid.data.db.SendState
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.theme.IMTheme
 
+/** 距顶多少行以内就去加载更早的一页。 */
+private const val LOAD_OLDER_THRESHOLD = 3
+
 /** 聊天页显示的一行：已确认消息 或 待发消息。 */
 sealed interface ChatRow {
     /** 身份键——列表 key 一律用它。 */
@@ -145,6 +148,11 @@ fun ChatScreen(
     /** 当前引用的目标；null=没在引用。 */
     replyTo: MessageEntity?,
     onCancelReply: () -> Unit,
+    /** 滚到顶部附近时回调，加载更早的消息。 */
+    onLoadOlder: () -> Unit,
+    /** 媒体地址补全用。 */
+    host: String,
+    useTls: Boolean,
     rows: List<ChatRow>,
     input: String,
     onInputChange: (String) -> Unit,
@@ -176,6 +184,13 @@ fun ChatScreen(
         val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
         if (ChatEntry.shouldAutoScroll(last, rows.size)) {
             listState.animateScrollToItem(rows.size - 1)
+        }
+    }
+
+    // —— 滚到顶部附近就加载更早的一页 ——
+    LaunchedEffect(rows.size, listState.firstVisibleItemIndex) {
+        if (didEntryScroll && rows.isNotEmpty() && listState.firstVisibleItemIndex <= LOAD_OLDER_THRESHOLD) {
+            onLoadOlder()
         }
     }
 
@@ -245,6 +260,8 @@ fun ChatScreen(
                         text = r.msg.content,
                         msg = r.msg,
                         onLongPress = { onLongPress(r.msg) },
+                        host = host,
+                        useTls = useTls,
                         mine = r.msg.sender == myUid,
                         timestamp = r.msg.timestamp,
                         senderName = if (r.msg.sender != myUid) r.msg.fromNickname else null,

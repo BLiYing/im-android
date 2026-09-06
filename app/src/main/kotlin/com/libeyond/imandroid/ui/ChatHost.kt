@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -31,19 +32,34 @@ import kotlinx.coroutines.launch
 /** typing 上报节流：每次按键都发是错的，服务端要给全体成员中继。 */
 private const val TYPING_THROTTLE_MS = 3_000L
 
+/** 进会话先渲染多少条。 */
+private const val INITIAL_WINDOW = 200
+
+/** 滚到顶再加一页的条数。 */
+private const val WINDOW_PAGE = 200
+
 /**
  * 聊天页的接线层：读库、算副标题、发消息、管 watch。
  * [ChatScreen] 保持纯展示（CODING_STYLE §7②）。
  */
 @Composable
 fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
+    // 系统返回键要回会话列表，不是退出 App。
+    // 不拦的话「进会话 → 按返回 → App 没了」，这是 Android 用户最直觉的一个动作。
+    BackHandler(onBack = onBack)
+
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     val owner = client.uid.orEmpty()
     var input by remember(conv.convId) { mutableStateOf("") }
 
-    val messages by remember(owner, conv.convId) {
-        client.repo.observeMessages(owner, conv.convId)
+    // 渲染窗口大小。**不能无界**——13 万条的会话会把聊天页渲染成空白（实测）。
+    // 滚到顶时加一页；不做减半回收：Compose 的 LazyColumn 本就只组合可见项，
+    // 内存压力来自这个 List 本身，而用户主动翻上去的部分他还想看得到。
+    var windowLimit by remember(conv.convId) { mutableStateOf(INITIAL_WINDOW) }
+
+    val messages by remember(owner, conv.convId, windowLimit) {
+        client.repo.observeMessages(owner, conv.convId, windowLimit)
     }.collectAsState(initial = emptyList())
 
     val pending by remember(owner, conv.convId) {
@@ -155,9 +171,16 @@ fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
         onBack = onBack,
         onRetry = { cid -> scope.launch { client.messages.resend(cid) } },
         onVisibleSeq = { seq -> scope.launch { client.messages.markRead(conv.convId, seq) } },
+        onLoadOlder = {
+            // 只有窗口已经装满时才继续加——没装满说明本地就这么多，
+            // 再加只会让同一批数据反复重查
+            if (messages.size >= windowLimit) windowLimit += WINDOW_PAGE
+        },
         onLongPress = { menuFor = it },
         replyTo = replyTo,
         onCancelReply = { replyTo = null },
+        host = client.host,
+        useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
     )
 
     // —— 消息长按菜单 ——

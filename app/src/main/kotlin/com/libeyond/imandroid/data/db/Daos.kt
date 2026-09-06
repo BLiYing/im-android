@@ -44,12 +44,28 @@ interface MessageDao {
     """)
     suspend fun olderThan(owner: String, convId: String, beforeSeq: Long, limit: Int): List<MessageEntity>
 
+    /**
+     * 观察**最近 [limit] 条**（按显示序返回：旧→新）。
+     *
+     * ## 绝不能无界查询
+     * 早先这里是 `SELECT * ... ORDER BY timestamp ASC`（不带 LIMIT），
+     * 2026-09-07 实测在一条 **13 万条**的会话上直接把聊天页渲染成空白——
+     * 130k 行全被构造成对象，Flow 迟迟发不出第一帧。
+     * 这正是 iOS 文档里记的「几十万行全构造成对象」那个瓶颈，本端一样躲不过。
+     *
+     * 取最新 N 条要 `ORDER BY ... DESC LIMIT n`，**调用方再反转成显示序**——
+     * 写成 ASC + LIMIT 会取到最**旧**的 N 条（那是另一个很容易犯的错）。
+     */
     @Query("""
         SELECT * FROM message
         WHERE ownerUid = :owner AND convId = :convId
-        ORDER BY timestamp ASC, convSeq ASC
+        ORDER BY timestamp DESC, convSeq DESC
+        LIMIT :limit
     """)
-    fun observeAll(owner: String, convId: String): Flow<List<MessageEntity>>
+    fun observeWindow(owner: String, convId: String, limit: Int): Flow<List<MessageEntity>>
+
+    @Query("SELECT COUNT(*) FROM message WHERE ownerUid = :owner AND convId = :convId")
+    suspend fun countIn(owner: String, convId: String): Int
 
     @Query("SELECT MAX(convSeq) FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun maxConvSeq(owner: String, convId: String): Long?

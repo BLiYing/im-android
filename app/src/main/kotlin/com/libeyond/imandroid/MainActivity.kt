@@ -8,7 +8,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.libeyond.imandroid.ui.AppRoot
+import androidx.compose.runtime.CompositionLocalProvider
 import com.libeyond.imandroid.ui.theme.IMAppTheme
+import com.libeyond.imandroid.ui.theme.LocalMediaHost
+import com.libeyond.imandroid.ui.theme.MediaHost
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -29,7 +32,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             IMAppTheme {
-                AppRoot(client)
+                CompositionLocalProvider(
+                    LocalMediaHost provides MediaHost(client.host, BuildConfig.USE_TLS),
+                ) {
+                    AppRoot(client)
+                }
             }
         }
     }
