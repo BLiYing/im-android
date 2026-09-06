@@ -18,6 +18,9 @@ import com.libeyond.imandroid.sdk.protocol.PresenceFrame
 import com.libeyond.imandroid.sdk.protocol.SyncRespData
 import com.libeyond.imandroid.sdk.ws.IMSocketManager
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 
@@ -37,6 +40,10 @@ class MessageService(
     private val ownerProvider: () -> String?,
 ) {
     private val log = IMLog.tag("IM.Msg")
+
+    private val _friendEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    /** 好友关系有变（收到 friend 帧）。UI 据此重拉 /friends。 */
+    val friendEvents: SharedFlow<Unit> = _friendEvents.asSharedFlow()
 
     fun start() {
         scope.launch {
@@ -94,6 +101,12 @@ class MessageService(
                 val from = d.from
                 // from 为空、或就是自己，都不显示（本人回声）
                 if (!from.isNullOrEmpty() && from != owner) presence.onTyping(d.convId, from)
+            }
+
+            // 收到任意 friend 帧即重拉列表，event 只作语义/日志（PROTOCOL §6.5）
+            FrameType.FRIEND -> {
+                log.i("friend_event")
+                _friendEvents.tryEmit(Unit)
             }
 
             FrameType.ERROR -> data?.let {

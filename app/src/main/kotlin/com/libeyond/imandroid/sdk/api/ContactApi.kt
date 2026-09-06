@@ -1,0 +1,125 @@
+package com.libeyond.imandroid.sdk.api
+
+import com.libeyond.imandroid.sdk.http.HttpClient
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+
+/** 用户名片（对齐 `internal/profile.Card`）。 */
+@Serializable
+data class UserCard(
+    /** 内部 ID（10 位数字）。**只作接口参数与本地键，UI 全程不展示。** */
+    @SerialName("user_id") val userId: String = "",
+    /** 公开句柄，UI 里渲染成 `@xxx`。系统账号为空。 */
+    val username: String = "",
+    val nickname: String = "",
+    @SerialName("avatar_url") val avatarUrl: String = "",
+    val phone: String = "",
+    val tags: List<String> = emptyList(),
+    /** 查看者对该用户的私有备注名；看自己时恒空。 */
+    val remark: String = "",
+    val presence: String = "",
+    @SerialName("online_until") val onlineUntil: Long = 0,
+    @SerialName("last_seen") val lastSeen: Long = 0,
+) {
+    /**
+     * 本机显示名。回退链 **备注 → 昵称 → @句柄 → 「未命名用户」**，
+     * **末级绝不是 user_id**（那是 10 位随机内部 ID，露在界面上对用户毫无意义）。
+     */
+    val displayName: String
+        get() = remark.ifBlank { nickname }.ifBlank { username.ifBlank { "" }.let { if (it.isEmpty()) "" else "@$it" } }
+            .ifBlank { "未命名用户" }
+
+    /** 副标题里的标识行。**为空时整行隐藏**，不显示「用户名：未设置」，更不回退内部 ID。 */
+    val handle: String get() = if (username.isBlank()) "" else "@$username"
+}
+
+/** 好友关系项（对齐 `internal/friend.Entry`）。 */
+@Serializable
+data class FriendEntry(
+    @SerialName("user_id") val userId: String = "",
+    val username: String = "",
+    val nickname: String = "",
+    /** 我对该好友的私有备注名，显示优先级高于昵称。 */
+    val remark: String = "",
+    @SerialName("avatar_url") val avatarUrl: String = "",
+    /** accepted | pending | requested | blocked */
+    val status: String = "",
+    @SerialName("updated_at") val updatedAt: Long = 0,
+    /** 与 status 正交：我是否把对方加入黑名单。拉黑的好友 status 仍是 accepted。 */
+    val blocked: Boolean = false,
+    /** 好友申请的验证消息，只在 pending/requested 时有值。 */
+    val hello: String = "",
+) {
+    val displayName: String
+        get() = remark.ifBlank { nickname }.ifBlank { if (username.isBlank()) "未命名用户" else "@$username" }
+
+    val handle: String get() = if (username.isBlank()) "" else "@$username"
+
+    companion object {
+        const val ACCEPTED = "accepted"
+        /** 别人申请加我，等我确认。 */
+        const val PENDING = "pending"
+        /** 我申请加别人，等对方确认。 */
+        const val REQUESTED = "requested"
+        const val BLOCKED = "blocked"
+    }
+}
+
+@Serializable private data class FriendsResp(val friends: List<FriendEntry> = emptyList())
+@Serializable private data class UsersResp(val users: List<UserCard> = emptyList())
+
+class ContactApi(private val http: HttpClient) {
+
+    /** @param status 空=全部；accepted / pending / requested / blocked */
+    suspend fun friends(status: String = ""): List<FriendEntry> {
+        val q = if (status.isEmpty()) emptyMap() else mapOf("status" to status)
+        return decode(http.call("GET", "/api/v1/friends", query = q), FriendsResp.serializer()).friends
+    }
+
+    /**
+     * 找人。**按 username（大小写不敏感）/ phone 精确匹配，防枚举**——
+     * 内部 `user_id` 不是找人键，别拿它当搜索词。
+     */
+    suspend fun search(q: String, limit: Int = 20): List<UserCard> =
+        decode(
+            http.call("GET", "/api/v1/users/search", query = mapOf("q" to q, "limit" to limit.toString())),
+            UsersResp.serializer(),
+        ).users
+
+    suspend fun card(userId: String): UserCard =
+        decode(http.call("GET", "/api/v1/users/$userId"), UserCard.serializer())
+
+    suspend fun me(): UserCard =
+        decode(http.call("GET", "/api/v1/users/me"), UserCard.serializer())
+
+    /** @param hello 验证消息，≤50 rune；服务端压单行 + 超长截断而非报错。 */
+    suspend fun request(userId: String, hello: String = "") {
+        http.call("POST", "/api/v1/friends/request", buildJsonObject {
+            put("user_id", userId)
+            if (hello.isNotBlank()) put("hello", hello)
+        })
+    }
+
+    suspend fun accept(userId: String) = act("accept", userId)
+    suspend fun reject(userId: String) = act("reject", userId)
+    suspend fun block(userId: String) = act("block", userId)
+    suspend fun unblock(userId: String) = act("unblock", userId)
+
+    private suspend fun act(action: String, userId: String) {
+        http.call("POST", "/api/v1/friends/$action", buildJsonObject { put("user_id", userId) })
+    }
+
+    suspend fun remove(userId: String) {
+        http.call("DELETE", "/api/v1/friends/$userId")
+    }
+
+    /** 设备注名。空串=清除。须已是好友，否则 200103。 */
+    suspend fun setRemark(userId: String, remark: String) {
+        http.call("POST", "/api/v1/friends/remark", buildJsonObject {
+            put("user_id", userId)
+            put("remark", remark)
+        })
+    }
+}

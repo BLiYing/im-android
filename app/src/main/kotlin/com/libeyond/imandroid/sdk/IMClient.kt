@@ -6,7 +6,9 @@ import com.libeyond.imandroid.sdk.api.AuthApi
 import com.libeyond.imandroid.data.MessageRepository
 import com.libeyond.imandroid.data.MessageService
 import com.libeyond.imandroid.data.PresenceStore
+import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.IMDatabase
+import com.libeyond.imandroid.sdk.api.ContactApi
 import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.sdk.api.DevicesApi
 import com.libeyond.imandroid.sdk.http.HttpClient
@@ -44,6 +46,7 @@ class IMClient(context: Context) {
     private val auth = AuthApi(http, device)
     private val devices = DevicesApi(http)
     private val conversationsApi = ConversationsApi(http)
+    val contacts = ContactApi(http)
 
     private val db = IMDatabase.get(context)
     val repo = MessageRepository(db.messages(), db.pending(), db.conversations())
@@ -80,6 +83,34 @@ class IMClient(context: Context) {
         conversationsApi = conversationsApi,
         ownerProvider = { session.uid },
     )
+
+    /**
+     * 好友关系变更。**收到任意 friend 帧即重新拉 `/friends`**，
+     * `event` 只作语义/日志（PROTOCOL §6.5）——按 event 分类型增量更新是自找麻烦，
+     * 服务端也明说了这么用。
+     */
+    val friendEvents: SharedFlow<Unit> get() = messages.friendEvents
+
+    /**
+     * 为一个还没有会话行的对端造一个「会话壳」，让 UI 能直接进聊天页。
+     *
+     * conv_id 用**字典序** `u_a_u_b`——与后端 `p2pConvID`、iOS `IMConversationID`、
+     * Web `convIdFor` 同构。**不能按数值排序**：uid 是 10 位随机数字，
+     * 但系统账号 777000 只有 6 位，数值序与字典序在这里给出不同结果
+     * （实测 `u_5205766476_u_777000` 就是字典序）。
+     */
+    fun conversationStubFor(peerUid: String, title: String, avatarUrl: String): ConversationEntity {
+        val me = session.uid.orEmpty()
+        val (a, b) = if (me <= peerUid) me to peerUid else peerUid to me
+        return ConversationEntity(
+            ownerUid = me,
+            convId = "u_${a}_u_$b",
+            isGroup = false,
+            peerUid = peerUid,
+            title = title,
+            avatarUrl = avatarUrl,
+        )
+    }
 
     /** 服务端否定了这条会话（被踢 / 被封）。UI 订阅它回登录页。 */
     val sessionEnded: SharedFlow<com.libeyond.imandroid.sdk.ws.SessionEndReason> get() = socket.sessionEnded
