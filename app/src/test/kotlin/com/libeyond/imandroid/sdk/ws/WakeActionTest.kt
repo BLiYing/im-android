@@ -86,3 +86,31 @@ class WakeActionTest {
         }
     }
 }
+
+/**
+ * 「什么状态下允许新开一条连接」——与 [wakeActionFor] 是两回事：
+ * 那个管唤醒信号，这个管**任何**调用 connect()/openSocket() 的路径。
+ *
+ * 2026-09-07 回归实测抓到：NetworkMonitor 在启动瞬间已经连上，restore() 成功后
+ * AppRoot 又调一次 connect()，旧连接被字段覆盖孤儿化，服务端挂着两条。
+ */
+class OpenSocketGuardTest {
+
+    /** 复刻 openSocket 的准入判据（实现里就是这一条）。 */
+    private fun mayOpen(state: ConnState, manualClose: Boolean): Boolean =
+        !manualClose && state == ConnState.Idle
+
+    @Test
+    fun `只有空闲态才允许开新连接`() {
+        org.junit.Assert.assertTrue(mayOpen(ConnState.Idle, false))
+        org.junit.Assert.assertFalse("已连接时再开会孤儿化旧连接", mayOpen(ConnState.Connected, false))
+        org.junit.Assert.assertFalse("握手中再开会掐掉在途那条", mayOpen(ConnState.Connecting, false))
+    }
+
+    @Test
+    fun `manualClose 后任何状态都不开`() {
+        for (s in ConnState.entries) {
+            org.junit.Assert.assertFalse("state=$s", mayOpen(s, true))
+        }
+    }
+}

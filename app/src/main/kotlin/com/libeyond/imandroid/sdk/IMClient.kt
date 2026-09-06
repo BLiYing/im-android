@@ -27,15 +27,11 @@ class IMClient(context: Context) {
     private val log = IMLog.tag("IM.Client")
     val scope = CoroutineScope(SupervisorJob())
 
-    /** 服务器地址。debug 默认 `10.0.2.2:8080`（模拟器指向宿主机）。 */
-    var host: String = BuildConfig.DEFAULT_HOST
-        set(v) { field = v; http.host = v; socket.host = v }
-
     private val session = SessionStore(context)
     private val device = DeviceIdentity(context)
 
     private val http = HttpClient(
-        host = host,
+        host = session.host.ifEmpty { BuildConfig.DEFAULT_HOST },
         useTls = BuildConfig.USE_TLS,
         tokenProvider = { session.token },
     )
@@ -45,9 +41,22 @@ class IMClient(context: Context) {
 
     val tokens = TokenSession(session, auth, probe = { devices.probe() })
 
+    /**
+     * 服务器地址。debug 默认 `10.0.2.2:8080`（模拟器指向宿主机）。
+     * **与凭据一起持久化**——只存 token 不存 host，重启后会拿着上一台服务器的凭据
+     * 去连默认地址（/code-review 2026-09-07）。
+     */
+    var host: String = session.host.ifEmpty { BuildConfig.DEFAULT_HOST }
+        set(v) {
+            field = v
+            session.host = v
+            http.host = v
+            socket.host = v
+        }
+
     val socket = IMSocketManager(
         scope = scope,
-        host = host,
+        host = session.host.ifEmpty { BuildConfig.DEFAULT_HOST },
         useTls = BuildConfig.USE_TLS,
         tokenProvider = { session.token },
     )

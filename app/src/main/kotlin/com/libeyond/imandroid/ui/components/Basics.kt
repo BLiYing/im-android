@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -59,7 +58,7 @@ fun IMPrimaryButton(
                     strokeWidth = 2.dp,
                 )
             } else {
-                Text(text = text, color = c.onAccent, style = LocalTextStyle.current.copy(fontSize = androidx.compose.ui.unit.TextUnit.Unspecified))
+                Text(text = text, color = c.onAccent)
             }
         }
     }

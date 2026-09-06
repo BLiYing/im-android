@@ -57,11 +57,17 @@ class IMSocketManager(
     private val _state = MutableStateFlow(ConnState.Idle)
     val state: StateFlow<ConnState> = _state.asStateFlow()
 
+    // replay = 0 但**改用 emit 而非 tryEmit**（见 onMessage）：无订阅者时 tryEmit 直接
+    // 丢帧并返回 true，连日志都不打。P4 接同步后，sync_resp 若在收集器 attach 前到达
+    // 就会被静默吞掉，客户端永远等不到响应且无法自愈。
     private val _frames = MutableSharedFlow<Envelope>(extraBufferCapacity = 256)
     /** 所有下行帧。上层按 `type` 分派。 */
     val frames: SharedFlow<Envelope> = _frames.asSharedFlow()
 
-    private val _sessionEnded = MutableSharedFlow<SessionEndReason>(extraBufferCapacity = 4)
+    // replay = 1：UI 的收集器在首次组合时才订阅，而握手 401 可能在那之前就发生了
+    // （冷启动 restore 成功 → connect → 服务端发现 sid 已吊销）。replay=0 会让这条事件
+    // 永久丢失：本地凭据已被清空，UI 却停在主界面显示「已登录」，之后每个请求都 401。
+    private val _sessionEnded = MutableSharedFlow<SessionEndReason>(replay = 1, extraBufferCapacity = 4)
     /** 服务端否定了这条会话（握手 401/403）。UI 收到即清会话回登录页。 */
     val sessionEnded: SharedFlow<SessionEndReason> = _sessionEnded.asSharedFlow()
 
@@ -98,7 +104,18 @@ class IMSocketManager(
 
     private fun openSocket() {
         if (manualClose) return
-        if (_state.value == ConnState.Connecting) return
+        // 已连接 / 正在握手都不再开新的。
+        //
+        // **漏掉 Connected 那一档会孤儿化上一条连接**：`socket` 字段被直接覆盖，
+        // 旧的那条 WebSocket 没关、服务端仍认为它活着，同一台设备于是挂着两条连接
+        // （消息会重复投递，且 sid 顶替语义被打乱）。
+        // 真实触发路径：NetworkMonitor 在 App 启动瞬间就发 wake（此时本地已有 token，
+        // 于是连上了），随后 restore() 探活成功，AppRoot 又调一次 connect() ——
+        // 2026-09-07 回归实测抓到，日志里 26.349 与 34.261 各连了一次。
+        if (_state.value != ConnState.Idle) {
+            log.d("ws_open_skipped", "state" to _state.value.name)
+            return
+        }
         val token = tokenProvider()
         if (token.isNullOrEmpty()) {
             log.w("ws_no_token_skip_connect")
@@ -117,12 +134,19 @@ class IMSocketManager(
 
     // ————————————————— 发送 —————————————————
 
-    /** 发一帧。未连接时返回 false（调用方决定是否入队重发）。 */
-    fun send(type: String, data: JsonElement? = null, seq: Long = nextSeq()): Boolean {
+    /**
+     * 发一帧。未连接时返回 false（调用方决定是否入队重发）。
+     *
+     * `seq` **在确认能发之后才取**：默认参数会在函数体执行前求值，
+     * 若在 socket 为 null 时也自增，断线期间的多次重试会烧掉一串序号，
+     * 让服务端与客户端的请求-响应配对日志出现无法解释的空洞。
+     */
+    fun send(type: String, data: JsonElement? = null, seq: Long? = null): Boolean {
         val s = socket ?: return false
-        val text = ProtocolJson.encodeToString(Envelope.serializer(), Envelope(type, seq, data))
+        val actualSeq = seq ?: nextSeq()
+        val text = ProtocolJson.encodeToString(Envelope.serializer(), Envelope(type, actualSeq, data))
         val okSent = s.send(text)
-        if (!okSent) log.w("ws_send_failed", "type" to type, "seq" to seq)
+        if (!okSent) log.w("ws_send_failed", "type" to type, "seq" to actualSeq)
         return okSent
     }
 
@@ -132,7 +156,7 @@ class IMSocketManager(
      * 网络恢复 / 回到前台时调用。判据见 [wakeActionFor]。
      */
     fun wake(reason: String) {
-        when (val action = wakeActionFor(_state.value, manualClose)) {
+        when (wakeActionFor(_state.value, manualClose)) {
             WakeAction.None -> log.d("ws_wake_ignored", "reason" to reason, "state" to _state.value.name)
             WakeAction.Probe -> {
                 log.i("ws_wake_probe", "reason" to reason)
@@ -146,7 +170,6 @@ class IMSocketManager(
                 reconnectAttempts = 0
                 openSocket()
             }
-            else -> log.d("ws_wake_noop", "action" to action.name)
         }
     }
 
@@ -217,6 +240,10 @@ class IMSocketManager(
     private inner class Listener : WebSocketListener() {
 
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            // 必须清掉在途的探活看门狗：它是上一条连接 arm 的，若不清，
+            // 8s 后会把这条刚建好的健康连接 cancel 掉（/code-review 2026-09-07 查出）。
+            probeJob?.cancel()
+            probeJob = null
             reconnectAttempts = 0
             _state.value = ConnState.Connected
             log.i("ws_connected", "host" to host)
@@ -237,8 +264,14 @@ class IMSocketManager(
                 probeJob = null
                 return
             }
-            if (!_frames.tryEmit(env)) {
-                log.w("ws_frame_dropped_buffer_full", "type" to env.type)
+            // 用 emit 不用 tryEmit：缓冲满时挂起等消费，而不是默默丢一帧。
+            // 丢一帧同步响应的代价是本地出现永久空洞，远大于短暂背压。
+            scope.launch {
+                try {
+                    _frames.emit(env)
+                } catch (e: Exception) {
+                    log.w("ws_frame_emit_failed", "type" to env.type, "err" to e.javaClass.simpleName)
+                }
             }
         }
 
@@ -246,6 +279,9 @@ class IMSocketManager(
             val status = response?.code ?: 0
             _state.value = ConnState.Idle
             socket = null
+            // 与 onClosed 对称：连接没了，在途的 ping / 探活看门狗都不再有意义。
+            // 漏掉这一句时，过期看门狗会在重连成功后掐死新连接。
+            cancelTimers()
             when (handshakeFailureFor(status)) {
                 HandshakeFailure.Revoked -> {
                     log.w("ws_handshake_401_revoked")

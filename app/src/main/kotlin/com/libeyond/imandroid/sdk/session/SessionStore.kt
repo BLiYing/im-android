@@ -39,6 +39,16 @@ class SessionStore(context: Context) {
         get() = prefs.getString(KEY_USERNAME, null)
         set(v) = prefs.edit().apply { if (v == null) remove(KEY_USERNAME) else putString(KEY_USERNAME, v) }.apply()
 
+    /**
+     * 服务器地址。**必须与凭据一起持久化**：token 存了而 host 没存，重启后就会拿着
+     * 上一台服务器的凭据去连默认地址——真机用户改成内网 IP 登录后杀进程重进，
+     * host 回落 10.0.2.2（真机不可达），WS 永远连不上，而主界面没有改地址的入口
+     * （/code-review 2026-09-07 查出）。空串表示用构建默认值。
+     */
+    var host: String
+        get() = prefs.getString(KEY_HOST, "").orEmpty()
+        set(v) = prefs.edit().putString(KEY_HOST, v).apply()
+
     val isLoggedIn: Boolean get() = !token.isNullOrEmpty() && !uid.isNullOrEmpty()
 
     fun save(token: String, uid: String, refreshToken: String?, username: String?) {
@@ -50,7 +60,11 @@ class SessionStore(context: Context) {
         if (!username.isNullOrEmpty()) this.username = username
     }
 
-    /** 退出登录 / 会话被判定已死时调用。 */
+    /**
+     * 退出登录 / 会话被判定已死时调用。
+     * **刻意不清 [host]**：服务器地址是本机配置不是账号数据，
+     * 清掉会让用户每次退出后都要重填一遍内网 IP。
+     */
     fun clear() {
         prefs.edit().remove(KEY_TOKEN).remove(KEY_REFRESH).remove(KEY_UID).remove(KEY_USERNAME).apply()
     }
@@ -61,5 +75,6 @@ class SessionStore(context: Context) {
         const val KEY_REFRESH = "refresh_token"
         const val KEY_UID = "uid"
         const val KEY_USERNAME = "username"
+        const val KEY_HOST = "host"
     }
 }
