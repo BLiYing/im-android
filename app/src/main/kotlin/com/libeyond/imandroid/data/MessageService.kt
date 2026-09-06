@@ -12,6 +12,9 @@ import com.libeyond.imandroid.sdk.protocol.ReceiptData
 import com.libeyond.imandroid.sdk.protocol.SendMsgData
 import com.libeyond.imandroid.sdk.protocol.SyncCursorItem
 import com.libeyond.imandroid.sdk.protocol.SyncReqData
+import com.libeyond.imandroid.sdk.protocol.TypingData
+import com.libeyond.imandroid.sdk.protocol.WatchData
+import com.libeyond.imandroid.sdk.protocol.PresenceFrame
 import com.libeyond.imandroid.sdk.protocol.SyncRespData
 import com.libeyond.imandroid.sdk.ws.IMSocketManager
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +31,7 @@ class MessageService(
     private val scope: CoroutineScope,
     private val socket: IMSocketManager,
     private val repo: MessageRepository,
+    val presence: PresenceStore,
     private val conversationsApi: ConversationsApi,
     /** 当前账号；未登录为 null。切账号时必须换掉，否则新账号会写进旧账号的行。 */
     private val ownerProvider: () -> String?,
@@ -75,6 +79,21 @@ class MessageService(
 
             FrameType.RECEIPT -> data?.let {
                 repo.applyPeerReceipt(owner, ProtocolJson.decodeFromJsonElement(ReceiptData.serializer(), it))
+            }
+
+            FrameType.PRESENCE -> data?.let { el ->
+                val d = ProtocolJson.decodeFromJsonElement(PresenceFrame.serializer(), el)
+                presence.applyPresence(
+                    d.user,
+                    PresenceSnapshot(d.status, d.onlineUntil, d.lastSeen),
+                )
+            }
+
+            FrameType.TYPING -> data?.let { el ->
+                val d = ProtocolJson.decodeFromJsonElement(TypingData.serializer(), el)
+                val from = d.from
+                // from 为空、或就是自己，都不显示（本人回声）
+                if (!from.isNullOrEmpty() && from != owner) presence.onTyping(d.convId, from)
             }
 
             FrameType.ERROR -> data?.let {
@@ -135,6 +154,33 @@ class MessageService(
         }
     }
 
+    /**
+     * 上报「正在输入」。上行只带 conv_id，服务端中继时附 from。
+     * 节流由调用方负责——每次按键都发是错的。
+     */
+    fun sendTyping(convId: String) {
+        socket.send(
+            FrameType.TYPING,
+            ProtocolJson.encodeToJsonElement(TypingData.serializer(), TypingData(convId = convId)),
+        )
+    }
+
+    /**
+     * 上报当前要显示在线态的 uid 全集（**全量替换语义**）。
+     *
+     * 服务端对每次 watch（含集合不变的重发）都回快照，故进入界面与重连后都要发一次，
+     * 别因为集合没变就跳过——那正是「返回聊天页在线态不刷新」的成因。
+     */
+    fun sendWatch(set: Set<String>, force: Boolean = false) {
+        if (!presence.updateWatch(set, force)) return
+        socket.send(
+            FrameType.WATCH,
+            ProtocolJson.encodeToJsonElement(
+                WatchData.serializer(), WatchData(presence.currentWatchSet()),
+            ),
+        )
+    }
+
     fun sendReceipt(convId: String, status: String, upTo: Long) {
         socket.send(
             FrameType.RECEIPT,
@@ -171,13 +217,16 @@ class MessageService(
         refreshConversations()
         requestSync(owner)
         resendInFlight(owner)
+        // watch 订阅是**连接级易失态**，断连即清 → 重连必须重发当前集合，
+        // 否则重连后所有在线态就此冻在旧值上（PROTOCOL §5.5「生命周期」）。
+        sendWatch(presence.currentWatchSet().toSet(), force = true)
     }
 
     /** 拉会话列表（权威快照）。 */
     suspend fun refreshConversations() {
         val owner = ownerProvider() ?: return
         try {
-            repo.applyConversationList(owner, conversationsApi.list())
+            repo.applyConversationList(owner, conversationsApi.list(), presence)
         } catch (e: Exception) {
             log.w("conversations_refresh_failed", "err" to e.javaClass.simpleName)
         }

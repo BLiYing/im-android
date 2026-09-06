@@ -128,6 +128,21 @@ data class TypingData(
     val from: String? = null,
 )
 
+/** presence 下行广播（§5.5 租约模型）。 */
+@Serializable
+data class PresenceFrame(
+    val user: String = "",
+    val status: String = "",
+    /** 在线租约到期毫秒；仅 status=online 时下发。 */
+    @SerialName("online_until") val onlineUntil: Long = 0,
+    /** 最后在线毫秒；0=未知/不可见。 */
+    @SerialName("last_seen") val lastSeen: Long = 0,
+)
+
+/** watch 上行（§5.5）：当前要显示在线态的 uid 全集，**全量替换**。 */
+@Serializable
+data class WatchData(val set: List<String> = emptyList())
+
 /** error 下行（§8）。 */
 @Serializable
 data class ErrorData(

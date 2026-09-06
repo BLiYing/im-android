@@ -39,7 +39,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.SendHorizontal
 import com.libeyond.imandroid.data.ChatEntry
@@ -128,6 +131,12 @@ fun ChatScreen(
     readSeq: Long,
     /** **服务端算出的真实未读数**。判据只认它，见 [ChatEntry.hasUnread]。 */
     unread: Int,
+    /** 副标题：在线态 / 「正在输入」。空串不显示。 */
+    subtitle: String,
+    /** 对端已读位点（单聊）。我发的 conv_seq ≤ 它 → 绿双勾。群聊传 0。 */
+    peerReadSeq: Long,
+    /** 输入变化时回调，供节流上报 typing。 */
+    onTyping: () -> Unit,
     rows: List<ChatRow>,
     input: String,
     onInputChange: (String) -> Unit,
@@ -196,17 +205,28 @@ fun ChatScreen(
                 colorFilter = ColorFilter.tint(c.accent),
             )
             Spacer(Modifier.width(d.space3))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = c.textPrimary,
-                maxLines = 1,
-            )
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = c.textPrimary,
+                    maxLines = 1,
+                )
+                if (subtitle.isNotEmpty()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (subtitle == "在线") c.online else c.textSecondary,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
 
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = d.space3),
+            modifier = Modifier.fillMaxSize().padding(horizontal = d.space3),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(rows.size, key = { rows[it].key }) { i ->
@@ -218,6 +238,9 @@ fun ChatScreen(
                         mine = r.msg.sender == myUid,
                         timestamp = r.msg.timestamp,
                         senderName = if (r.msg.sender != myUid) r.msg.fromNickname else null,
+                        // 已读双勾：我发的、且对端读位点已越过它
+                        read = r.msg.sender == myUid && peerReadSeq >= r.msg.convSeq,
+                        delivered = r.msg.sender == myUid,
                     )
                     is ChatRow.Pending -> Bubble(
                         text = r.msg.content,
@@ -232,7 +255,42 @@ fun ChatScreen(
             }
         }
 
-        Composer(input, onInputChange, onSend)
+        // ↓ 悬浮跳转：离底较远时出现，点了瞬时贴底
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+        val awayFromBottom = rows.isNotEmpty() && lastVisible in 0 until (rows.size - 1 - ChatEntry.NEAR_BOTTOM_SLACK)
+        if (awayFromBottom) {
+            val scope = rememberCoroutineScope()
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = d.space4, bottom = d.space3)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(c.surfaceElevated)
+                    .clickable {
+                        // 瞬时滚动，不用 animate——长列表上动画会滚很久，看着像卡住
+                        scope.launch { listState.scrollToItem(rows.size - 1) }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    imageVector = Lucide.ChevronDown,
+                    contentDescription = "回到最新",
+                    modifier = Modifier.size(20.dp),
+                    colorFilter = ColorFilter.tint(c.accent),
+                )
+            }
+        }
+        }
+
+        Composer(
+            input = input,
+            onInputChange = {
+                onInputChange(it)
+                if (it.isNotEmpty()) onTyping()
+            },
+            onSend = onSend,
+        )
     }
 }
 
@@ -277,6 +335,8 @@ private fun Bubble(
     senderName: String?,
     sending: Boolean = false,
     failed: Boolean = false,
+    delivered: Boolean = false,
+    read: Boolean = false,
     onRetry: (() -> Unit)? = null,
 ) {
     val c = IMTheme.colors
@@ -325,6 +385,14 @@ private fun Bubble(
                         if (sending) {
                             Spacer(Modifier.width(3.dp))
                             Text("🕐", fontSize = 9.sp)
+                        } else if (delivered) {
+                            Spacer(Modifier.width(3.dp))
+                            // 已读=绿双勾 / 未读=灰单勾，与 iOS/Web 同一表意
+                            Text(
+                                text = if (read) "✓✓" else "✓",
+                                color = if (read) c.checkRead else c.textTertiary,
+                                fontSize = 10.sp,
+                            )
                         }
                     }
                 }

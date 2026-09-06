@@ -175,8 +175,23 @@ class MessageRepository(
         }
     }
 
-    /** 会话列表整表刷新（HTTP 拉回来的权威快照）。 */
-    suspend fun applyConversationList(owner: String, list: List<ConversationSummary>) {
+    /**
+     * 会话列表整表刷新（HTTP 拉回来的权威快照）。
+     *
+     * @param presence 顺带把在线态快照喂进去。**HTTP 快照才是初始值来源**，
+     *   `presence` 帧只用于其后的增量更新（PROTOCOL §5.5「档位只是变化通知，不是初始值来源」）。
+     *   不喂的话，进会话时对端在线态一律空白，要等下一次 presence 帧才显示。
+     */
+    suspend fun applyConversationList(
+        owner: String,
+        list: List<ConversationSummary>,
+        presence: PresenceStore? = null,
+    ) {
+        list.forEach { s ->
+            if (!s.isGroup && s.peer.isNotEmpty()) {
+                presence?.seed(s.peer, s.peerPresence, s.peerOnlineUntil, s.peerLastSeen)
+            }
+        }
         val rows = list.map { s ->
             // 游标是本地状态，服务端快照里没有——**必须保留原值**，
             // 否则每次刷新会话列表都会把同步进度清零，触发全量重拉。

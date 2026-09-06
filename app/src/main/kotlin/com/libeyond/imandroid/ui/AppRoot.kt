@@ -27,6 +27,8 @@ import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.session.RestoreOutcome
 import com.libeyond.imandroid.sdk.ws.SessionEndReason
 import com.libeyond.imandroid.ui.components.IMPrimaryButton
+import androidx.compose.runtime.DisposableEffect
+import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.ui.screens.ChatScreen
 import com.libeyond.imandroid.ui.screens.ConversationListScreen
@@ -35,6 +37,9 @@ import com.libeyond.imandroid.ui.screens.buildChatRows
 import kotlinx.coroutines.flow.emptyFlow
 import com.libeyond.imandroid.ui.theme.IMTheme
 import kotlinx.coroutines.launch
+
+/** typing 上报节流间隔：每次按键都发是错的，服务端要给全体成员中继。 */
+private const val TYPING_THROTTLE_MS = 3_000L
 
 /** 应用阶段。 */
 private enum class Phase { Restoring, Login, Main }
@@ -204,12 +209,72 @@ private fun MainScreen(client: IMClient, onLogout: () -> Unit) {
         buildChatRows(messages, pending, entry.first, entry.second)
     }
 
+    // —— 在线态：租约模型要求客户端自己敲心跳重算 ——
+    // 「租约到期」是纯粹的时间流逝，不触发任何回调；不主动重算的话，
+    // 用户静止不动时副标题会**永远**停在「在线」（PROTOCOL §5.5）。
+    val presenceMap by client.presence.presence.collectAsState()
+    val typingMap by client.presence.typing.collectAsState()
+    var tick by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(conv.convId) {
+        // 进会话即上报 watch（force=true：服务端对每次 watch 都回快照，
+        // 返回聊天页正靠它刷新，集合没变也要发）
+        if (!conv.isGroup && conv.peerUid.isNotEmpty()) {
+            client.messages.sendWatch(setOf(conv.peerUid), force = true)
+        }
+        var sinceSnapshot = 0L
+        while (true) {
+            kotlinx.coroutines.delay(Presence.TICK_MS)
+            tick = System.currentTimeMillis()
+            sinceSnapshot += Presence.TICK_MS
+            // 对端不在线时定期重拉快照：单聊 topic 随首条消息才建，
+            // 「刚加好友但从未聊过」的对端收不到上线帧，只靠帧永远升不回「在线」
+            if (sinceSnapshot >= Presence.SNAPSHOT_REFRESH_MS) {
+                sinceSnapshot = 0
+                val d = Presence.display(
+                    client.presence.snapshotOf(conv.peerUid).status,
+                    client.presence.snapshotOf(conv.peerUid).onlineUntil,
+                    client.presence.snapshotOf(conv.peerUid).lastSeen,
+                    System.currentTimeMillis(),
+                )
+                if (Presence.needsSnapshotRefresh(d)) client.messages.refreshConversations()
+            }
+        }
+    }
+    // 退出聊天页清空 watch 集
+    DisposableEffect(conv.convId) {
+        onDispose { client.messages.sendWatch(emptySet(), force = true) }
+    }
+
+    val subtitle = remember(conv.convId, presenceMap, typingMap, tick) {
+        val who = client.presence.typingIn(conv.convId, tick)
+        when {
+            who != null -> "正在输入…"
+            conv.isGroup -> ""
+            else -> {
+                val p = client.presence.snapshotOf(conv.peerUid)
+                Presence.label(Presence.display(p.status, p.onlineUntil, p.lastSeen, tick), tick)
+            }
+        }
+    }
+
+    // typing 节流：3 秒最多发一帧。每次按键都发是错的（服务端要给全体成员中继）。
+    var lastTypingSent by remember(conv.convId) { mutableStateOf(0L) }
+
     ChatScreen(
         convId = conv.convId,
         title = conv.title.ifBlank { conv.convId },
         myUid = owner,
         readSeq = entry.first,
         unread = entry.second,
+        subtitle = subtitle,
+        peerReadSeq = if (conv.isGroup) 0 else conv.peerReadSeq,
+        onTyping = {
+            val now = System.currentTimeMillis()
+            if (now - lastTypingSent >= TYPING_THROTTLE_MS) {
+                lastTypingSent = now
+                client.messages.sendTyping(conv.convId)
+            }
+        },
         rows = rows,
         input = input,
         onInputChange = { input = it },

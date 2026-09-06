@@ -5,6 +5,7 @@ import com.libeyond.imandroid.BuildConfig
 import com.libeyond.imandroid.sdk.api.AuthApi
 import com.libeyond.imandroid.data.MessageRepository
 import com.libeyond.imandroid.data.MessageService
+import com.libeyond.imandroid.data.PresenceStore
 import com.libeyond.imandroid.data.db.IMDatabase
 import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.sdk.api.DevicesApi
@@ -46,6 +47,7 @@ class IMClient(context: Context) {
 
     private val db = IMDatabase.get(context)
     val repo = MessageRepository(db.messages(), db.pending(), db.conversations())
+    val presence = PresenceStore()
 
     val tokens = TokenSession(session, auth, probe = { devices.probe() })
 
@@ -74,6 +76,7 @@ class IMClient(context: Context) {
         scope = scope,
         socket = socket,
         repo = repo,
+        presence = presence,
         conversationsApi = conversationsApi,
         ownerProvider = { session.uid },
     )
