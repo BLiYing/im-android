@@ -83,4 +83,16 @@ val ProtocolJson: Json = Json {
     encodeDefaults = false
     explicitNulls = false
     isLenient = false
+
+    /**
+     * **必须开**——后端是 Go，而 Go 的 **nil slice / nil map 会 marshal 成 `null`，不是 `[]` / `{}`**。
+     *
+     * 于是「没有新消息的会话」下发的是 `"messages": null`，非空 `List` 收到 null 会直接抛
+     * `JsonDecodingException`，**整帧 sync_resp 报废**——不是丢一个字段，是这一轮同步全没了。
+     * 2026-09-07 首次接同步时实测撞到：`frame_dispatch_failed {type=sync_resp}`，
+     * 客户端界面表现为「会话列表有，点进去一条消息都没有」。
+     *
+     * 开了它，null 会落到属性声明的默认值上（故**每个集合字段都必须给默认值**）。
+     */
+    coerceInputValues = true
 }

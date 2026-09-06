@@ -27,7 +27,12 @@ import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.session.RestoreOutcome
 import com.libeyond.imandroid.sdk.ws.SessionEndReason
 import com.libeyond.imandroid.ui.components.IMPrimaryButton
+import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.ui.screens.ChatScreen
+import com.libeyond.imandroid.ui.screens.ConversationListScreen
 import com.libeyond.imandroid.ui.screens.LoginScreen
+import com.libeyond.imandroid.ui.screens.buildChatRows
+import kotlinx.coroutines.flow.emptyFlow
 import com.libeyond.imandroid.ui.theme.IMTheme
 import kotlinx.coroutines.launch
 
@@ -131,7 +136,7 @@ fun AppRoot(client: IMClient) {
             devLoginEnabled = BuildConfig.DEBUG,
         )
 
-        Phase.Main -> MainPlaceholder(
+        Phase.Main -> MainScreen(
             client = client,
             onLogout = {
                 scope.launch {
@@ -143,6 +148,84 @@ fun AppRoot(client: IMClient) {
     }
 }
 
+/**
+ * 主界面：会话列表 ⇄ 聊天页。
+ *
+ * 用一个 `openConv` 状态切换，不引 Navigation 库——两层而已。
+ * 真到了「会话 → 聊天 → 资料 → 群成员」四层时再引，届时也好一次性设计返回栈。
+ */
+@Composable
+private fun MainScreen(client: IMClient, onLogout: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val owner = client.uid.orEmpty()
+    var openConv by remember { mutableStateOf<ConversationEntity?>(null) }
+    var input by remember { mutableStateOf("") }
+
+    val conversations by remember(owner) {
+        if (owner.isEmpty()) emptyFlow() else client.repo.observeConversations(owner)
+    }.collectAsState(initial = emptyList())
+
+    val connState by client.socket.state.collectAsState()
+
+    // 进主界面就拉一次会话列表——WS 的 onConnected 也会拉，但那条路只在
+    // 「本次冷启动真的新建了连接」时触发；会话已存活时进来不会有 onConnected。
+    LaunchedEffect(owner) {
+        if (owner.isNotEmpty()) client.messages.refreshConversations()
+    }
+
+    val conv = openConv
+    if (conv == null) {
+        ConversationListScreen(
+            conversations = conversations,
+            onOpen = { openConv = it; input = "" },
+            onSettings = onLogout,
+            connected = connState == com.libeyond.imandroid.sdk.ws.ConnState.Connected,
+        )
+        return
+    }
+
+    val messages by remember(owner, conv.convId) {
+        client.repo.observeMessages(owner, conv.convId)
+    }.collectAsState(initial = emptyList())
+
+    val pending by remember(owner, conv.convId) {
+        client.repo.observePending(owner, conv.convId)
+    }.collectAsState(initial = emptyList())
+
+    val rows = remember(messages, pending, conv.readSeq, conv.unread) {
+        buildChatRows(messages, pending, conv.readSeq, conv.unread)
+    }
+
+    ChatScreen(
+        convId = conv.convId,
+        title = conv.title.ifBlank { conv.convId },
+        myUid = owner,
+        readSeq = conv.readSeq,
+        unread = conv.unread,
+        rows = rows,
+        input = input,
+        onInputChange = { input = it },
+        onSend = {
+            val text = input.trim()
+            if (text.isNotEmpty()) {
+                input = ""
+                scope.launch {
+                    client.messages.sendText(
+                        convId = conv.convId,
+                        to = if (conv.isGroup) conv.convId else conv.peerUid,
+                        text = text,
+                    )
+                }
+            }
+        },
+        onBack = { openConv = null },
+        onRetry = { cid -> scope.launch { client.messages.resend(cid) } },
+        onVisibleSeq = { seq ->
+            scope.launch { client.messages.markRead(conv.convId, seq) }
+        },
+    )
+}
+
 @Composable
 private fun Splash() {
     val c = IMTheme.colors
@@ -150,36 +233,6 @@ private fun Splash() {
         modifier = Modifier.fillMaxSize().background(c.groupedBackground),
         contentAlignment = Alignment.Center,
     ) { CircularProgressIndicator(color = c.accent) }
-}
-
-/** 主界面占位——会话列表在 P4 接上（`CLIENT_PARITY.md` M1「会话列表」行）。 */
-@Composable
-private fun MainPlaceholder(client: IMClient, onLogout: () -> Unit) {
-    val c = IMTheme.colors
-    val d = IMTheme.dimens
-    val state by client.socket.state.collectAsState()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(c.groupedBackground)
-            .systemBarsPadding()
-            .padding(d.space4),
-        verticalArrangement = Arrangement.spacedBy(d.space3, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("已登录", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
-        Text("@${client.username ?: "-"}", color = c.textSecondary)
-        Text(
-            text = "连接：${state.name}",
-            color = if (state.name == "Connected") c.online else c.textTertiary,
-        )
-        Text(
-            "会话列表待接（P4）",
-            style = MaterialTheme.typography.bodyMedium,
-            color = c.textTertiary,
-        )
-        IMPrimaryButton(text = "退出登录", onClick = onLogout)
-    }
 }
 
 /**

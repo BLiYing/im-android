@@ -88,3 +88,45 @@ class EnvelopeTest {
         assertTrue(!contentTypeAllowsCaption("text"))
     }
 }
+
+/**
+ * Go 后端的 nil slice / nil map 会 marshal 成 `null` 而不是 `[]` / `{}`。
+ * 这些用例钉住「收到 null 集合不能炸」——2026-09-07 实测撞到过：
+ * 没有新消息的会话下发 `"messages": null`，整帧 sync_resp 解析失败，
+ * 界面表现为「会话列表有，点进去一条消息都没有」。
+ */
+class GoNullCollectionTest {
+
+    @Test
+    fun `sync_resp 的 messages 为 null 时退化成空列表`() {
+        val json = """
+            {"conversations":[{"conv_id":"u_1_2","messages":null,
+             "latest_conv_seq":0,"covered_conv_seq":57,"has_more":false}]}
+        """.trimIndent()
+        val d = ProtocolJson.decodeFromString(
+            com.libeyond.imandroid.sdk.protocol.SyncRespData.serializer(), json
+        )
+        assertEquals(1, d.conversations.size)
+        assertTrue(d.conversations[0].messages.isEmpty())
+        assertEquals(57L, d.conversations[0].coveredConvSeq)
+    }
+
+    @Test
+    fun `conversations 整个为 null 时退化成空列表`() {
+        val d = ProtocolJson.decodeFromString(
+            com.libeyond.imandroid.sdk.protocol.SyncRespData.serializer(), """{"conversations":null}"""
+        )
+        assertTrue(d.conversations.isEmpty())
+    }
+
+    @Test
+    fun `非空字符串字段收到 null 时退化成默认值`() {
+        val d = ProtocolJson.decodeFromString(
+            com.libeyond.imandroid.sdk.protocol.MessageData.serializer(),
+            """{"conv_id":"u_1_2","conv_seq":7,"content":null,"content_type":null,"from":"1001"}""",
+        )
+        assertEquals("", d.content)
+        assertEquals("text", d.contentType)
+        assertEquals(7L, d.convSeq)
+    }
+}

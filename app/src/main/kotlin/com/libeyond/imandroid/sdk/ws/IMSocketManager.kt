@@ -259,6 +259,11 @@ class IMSocketManager(
                 log.w("ws_frame_parse_failed", "len" to text.length, "err" to e.javaClass.simpleName)
                 return
             }
+            // 只记帧类型与长度，不记正文——正文属业务内容，量大且含隐私。
+            // 真要看原始帧时临时把 text.take(N) 加回来（2026-09-07 排 sync_resp 时这么干过）。
+            if (env.type != FrameType.PONG) {
+                log.d("ws_frame", "type" to env.type, "len" to text.length)
+            }
             if (env.type == FrameType.PONG) {
                 probeJob?.cancel()
                 probeJob = null

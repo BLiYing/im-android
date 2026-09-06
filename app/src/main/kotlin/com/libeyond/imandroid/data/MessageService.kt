@@ -42,7 +42,14 @@ class MessageService(
                     dispatch(owner, env.type, env.data)
                 } catch (e: Exception) {
                     // 一帧处理失败不能掀翻整条收集流——否则之后所有消息都收不到。
-                    log.w("frame_dispatch_failed", "type" to env.type, "err" to e.javaClass.simpleName)
+                    // 带上异常消息：只记类名等于把线索扔了——2026-09-07 排 sync_resp
+                    // 解析失败时就因为只有 "JsonDecodingException" 而多花了一轮。
+                    log.w(
+                        "frame_dispatch_failed",
+                        "type" to env.type,
+                        "err" to e.javaClass.simpleName,
+                        "msg" to (e.message?.take(300) ?: ""),
+                    )
                 }
             }
         }
