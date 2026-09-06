@@ -106,8 +106,11 @@ data class ConversationEntity(
     val lastTimestamp: Long = 0,
     val lastConvSeq: Long = 0,
     val unread: Int = 0,
-    /** 群 @我 未读（M4-8）。 */
-    val mentionUnread: Int = 0,
+    /**
+     * 未读区间内有人 @我（含 @所有人），仅群聊有意义（M4-8）。
+     * **穿透免打扰**：muted 也要强提醒，故它不能被 muted 一笔带过。
+     */
+    val mentionUnread: Boolean = false,
     /** 我已读到的位点。 */
     val readSeq: Long = 0,
     /** 对端已读到的位点（单聊已读双勾用）。 */

@@ -3,6 +3,10 @@ package com.libeyond.imandroid.sdk
 import android.content.Context
 import com.libeyond.imandroid.BuildConfig
 import com.libeyond.imandroid.sdk.api.AuthApi
+import com.libeyond.imandroid.data.MessageRepository
+import com.libeyond.imandroid.data.MessageService
+import com.libeyond.imandroid.data.db.IMDatabase
+import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.sdk.api.DevicesApi
 import com.libeyond.imandroid.sdk.http.HttpClient
 import com.libeyond.imandroid.sdk.logging.IMLog
@@ -38,6 +42,10 @@ class IMClient(context: Context) {
 
     private val auth = AuthApi(http, device)
     private val devices = DevicesApi(http)
+    private val conversationsApi = ConversationsApi(http)
+
+    private val db = IMDatabase.get(context)
+    val repo = MessageRepository(db.messages(), db.pending(), db.conversations())
 
     val tokens = TokenSession(session, auth, probe = { devices.probe() })
 
@@ -61,6 +69,15 @@ class IMClient(context: Context) {
         tokenProvider = { session.token },
     )
 
+    /** 收发编排。UI 通过它发消息、通过 [repo] 读库。 */
+    val messages = MessageService(
+        scope = scope,
+        socket = socket,
+        repo = repo,
+        conversationsApi = conversationsApi,
+        ownerProvider = { session.uid },
+    )
+
     /** 服务端否定了这条会话（被踢 / 被封）。UI 订阅它回登录页。 */
     val sessionEnded: SharedFlow<com.libeyond.imandroid.sdk.ws.SessionEndReason> get() = socket.sessionEnded
 
@@ -69,6 +86,8 @@ class IMClient(context: Context) {
     val isLoggedIn: Boolean get() = session.isLoggedIn
 
     init {
+        messages.start()
+
         // 会话被服务端否定 → 清本地凭据。**不在这里跳 UI**（那是 UI 的事），
         // 但必须清凭据，否则下次冷启动又拿着一枚已死的 token 去探活。
         scope.launch {
@@ -100,6 +119,12 @@ class IMClient(context: Context) {
     /** 已有有效会话时连接。 */
     fun connect() = socket.connect()
 
+    /**
+     * 退出登录。
+     *
+     * **不清本地消息库**：切回同一账号时数据还在（iOS/Web 同构，单库多账号靠
+     * ownerUid 隔离）。真要清是「删除账号数据」那个独立功能，不是退出登录。
+     */
     suspend fun logout() {
         socket.disconnect()
         tokens.logout()

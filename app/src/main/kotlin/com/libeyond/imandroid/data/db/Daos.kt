@@ -76,6 +76,9 @@ interface PendingMessageDao {
     @Query("SELECT * FROM pending_message WHERE ownerUid = :owner AND state = 'Sending' ORDER BY createdAt ASC")
     suspend fun inFlight(owner: String): List<PendingMessageEntity>
 
+    @Query("SELECT * FROM pending_message WHERE ownerUid = :owner AND clientMsgId = :cid")
+    suspend fun byClientId(owner: String, cid: String): PendingMessageEntity?
+
     @Query("UPDATE pending_message SET state = :state, errorCode = :code WHERE ownerUid = :owner AND clientMsgId = :cid")
     suspend fun markState(owner: String, cid: String, state: String, code: Int)
 

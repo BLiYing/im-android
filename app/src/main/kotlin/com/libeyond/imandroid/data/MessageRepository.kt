@@ -1,0 +1,304 @@
+package com.libeyond.imandroid.data
+
+import com.libeyond.imandroid.data.db.ConversationDao
+import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.data.db.MessageDao
+import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.data.db.PendingMessageDao
+import com.libeyond.imandroid.data.db.PendingMessageEntity
+import com.libeyond.imandroid.data.db.SendState
+import com.libeyond.imandroid.sdk.api.ConversationSummary
+import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.sdk.protocol.AckData
+import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.sdk.protocol.ErrorData
+import com.libeyond.imandroid.sdk.protocol.MessageData
+import com.libeyond.imandroid.sdk.protocol.ReceiptData
+import kotlinx.coroutines.flow.Flow
+import java.util.UUID
+
+/**
+ * 消息收发与落库。
+ *
+ * ## 发送链路（PROTOCOL §4）
+ * ```
+ * 本地落 pending(state=Sending) + 生成 client_msg_id
+ *   → send_msg 上行
+ *   → ack 回来：落 message 表（真实 conv_seq）+ 从 pending 移除
+ *   → 或 error 带 client_msg_id：pending 标 Failed + 记业务码
+ * ```
+ * **超时重发用同一个 `client_msg_id`**，服务端靠它幂等去重，重发不会产生重复消息。
+ *
+ * ## 为什么先落库再发
+ * 杀进程/断网时未发出的消息不能凭空消失。iOS 有一类长期欠账正是"发送中占位不落库"——
+ * 粘贴图/相机拍照那两条路的失败气泡 content 为空不落库，重进会话就没了，
+ * 后来加的「红❗点击重发」自然也覆盖不到它们。本端从第一版就全部落库。
+ */
+class MessageRepository(
+    private val messages: MessageDao,
+    private val pending: PendingMessageDao,
+    private val conversations: ConversationDao,
+) {
+    private val log = IMLog.tag("IM.Msg")
+
+    // ————————————————— 读 —————————————————
+
+    fun observeConversations(owner: String): Flow<List<ConversationEntity>> =
+        conversations.observeList(owner)
+
+    fun observeMessages(owner: String, convId: String): Flow<List<MessageEntity>> =
+        messages.observeAll(owner, convId)
+
+    fun observePending(owner: String, convId: String): Flow<List<PendingMessageEntity>> =
+        pending.observe(owner, convId)
+
+    fun observeTotalUnread(owner: String): Flow<Int> = conversations.observeTotalUnread(owner)
+
+    suspend fun syncCursors(owner: String): List<Pair<String, Long>> =
+        conversations.all(owner).map { it.convId to it.syncedConvSeq }
+
+    // ————————————————— 发 —————————————————
+
+    /** 生成一条待发消息并落库。调用方拿返回值去发帧。 */
+    suspend fun createPending(
+        owner: String,
+        convId: String,
+        to: String,
+        content: String,
+        contentType: String = ContentType.TEXT,
+        replyToConvSeq: Long? = null,
+    ): PendingMessageEntity {
+        val p = PendingMessageEntity(
+            ownerUid = owner,
+            clientMsgId = UUID.randomUUID().toString(),
+            convId = convId,
+            to = to,
+            contentType = contentType,
+            content = content,
+            replyToConvSeq = replyToConvSeq,
+            state = SendState.Sending.name,
+            createdAt = System.currentTimeMillis(),
+        )
+        pending.put(p)
+        log.i("msg_pending_created", "convId" to convId, "cid" to p.clientMsgId)
+        return p
+    }
+
+    /** 在途未确认的消息——重连后按同一 `client_msg_id` 重发。 */
+    suspend fun inFlight(owner: String): List<PendingMessageEntity> = pending.inFlight(owner)
+
+    /**
+     * ack 到达：落真身、清待发、bump 会话。
+     *
+     * **正文要从 pending 里取**——ack 只回 id/seq/时间戳，不回带正文（PROTOCOL §4.2）。
+     * pending 已被清掉（重复 ack / 进程重启后重发）时只能落一条没正文的骨架，
+     * 靠后续 sync 用同一 conv_seq 幂等补全。
+     */
+    suspend fun onAck(owner: String, ack: AckData) {
+        val cached = pending.byClientId(owner, ack.clientMsgId)
+        if (cached == null) {
+            log.w("msg_ack_without_pending", "cid" to ack.clientMsgId, "seq" to ack.convSeq)
+        }
+        val row = MessageEntity(
+            ownerUid = owner,
+            convId = ack.convId,
+            convSeq = ack.convSeq,
+            serverMsgId = ack.serverMsgId,
+            clientMsgId = ack.clientMsgId,
+            sender = owner,
+            contentType = cached?.contentType ?: ContentType.TEXT,
+            content = cached?.content.orEmpty(),
+            caption = cached?.caption,
+            fileName = cached?.fileName,
+            fileSize = cached?.fileSize,
+            replyToConvSeq = cached?.replyToConvSeq,
+            timestamp = ack.timestamp,
+        )
+        messages.upsert(row)
+        pending.remove(owner, ack.clientMsgId)
+        bumpConversation(owner, ack.convId, row)
+        log.i("msg_acked", "convId" to ack.convId, "seq" to ack.convSeq, "cid" to ack.clientMsgId)
+    }
+
+    /**
+     * 服务端拒绝了某条发送（PROTOCOL §8：error 带 client_msg_id）。
+     * 常见码：200102 被拉黑 / 200103 非好友 / 300004 被禁言 / 300203 不是群成员。
+     */
+    suspend fun onSendRejected(owner: String, err: ErrorData) {
+        val cid = err.clientMsgId ?: return
+        pending.markState(owner, cid, SendState.Failed.name, err.code)
+        log.w("msg_send_rejected", "cid" to cid, "code" to err.code)
+    }
+
+    // ————————————————— 收 —————————————————
+
+    /**
+     * 收到一条消息（new_msg 或 sync_resp 里的一条）。
+     *
+     * 幂等：主键 `(owner, convId, convSeq)` upsert，重复补拉自动收敛。
+     */
+    suspend fun onIncoming(owner: String, m: MessageData, bumpUnread: Boolean) {
+        val row = m.toEntity(owner)
+        messages.upsert(row)
+        bumpConversation(owner, m.convId, row, incUnread = bumpUnread && m.from != owner)
+    }
+
+    /** 批量落库（sync_resp）。返回首个失败的 conv_seq；全部成功返回 null。 */
+    suspend fun onIncomingBatch(owner: String, list: List<MessageData>): Long? {
+        if (list.isEmpty()) return null
+        return try {
+            messages.upsert(list.map { it.toEntity(owner) })
+            null
+        } catch (e: Exception) {
+            log.w("msg_batch_write_failed", "count" to list.size, "err" to e.javaClass.simpleName)
+            // 逐条重试，定位首个失败点——游标只能推进到它之前（SyncCursorRule）
+            var firstFailed: Long? = null
+            for (m in list.sortedBy { it.convSeq }) {
+                try {
+                    messages.upsert(m.toEntity(owner))
+                } catch (_: Exception) {
+                    firstFailed = m.convSeq
+                    break
+                }
+            }
+            firstFailed
+        }
+    }
+
+    /** 推进同步游标。**只接受 [SyncCursorRule] 算出的值。** */
+    suspend fun advanceCursor(owner: String, convId: String, covered: Long, firstFailedSeq: Long?) {
+        val cur = conversations.byId(owner, convId)?.syncedConvSeq ?: 0
+        val next = SyncCursorRule.advance(cur, covered, firstFailedSeq)
+        if (next != cur) {
+            conversations.setSyncedConvSeq(owner, convId, next)
+            log.d("sync_cursor_advanced", "convId" to convId, "from" to cur, "to" to next)
+        }
+    }
+
+    /** 会话列表整表刷新（HTTP 拉回来的权威快照）。 */
+    suspend fun applyConversationList(owner: String, list: List<ConversationSummary>) {
+        val rows = list.map { s ->
+            // 游标是本地状态，服务端快照里没有——**必须保留原值**，
+            // 否则每次刷新会话列表都会把同步进度清零，触发全量重拉。
+            val existing = conversations.byId(owner, s.convId)
+            ConversationEntity(
+                ownerUid = owner,
+                convId = s.convId,
+                isGroup = s.isGroup,
+                peerUid = s.peer,
+                title = DisplayName.ofConversation(s),
+                avatarUrl = if (s.isGroup) s.avatarUrl else s.peerAvatarUrl,
+                peerRemark = s.peerRemark,
+                lastContent = s.lastMessage?.let { previewOf(it) } ?: "",
+                lastContentType = s.lastMessage?.contentType ?: ContentType.TEXT,
+                lastTimestamp = s.lastMessage?.timestamp ?: 0,
+                lastConvSeq = s.latestConvSeq,
+                unread = s.unread,
+                mentionUnread = s.mentionUnread,
+                readSeq = s.readSeq,
+                peerReadSeq = s.peerReadSeq,
+                syncedConvSeq = existing?.syncedConvSeq ?: 0,
+                pinnedAt = s.pinnedAt,
+                muted = s.muted,
+                markedUnread = s.markedUnread,
+            )
+        }
+        conversations.upsert(rows)
+        log.i("conversations_applied", "count" to rows.size)
+    }
+
+    suspend fun markRead(owner: String, convId: String, upTo: Long) {
+        conversations.markRead(owner, convId, upTo)
+    }
+
+    suspend fun applyPeerReceipt(owner: String, r: ReceiptData) {
+        if (r.status != ReceiptData.READ) return
+        val c = conversations.byId(owner, r.convId) ?: return
+        if (r.from == owner) {
+            // 本人其它端已读 → 本端未读清零（多端已读同步）
+            conversations.markRead(owner, r.convId, maxOf(c.readSeq, r.upToConvSeq))
+        } else {
+            conversations.upsert(c.copy(peerReadSeq = maxOf(c.peerReadSeq, r.upToConvSeq)))
+        }
+    }
+
+    suspend fun clearAccount(owner: String) {
+        messages.clearAccount(owner)
+        pending.clearAccount(owner)
+        conversations.clearAccount(owner)
+    }
+
+    // ————————————————— 内部 —————————————————
+
+    private suspend fun bumpConversation(
+        owner: String,
+        convId: String,
+        row: MessageEntity,
+        incUnread: Boolean = false,
+    ) {
+        val c = conversations.byId(owner, convId) ?: ConversationEntity(
+            ownerUid = owner,
+            convId = convId,
+            isGroup = convId.startsWith("g_"),
+        )
+        conversations.upsert(
+            c.copy(
+                lastContent = previewOfEntity(row),
+                lastContentType = row.contentType,
+                lastTimestamp = maxOf(c.lastTimestamp, row.timestamp),
+                lastConvSeq = maxOf(c.lastConvSeq, row.convSeq),
+                unread = if (incUnread) c.unread + 1 else c.unread,
+            )
+        )
+    }
+
+    private fun previewOf(m: MessageData): String = when (m.contentType) {
+        ContentType.TEXT -> m.content
+        ContentType.IMAGE -> m.caption?.takeIf { it.isNotBlank() } ?: "[图片]"
+        ContentType.VIDEO -> m.caption?.takeIf { it.isNotBlank() } ?: "[视频]"
+        ContentType.VOICE -> "[语音]"
+        ContentType.FILE -> m.caption?.takeIf { it.isNotBlank() } ?: "[文件]"
+        ContentType.CONTACT -> "[个人名片]"
+        ContentType.CHAT_RECORD -> "[聊天记录]"
+        ContentType.SYSTEM -> m.content
+        else -> m.content
+    }
+
+    private fun previewOfEntity(m: MessageEntity): String = when (m.contentType) {
+        ContentType.TEXT -> m.content
+        ContentType.IMAGE -> m.caption?.takeIf { it.isNotBlank() } ?: "[图片]"
+        ContentType.VIDEO -> m.caption?.takeIf { it.isNotBlank() } ?: "[视频]"
+        ContentType.VOICE -> "[语音]"
+        ContentType.FILE -> m.caption?.takeIf { it.isNotBlank() } ?: "[文件]"
+        ContentType.CONTACT -> "[个人名片]"
+        ContentType.CHAT_RECORD -> "[聊天记录]"
+        else -> m.content
+    }
+}
+
+private fun MessageData.toEntity(owner: String) = MessageEntity(
+    ownerUid = owner,
+    convId = convId,
+    convSeq = convSeq,
+    serverMsgId = serverMsgId,
+    sender = from,
+    fromNickname = fromNickname,
+    fromRole = fromRole,
+    contentType = contentType,
+    content = content,
+    caption = caption,
+    timestamp = timestamp,
+    fileName = fileName,
+    fileSize = fileSize,
+    mediaW = mediaW,
+    mediaH = mediaH,
+    duration = duration,
+    waveform = waveform,
+    replyToConvSeq = replyToConvSeq,
+    replySnapshot = replySnapshot,
+    replyToFrom = replyToFrom,
+    recalledAt = recalledAt,
+    deletedAt = deletedAt,
+    editedAt = editedAt,
+    pinnedAt = pinnedAt,
+)
