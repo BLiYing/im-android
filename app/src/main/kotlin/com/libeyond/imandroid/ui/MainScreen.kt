@@ -58,6 +58,15 @@ private enum class Tab(val label: String) { Chats("消息"), Contacts("通讯录
 fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     val owner = client.uid.orEmpty()
     var tab by remember { mutableStateOf(Tab.Chats) }
+    // 本地好友关系表：uid → status。资料页进页即用它定型，避免闪动。
+    var knownRelations by remember(owner) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    LaunchedEffect(owner) {
+        if (owner.isNotEmpty()) {
+            runCatching { client.contacts.friends() }
+                .onSuccess { list -> knownRelations = list.associate { it.userId to it.status } }
+        }
+    }
+
     var openConv by remember { mutableStateOf<ConversationEntity?>(null) }
 
     val conversations by remember(owner) {
@@ -90,7 +99,11 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
             UserProfileHost(
                 client = client,
                 userId = infoConv.peerUid,
-                knownRelation = "accepted",
+                // **不能写死 accepted**：和非好友也可能有会话（对方先加了我又删、
+                // 群成员单聊、系统账号…）。写死会让非好友进资料页先显示成好友、
+                // 拉到真实关系后再闪变成「加好友」——正是 2026-08-30 三端收口
+                // 要消除的那种闪动。空串=未知，由 Host 自己查本地好友表定型。
+                knownRelation = knownRelations[infoConv.peerUid].orEmpty(),
                 seed = UserCard(
                     userId = infoConv.peerUid,
                     nickname = infoConv.title,
@@ -117,6 +130,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
 
     var menuFor by remember { mutableStateOf<ConversationEntity?>(null) }
     val scope = rememberCoroutineScope()
+
 
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(IMTheme.colors.groupedBackground)) {

@@ -168,10 +168,18 @@ fun ChatHost(
     var menuFor by remember { mutableStateOf<MessageEntity?>(null) }
     var replyTo by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
 
-    // 群里我是不是管理员——决定能否删他人的消息。
-    // TODO(P10 群聊)：接 GET /groups/{id} 的 my_role 后换成真值；
-    //   现在恒 false，最坏结果是**少给**一个菜单项，不会越权（服务端也会拦）。
-    val iAmManager = false
+    // 群里我是不是管理员——决定「为所有人删除」给不给。
+    //
+    // 只影响**菜单显不显**，服务端仍会独立校验（越权回 300006）。
+    // 即便这里判错也不会越权，最坏是多显/少显一个菜单项——所以不必为它阻塞首屏，
+    // 拉不到就按 false 走。
+    var iAmManager by remember(conv.convId) { mutableStateOf(false) }
+    LaunchedEffect(conv.convId) {
+        if (conv.isGroup) {
+            runCatching { client.groups.info(conv.convId) }
+                .onSuccess { iAmManager = it.iAmManager }
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
     ChatScreen(
