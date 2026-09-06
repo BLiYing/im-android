@@ -51,7 +51,12 @@ private const val WINDOW_PAGE = 200
  * [ChatScreen] 保持纯展示（CODING_STYLE §7②）。
  */
 @Composable
-fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
+fun ChatHost(
+    client: IMClient,
+    conv: ConversationEntity,
+    onBack: () -> Unit,
+    onOpenInfo: () -> Unit,
+) {
     // 系统返回键要回会话列表，不是退出 App。
     // 不拦的话「进会话 → 按返回 → App 没了」，这是 Android 用户最直觉的一个动作。
     BackHandler(onBack = onBack)
@@ -206,6 +211,7 @@ fun ChatHost(client: IMClient, conv: ConversationEntity, onBack: () -> Unit) {
         onBack = onBack,
         onRetry = { cid -> scope.launch { client.messages.resend(cid) } },
         onVisibleSeq = { seq -> scope.launch { client.messages.markRead(conv.convId, seq) } },
+        onOpenInfo = onOpenInfo,
         onPickMedia = { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         onLoadOlder = {
             // 只有窗口已经装满时才继续加——没装满说明本地就这么多，

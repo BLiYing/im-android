@@ -153,6 +153,8 @@ fun ChatScreen(
     onLoadOlder: () -> Unit,
     /** 点「+」选图片。 */
     onPickMedia: () -> Unit,
+    /** 点标题进详情（群资料 / 用户资料）。 */
+    onOpenInfo: () -> Unit,
     /** 媒体地址补全用。 */
     host: String,
     useTls: Boolean,
@@ -256,7 +258,7 @@ fun ChatScreen(
                 colorFilter = ColorFilter.tint(c.accent),
             )
             Spacer(Modifier.width(d.space3))
-            Column {
+            Column(Modifier.clickable { onOpenInfo() }) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleLarge,

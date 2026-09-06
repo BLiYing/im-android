@@ -9,6 +9,7 @@ import com.libeyond.imandroid.data.PresenceStore
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.IMDatabase
 import com.libeyond.imandroid.sdk.api.ContactApi
+import com.libeyond.imandroid.sdk.api.GroupApi
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.sdk.api.DevicesApi
@@ -48,6 +49,7 @@ class IMClient(context: Context) {
     private val devices = DevicesApi(http)
     val conversationsApi = ConversationsApi(http)
     val contacts = ContactApi(http)
+    val groups = GroupApi(http)
     private val uploadApi = UploadApi(http) { session.token }
 
     private val db = IMDatabase.get(context)

@@ -74,10 +74,32 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
         if (owner.isNotEmpty()) client.messages.refreshConversations()
     }
 
-    // —— 二级页：聊天（占满全屏，不显 Tab 栏）——
+    // —— 二级页：聊天 / 群资料（占满全屏，不显 Tab 栏）——
+    var infoForConv by remember { mutableStateOf<ConversationEntity?>(null) }
+    val infoConv = infoForConv
+    if (infoConv != null) {
+        if (infoConv.isGroup) {
+            GroupInfoHost(
+                client = client,
+                convId = infoConv.convId,
+                onBack = { infoForConv = null },
+                onLeft = { infoForConv = null; openConv = null },
+            )
+        } else {
+            // 单聊详情待接（P13）；先退回聊天页，别把用户卡在空白页
+            infoForConv = null
+        }
+        return
+    }
+
     val conv = openConv
     if (conv != null) {
-        ChatHost(client = client, conv = conv, onBack = { openConv = null })
+        ChatHost(
+            client = client,
+            conv = conv,
+            onBack = { openConv = null },
+            onOpenInfo = { infoForConv = conv },
+        )
         return
     }
 
