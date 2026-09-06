@@ -46,6 +46,17 @@ data class ConversationSummary(
     val remark: String = "",
 )
 
+/**
+ * 部署级配额/能力（`GET /server-config`）。
+ * **客户端不得硬编码群上限**，一律读这里（与账号级 capabilities 不是一回事）。
+ */
+@Serializable
+data class ServerConfig(
+    @SerialName("max_group_members") val maxGroupMembers: Int = 0,
+    @SerialName("supergroup_enabled") val supergroupEnabled: Boolean = false,
+    @SerialName("max_supergroup_members") val maxSupergroupMembers: Int = 0,
+)
+
 @Serializable
 private data class ConversationsResp(
     val conversations: List<ConversationSummary> = emptyList(),
@@ -75,6 +86,9 @@ class ConversationsApi(private val http: HttpClient) {
     suspend fun delete(convId: String) {
         http.call("DELETE", "/api/v1/conversations/$convId")
     }
+
+    suspend fun serverConfig(): ServerConfig =
+        decode(http.call("GET", "/api/v1/server-config"), ServerConfig.serializer())
 
     /** 「仅为我删除」一条消息（§6.7.1）。服务端随后推 msg_hidden 给本人全部设备。 */
     suspend fun hideMessage(convId: String, convSeq: Long) {

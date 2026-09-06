@@ -14,11 +14,12 @@ import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.ui.screens.ContactsScreen
+import com.libeyond.imandroid.ui.screens.CreateGroupScreen
 import com.libeyond.imandroid.ui.screens.NewFriendsScreen
 import com.libeyond.imandroid.ui.screens.UserSearchScreen
 import kotlinx.coroutines.launch
 
-private enum class ContactsPage { List, NewFriends, Search }
+private enum class ContactsPage { List, NewFriends, Search, CreateGroup }
 
 /**
  * 通讯录接线层：好友列表 / 新的朋友 / 找人。
@@ -36,6 +37,16 @@ fun ContactsHost(client: IMClient, onOpenChat: (ConversationEntity) -> Unit) {
     var searching by remember { mutableStateOf(false) }
     var searched by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf("") }
+
+    var groupName by remember { mutableStateOf("") }
+    var groupPicks by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var creating by remember { mutableStateOf(false) }
+    var createError by remember { mutableStateOf("") }
+    // **群上限读服务端配置，不硬编码**（要装更多人走大群，不是调大这个数）
+    var maxMembers by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        runCatching { maxMembers = client.conversationsApi.serverConfig().maxGroupMembers }
+    }
 
     suspend fun reload() {
         try {
@@ -64,6 +75,10 @@ fun ContactsHost(client: IMClient, onOpenChat: (ConversationEntity) -> Unit) {
             pendingCount = pending.size,
             onOpenNewFriends = { page = ContactsPage.NewFriends },
             onOpenSearch = { page = ContactsPage.Search; searched = false; results = emptyList() },
+            onCreateGroup = {
+                page = ContactsPage.CreateGroup
+                groupName = ""; groupPicks = emptySet(); createError = ""
+            },
             onOpenFriend = { f -> onOpenChat(client.conversationStubFor(f.userId, f.displayName, f.avatarUrl)) },
         )
 
@@ -72,6 +87,32 @@ fun ContactsHost(client: IMClient, onOpenChat: (ConversationEntity) -> Unit) {
             requested = requested,
             onAccept = { f -> scope.launch { runCatching { client.contacts.accept(f.userId) }; reload() } },
             onReject = { f -> scope.launch { runCatching { client.contacts.reject(f.userId) }; reload() } },
+            onBack = { page = ContactsPage.List },
+        )
+
+        ContactsPage.CreateGroup -> CreateGroupScreen(
+            name = groupName,
+            onNameChange = { groupName = it },
+            friends = accepted,
+            selected = groupPicks,
+            onToggle = { id ->
+                groupPicks = if (id in groupPicks) groupPicks - id else groupPicks + id
+            },
+            maxMembers = maxMembers,
+            busy = creating,
+            error = createError,
+            onCreate = {
+                scope.launch {
+                    creating = true; createError = ""
+                    try {
+                        client.groups.create(groupName.trim(), groupPicks.toList())
+                        client.messages.refreshConversations()
+                        page = ContactsPage.List
+                    } catch (e: ApiException) {
+                        createError = if (e.isTransport) "网络请求失败" else e.message
+                    } finally { creating = false }
+                }
+            },
             onBack = { page = ContactsPage.List },
         )
 

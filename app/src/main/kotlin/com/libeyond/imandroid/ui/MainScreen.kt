@@ -33,6 +33,7 @@ import com.composables.icons.lucide.MessageCircle
 import com.composables.icons.lucide.User
 import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.ConversationAction
@@ -86,8 +87,19 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                 onLeft = { infoForConv = null; openConv = null },
             )
         } else {
-            // 单聊详情待接（P13）；先退回聊天页，别把用户卡在空白页
-            infoForConv = null
+            UserProfileHost(
+                client = client,
+                userId = infoConv.peerUid,
+                knownRelation = "accepted",
+                seed = UserCard(
+                    userId = infoConv.peerUid,
+                    nickname = infoConv.title,
+                    avatarUrl = infoConv.avatarUrl,
+                    remark = infoConv.peerRemark,
+                ),
+                onSendMessage = { infoForConv = null },
+                onBack = { infoForConv = null },
+            )
         }
         return
     }

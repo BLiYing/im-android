@@ -30,6 +30,7 @@ import androidx.compose.foundation.Image
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.UserPlus
+import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -46,6 +47,7 @@ fun ContactsScreen(
     pendingCount: Int,
     onOpenNewFriends: () -> Unit,
     onOpenSearch: () -> Unit,
+    onCreateGroup: () -> Unit,
     onOpenFriend: (FriendEntry) -> Unit,
 ) {
     val c = IMTheme.colors
@@ -74,6 +76,12 @@ fun ContactsScreen(
                     title = "新的朋友",
                     badge = pendingCount,
                     onClick = onOpenNewFriends,
+                )
+                EntryRow(
+                    icon = { Image(Lucide.Users, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onAccent)) },
+                    title = "发起群聊",
+                    badge = 0,
+                    onClick = onCreateGroup,
                 )
                 SectionLabel("好友")
             }
