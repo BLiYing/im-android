@@ -13,6 +13,7 @@ serialization = "1.7.3"
 coroutines = "1.9.0"
 datastore = "1.1.1"
 room = "2.6.1"
+lucide = "1.1.0"
 junit = "4.13.2"
 androidxJunit = "1.2.1"
 espresso = "3.6.1"
@@ -38,6 +39,11 @@ okhttp                      = { group = "com.squareup.okhttp3",      name = "okh
 okhttp-logging              = { group = "com.squareup.okhttp3",      name = "logging-interceptor",      version.ref = "okhttp" }
 kotlinx-serialization-json  = { group = "org.jetbrains.kotlinx",     name = "kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-coroutines-android  = { group = "org.jetbrains.kotlinx",     name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+
+# --- 图标（lucide，ISC 许可）---
+# 与 im-web 的 lucide-react 同一套设计语言；iOS 用 SF Symbols，三端语义对齐。
+# 选它而不是 Material Icons：后者风格偏 Google，与本项目的 Telegram 观感不合。
+icons-lucide                = { group = "com.composables",         name = "icons-lucide",             version.ref = "lucide" }
 
 # --- 本地存储（对应 iOS 的 SQLite/FMDB、Web 的 IndexedDB）---
 androidx-datastore-prefs    = { group = "androidx.datastore",        name = "datastore-preferences",    version.ref = "datastore" }
