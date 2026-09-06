@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -48,6 +49,12 @@ android {
         buildConfig = true
     }
 
+    // Room schema 导出：迁移测试需要，且把表结构变更纳入 code review 视野
+    // （schema JSON 进版本库，加一列就能在 diff 里看见）。
+    ksp {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
+
     // 源码目录用 kotlin/ 而非 java/（纯 Kotlin 工程）
     sourceSets {
         getByName("main")  { kotlin.srcDirs("src/main/kotlin") }
@@ -77,8 +84,12 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.datastore.prefs)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
 
     testImplementation(libs.junit)
+    testImplementation(libs.room.testing)
     testImplementation(libs.kotlinx.coroutines.test)
 
     androidTestImplementation(libs.androidx.junit)

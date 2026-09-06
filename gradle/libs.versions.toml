@@ -14,6 +14,7 @@ coroutines = "1.9.0"
 datastore = "1.1.1"
 room = "2.6.1"
 lucide = "1.1.0"
+ksp = "2.0.21-1.0.28"
 junit = "4.13.2"
 androidxJunit = "1.2.1"
 espresso = "3.6.1"
@@ -49,6 +50,8 @@ icons-lucide                = { group = "com.composables",         name = "icons
 androidx-datastore-prefs    = { group = "androidx.datastore",        name = "datastore-preferences",    version.ref = "datastore" }
 room-runtime                = { group = "androidx.room",             name = "room-runtime",             version.ref = "room" }
 room-ktx                    = { group = "androidx.room",             name = "room-ktx",                 version.ref = "room" }
+room-compiler               = { group = "androidx.room",             name = "room-compiler",            version.ref = "room" }
+room-testing                = { group = "androidx.room",             name = "room-testing",             version.ref = "room" }
 
 # --- 测试 ---
 junit                       = { group = "junit",                     name = "junit",                    version.ref = "junit" }
@@ -63,3 +66,4 @@ android-application  = { id = "com.android.application",                  versio
 kotlin-android       = { id = "org.jetbrains.kotlin.android",             version.ref = "kotlin" }
 kotlin-compose       = { id = "org.jetbrains.kotlin.plugin.compose",      version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp                  = { id = "com.google.devtools.ksp",                   version.ref = "ksp" }
