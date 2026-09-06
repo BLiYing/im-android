@@ -191,8 +191,33 @@ fun ChatScreen(
     }
 
     // —— 滚到顶部附近就加载更早的一页 ——
+    //
+    // 两件事一起做，缺一条都会出问题：
+    // ① **在途守卫**：不守的话 rows.size 一变 effect 就再触发，一路把整个会话
+    //    （可能十几万条）全加载进来，等于没做窗口。
+    // ② **翻页保位**：在顶部插入 N 条后，firstVisibleItemIndex 仍指向同一个**下标**，
+    //    而那个下标现在对应的是更早的消息——用户会看到列表凭空跳走。
+    //    补偿一律**按同一条消息**（下标 + 新增条数），不按 contentSize 差值。
+    var pendingOlder by remember(convId) { mutableStateOf(false) }
+    var rowsBeforeLoad by remember(convId) { mutableStateOf(0) }
+
     LaunchedEffect(rows.size, listState.firstVisibleItemIndex) {
-        if (didEntryScroll && rows.isNotEmpty() && listState.firstVisibleItemIndex <= LOAD_OLDER_THRESHOLD) {
+        if (!didEntryScroll || rows.isEmpty()) return@LaunchedEffect
+
+        // 上一页加载回来了 → 把视口按同一条消息补偿回去
+        if (pendingOlder && rows.size > rowsBeforeLoad) {
+            val added = rows.size - rowsBeforeLoad
+            pendingOlder = false
+            listState.scrollToItem(
+                (listState.firstVisibleItemIndex + added).coerceAtMost(rows.lastIndex),
+                listState.firstVisibleItemScrollOffset,
+            )
+            return@LaunchedEffect
+        }
+
+        if (!pendingOlder && listState.firstVisibleItemIndex <= LOAD_OLDER_THRESHOLD) {
+            pendingOlder = true
+            rowsBeforeLoad = rows.size
             onLoadOlder()
         }
     }

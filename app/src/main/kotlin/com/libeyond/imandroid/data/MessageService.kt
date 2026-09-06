@@ -390,8 +390,28 @@ class MessageService(
     private suspend fun resendInFlight(owner: String) {
         val list = repo.inFlight(owner)
         if (list.isEmpty()) return
-        log.i("resend_in_flight", "count" to list.size)
-        list.forEach {
+
+        // **正文还是本地 uri 的媒体消息不能重发**：那是「上传没走完就被杀进程/断线」的残留。
+        // 原样发出去，服务端会把 `content://media/...` 当消息正文存下来，
+        // 收件人拿到一个**永远打不开的地址**——而且这条错误消息再也改不回来了。
+        // 字节已经不在内存里（Uri 的读权限也随进程没了），重发无从谈起，
+        // 只能标失败让用户重选一次。
+        val (resendable, stale) = list.partition { !isLocalUri(it.content) }
+        stale.forEach {
+            repo.onSendRejected(
+                owner,
+                com.libeyond.imandroid.sdk.protocol.ErrorData(
+                    code = com.libeyond.imandroid.sdk.protocol.ErrCode.PARAM_INVALID,
+                    message = "上传未完成，请重新发送",
+                    clientMsgId = it.clientMsgId,
+                ),
+            )
+        }
+        if (stale.isNotEmpty()) log.w("resend_dropped_unuploaded", "count" to stale.size)
+
+        if (resendable.isEmpty()) return
+        log.i("resend_in_flight", "count" to resendable.size)
+        resendable.forEach {
             transmit(
                 it.clientMsgId, it.convId, it.to, it.contentType, it.content, it.replyToConvSeq,
                 it.fileName, it.fileSize, it.caption,
@@ -399,3 +419,13 @@ class MessageService(
         }
     }
 }
+
+
+/**
+ * 判断一条待发消息的正文是不是**本地** uri（还没上传完）。
+ *
+ * 抽成顶层纯函数便于单测——这条判据错了不会报错，只会让收件人收到一个
+ * 打不开的 `content://` 地址，而且再也改不回来。
+ */
+internal fun isLocalUri(content: String): Boolean =
+    content.startsWith("content://") || content.startsWith("file://")
