@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# pre-commit —— 提交前体检。
+#
+#   安装（每个 clone 一次）：  ./scripts/install-hooks.sh
+#   应急绕过单次提交（不推荐）：git commit --no-verify
+set -u
+
+REPO_ROOT=$(git rev-parse --show-toplevel) || exit 1
+
+# 「改一处，先看兄弟」——登记表与脚本都在同级的 IMServer 仓（四仓共用一份，避免各抄一份）。
+# 只 WARN 不拦；没有那个仓（只 clone 了本仓）就静默跳过。
+SYMMETRY="$REPO_ROOT/../IMServer/scripts/check-symmetry.sh"
+[ -x "$SYMMETRY" ] && "$SYMMETRY" --repo "im-android" || true
+
+"$REPO_ROOT/scripts/check-file-size.sh" || {
+  echo ""
+  echo "✗ pre-commit：有文件超预算，提交已拦。"
+  echo "  正确处理：拆分（抽状态持有者 / 抽 @Composable / 抽纯函数 + 单测），见 CODING_STYLE.md §7——**别放宽阈值**。"
+  echo "  应急绕过（仅限确有正当理由）：git commit --no-verify"
+  exit 1
+}
+
+"$REPO_ROOT/scripts/check-logging.sh" || {
+  echo ""
+  echo "✗ pre-commit：日志红线未过，提交已拦。"
+  exit 1
+}
+
+exit 0

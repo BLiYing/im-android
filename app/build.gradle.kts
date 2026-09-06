@@ -1,0 +1,88 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+}
+
+android {
+    namespace = "com.libeyond.imandroid"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.libeyond.imandroid"
+        // minSdk 26 (Android 8.0)：覆盖率已 >95%，且免去 java.time / 通知渠道的兼容分支。
+        minSdk = 26
+        targetSdk = 36
+        versionCode = 1
+        versionName = "0.1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        debug {
+            // 开发期后端：模拟器用 10.0.2.2 回环到宿主机的 :8080（127.0.0.1 在模拟器里指模拟器自己）。
+            buildConfigField("String", "DEFAULT_HOST", "\"10.0.2.2:8080\"")
+            buildConfigField("boolean", "USE_TLS", "false")
+        }
+        release {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            buildConfigField("String", "DEFAULT_HOST", "\"\"")
+            buildConfigField("boolean", "USE_TLS", "true")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    // 源码目录用 kotlin/ 而非 java/（纯 Kotlin 工程）
+    sourceSets {
+        getByName("main")  { kotlin.srcDirs("src/main/kotlin") }
+        getByName("test")  { kotlin.srcDirs("src/test/kotlin") }
+    }
+
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+}
+
+dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.activity.compose)
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    debugImplementation(libs.compose.ui.tooling)
+
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.datastore.prefs)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.espresso.core)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
+}

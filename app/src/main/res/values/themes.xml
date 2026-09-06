@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Compose 应用的 XML 主题只负责「进程起来到 setContent 首帧」这段窗口外观。
+      真正的配色令牌在 ui/theme/Tokens.kt，别在这里再写一套颜色。
+      windowBackground 取分组页面背景（Web 令牌 grouped-bg），与首屏一致，消除启动白闪。
+    -->
+    <style name="Theme.IMAndroid" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

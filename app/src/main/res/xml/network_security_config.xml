@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PROTOCOL.md §0.1：传输一律 wss/https，不自造加密。
+  但本地开发时后端跑在宿主机 :8080 的明文 HTTP 上，模拟器经 10.0.2.2 回环访问。
+  故**只对开发用主机名逐个放行明文**，不用 android:usesCleartextTraffic="true" 全局开口子——
+  那个开关会让 release 包也能明文出网，等于把 §0.1 废掉。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Android 模拟器里指向宿主机的固定回环地址 -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- 真机连同一局域网内的开发机时按需加自己的内网 IP，勿留到生产 -->
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

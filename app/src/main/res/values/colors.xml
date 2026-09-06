@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 仅供 XML 主题（启动窗口）使用；业务配色一律走 Compose 令牌 ui/theme/Tokens.kt。
+         取值对应 Web 令牌 grouped-bg / accent（XML 注释里不能出现连字符对，故略去变量前缀）。 -->
+    <color name="window_background">#F5F6F8</color>
+    <color name="ic_launcher_background">#4CA64C</color>
+</resources>
