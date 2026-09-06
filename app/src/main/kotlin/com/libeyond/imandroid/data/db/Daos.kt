@@ -117,7 +117,18 @@ interface ConversationDao {
     @Query("UPDATE conversation SET syncedConvSeq = :seq WHERE ownerUid = :owner AND convId = :convId")
     suspend fun setSyncedConvSeq(owner: String, convId: String, seq: Long)
 
-    @Query("UPDATE conversation SET readSeq = :seq, unread = 0, markedUnread = 0 WHERE ownerUid = :owner AND convId = :convId")
+    /**
+     * 推进已读位点。**用 MAX 保证单调不倒退**。
+     *
+     * 无条件 `readSeq = :seq` 是错的：可见即读上报的是「当前可见的最大 conv_seq」，
+     * 用户往回翻历史时这个值会变小，直接赋值等于把已读位点**写回去**——
+     * 表现为「翻了下历史，未读又冒出来了」，而且会向服务端发一个倒退的 read 回执。
+     */
+    @Query("""
+        UPDATE conversation
+        SET readSeq = MAX(readSeq, :seq), unread = 0, markedUnread = 0
+        WHERE ownerUid = :owner AND convId = :convId
+    """)
     suspend fun markRead(owner: String, convId: String, seq: Long)
 
     @Query("SELECT COALESCE(SUM(unread), 0) FROM conversation WHERE ownerUid = :owner AND muted = 0")

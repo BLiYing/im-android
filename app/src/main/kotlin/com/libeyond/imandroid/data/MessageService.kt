@@ -145,9 +145,21 @@ class MessageService(
         )
     }
 
-    /** 可见即读：把已读位点推到 upTo 并上报。 */
+    /** 每个会话上一次真正上报过的已读位点，用于抑制重复回执。 */
+    private val lastReportedRead = mutableMapOf<String, Long>()
+
+    /**
+     * 可见即读：把已读位点推到 [upTo] 并上报。
+     *
+     * **位点没前进就什么都不做**。可见即读会随每次滚动/列表变化触发，
+     * 不做这道闸的话：① 往回翻历史时会发一个**倒退**的 read 回执；
+     * ② 静止不动也会因重组反复发同一帧，白白刷服务端。
+     */
     suspend fun markRead(convId: String, upTo: Long) {
         val owner = ownerProvider() ?: return
+        val last = lastReportedRead[convId] ?: 0
+        if (upTo <= last) return
+        lastReportedRead[convId] = upTo
         repo.markRead(owner, convId, upTo)
         sendReceipt(convId, ReceiptData.READ, upTo)
     }

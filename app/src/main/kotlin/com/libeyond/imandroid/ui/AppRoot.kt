@@ -192,16 +192,24 @@ private fun MainScreen(client: IMClient, onLogout: () -> Unit) {
         client.repo.observePending(owner, conv.convId)
     }.collectAsState(initial = emptyList())
 
-    val rows = remember(messages, pending, conv.readSeq, conv.unread) {
-        buildChatRows(messages, pending, conv.readSeq, conv.unread)
+    // **进会话那一刻的快照，之后不再跟随**。
+    //
+    // 直接用实时的 conv.readSeq / conv.unread 会让未读分割线在进会话后当场消失：
+    // 「可见即读」一上报就把 unread 清零，重组时 buildChatRows 拿到 unread=0，
+    // 分割线随之不见——用户根本来不及看到自己从哪里开始没读。
+    // iOS/Web 同样是冻结入会话快照，不是实时值。
+    val entry = remember(conv.convId) { conv.readSeq to conv.unread }
+
+    val rows = remember(messages, pending, entry) {
+        buildChatRows(messages, pending, entry.first, entry.second)
     }
 
     ChatScreen(
         convId = conv.convId,
         title = conv.title.ifBlank { conv.convId },
         myUid = owner,
-        readSeq = conv.readSeq,
-        unread = conv.unread,
+        readSeq = entry.first,
+        unread = entry.second,
         rows = rows,
         input = input,
         onInputChange = { input = it },
