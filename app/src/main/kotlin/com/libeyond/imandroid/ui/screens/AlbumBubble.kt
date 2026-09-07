@@ -71,6 +71,8 @@ internal fun AlbumBubble(
     host: String,
     useTls: Boolean,
     onLongPress: (Rect) -> Unit,
+    /** 点开第 n 格（**逐格**，不是整格一个回调）。 */
+    onTapTile: (Int) -> Unit = {},
 ) {
     val c = IMTheme.colors
     var rect by remember { mutableStateOf(Rect.Zero) }
@@ -101,7 +103,8 @@ internal fun AlbumBubble(
                                 // 格数比消息多（理论上不会，pattern 由 size 推出）——留空不崩
                                 Spacer(Modifier.size(tile))
                             } else {
-                                AlbumTileView(m, tile, host, useTls)
+                                val at = idx - 1 // idx 已在上面自增过
+                                AlbumTileView(m, tile, host, useTls, onTap = { onTapTile(at) })
                             }
                         }
                     }
@@ -132,9 +135,10 @@ private fun AlbumTileView(
     size: androidx.compose.ui.unit.Dp,
     host: String,
     useTls: Boolean,
+    onTap: () -> Unit = {},
 ) {
     val c = IMTheme.colors
-    Box(modifier = Modifier.size(size).background(c.subtleFill)) {
+    Box(modifier = Modifier.size(size).background(c.subtleFill).clickable(onClick = onTap)) {
         AsyncImage(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，
             // 所以选完立刻有图，不用等上传完

@@ -85,6 +85,8 @@ fun ChatScreen(
     /** 长按一条消息。 */
     /** 长按一条消息，带上气泡在窗口里的矩形（菜单按它定位）。 */
     onLongPress: (MessageEntity, Rect) -> Unit,
+    /** 点开媒体查看器。 */
+    onOpenMedia: (MessageEntity) -> Unit,
     /** 当前引用的目标；null=没在引用。 */
     replyTo: MessageEntity?,
     onCancelReply: () -> Unit,
@@ -233,6 +235,9 @@ fun ChatScreen(
                         tiles = r.msgs.map {
                             AlbumTile(it.content, it.contentType, it.duration)
                         },
+                        // 宫格**逐格**点开（iOS 同）：点第 3 格就该看第 3 张，
+                        // 整格共用一个回调会让所有格都打开第一张
+                        onTapTile = { idx -> r.msgs.getOrNull(idx)?.let(onOpenMedia) },
                         mine = r.msgs.first().sender == myUid,
                         timestamp = r.msgs.last().timestamp,
                         host = host,
@@ -258,6 +263,7 @@ fun ChatScreen(
                         text = r.msg.content,
                         msg = r.msg,
                         onLongPress = { rect -> onLongPress(r.msg, rect) },
+                        onOpenMedia = onOpenMedia,
                         host = host,
                         useTls = useTls,
                         mine = r.msg.sender == myUid,

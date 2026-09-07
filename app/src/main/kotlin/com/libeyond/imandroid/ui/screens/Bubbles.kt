@@ -117,6 +117,8 @@ internal fun Bubble(
     msg: MessageEntity? = null,
     /** 长按回调，带上**气泡在窗口里的矩形**——菜单要浮在气泡旁边（对齐 iOS UIContextMenu）。 */
     onLongPress: ((Rect) -> Unit)? = null,
+    /** 点开媒体查看器（只对 image/video 生效）。 */
+    onOpenMedia: ((MessageEntity) -> Unit)? = null,
     /** 媒体地址补全用的当前 host。 */
     host: String = "",
     useTls: Boolean = false,
@@ -212,7 +214,16 @@ internal fun Bubble(
                     .then(
                         if (onLongPress != null && !recalled) {
                             Modifier.combinedClickable(
-                                onClick = {},
+                                // 图片/视频点开进查看器；其余类型点击**不做事**——
+                                // 文本气泡点一下就跳走是很怪的交互（iOS/Web 同样只有媒体可点）
+                                onClick = {
+                                    val m = msg
+                                    if (onOpenMedia != null && m != null &&
+                                        (m.contentType == ContentType.IMAGE || m.contentType == ContentType.VIDEO)
+                                    ) {
+                                        onOpenMedia(m)
+                                    }
+                                },
                                 onLongClick = { onLongPress(bubbleRect) },
                             )
                         } else Modifier

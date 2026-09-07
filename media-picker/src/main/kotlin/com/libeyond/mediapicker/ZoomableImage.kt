@@ -108,7 +108,7 @@ fun ZoomableImage(
             },
     ) {
         AsyncImage(
-            imageLoader = LocalPickerImageLoader.current,
+            imageLoader = currentImageLoader(),
             model = model,
             contentDescription = contentDescription,
             contentScale = ContentScale.Fit,

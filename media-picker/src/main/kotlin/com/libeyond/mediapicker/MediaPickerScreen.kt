@@ -232,7 +232,7 @@ private fun MediaTile(
             .combinedClickableCompat(onClick = onClick, onLongClick = onLongPress),
     ) {
         AsyncImage(
-            imageLoader = LocalPickerImageLoader.current,
+            imageLoader = currentImageLoader(),
             model = asset.uri,
             contentDescription = asset.displayName,
             contentScale = ContentScale.Crop,
@@ -290,7 +290,7 @@ private fun BucketSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     AsyncImage(
-                        imageLoader = LocalPickerImageLoader.current,
+                        imageLoader = currentImageLoader(),
                         model = b.coverUri,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,

@@ -9,6 +9,7 @@ import com.libeyond.imandroid.data.AttachItems
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.screens.FriendPickerScreen
+import com.libeyond.imandroid.ui.screens.MediaViewerScreen
 import com.libeyond.mediapicker.MediaPickerHost
 import com.libeyond.mediapicker.PickedMedia
 import kotlinx.coroutines.Dispatchers
@@ -68,10 +69,6 @@ fun ChatHost(
     onBack: () -> Unit,
     onOpenInfo: () -> Unit,
 ) {
-    // 系统返回键要回会话列表，不是退出 App。
-    // 不拦的话「进会话 → 按返回 → App 没了」，这是 Android 用户最直觉的一个动作。
-    BackHandler(onBack = onBack)
-
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
@@ -86,9 +83,35 @@ fun ChatHost(
     // toast 要声明在下面那些 launcher 回调之前——回调里会赋值
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
     var picking by remember(conv.convId) { mutableStateOf(false) }
-    val mediaSend = remember(conv.convId) { MediaSendFlow(context, client, conv) }
     /** 选联系人发名片中（null = 不在选）。 */
     var pickingFriend by remember(conv.convId) { mutableStateOf<List<FriendEntry>?>(null) }
+    /** 正在全屏查看的媒体（null = 没在看）。 */
+    var viewing by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
+    var menuFor by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
+
+    // 系统返回键：**先关最上面那层覆盖层，全关完了才回会话列表**。
+    // 不分层的话「打开大图 → 按返回 → 连会话都退了」，用户还得重新滚回刚才的位置。
+    // 层序在 ChatOverlays.Layer（= 渲染顺序），有测试钉着。
+    BackHandler {
+        val open = buildSet {
+            if (viewing != null) add(ChatOverlays.Layer.Viewer)
+            if (pickingFriend != null) add(ChatOverlays.Layer.FriendPicker)
+            if (picking) add(ChatOverlays.Layer.MediaPicker)
+            if (forwarding != null) add(ChatOverlays.Layer.Forward)
+            if (menuFor != null) add(ChatOverlays.Layer.ContextMenu)
+        }
+        when (ChatOverlays.topmost(open)) {
+            ChatOverlays.Layer.Viewer -> viewing = null
+            ChatOverlays.Layer.FriendPicker -> pickingFriend = null
+            ChatOverlays.Layer.MediaPicker -> picking = false
+            ChatOverlays.Layer.Forward -> forwarding = null
+            ChatOverlays.Layer.ContextMenu -> menuFor = null
+            // 没有覆盖层才真的退出本页。不拦的话「进会话 → 按返回 → App 没了」，
+            // 这是 Android 用户最直觉的一个动作。
+            null -> onBack()
+        }
+    }
+    val mediaSend = remember(conv.convId) { MediaSendFlow(context, client, conv) }
     /** 相机产物的落点；拍完从这里读字节。 */
     var cameraUri by remember(conv.convId) { mutableStateOf<android.net.Uri?>(null) }
 
@@ -197,7 +220,6 @@ fun ChatHost(
     }
 
     var lastTypingSent by remember(conv.convId) { mutableStateOf(0L) }
-    var menuFor by remember { mutableStateOf<MessageEntity?>(null) }
     var replyTo by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
 
     // 群里我是不是管理员——决定「为所有人删除」给不给。
@@ -288,12 +310,23 @@ fun ChatHost(
             if (messages.size >= windowLimit) windowLimit += WINDOW_PAGE
         },
         onLongPress = { m, rect -> menuFor = m; menuAnchor = rect },
+        onOpenMedia = { viewing = it },
         replyTo = replyTo,
         onCancelReply = { replyTo = null },
         loadLinkPreview = { url -> client.conversationsApi.linkPreview(url) },
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
     )
+
+    // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——
+    viewing?.let { m ->
+        MediaViewerScreen(
+            msg = m,
+            host = client.host,
+            useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+            onClose = { viewing = null },
+        )
+    }
 
     // —— 选联系人发名片（覆盖在聊天页之上）——
     pickingFriend?.let { list ->

@@ -61,9 +61,20 @@ internal fun Modifier.combinedClickableCompat(
  * 往调用方的全局 loader 上塞 decoder 属于「模块偷偷改宿主全局状态」，
  * 换个 App 接进来就会莫名其妙。自己持一个，谁都不影响。
  */
-internal val LocalPickerImageLoader = androidx.compose.runtime.staticCompositionLocalOf<coil.ImageLoader> {
-    error("LocalPickerImageLoader 未提供——只能在 MediaPickerHost 内部使用")
-}
+internal val LocalPickerImageLoader = androidx.compose.runtime.staticCompositionLocalOf<coil.ImageLoader?> { null }
+
+/**
+ * 取当前该用的 loader：选择器内部用自己那一个；**在模块外单独使用
+ * [ZoomableImage] 时回落到调用方的 Coil 单例**。
+ *
+ * 原先这个 CompositionLocal 的默认值是 `error(...)`，于是 `ZoomableImage` 虽然是 public、
+ * 却只能在 `MediaPickerHost` 里用——聊天页要复用它就当场崩。导出一个组件却让它只能在
+ * 自家内部跑，等于没导出。
+ */
+@Composable
+internal fun currentImageLoader(): coil.ImageLoader =
+    LocalPickerImageLoader.current
+        ?: coil.Coil.imageLoader(androidx.compose.ui.platform.LocalContext.current)
 
 @Composable
 internal fun rememberPickerImageLoader(): coil.ImageLoader {

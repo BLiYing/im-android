@@ -21,6 +21,8 @@ junit = "4.13.2"
 androidxJunit = "1.2.1"
 espresso = "3.6.1"
 exifinterface = "1.3.7"
+# Media3（ExoPlayer）：视频播放。1.4.1 是与 compileSdk 36 / AGP 8.12 稳定搭配的一档。
+media3 = "1.4.1"
 
 [libraries]
 # --- 基础 ---
@@ -39,6 +41,9 @@ compose-material3           = { group = "androidx.compose.material3", name = "ma
 compose-foundation          = { group = "androidx.compose.foundation", name = "foundation" }
 # EXIF 方向：相机拍的照片字节里是横的、靠 EXIF 标记转 90°，解码后不转就会存成躺倒的图。
 androidx-exifinterface      = { group = "androidx.exifinterface",     name = "exifinterface",            version.ref = "exifinterface" }
+media3-exoplayer            = { group = "androidx.media3",            name = "media3-exoplayer",         version.ref = "media3" }
+# 只为 PlayerView 的 Surface 与 resizeMode（自绘控件仍是我们自己的，见 VideoPlayer.kt）
+media3-ui                   = { group = "androidx.media3",            name = "media3-ui",                version.ref = "media3" }
 
 # --- 网络 / 序列化（协议 SDK 用）---
 # OkHttp：WebSocket 能设请求头，故走 PROTOCOL §1 首选的 Authorization: Bearer，而非 ?token= 查询串。

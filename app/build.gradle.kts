@@ -84,6 +84,8 @@ dependencies {
     implementation(libs.coil.compose)
     // 本地 content:// 视频的首帧（待发气泡）——服务端回来的视频有 poster，本地那段没有
     implementation(libs.coil.video)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
     implementation(libs.zxing.core)
     debugImplementation(libs.compose.ui.tooling)
 
