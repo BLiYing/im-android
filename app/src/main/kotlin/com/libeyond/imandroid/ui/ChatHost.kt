@@ -3,7 +3,12 @@ package com.libeyond.imandroid.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.sdk.logging.IMLog
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.libeyond.imandroid.data.AttachItems
+import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.ui.screens.FriendPickerScreen
 import com.libeyond.mediapicker.MediaPickerHost
 import com.libeyond.mediapicker.PickedMedia
 import kotlinx.coroutines.Dispatchers
@@ -78,11 +83,47 @@ fun ChatHost(
     // 待转发的消息列表（null = 没在转发）。选完目标会话后逐条发出。
     var forwarding by remember(conv.convId) { mutableStateOf<List<MessageEntity>?>(null) }
     /** 选图中（覆盖在聊天页之上的自建相册页；无权限时它自己会降级到系统选择器）。 */
+    // toast 要声明在下面那些 launcher 回调之前——回调里会赋值
+    var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
     var picking by remember(conv.convId) { mutableStateOf(false) }
     val mediaSend = remember(conv.convId) { MediaSendFlow(context, client, conv) }
+    /** 选联系人发名片中（null = 不在选）。 */
+    var pickingFriend by remember(conv.convId) { mutableStateOf<List<FriendEntry>?>(null) }
+    /** 相机产物的落点；拍完从这里读字节。 */
+    var cameraUri by remember(conv.convId) { mutableStateOf<android.net.Uri?>(null) }
+
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = cameraUri
+        cameraUri = null
+        // ok=false 就是用户在相机里按了取消——**不提示**，那不是错误
+        if (ok && uri != null) {
+            scope.launch {
+                mediaSend.send(
+                    listOf(
+                        PickedMedia(
+                            uri = uri.toString(),
+                            displayName = "camera_${System.currentTimeMillis()}.jpg",
+                            mime = "image/jpeg",
+                            // 相机产物走压缩路径，字节数由压缩后的结果决定，这里给 1 只为过
+                            // 「0 = MediaStore 坏行」那道判断
+                            sizeBytes = 1,
+                            isVideo = false,
+                        ),
+                    ),
+                    // 相机原片动辄 10MB+，默认压（与相册同口径）
+                    sendOriginal = false,
+                ) { toast = it }
+            }
+        }
+    }
+
+    val pickFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) scope.launch { mediaSend.sendFile(uri) { toast = it } }
+    }
     /** 长按菜单锚点：被长按气泡在窗口坐标系里的矩形，菜单按它定位（对齐 iOS UIContextMenu）。 */
     var menuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
-    var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
 
     // 渲染窗口大小。**不能无界**——13 万条的会话会把聊天页渲染成空白（实测）。
     // 滚到顶时加一页；不做减半回收：Compose 的 LazyColumn 本就只组合可见项，
@@ -212,7 +253,35 @@ fun ChatHost(
         onRetry = { cid -> scope.launch { client.messages.resend(cid) } },
         onVisibleSeq = { seq -> scope.launch { client.messages.markRead(conv.convId, seq) } },
         onOpenInfo = onOpenInfo,
-        onPickMedia = { picking = true },
+
+        onAttach = { kind ->
+            when (kind) {
+                AttachItems.Kind.Photo -> picking = true
+                AttachItems.Kind.Camera -> {
+                    val uri = MediaSendFlow.newCameraUri(context)
+                    if (uri == null) {
+                        toast = "打不开相机"
+                    } else {
+                        cameraUri = uri
+                        takePhoto.launch(uri)
+                    }
+                }
+                // 任意类型：服务端按扩展名走白名单，端上不预筛——预筛只会让用户
+                // 「明明有这个文件却选不中」，而真正的规则在服务端
+                AttachItems.Kind.File -> pickFile.launch(arrayOf("*/*"))
+                AttachItems.Kind.ContactCard -> scope.launch {
+                    pickingFriend = runCatchingCancellable { client.contacts.friends("accepted") }
+                        .getOrElse {
+                            toast = "联系人加载失败"
+                            null
+                        }
+                }
+                // 与 iOS 一致：整个功能三端都没做
+                AttachItems.Kind.AudioVideo -> toast = "音视频通话还没做"
+                // 本端没有收藏能力（无 API、无页面）
+                AttachItems.Kind.Favorite -> toast = "收藏还没做"
+            }
+        },
         onLoadOlder = {
             // 只有窗口已经装满时才继续加——没装满说明本地就这么多，
             // 再加只会让同一批数据反复重查
@@ -225,6 +294,18 @@ fun ChatHost(
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
     )
+
+    // —— 选联系人发名片（覆盖在聊天页之上）——
+    pickingFriend?.let { list ->
+        FriendPickerScreen(
+            friends = list,
+            onCancel = { pickingFriend = null },
+            onPick = { f ->
+                pickingFriend = null
+                scope.launch { mediaSend.sendContactCard(f) { toast = it } }
+            },
+        )
+    }
 
     // —— 相册选择页（覆盖在聊天页之上）——
     if (picking) {

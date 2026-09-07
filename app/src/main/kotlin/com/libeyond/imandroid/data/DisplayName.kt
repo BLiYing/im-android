@@ -53,4 +53,21 @@ object DisplayName {
         if (t.isEmpty()) return "?"
         return if (t.length <= 2) t else t.takeLast(2)
     }
+
+    /**
+     * 好友在**本机界面**上的显示名：备注 > 昵称 > 用户名 > uid。
+     * 备注是本机私有数据，**只能用于渲染**。
+     */
+    fun ofFriend(f: com.libeyond.imandroid.sdk.api.FriendEntry): String =
+        f.remark.ifBlank { f.nickname }.ifBlank { f.username }.ifBlank { f.userId }
+
+    /**
+     * 好友的**公开名**：昵称 > 用户名 > uid，**绝不含备注**。
+     *
+     * 凡是「显示名会被写进要发出去的字节」的地方一律走这个（IMServer `docs/UI.md` 隐私红线）。
+     * 个人名片就是这种地方：把「我给他起的外号」发给第三个人，是 iOS 与 im-web
+     * **各出过一次**的线上事故。
+     */
+    fun publicNameOfFriend(f: com.libeyond.imandroid.sdk.api.FriendEntry): String =
+        f.nickname.ifBlank { f.username }.ifBlank { f.userId }
 }

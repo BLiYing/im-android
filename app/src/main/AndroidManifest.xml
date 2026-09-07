@@ -49,8 +49,10 @@
         </activity>
 
         <!--
-          分享二维码图片用。exported=false + grantUriPermissions：只有被我们显式授权的
-          那一个 Intent 能读，别的应用主动来读会被拒。
+          分享二维码图片用；2026-09-07 起**相机拍照**也走它（系统相机是另一个进程，
+          Android 7+ 跨进程传 file:// 会抛 FileUriExposedException）。
+          exported=false + grantUriPermissions：只有被我们显式授权的那一个 Intent 能读，
+          别的应用主动来读会被拒。
         -->
         <provider
             android:name="androidx.core.content.FileProvider"

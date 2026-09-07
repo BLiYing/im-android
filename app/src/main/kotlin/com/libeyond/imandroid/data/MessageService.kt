@@ -153,6 +153,19 @@ class MessageService(
     }
 
     /**
+     * 发一条卡片消息（`contact` 个人名片 / `chat_record` 合并转发）。
+     *
+     * 与 [sendText] 只差 `contentType`——**内容就是那段 JSON 字符串**，服务端只透传。
+     * 单独开一个方法而不是给 sendText 加参数：卡片的 `content` 不是给人读的文本，
+     * 混在一起早晚会有人给它接引用/@提及那套文本逻辑。
+     */
+    suspend fun sendCard(convId: String, to: String, contentType: String, json: String) {
+        val owner = ownerProvider() ?: return
+        val p = repo.createPending(owner, convId, to, json, contentType)
+        transmit(p.clientMsgId, convId, to, contentType, json, null)
+    }
+
+    /**
      * 转发一条消息到另一个会话（M4-3，PROTOCOL §4.3 `forward_from`）。
      *
      * **不是"复制文本再发一遍"**：要带上 `forward_from`，收端才显示「转发自 X」。

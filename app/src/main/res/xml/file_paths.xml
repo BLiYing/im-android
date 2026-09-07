@@ -6,4 +6,6 @@
 -->
 <paths>
     <cache-path name="share" path="share/" />
+    <!-- 相机拍照的落点（2026-09-07）。同样只开一个子目录，拍完读走即删。 -->
+    <cache-path name="camera" path="camera/" />
 </paths>

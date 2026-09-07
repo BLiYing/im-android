@@ -3,6 +3,8 @@ package com.libeyond.imandroid.data
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
@@ -112,4 +114,23 @@ object CardContent {
 
     private fun JsonObject.str(key: String): String =
         runCatching { this[key]?.jsonPrimitive?.content.orEmpty() }.getOrDefault("").trim()
+
+    /**
+     * 生成名片卡片的 `content`（协议 §4.3 `contact`：`{u, un, n, a}`）。
+     *
+     * **字段名是短的**（`u`/`un`/`n`/`a`）——三端共用这套缩写，改一个字母就三端全瞎，
+     * 所以这里不"顺手改成可读的名字"。空值一律省略，别发 `"a":""` 让对端去判空串。
+     *
+     * [nickname] **必须由调用方传公开名**：这段 JSON 会原样发给第三个人，
+     * 带备注就是把「我给他起的外号」发出去（`docs/UI.md` 隐私红线）。
+     */
+    fun encodeContact(uid: String, username: String, nickname: String, avatarUrl: String): String {
+        val o = buildJsonObject {
+            put("u", uid)
+            if (username.isNotBlank()) put("un", username)
+            if (nickname.isNotBlank()) put("n", nickname)
+            if (avatarUrl.isNotBlank()) put("a", avatarUrl)
+        }
+        return o.toString()
+    }
 }

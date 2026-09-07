@@ -2,7 +2,10 @@ package com.libeyond.imandroid.ui
 
 import android.content.Context
 import android.net.Uri
+import com.libeyond.imandroid.data.CardContent
+import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -120,5 +123,116 @@ internal class MediaSendFlow(
         // 大文件 OOM 是 Error，catch(Exception) 抓不到
         log.w("pick_read_oom")
         null
+    }
+
+    /** 发一个任意文件（➕ 面板「文件」）。类型白名单在服务端，端上不预筛。 */
+    suspend fun sendFile(uri: Uri, onToast: (String) -> Unit) {
+        val meta = withContext(Dispatchers.IO) { describeFile(uri) }
+        if (meta == null) {
+            onToast("这个文件读不出来")
+            return
+        }
+        val (name, size) = meta
+        if (size <= 0) {
+            onToast("这个文件读不出来")
+            return
+        }
+        // **一律走分片**：文件上限同样是 2GB，整包读进内存不行。
+        // 小文件多一次 init/complete 往返，换来的是「多大都不会 OOM」，值。
+        client.messages.sendMediaStream(
+            convId = conv.convId,
+            to = to,
+            openStream = { context.contentResolver.openInputStream(uri) },
+            totalBytes = size,
+            fileName = name,
+            mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream",
+            contentType = ContentType.FILE,
+            localPreviewUri = uri.toString(),
+        )
+    }
+
+    /**
+     * 发个人名片（➕ 面板「个人名片」）。
+     *
+     * **写进卡片的必须是公开名**（[DisplayName.publicNameOfFriend]）——
+     * 这段 JSON 会原样发给第三个人，带备注就是把「我给他起的外号」发出去。
+     * iOS 与 im-web 各为此出过一次线上事故（IMServer `docs/UI.md` 隐私红线）。
+     */
+    suspend fun sendContactCard(f: FriendEntry, onToast: (String) -> Unit) {
+        if (f.userId.isBlank()) {
+            onToast("这个联系人不完整")
+            return
+        }
+        client.messages.sendCard(
+            convId = conv.convId,
+            to = to,
+            contentType = ContentType.CONTACT,
+            json = CardContent.encodeContact(
+                uid = f.userId,
+                username = f.username,
+                nickname = DisplayName.publicNameOfFriend(f),
+                avatarUrl = f.avatarUrl,
+            ),
+        )
+    }
+
+    /** 名字与大小；读不到返回 null。 */
+    private fun describeFile(uri: Uri): Pair<String, Long>? = try {
+        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+            val nameIdx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            val sizeIdx = c.getColumnIndex(android.provider.OpenableColumns.SIZE)
+            if (c.moveToFirst()) {
+                val n = (if (nameIdx >= 0) c.getString(nameIdx) else null)
+                    ?: ("file_" + System.currentTimeMillis())
+                val sz = if (sizeIdx >= 0 && !c.isNull(sizeIdx)) c.getLong(sizeIdx) else 0L
+                n to sz
+            } else {
+                null
+            }
+        }
+    } catch (e: Exception) {
+        log.w("file_meta_failed", "err" to e.javaClass.simpleName)
+        null
+    }
+
+    companion object {
+        /**
+         * 给系统相机一个可写的 `content://`。
+         *
+         * 系统相机是**另一个进程**，Android 7+ 起跨进程传 `file://` 会抛
+         * `FileUriExposedException`，所以必须走 FileProvider（authority 与 manifest 里那个一致）。
+         * 落在 `cache/camera/`，只开这一个子目录。
+         */
+        fun newCameraUri(context: Context): Uri? = try {
+            val dir = java.io.File(context.cacheDir, "camera").apply { mkdirs() }
+            // 上一张的原片在这里躺着——相机原片 3~5MB，不清就是每拍一张漏一份。
+            // 在**下次拍照时**清而不是发完就删：发送是异步的，发完立刻删会和上传抢文件。
+            purgeCameraCache(dir)
+            val f = java.io.File(dir, "cam_${System.currentTimeMillis()}.jpg")
+            androidx.core.content.FileProvider.getUriForFile(
+                context, context.packageName + ".fileprovider", f,
+            )
+        } catch (e: Exception) {
+            IMLog.tag("IM.Media").w("camera_uri_failed", "err" to e.javaClass.simpleName)
+            null
+        }
+
+        /**
+         * 清掉相机临时目录里**上一轮**的原片。
+         *
+         * 只删比 [CAMERA_CACHE_TTL_MS] 老的：刚拍的那张可能还在上传，删了就发不出去。
+         * 用时间而不是「删除除最新一个以外的全部」——后者在连拍两张时会删掉还在传的那张。
+         */
+        private fun purgeCameraCache(dir: java.io.File) {
+            val cutoff = System.currentTimeMillis() - CAMERA_CACHE_TTL_MS
+            dir.listFiles()?.forEach { f ->
+                if (f.isFile && f.lastModified() < cutoff && !f.delete()) {
+                    IMLog.tag("IM.Media").w("camera_cache_purge_failed", "name" to f.name)
+                }
+            }
+        }
+
+        /** 相机原片在缓存里保留多久。10 分钟足够任何一次上传跑完（含失败重试）。 */
+        private const val CAMERA_CACHE_TTL_MS = 10 * 60 * 1000L
     }
 }
