@@ -190,6 +190,7 @@ fun ChatHost(
         readSeq = entry.first,
         unread = entry.second,
         subtitle = subtitle,
+        isGroup = conv.isGroup,
         peerReadSeq = if (conv.isGroup) 0 else conv.peerReadSeq,
         input = input,
         onInputChange = { input = it },

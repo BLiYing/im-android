@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -195,11 +196,17 @@ private fun UnreadBadge(conv: ConversationEntity) {
     when {
         conv.unread > 0 -> {
             val strongAlert = !conv.muted || conv.mentionUnread
+            val d = IMTheme.dimens
             Box(
+                // 高 20、最小宽 20（UI_SPEC §2，与 iOS _badge.heightAnchor 同值）：
+                // 个位数是正圆，两位数才拉成胶囊。
                 modifier = Modifier
+                    .height(d.unreadBadgeHeight)
+                    .widthIn(min = d.unreadBadgeHeight)
                     .clip(CircleShape)
                     .background(if (strongAlert) c.unreadBadge else c.textTertiary)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    .padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = if (conv.unread > 99) "99+" else conv.unread.toString(),

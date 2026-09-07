@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.ui.components.TimeFormat
+import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 // 气泡与分隔行。从 ChatScreen 拆出（CODING_STYLE §7②）：
@@ -86,6 +88,12 @@ internal fun Bubble(
     delivered: Boolean = false,
     read: Boolean = false,
     onRetry: (() -> Unit)? = null,
+    /** 群聊里对方的消息要占一条 30dp 头像列（即使本条不画头像，也得占位）。 */
+    reserveAvatarColumn: Boolean = false,
+    /** 本条是否真的画头像（连续段的最后一条才画，见 [showsSenderAvatar]）。 */
+    showAvatar: Boolean = false,
+    /** 头像取色种子——用 uid 不用昵称，改昵称不该换颜色。 */
+    avatarSeed: String = "",
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -105,6 +113,25 @@ internal fun Bubble(
                 fontSize = 16.sp,
                 modifier = Modifier.clickable { onRetry() }.padding(end = 4.dp),
             )
+        }
+        // —— 头像列（UI_SPEC §3：12 + 30 + 6 = iOS 的 _leading.constant 48）——
+        // **底对齐气泡底**，不是顶对齐：多行气泡时头像贴在最后一行旁边，与 iOS/Web 一致。
+        if (reserveAvatarColumn) {
+            // **这里不再加左边距**：消息列表本身的横向内边距就是 chatAvatarLeading（见 ChatScreen），
+            // 在这儿再加一次会把整列右推 12dp（实测头像左边距 24 而非 12、气泡左缘 60 而非 48）。
+            Box(
+                modifier = Modifier.size(d.chatAvatar).align(Alignment.Bottom),
+            ) {
+                if (showAvatar) {
+                    IMAvatar(
+                        displayName = senderName.orEmpty().ifBlank { avatarSeed },
+                        seed = avatarSeed,
+                        avatarUrl = "",   // TODO 群成员头像 URL 尚无本地缓存，先走首字母色块
+                        size = d.chatAvatar,
+                    )
+                }
+            }
+            Spacer(Modifier.width(d.chatAvatarGap))
         }
         Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
             if (!senderName.isNullOrBlank()) {
@@ -207,6 +234,22 @@ internal fun localizeReplySnapshot(raw: String): String = when {
     else -> raw
 }
 
+
+/**
+ * 群内发送者头像**只挂在连续段的最后一条**上（与 iOS `IMBubbleCell` 的 gutter、
+ * Web `.avatar-col` 一致）；段内其余行用等宽占位撑住，保证同一段所有气泡左缘齐平。
+ *
+ * 抽成纯函数是为了能单测——「只在段末挂」这条错了肉眼很难发现：
+ * 段里每条都挂头像看着也"正常"，只是啰嗦；而**忘了占位**才会让气泡左缘参差，
+ * 那时人多半会去调 padding 而不是想到这里。
+ */
+internal fun showsSenderAvatar(rows: List<ChatRow>, index: Int, myUid: String, isGroup: Boolean): Boolean {
+    if (!isGroup) return false
+    val cur = rows.getOrNull(index) as? ChatRow.Confirmed ?: return false
+    if (cur.msg.sender.isBlank() || cur.msg.sender == myUid) return false
+    val next = rows.getOrNull(index + 1)
+    return !(next is ChatRow.Confirmed && next.msg.sender == cur.msg.sender)
+}
 
 /**
  * 气泡最大宽 = 可用内容区宽 × 比例（UI_SPEC §3）。

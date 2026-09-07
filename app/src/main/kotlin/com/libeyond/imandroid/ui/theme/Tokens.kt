@@ -211,12 +211,19 @@ data class IMDimens(
      * **必须是比例不能是固定 dp**：280dp 在 360dp 机器上占 78%、411dp 机器上占 68%，两头都不对。
      */
     val bubbleMaxWidthFraction: Float = 0.75f,
-    /** 气泡左右内边距。三端 10/10/12，基准待定（UI_SPEC §6-C），暂随 Web。 */
-    val bubblePaddingH: Dp = 10.dp,
+    /** 气泡左右内边距。基准 12（iOS `_text` leading/trailing；2026-09-07 拍板按 iOS）。 */
+    val bubblePaddingH: Dp = 12.dp,
     /** 气泡上下内边距。iOS/Web 同为 6。 */
     val bubblePaddingV: Dp = 6.dp,
-    /** 群内发送者头像。iOS 30 / Web 28，基准待定（UI_SPEC §6-D），本端暂未实现。 */
+    /** 群内发送者头像。基准 30（iOS `IMBubbleCell` `_avatar`）。 */
     val chatAvatar: Dp = 30.dp,
+    /** 头像距 cell 左 12、头像与气泡间隙 6 —— 合起来就是 iOS 的 `_leading.constant = 48`。 */
+    val chatAvatarLeading: Dp = 12.dp,
+    val chatAvatarGap: Dp = 6.dp,
+    /** 会话行未读徽标高。基准 20（iOS `_badge.heightAnchor`）。 */
+    val unreadBadgeHeight: Dp = 20.dp,
+    /** 跳到底部悬浮钮。移动端基准 36（iOS `jumpButton`）；Web 维持 40。 */
+    val jumpButton: Dp = 36.dp,
     /** 日期分隔胶囊高。iOS `_datePillHeight` 24。 */
     val datePillHeight: Dp = 24.dp,
 
@@ -225,6 +232,8 @@ data class IMDimens(
     val inputBarHeight: Dp = 56.dp,
     /** 输入栏左右功能钮。iOS `plusButton`/`sendButton` 同为 36。 */
     val inputControl: Dp = 36.dp,
+    /** 输入栏按钮距栏边。移动端基准 8（iOS `plusButton` leading）；Web 维持 16。 */
+    val inputBarEdge: Dp = 8.dp,
 )
 
 /**

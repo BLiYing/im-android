@@ -135,6 +135,8 @@ fun ChatScreen(
     convId: String,
     title: String,
     myUid: String,
+    /** 群聊：对方消息要挂发送者头像（UI_SPEC §3）。 */
+    isGroup: Boolean,
     /** 本人已读位点，用于未读分割线与首屏定位。 */
     readSeq: Long,
     /** **服务端算出的真实未读数**。判据只认它，见 [ChatEntry.hasUnread]。 */
@@ -280,7 +282,9 @@ fun ChatScreen(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(horizontal = d.space3),
+            // 横向内边距**就是** UI_SPEC §3 的「头像距 cell 左 12」——不要换成别的数，
+            // 群头像列靠它凑出 iOS 的 12+30+6=48（Bubbles.kt 那侧不再重复加）。
+            modifier = Modifier.fillMaxSize().padding(horizontal = d.chatAvatarLeading),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(rows.size, key = { rows[it].key }) { i ->
@@ -299,6 +303,9 @@ fun ChatScreen(
                         // 已读双勾：我发的、且对端读位点已越过它
                         read = r.msg.sender == myUid && peerReadSeq >= r.msg.convSeq,
                         delivered = r.msg.sender == myUid,
+                        reserveAvatarColumn = isGroup && r.msg.sender != myUid,
+                        showAvatar = showsSenderAvatar(rows, i, myUid, isGroup),
+                        avatarSeed = r.msg.sender,
                     )
                     is ChatRow.Pending -> Bubble(
                         text = r.msg.content,
@@ -322,7 +329,7 @@ fun ChatScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = d.space4, bottom = d.space3)
-                    .size(40.dp)
+                    .size(d.jumpButton)
                     .clip(CircleShape)
                     .background(c.surfaceElevated)
                     .clickable {
@@ -389,7 +396,9 @@ private fun Composer(
             // 多行时允许长高，故用 heightIn(min) 而非 height。
             .heightIn(min = d.inputBarHeight)
             .background(c.surface)
-            .padding(horizontal = d.space3, vertical = d.space2),
+            // 按钮距栏边 8（UI_SPEC §4，iOS plusButton leading）——移动端要给拇指留满宽，
+            // 不走 Web 的 --space-4 页面节奏。
+            .padding(horizontal = d.inputBarEdge, vertical = d.space2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 点击区 36（与 iOS plusButton 同）；图标本身 24。

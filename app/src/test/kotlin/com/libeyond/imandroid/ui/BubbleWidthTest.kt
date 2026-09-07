@@ -40,6 +40,21 @@ class BubbleWidthTest {
     }
 
     @Test
+    fun `群头像列合计 48——与 iOS _leading_constant 同值`() {
+        // iOS：`_leading.constant = gutter ? 48 : 12`，注释写明 48 = 12 + 30 + 6。
+        // 本端这三段分别由「消息列表横向内边距」「头像」「间隙」提供；
+        // **实测踩过一次**：Bubbles 里又加了一遍 12，头像左边距变 24、气泡左缘变 60。
+        val d = IMDimens()
+        assertEquals(
+            "头像列合计必须 = 12 + 30 + 6 = 48",
+            48f,
+            (d.chatAvatarLeading + d.chatAvatar + d.chatAvatarGap).value,
+            0.01f,
+        )
+        assertEquals("列表横向内边距就是这 12，别各写各的", 12f, d.chatAvatarLeading.value, 0.01f)
+    }
+
+    @Test
     fun `会话行分割线缩进恰好对齐头像右缘`() {
         val d = IMDimens()
         assertEquals(
