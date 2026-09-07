@@ -56,10 +56,12 @@ if [ "${BUILD_ONLY:-0}" = "1" ]; then
 fi
 
 step "4/4 单测"
+# **不写 :app:** —— 裸任务名会在所有模块上跑。2026-09-07 拆出 :media-picker 后
+# 这里若还写死 :app:，模块里的 6 个测试类会一条都不跑，而输出照样是绿的。
 if [ -n "${ONLY:-}" ]; then
-  ./gradlew :app:testDebugUnitTest --console=plain --tests "*${ONLY}*" || { echo "✗ 单测失败"; exit 1; }
+  ./gradlew testDebugUnitTest --console=plain --tests "*${ONLY}*" || { echo "✗ 单测失败"; exit 1; }
 else
-  ./gradlew :app:testDebugUnitTest --console=plain || { echo "✗ 单测失败"; exit 1; }
+  ./gradlew testDebugUnitTest --console=plain || { echo "✗ 单测失败"; exit 1; }
 fi
 
 # Gradle 默认不打印用例数——从 XML 报告里数出来，免得"绿了但一条没跑"。
@@ -71,7 +73,7 @@ fi
 python3 - <<'PY' 2>/dev/null || true
 import glob, re
 t = f = e = s = 0
-files = glob.glob('app/build/test-results/testDebugUnitTest/*.xml')
+files = glob.glob('*/build/test-results/testDebugUnitTest/*.xml')
 for p in files:
     h = open(p).read(2000)
     t += int(re.search(r'tests="(\d+)"', h).group(1))
@@ -81,7 +83,7 @@ for p in files:
 # 数**类声明**不是文件——有三个文件里各声明了两个测试类（EnvelopeTest / WakeActionTest /
 # MessageActionsTest），按文件数比会永远误报。
 src = []
-for path in glob.glob('app/src/test/**/*.kt', recursive=True):
+for path in glob.glob('*/src/test/**/*.kt', recursive=True):
     src += re.findall(r'^class\s+\w+Test\b', open(path).read(), re.M)
 print(f"\n用例 {t} · 失败 {f} · 错误 {e} · 跳过 {s} （{len(files)} 个测试类）")
 if t == 0:
@@ -89,7 +91,7 @@ if t == 0:
 elif len(files) != len(src):
     print(f"⚠ 报告里 {len(files)} 个测试类，源码里 {len(src)} 个——**这个用例数不可信**。")
     print("  多半是上一次失败留下的残留报告 + 本次 UP-TO-DATE 没重写。")
-    print("  跑 `rm -rf app/build/test-results && ./scripts/test.sh` 拿真实数字。")
+    print("  跑 `rm -rf */build/test-results && ./scripts/test.sh` 拿真实数字。")
 PY
 
 echo ""

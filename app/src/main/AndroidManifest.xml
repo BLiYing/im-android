@@ -19,12 +19,13 @@
 
       三个名字对应三个版本段，缺一段就会在那一段系统上「相册永远是空的」：
         ≤32 READ_EXTERNAL_STORAGE / 33 READ_MEDIA_IMAGES / 34+ 再加 VISUAL_USER_SELECTED（部分授权）
-      只申请图片：视频发送还没接（sendMedia 是整包字节上传，无分片），
-      申请了 READ_MEDIA_VIDEO 却用不上就是纯粹的权限过度索取。
+      2026-09-07 加了 READ_MEDIA_VIDEO：视频发送已接（UploadApi.uploadStream 走服务端分片，
+      峰值内存 = 一片 8MB，与文件大小无关），所以这条权限现在是真的用得上。
     -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <application

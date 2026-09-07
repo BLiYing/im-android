@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -47,6 +47,24 @@ abstract class IMDatabase : RoomDatabase() {
             }
         }
 
+/**
+ * v4 → v5：媒体元数据落库。
+ *
+ * ack **不回带** media_w/media_h/duration/poster，所以待发行必须自己存一份，
+ * 收到 ack 时从那里取——与 forwardFrom（v1→v2）、groupId（v2→v3、v3→v4）同一个坑，
+ * 这是第三次。不存的结果是视频在**自己这一侧**没封面、没时长、气泡比例也不对，
+ * 而对端一切正常，所以自查时很难发现。
+ */
+internal val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE message ADD COLUMN poster TEXT")
+        db.execSQL("ALTER TABLE pending_message ADD COLUMN mediaW INTEGER")
+        db.execSQL("ALTER TABLE pending_message ADD COLUMN mediaH INTEGER")
+        db.execSQL("ALTER TABLE pending_message ADD COLUMN duration INTEGER")
+        db.execSQL("ALTER TABLE pending_message ADD COLUMN poster TEXT")
+    }
+}
+
         /** v2 → v3：消息加 `groupId`（相册宫格，M4+）。老行为 NULL = 不属于任何相册。 */
         internal val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -62,7 +80,7 @@ abstract class IMDatabase : RoomDatabase() {
             )
                 // 刻意**不加** fallbackToDestructiveMigration：那会在版本号一变时
                 // 直接删库重建，用户的本地消息全没。加列要写真的 Migration。
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build().also { instance = it }
         }
     }

@@ -197,12 +197,18 @@ class MessageService(
         localPreviewUri: String = "",
         /** 相册分组：同批 ≥2 张时由调用方生成一个共享 ID，1 张传 null。 */
         groupId: String? = null,
+        /** 像素宽高 / 视频时长 / 视频封面（§4.1）；拿不到传 null，**不要传负数**（服务端拒发）。 */
+        mediaW: Int? = null,
+        mediaH: Int? = null,
+        duration: Int? = null,
+        poster: String? = null,
     ) {
         val owner = ownerProvider() ?: return
         val p = repo.createPending(
             owner = owner, convId = convId, to = to,
             content = localPreviewUri, contentType = contentType,
             groupId = groupId,
+            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
         )
         val r = try {
             upload.upload(bytes, fileName, mimeType, asVoice = contentType == ContentType.VOICE)
@@ -220,6 +226,62 @@ class MessageService(
         transmit(
             p.clientMsgId, convId, to, contentType, r.url, null,
             fileName, r.size, caption, groupId = groupId,
+            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
+        )
+    }
+
+    /**
+     * 发一条**流式上传**的媒体消息（视频）。
+     *
+     * 与 [sendMedia] 的唯一区别是上传走分片（`UploadApi.uploadStream`）而不是整包字节：
+     * 服务端视频上限 2GB，整包读进 `ByteArray` 就是当场 OOM。
+     * 其余（先落待发 → 失败标红 → 成功换 URL 再发帧）**必须保持一致**——
+     * 两条发送路径的状态机分叉过一次就会出现「视频发失败了但没有红❗」这种查不出来的事。
+     *
+     * @param openStream 每次返回从头开始的新流
+     * @param totalBytes 必须准确：分片协议按声明大小校验，多一字节服务端直接判超限
+     */
+    suspend fun sendMediaStream(
+        convId: String,
+        to: String,
+        openStream: () -> java.io.InputStream?,
+        totalBytes: Long,
+        fileName: String,
+        mimeType: String,
+        contentType: String,
+        caption: String? = null,
+        localPreviewUri: String = "",
+        groupId: String? = null,
+        mediaW: Int? = null,
+        mediaH: Int? = null,
+        duration: Int? = null,
+        poster: String? = null,
+        onProgress: ((Long, Long) -> Unit)? = null,
+    ) {
+        val owner = ownerProvider() ?: return
+        val p = repo.createPending(
+            owner = owner, convId = convId, to = to,
+            content = localPreviewUri, contentType = contentType,
+            groupId = groupId,
+            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
+        )
+        val r = try {
+            upload.uploadStream(openStream, fileName, mimeType, totalBytes, onProgress)
+        } catch (e: com.libeyond.imandroid.sdk.http.ApiException) {
+            repo.onSendRejected(
+                owner,
+                com.libeyond.imandroid.sdk.protocol.ErrorData(
+                    code = e.code, message = e.message, clientMsgId = p.clientMsgId,
+                ),
+            )
+            log.w("media_stream_upload_failed", "cid" to p.clientMsgId, "code" to e.code)
+            return
+        }
+        repo.updatePendingContent(owner, p.clientMsgId, r.url, r.size)
+        transmit(
+            p.clientMsgId, convId, to, contentType, r.url, null,
+            fileName, r.size, caption, groupId = groupId,
+            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
         )
     }
 
@@ -230,6 +292,7 @@ class MessageService(
         transmit(
             p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
             p.fileName, p.fileSize, p.caption, p.forwardFrom, p.groupId,
+            p.mediaW, p.mediaH, p.duration, p.poster,
         )
     }
 
@@ -245,6 +308,10 @@ class MessageService(
         caption: String? = null,
         forwardFrom: String? = null,
         groupId: String? = null,
+        mediaW: Int? = null,
+        mediaH: Int? = null,
+        duration: Int? = null,
+        poster: String? = null,
     ) {
         val payload = ProtocolJson.encodeToJsonElement(
             SendMsgData.serializer(),
@@ -260,6 +327,10 @@ class MessageService(
                 replyToConvSeq = replyToConvSeq,
                 forwardFrom = forwardFrom,
                 groupId = groupId,
+                mediaW = mediaW,
+                mediaH = mediaH,
+                duration = duration,
+                poster = poster,
             ),
         )
         val sent = socket.send(FrameType.SEND_MSG, payload)

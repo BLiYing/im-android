@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -56,7 +57,7 @@ fun MediaContent(msg: MessageEntity, host: String, useTls: Boolean, maxWidth: an
     }
     when (msg.contentType) {
         "image" -> ImageContent(url, msg, maxWidth, shape)
-        "video" -> VideoContent(url, msg, maxWidth, shape)
+        "video" -> VideoContent(url, msg, maxWidth, shape, host, useTls)
         "voice" -> VoiceContent(msg)
         else -> FileContent(msg)
     }
@@ -95,25 +96,47 @@ private fun VideoContent(
     msg: MessageEntity,
     maxWidth: androidx.compose.ui.unit.Dp,
     shape: androidx.compose.ui.graphics.Shape,
+    host: String,
+    useTls: Boolean,
 ) {
     val c = IMTheme.colors
     Column {
+        // 气泡比例按 media_w/media_h 走；服务端没给（老消息 / 发送端量不到）才回落 16:9。
+        // 一律 16:9 的后果是竖着拍的视频封面被裁掉上下，加载完还跳一下版。
+        val ratio = if ((msg.mediaW ?: 0) > 0 && (msg.mediaH ?: 0) > 0) {
+            msg.mediaW!!.toFloat() / msg.mediaH!!.toFloat()
+        } else {
+            16f / 9f
+        }
         Box(
-            modifier = Modifier.widthIn(max = maxWidth).fillMaxWidth().aspectRatio(16f / 9f)
+            modifier = Modifier.widthIn(max = maxWidth).fillMaxWidth().aspectRatio(ratio)
                 .clip(shape).background(c.subtleFill),
             contentAlignment = Alignment.Center,
         ) {
+            // 封面：**解不了 HEVC 的端只能靠这张图**，没有它就是一片黑底加个播放钮。
+            // poster 为空时不画 AsyncImage —— 传空串给 Coil 会触发一次必然失败的加载。
+            val poster = msg.poster
+            if (!poster.isNullOrBlank()) {
+                AsyncImage(
+                    model = MediaUrl.absolute(poster, host, useTls),
+                    contentDescription = "视频封面",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             Box(
                 modifier = Modifier.size(44.dp).clip(CircleShape).background(c.overlay),
                 contentAlignment = Alignment.Center,
             ) {
                 Image(Lucide.Play, "播放", Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onMedia))
             }
-            // 时长角标：服务端给了才显，**不为拿它去下载视频**
+            // 时长角标：服务端给了才显，**不为拿它去下载视频**。
+            // 位置是**左上角**——协议 §4.1 明写「据 duration 在视频封面左上角显 mm:ss」，
+            // 三端同一份口径。画在右下角会和时间胶囊叠在一起（2026-09-07 真机实测撞见）。
             val dur = MediaUrl.formatDuration(msg.duration)
             if (msg.duration != null && msg.duration > 0) {
                 Box(
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)
+                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
                         .clip(RoundedCornerShape(4.dp)).background(c.overlay)
                         .padding(horizontal = 5.dp, vertical = 1.dp),
                 ) { Text(dur, color = c.onMedia, fontSize = 10.sp) }

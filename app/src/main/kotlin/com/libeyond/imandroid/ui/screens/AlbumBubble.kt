@@ -2,6 +2,7 @@ package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -156,6 +158,90 @@ private fun AlbumTileView(
                     .padding(horizontal = 4.dp, vertical = 1.dp),
             ) {
                 Text(MediaUrl.formatDuration(m.durationMs), color = c.onMedia, fontSize = 9.sp)
+            }
+        }
+    }
+}
+
+/**
+ * 单条待发媒体的气泡（发送中 / 失败）。
+ *
+ * **为什么单独有它**：`ChatRow.Pending` 原本一律画成文本气泡，`text = msg.content`——
+ * 而媒体待发行的 `content` 是本地 `content://…` URI，于是屏幕上出现一条绿色文本气泡
+ * 写着 `content://media/external/video/media/30`（2026-09-07 真机实测撞见）。
+ * 多图那条路早就有 [AlbumBubble] 兜着，所以只有**单张**图/视频会露出来，
+ * 而单张通常几百毫秒就 ack 了、一闪而过——**只有发失败时才会一直挂在那儿**。
+ */
+@Composable
+internal fun PendingMediaBubble(
+    localUri: String,
+    isVideo: Boolean,
+    timestamp: Long,
+    sending: Boolean,
+    failed: Boolean,
+    onRetry: () -> Unit,
+) {
+    val c = IMTheme.colors
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (failed) {
+            // 红❗在气泡左侧，点了重发——与文本失败气泡同一套语义
+            Text(
+                "！",
+                color = c.danger,
+                fontSize = 18.sp,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable(onClick = onRetry)
+                    .padding(horizontal = 6.dp),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .width(AlbumLayout.WIDTH.dp)
+                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
+                .background(c.subtleFill),
+        ) {
+            AsyncImage(
+                // 本地 content:// URI，Coil 直接能加载（视频靠 coil-video 出首帧；
+                // 没注册解码器时是空白底，不崩）
+                model = localUri,
+                contentDescription = if (isVideo) "视频" else "图片",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.width(AlbumLayout.WIDTH.dp).height(AlbumLayout.SINGLE_ROW_HEIGHT.dp),
+            )
+            if (sending || failed) {
+                Box(
+                    Modifier
+                        .width(AlbumLayout.WIDTH.dp)
+                        .height(AlbumLayout.SINGLE_ROW_HEIGHT.dp)
+                        .background(c.overlay),
+                )
+            }
+            if (isVideo) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(c.overlay),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("▶", color = c.onMedia, fontSize = 16.sp)
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(c.overlay)
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+                Text(TimeFormat.bubbleTime(timestamp), color = c.onMedia, fontSize = 10.sp)
             }
         }
     }

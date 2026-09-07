@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "im-android"
 include(":app")
+include(":media-picker")

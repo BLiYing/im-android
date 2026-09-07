@@ -39,6 +39,21 @@ data class SendMsgData(
      *    （对端口径：`m.forwardFrom || m.fromNickname || m.from`）。
      */
     @SerialName("forward_from") val forwardFrom: String? = null,
+    /**
+     * 媒体元数据（§4.1，2026-08-03 起服务端支持；本端 2026-09-07 补上）。
+     * 收端据 `media_w/media_h` **按原比例预留气泡**（免加载完跳版）、据 `duration`
+     * 在视频封面角标显 `mm:ss`。服务端只透传 + 范围校验：**负数直接拒发 `100001`**，
+     * 所以拿不到就传 null（不要传 -1），0 的语义是「未知」。
+     */
+    @SerialName("media_w") val mediaW: Int? = null,
+    @SerialName("media_h") val mediaH: Int? = null,
+    /** 视频时长（毫秒）。非 video 带上会被服务端丢弃。 */
+    val duration: Int? = null,
+    /**
+     * 视频封面 URL（§4.1，限长 512）。**由发送端抽首帧上传后填这里**。
+     * 不是锦上添花：解不了 HEVC 的浏览器只能靠这张封面显示 iPhone 拍的视频。
+     */
+    val poster: String? = null,
 )
 
 /** ack 下行负载（PROTOCOL §4.2）——对 send_msg 的确认。 */
@@ -74,6 +89,12 @@ data class MessageData(
     @SerialName("media_w") val mediaW: Int? = null,
     @SerialName("media_h") val mediaH: Int? = null,
     val duration: Int? = null,
+    /**
+     * 视频封面 URL（§4.1）。**入站也要收**——不收的话 iOS/Web 发来的视频在本端
+     * 同样只有一片黑底加播放钮（2026-09-07 之前就是这样，一直没人发现，
+     * 因为本端此前根本发不了视频、也就很少收到）。
+     */
+    val poster: String? = null,
     val waveform: String? = null,
     /** 引用三件套（§4.3 M4-2）。 */
     @SerialName("reply_to_conv_seq") val replyToConvSeq: Long? = null,

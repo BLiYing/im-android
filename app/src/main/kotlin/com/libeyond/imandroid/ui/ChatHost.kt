@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.mediapicker.MediaPickerHost
+import com.libeyond.mediapicker.PickedMedia
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Box
@@ -69,39 +71,6 @@ fun ChatHost(
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
 
-    /**
-     * 选中的图片一批发出。**两条选图路径（自建宫格页 / 降级的系统选择器）共用这一个出口**——
-     * 不共用的话，「≥2 张才带 group_id」这条聚簇判据就会有两份，迟早分叉成
-     * 「自建页发的成宫格、降级路径发的散成单张」。
-     */
-    fun sendPicked(uris: List<String>) {
-        if (uris.isEmpty()) return
-        scope.launch {
-            // ≥2 张共享一个 group_id → 两端聚簇成宫格；1 张不带（普通媒体气泡）。
-            // 前缀 `alb-` 与 iOS 一致，便于日志里一眼认出。
-            val gid = if (uris.size > 1) "alb-" + java.util.UUID.randomUUID() else null
-            for (u in uris) {
-                val uri = android.net.Uri.parse(u)
-                val picked = withContext(Dispatchers.IO) { readPickedImage(context, uri) }
-                if (picked == null) {
-                    // 单张读失败不该中断整组——剩下的还能发出去
-                    IMLog.tag("IM.Media").w("pick_read_failed")
-                    continue
-                }
-                client.messages.sendMedia(
-                    convId = conv.convId,
-                    to = if (conv.isGroup) conv.convId else conv.peerUid,
-                    bytes = picked.bytes,
-                    fileName = picked.name,
-                    mimeType = picked.mime,
-                    contentType = ContentType.IMAGE,
-                    localPreviewUri = u,
-                    groupId = gid,
-                )
-            }
-        }
-    }
-
     val owner = client.uid.orEmpty()
     var input by remember(conv.convId) { mutableStateOf("") }
 
@@ -110,6 +79,7 @@ fun ChatHost(
     var forwarding by remember(conv.convId) { mutableStateOf<List<MessageEntity>?>(null) }
     /** 选图中（覆盖在聊天页之上的自建相册页；无权限时它自己会降级到系统选择器）。 */
     var picking by remember(conv.convId) { mutableStateOf(false) }
+    val mediaSend = remember(conv.convId) { MediaSendFlow(context, client, conv) }
     /** 长按菜单锚点：被长按气泡在窗口坐标系里的矩形，菜单按它定位（对齐 iOS UIContextMenu）。 */
     var menuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
@@ -259,12 +229,14 @@ fun ChatHost(
     // —— 相册选择页（覆盖在聊天页之上）——
     if (picking) {
         MediaPickerHost(
-            onPicked = { uris ->
+            skin = rememberPickerSkin(),
+            onPicked = { items, sendOriginal ->
                 picking = false
-                sendPicked(uris)
+                scope.launch { mediaSend.send(items, sendOriginal) { toast = it } }
             },
             onDismiss = { picking = false },
             onToast = { toast = it },
+            log = PickerLog,
         )
     }
 
@@ -351,36 +323,3 @@ fun ChatHost(
 }
 
 
-/** 从相册 uri 读出的图片。 */
-private class PickedImage(val bytes: ByteArray, val name: String, val mime: String)
-
-/**
- * 把选中的图读进内存。
- *
- * **有大小闸门**：服务端图片上限 20MB，超了会回 500001。在端上先挡一道，
- * 免得用户等上传等半天才被拒——而且真读进内存也可能 OOM。
- * 压缩待做（TODO），当前只挡不压。
- */
-private fun readPickedImage(context: android.content.Context, uri: android.net.Uri): PickedImage? {
-    val cr = context.contentResolver
-    val mime = cr.getType(uri) ?: "image/jpeg"
-    val name = cr.query(uri, null, null, null, null)?.use { cursor ->
-        val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-        if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
-    } ?: ("image_" + System.currentTimeMillis() + "." + mime.substringAfterLast('/'))
-
-    return try {
-        val bytes = cr.openInputStream(uri)?.use { it.readBytes() } ?: return null
-        if (bytes.size > MAX_IMAGE_BYTES) {
-            IMLog.tag("IM.Media").w("pick_too_large", "size" to bytes.size)
-            return null
-        }
-        PickedImage(bytes, name, mime)
-    } catch (e: Exception) {
-        IMLog.tag("IM.Media").w("pick_read_error", "err" to e.javaClass.simpleName)
-        null
-    }
-}
-
-/** 服务端图片上限 20MB（uploadLimitByKind）。 */
-private const val MAX_IMAGE_BYTES = 20 * 1024 * 1024

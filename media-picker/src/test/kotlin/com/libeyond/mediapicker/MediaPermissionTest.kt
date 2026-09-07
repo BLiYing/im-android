@@ -1,6 +1,6 @@
-package com.libeyond.imandroid.data
+package com.libeyond.mediapicker
 
-import com.libeyond.imandroid.data.MediaPermission.Access
+import com.libeyond.mediapicker.MediaPermission.Access
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -19,13 +19,17 @@ class MediaPermissionTest {
 
     @Test
     fun `Android 13 换成 READ_MEDIA_IMAGES`() {
-        assertEquals(listOf(MediaPermission.READ_IMAGES), MediaPermission.required(33))
+        // 默认收视频，所以是图片 + 视频两条（不收视频的分支另有一条用例）
+        assertEquals(
+            listOf(MediaPermission.READ_IMAGES, MediaPermission.READ_VIDEO),
+            MediaPermission.required(33),
+        )
     }
 
     @Test
     fun `Android 14 起要一并申请部分授权`() {
         assertEquals(
-            listOf(MediaPermission.READ_IMAGES, MediaPermission.READ_USER_SELECTED),
+            listOf(MediaPermission.READ_IMAGES, MediaPermission.READ_VIDEO, MediaPermission.READ_USER_SELECTED),
             MediaPermission.required(34),
         )
     }
@@ -62,5 +66,30 @@ class MediaPermissionTest {
         assertTrue(MediaPermission.canBrowse(Access.Full))
         assertTrue(MediaPermission.canBrowse(Access.Partial))
         assertFalse(MediaPermission.canBrowse(Access.None))
+    }
+
+    // —— 视频权限是 Android 13 起分出来的独立一条 ——
+
+    @Test
+    fun `不收视频就不申请视频权限`() {
+        // 申请了却用不上就是权限过度索取，商店审核会问
+        assertEquals(listOf(MediaPermission.READ_IMAGES), MediaPermission.required(33, includeVideo = false))
+        assertEquals(
+            listOf(MediaPermission.READ_IMAGES, MediaPermission.READ_VIDEO),
+            MediaPermission.required(33, includeVideo = true),
+        )
+        // ≤32 只有一条老权限、它同时覆盖图片和视频，所以这一段没有区别
+        assertEquals(MediaPermission.required(30, false), MediaPermission.required(30, true))
+    }
+
+    @Test
+    fun `只拒了视频不该让整个选择器降级`() {
+        // 以图片权限为准：单独拒视频的用户仍然要能发图
+        val onlyImages = setOf(MediaPermission.READ_IMAGES)
+        assertEquals(Access.Full, MediaPermission.access(33, onlyImages))
+        assertFalse(MediaPermission.canReadVideo(33, onlyImages))
+        assertTrue(MediaPermission.canReadVideo(33, onlyImages + MediaPermission.READ_VIDEO))
+        // 老系统上一条权限管两样
+        assertTrue(MediaPermission.canReadVideo(30, setOf(MediaPermission.READ_EXTERNAL)))
     }
 }

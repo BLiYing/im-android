@@ -402,15 +402,32 @@ fun ChatScreen(
                         avatarSeed = r.msg.sender,
                         loadLinkPreview = loadLinkPreview,
                     )
-                    is ChatRow.Pending -> Bubble(
-                        text = r.msg.content,
-                        mine = true,
-                        timestamp = r.msg.createdAt,
-                        senderName = null,
-                        sending = r.msg.state == SendState.Sending.name,
-                        failed = r.msg.state == SendState.Failed.name,
-                        onRetry = { onRetry(r.msg.clientMsgId) },
-                    )
+                    is ChatRow.Pending -> {
+                        // 媒体待发行的 content 是本地 content:// URI——按文本画就会在屏幕上
+                        // 出现一条写着 `content://media/...` 的绿气泡（真机撞见过）
+                        val isImage = r.msg.contentType == ContentType.IMAGE
+                        val isVideo = r.msg.contentType == ContentType.VIDEO
+                        if (isImage || isVideo) {
+                            PendingMediaBubble(
+                                localUri = r.msg.content,
+                                isVideo = isVideo,
+                                timestamp = r.msg.createdAt,
+                                sending = r.msg.state == SendState.Sending.name,
+                                failed = r.msg.state == SendState.Failed.name,
+                                onRetry = { onRetry(r.msg.clientMsgId) },
+                            )
+                        } else {
+                            Bubble(
+                                text = r.msg.content,
+                                mine = true,
+                                timestamp = r.msg.createdAt,
+                                senderName = null,
+                                sending = r.msg.state == SendState.Sending.name,
+                                failed = r.msg.state == SendState.Failed.name,
+                                onRetry = { onRetry(r.msg.clientMsgId) },
+                            )
+                        }
+                    }
                 }
             }
         }

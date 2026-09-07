@@ -42,6 +42,11 @@ data class MessageEntity(
     val mediaW: Int? = null,
     val mediaH: Int? = null,
     val duration: Int? = null,
+    /**
+     * 视频封面 URL（§4.1）。**不是锦上添花**：解不了 HEVC 的端只能靠这张封面显示视频，
+     * 没有它就是一片黑底加个播放钮。
+     */
+    val poster: String? = null,
     val waveform: String? = null,
     val replyToConvSeq: Long? = null,
     val replySnapshot: String? = null,
@@ -88,6 +93,15 @@ data class PendingMessageEntity(
      * 收到 ack 后再"啪"地拼成宫格。
      */
     val groupId: String? = null,
+    /**
+     * 媒体元数据。**待发就要存**——ack 不回带这些字段，收到 ack 时只能从待发行里取
+     * （与 [forwardFrom] / [groupId] 同一个坑，这已经是第三次了：
+     * 不存的话视频在**自己这一侧**没封面、没时长、气泡比例也不对，而对端一切正常）。
+     */
+    val mediaW: Int? = null,
+    val mediaH: Int? = null,
+    val duration: Int? = null,
+    val poster: String? = null,
     /** [SendState] 的 name。 */
     val state: String = "Sending",
     val createdAt: Long = 0,

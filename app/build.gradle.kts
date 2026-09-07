@@ -67,6 +67,9 @@ android {
 }
 
 dependencies {
+    // 自建相册选择器。依赖方向单向：app → media-picker，模块不认识 IM 业务
+    implementation(project(":media-picker"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -79,6 +82,8 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.icons.lucide)
     implementation(libs.coil.compose)
+    // 本地 content:// 视频的首帧（待发气泡）——服务端回来的视频有 poster，本地那段没有
+    implementation(libs.coil.video)
     implementation(libs.zxing.core)
     debugImplementation(libs.compose.ui.tooling)
 

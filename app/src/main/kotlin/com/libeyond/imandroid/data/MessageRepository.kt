@@ -87,6 +87,10 @@ class MessageRepository(
         replyToConvSeq: Long? = null,
         forwardFrom: String? = null,
         groupId: String? = null,
+        mediaW: Int? = null,
+        mediaH: Int? = null,
+        duration: Int? = null,
+        poster: String? = null,
     ): PendingMessageEntity {
         val p = PendingMessageEntity(
             ownerUid = owner,
@@ -98,6 +102,10 @@ class MessageRepository(
             replyToConvSeq = replyToConvSeq,
             forwardFrom = forwardFrom,
             groupId = groupId,
+            mediaW = mediaW,
+            mediaH = mediaH,
+            duration = duration,
+            poster = poster,
             state = SendState.Sending.name,
             createdAt = System.currentTimeMillis(),
         )
@@ -121,26 +129,20 @@ class MessageRepository(
         if (cached == null) {
             log.w("msg_ack_without_pending", "cid" to ack.clientMsgId, "seq" to ack.convSeq)
         }
-        val row = MessageEntity(
-            ownerUid = owner,
-            convId = ack.convId,
-            convSeq = ack.convSeq,
-            serverMsgId = ack.serverMsgId,
-            clientMsgId = ack.clientMsgId,
-            sender = owner,
-            contentType = cached?.contentType ?: ContentType.TEXT,
-            content = cached?.content.orEmpty(),
-            caption = cached?.caption,
-            fileName = cached?.fileName,
-            fileSize = cached?.fileSize,
-            replyToConvSeq = cached?.replyToConvSeq,
-            // ack 不回带 forward_from，从待发行里取——漏了这行，自己转发出去的消息
-            // 在**自己这一侧**就看不到「转发自 X」（对端看得到），是最难自查的一类不一致。
-            forwardFrom = cached?.forwardFrom,
-            // ack 同样不回带 group_id：漏了这行，一组图在**自己这一侧**收到 ack 后
-            // 会从宫格散回单张（对端看到的仍是宫格），比一开始就不聚簇更怪。
-            groupId = cached?.groupId,
-            timestamp = ack.timestamp,
+        // ack 只回带身份与序号；其余随消息走的字段一律从待发行补
+        // （漏一个就是「只在自己这侧坏」的那类 bug，已经踩过三次，见 AckCarryOver）
+        val row = AckCarryOver.enrich(
+            MessageEntity(
+                ownerUid = owner,
+                convId = ack.convId,
+                convSeq = ack.convSeq,
+                serverMsgId = ack.serverMsgId,
+                clientMsgId = ack.clientMsgId,
+                sender = owner,
+                contentType = ContentType.TEXT,
+                timestamp = ack.timestamp,
+            ),
+            cached,
         )
         messages.upsert(row)
         pending.remove(owner, ack.clientMsgId)
@@ -390,6 +392,7 @@ private fun MessageData.toEntity(owner: String) = MessageEntity(
     mediaW = mediaW,
     mediaH = mediaH,
     duration = duration,
+    poster = poster,
     waveform = waveform,
     replyToConvSeq = replyToConvSeq,
     replySnapshot = replySnapshot,

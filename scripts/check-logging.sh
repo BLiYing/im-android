@@ -2,7 +2,9 @@
 # check-logging.sh —— 日志红线自查（../IMServer/docs/LOGGING.md §7.1）。
 #
 # 业务代码禁止直接用 android.util.Log / println / System.out，一律走 sdk/logging/IMLog.kt。
-# IMLog.kt 自身是唯一落点，故排除。
+# IMLog.kt 自身是唯一落点，故排除。**扫所有模块**——把代码搬进新模块就绕过检查，
+# 那是这道红线最容易被悄悄架空的方式。:media-picker 不认识 IMLog，它靠
+# MediaPickerLog 接缝把事件转发出来（默认实现是静默丢弃，不是打 logcat）。
 #
 # 为什么要有这道机械检查：Go 后端曾累计 54 处违规无人察觉，因为有兼容桥接兜底、
 # "看起来没坏"。本端不加桥接，再加一道 grep，别等攒到 54 处。
@@ -10,7 +12,10 @@ set -u
 cd "$(dirname "$0")/.." || exit 2
 
 hits=$(grep -rnE "android\.util\.Log|(^|[^.[:alnum:]_])println\(|System\.out" \
-        app/src/main/kotlin --include="*.kt" 2>/dev/null | grep -v "sdk/logging/IMLog.kt" || true)
+        . --include="*.kt" 2>/dev/null \
+        | grep -v "/build/" | grep -v "/src/test/" \
+        | grep -v "sdk/logging/IMLog.kt" \
+        | grep -vE "^[^:]+:[0-9]+: *(\*|//|/\*)" || true)
 
 if [ -n "$hits" ]; then
   echo "✗ 日志红线：发现绕过 IMLog 的直接打印（应为 0 条）"

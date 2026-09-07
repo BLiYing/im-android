@@ -1,4 +1,4 @@
-package com.libeyond.imandroid.data
+package com.libeyond.mediapicker
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -68,9 +68,10 @@ class MediaPickTest {
     // —— 大小闸门 ——
 
     @Test
-    fun `超 20MB 与零字节都不可选`() {
-        assertTrue(MediaPick.selectable(asset(1, size = 20L * 1024 * 1024)))
-        assertFalse(MediaPick.selectable(asset(2, size = 20L * 1024 * 1024 + 1)))
+    fun `超服务端上限与零字节都不可选`() {
+        // 上限跟服务端 uploadLimitByKind 走（2GB，图片/视频同档）
+        assertTrue(MediaPick.selectable(asset(1, size = MediaPick.MAX_BYTES)))
+        assertFalse(MediaPick.selectable(asset(2, size = MediaPick.MAX_BYTES + 1)))
         // size=0 是 MediaStore 里的坏行（文件已删/正在写入），选了必然发失败
         assertFalse(MediaPick.selectable(asset(3, size = 0)))
     }

@@ -45,7 +45,9 @@ while IFS= read -r f; do
       warn=1
     fi
   fi
-done < <(find app/src/main -type f -name "*.kt" | sort)
+# **扫所有模块**，不只是 app/：把代码搬进新模块（如 :media-picker）就绕过门禁，
+# 那是这道检查最容易被悄悄架空的方式。
+done < <(find . -type d -name build -prune -o -type f -path "*/src/main/*" -name "*.kt" -print | sort)
 
 echo ""
 if [ "$fail" -ne 0 ]; then
