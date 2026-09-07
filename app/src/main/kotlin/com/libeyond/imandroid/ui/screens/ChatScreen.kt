@@ -161,6 +161,8 @@ fun ChatScreen(
     onPickMedia: () -> Unit,
     /** 点标题进详情（群资料 / 用户资料）。 */
     onOpenInfo: () -> Unit,
+    /** 取链接富预览（文本气泡里首个 URL）。由 Host 注入，screen 不持有 IMClient。 */
+    loadLinkPreview: suspend (String) -> com.libeyond.imandroid.sdk.api.LinkPreview?,
     /** 媒体地址补全用。 */
     host: String,
     useTls: Boolean,
@@ -313,6 +315,7 @@ fun ChatScreen(
                         reserveAvatarColumn = isGroup && r.msg.sender != myUid,
                         showAvatar = showsSenderAvatar(rows, i, myUid, isGroup),
                         avatarSeed = r.msg.sender,
+                        loadLinkPreview = loadLinkPreview,
                     )
                     is ChatRow.Pending -> Bubble(
                         text = r.msg.content,

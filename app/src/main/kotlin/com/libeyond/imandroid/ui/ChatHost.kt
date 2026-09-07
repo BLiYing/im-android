@@ -243,6 +243,7 @@ fun ChatHost(
         onLongPress = { m, rect -> menuFor = m; menuAnchor = rect },
         replyTo = replyTo,
         onCancelReply = { replyTo = null },
+        loadLinkPreview = { url -> client.conversationsApi.linkPreview(url) },
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
     )

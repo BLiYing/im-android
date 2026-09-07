@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.data.LinkDetect
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -131,6 +132,8 @@ internal fun Bubble(
     showAvatar: Boolean = false,
     /** 头像取色种子——用 uid 不用昵称，改昵称不该换颜色。 */
     avatarSeed: String = "",
+    /** 取链接预览。传 null = 不出预览卡（长按菜单里的原位重绘就传 null，别重复请求）。 */
+    loadLinkPreview: (suspend (String) -> com.libeyond.imandroid.sdk.api.LinkPreview?)? = null,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -249,6 +252,14 @@ internal fun Bubble(
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
                         )
+                    }
+                    // 文本气泡里首个 URL 的富预览卡（iOS `IMLinkPreviewView`）。
+                    // 只对**已确认的纯文本**出卡：待发消息还没落定、媒体气泡自己就有图。
+                    if (!recalled && loadLinkPreview != null && msg != null &&
+                        msg.contentType == ContentType.TEXT
+                    ) {
+                        val url = remember(text) { LinkDetect.firstUrl(text) }
+                        if (url != null) LinkPreviewCard(url, loadLinkPreview, host, useTls)
                     }
                     Spacer(Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {

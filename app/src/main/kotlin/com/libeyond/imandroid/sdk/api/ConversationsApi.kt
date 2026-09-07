@@ -64,6 +64,18 @@ private data class ConversationsResp(
 
 class ConversationsApi(private val http: HttpClient) {
 
+    /**
+     * 链接富预览。**抓不到不是错误**——服务端抓空 / 限流 / 网络失败一律回 null，
+     * UI 退化成纯链接文本（与 iOS `linkPreviewWithToken:` 的 nil 语义同）。
+     *
+     * 调用方**必须自己做缓存与去重**：这个接口与 `/qr/resolve` 共享每账号 60/min，
+     * 一屏十条链接消息各请求一次就能把配额打光。
+     */
+    suspend fun linkPreview(url: String): LinkPreview? = runCatching {
+        val q = java.net.URLEncoder.encode(url, "UTF-8")
+        decode(http.call("GET", "/api/v1/link-preview?url=$q"), LinkPreview.serializer())
+    }.getOrNull()?.takeIf { it.isRenderable }
+
     suspend fun list(): List<ConversationSummary> =
         decode(http.call("GET", "/api/v1/conversations"), ConversationsResp.serializer()).conversations
 
@@ -97,4 +109,17 @@ class ConversationsApi(private val http: HttpClient) {
             put("conv_seq", convSeq)
         })
     }
+}
+
+/** 链接富预览（PROTOCOL §11 `GET /api/v1/link-preview`）。字段都可能缺。 */
+@Serializable
+data class LinkPreview(
+    val url: String = "",
+    val title: String = "",
+    val description: String = "",
+    val image: String = "",
+    @SerialName("site_name") val siteName: String = "",
+) {
+    /** 一张卡都撑不起来时不出卡（与 iOS/Web 同：只有 url 没有标题的卡等于噪音）。 */
+    val isRenderable: Boolean get() = title.isNotBlank() || description.isNotBlank() || image.isNotBlank()
 }
