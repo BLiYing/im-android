@@ -87,6 +87,16 @@ class MessageRepository(
         replyToConvSeq: Long? = null,
         forwardFrom: String? = null,
         groupId: String? = null,
+        /**
+         * 文件名 / 大小 / 图说。**必须在这里就落库**，不能只在首次发帧时当参数传：
+         * [MessageService.resend] 是从待发行里读这些字段的，行里没有就等于
+         * 「重发一次，文件名和大小就没了」——与 forwardFrom / groupId / 媒体元数据
+         * 同一个坑（见 AckCarryOver 的注释），这已经是第四次。
+         * 另外文件待发气泡要靠 fileName 显示名字，不然屏幕上是一串 content:// 。
+         */
+        fileName: String? = null,
+        fileSize: Long? = null,
+        caption: String? = null,
         mediaW: Int? = null,
         mediaH: Int? = null,
         duration: Int? = null,
@@ -102,6 +112,9 @@ class MessageRepository(
             replyToConvSeq = replyToConvSeq,
             forwardFrom = forwardFrom,
             groupId = groupId,
+            fileName = fileName,
+            fileSize = fileSize,
+            caption = caption,
             mediaW = mediaW,
             mediaH = mediaH,
             duration = duration,

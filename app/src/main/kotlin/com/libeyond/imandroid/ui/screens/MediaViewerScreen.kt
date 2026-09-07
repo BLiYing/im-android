@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +17,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clip
+import com.composables.icons.lucide.Download
+import com.composables.icons.lucide.Forward
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.libeyond.imandroid.data.MediaUrl
@@ -43,9 +51,19 @@ internal fun MediaViewerScreen(
     msg: MessageEntity,
     host: String,
     useTls: Boolean,
+    onSave: (url: String, isVideo: Boolean) -> Unit,
+    onForward: () -> Unit,
     onClose: () -> Unit,
 ) {
     val isVideo = msg.contentType == ContentType.VIDEO
+    // 待发/失败的那条 content 是本地 content:// —— 原样用，别拼服务端前缀。
+    // 存相册与渲染必须是**同一个地址**：分开算过一次就会出现「看到的是本地原图、
+    // 存下来的是服务端压缩件」这种对不上账的情况。
+    val source = if (msg.content.startsWith("content://")) {
+        msg.content
+    } else {
+        MediaUrl.absolute(msg.content, host, useTls)
+    }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (isVideo) {
             VideoPlayer(
@@ -55,15 +73,7 @@ internal fun MediaViewerScreen(
                 useTls = useTls,
             )
         } else {
-            ZoomableImage(
-                // 待发/失败的那条 content 是本地 content:// —— 原样交给 Coil，别拼服务端前缀
-                model = if (msg.content.startsWith("content://")) {
-                    msg.content
-                } else {
-                    MediaUrl.absolute(msg.content, host, useTls)
-                },
-                contentDescription = "图片",
-            )
+            ZoomableImage(model = source, contentDescription = "图片")
         }
 
         // 关闭：左上角。**不做「点空白关闭」**——图片可缩放，点空白与拖动/双击抢手势，
@@ -72,17 +82,45 @@ internal fun MediaViewerScreen(
             modifier = Modifier.fillMaxWidth().systemBarsPadding().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier.size(36.dp).clickable(onClick = onClose),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    imageVector = Lucide.X,
-                    contentDescription = "关闭",
-                    modifier = Modifier.size(24.dp),
-                    colorFilter = ColorFilter.tint(Color.White),
-                )
-            }
+            ViewerButton(Lucide.X, "关闭", onClose)
         }
+
+        // 右下角一排：转发 + 下载（位置与 iOS `setupCommonControls` 的
+        // `_downloadButton` 一致——用户靠位置形成肌肉记忆，两端摆得不一样就是两套）。
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .systemBarsPadding()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 转发**先关查看器再执行**：转发选择页要盖在聊天页上下文里，
+            // 叠在查看器之上会出现「关掉选择页还留着一层黑底大图」的怪状态。
+            // iOS 的 `showMoreSheet` 对外部动作也是这么处理的。
+            ViewerButton(Lucide.Forward, "转发", onForward)
+            Spacer(Modifier.width(12.dp))
+            ViewerButton(Lucide.Download, "保存到相册") { onSave(source, isVideo) }
+        }
+    }
+}
+
+/** 查看器上的圆形按钮：黑底半透明 + 白色描边图标，压在任何画面上都看得见。 */
+@Composable
+private fun ViewerButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(Color(0x66000000))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            imageVector = icon,
+            contentDescription = label,
+            modifier = Modifier.size(20.dp),
+            colorFilter = ColorFilter.tint(Color.White),
+        )
     }
 }

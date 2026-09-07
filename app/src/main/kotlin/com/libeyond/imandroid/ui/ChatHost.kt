@@ -82,6 +82,10 @@ fun ChatHost(
     /** 选图中（覆盖在聊天页之上的自建相册页；无权限时它自己会降级到系统选择器）。 */
     // toast 要声明在下面那些 launcher 回调之前——回调里会赋值
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
+    // 存相册：权限分支与三段文案都在 rememberMediaSaver 里，这里只拿到一个可调的函数
+    val saveMedia = rememberMediaSaver { toast = it }
+    // 分片上传进度（视频/文件）。内存态，随进程消亡——上传本来也不跨进程续传。
+    val uploadProgress by client.messages.uploadProgress.state.collectAsState()
     var picking by remember(conv.convId) { mutableStateOf(false) }
     /** 选联系人发名片中（null = 不在选）。 */
     var pickingFriend by remember(conv.convId) { mutableStateOf<List<FriendEntry>?>(null) }
@@ -316,6 +320,7 @@ fun ChatHost(
         loadLinkPreview = { url -> client.conversationsApi.linkPreview(url) },
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+        uploadProgress = uploadProgress,
     )
 
     // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——
@@ -324,6 +329,9 @@ fun ChatHost(
             msg = m,
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+            onSave = saveMedia,
+            // 先关查看器再开转发选择页：两层叠着关掉上面一层会露出黑底大图
+            onForward = { viewing = null; forwarding = listOf(m) },
             onClose = { viewing = null },
         )
     }

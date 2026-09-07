@@ -47,6 +47,12 @@ class MessageService(
 ) {
     private val log = IMLog.tag("IM.Msg")
 
+    /**
+     * 分片上传进度（clientMsgId → 百分比），UI 直接 collect。
+     * 只有 [sendMediaStream] 这条路会写它——图片走整包上传，几百 KB，接了只会闪。
+     */
+    val uploadProgress = UploadProgress()
+
     private val _friendEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     /** 好友关系有变（收到 friend 帧）。UI 据此重拉 /friends。 */
     val friendEvents: SharedFlow<Unit> = _friendEvents.asSharedFlow()
@@ -221,6 +227,7 @@ class MessageService(
             owner = owner, convId = convId, to = to,
             content = localPreviewUri, contentType = contentType,
             groupId = groupId,
+            fileName = fileName, fileSize = bytes.size.toLong(), caption = caption,
             mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
         )
         val r = try {
@@ -269,17 +276,24 @@ class MessageService(
         mediaH: Int? = null,
         duration: Int? = null,
         poster: String? = null,
-        onProgress: ((Long, Long) -> Unit)? = null,
     ) {
         val owner = ownerProvider() ?: return
         val p = repo.createPending(
             owner = owner, convId = convId, to = to,
             content = localPreviewUri, contentType = contentType,
             groupId = groupId,
+            // 大小在上传前就知道（分片协议要求先声明），先落库好让待发气泡显示得出来
+            fileName = fileName, fileSize = totalBytes, caption = caption,
             mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
         )
+        // **开传就先置 0%**：第一片是 8MB，传完才有第一次回调。不置的话这段空窗里
+        // 气泡显示的是播放钮，看着像已经发好了——真机实测一段 404MB 的视频，
+        // 这个空窗有好几秒。0% 至少说明「在传」。
+        uploadProgress.report(p.clientMsgId, 0, totalBytes)
         val r = try {
-            upload.uploadStream(openStream, fileName, mimeType, totalBytes, onProgress)
+            upload.uploadStream(openStream, fileName, mimeType, totalBytes) { sent, total ->
+                uploadProgress.report(p.clientMsgId, sent, total)
+            }
         } catch (e: com.libeyond.imandroid.sdk.http.ApiException) {
             repo.onSendRejected(
                 owner,
@@ -289,6 +303,10 @@ class MessageService(
             )
             log.w("media_stream_upload_failed", "cid" to p.clientMsgId, "code" to e.code)
             return
+        } finally {
+            // 成功 / 失败 / 协程被取消都要摘掉。写在 happy path 上就会留下
+            // 一条永远停在 43% 的进度环——比没有进度条更让人以为程序卡死了。
+            uploadProgress.clear(p.clientMsgId)
         }
         repo.updatePendingContent(owner, p.clientMsgId, r.url, r.size)
         transmit(

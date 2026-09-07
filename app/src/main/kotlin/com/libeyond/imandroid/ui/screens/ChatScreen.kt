@@ -54,6 +54,7 @@ import com.composables.icons.lucide.SendHorizontal
 import com.libeyond.imandroid.data.ChatEntry
 import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.AttachItems
+import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.data.db.PendingMessageEntity
@@ -107,6 +108,8 @@ fun ChatScreen(
     onSend: () -> Unit,
     onBack: () -> Unit,
     onRetry: (String) -> Unit,
+    /** 分片上传进度：clientMsgId → 百分比。没有条目 = 不在分片上传中。 */
+    uploadProgress: Map<String, Int>,
     /** 可见即读：把已读位点推到这一条。 */
     onVisibleSeq: (Long) -> Unit,
 ) {
@@ -278,10 +281,12 @@ fun ChatScreen(
                         loadLinkPreview = loadLinkPreview,
                     )
                     is ChatRow.Pending -> {
-                        // 媒体待发行的 content 是本地 content:// URI——按文本画就会在屏幕上
+                        // 媒体/文件待发行的 content 是本地 content:// URI——按文本画就会在屏幕上
                         // 出现一条写着 `content://media/...` 的绿气泡（真机撞见过）
                         val isImage = r.msg.contentType == ContentType.IMAGE
                         val isVideo = r.msg.contentType == ContentType.VIDEO
+                        val isFile = r.msg.contentType == ContentType.FILE
+                        val pct = uploadProgress[r.msg.clientMsgId]
                         if (isImage || isVideo) {
                             PendingMediaBubble(
                                 localUri = r.msg.content,
@@ -289,6 +294,19 @@ fun ChatScreen(
                                 timestamp = r.msg.createdAt,
                                 sending = r.msg.state == SendState.Sending.name,
                                 failed = r.msg.state == SendState.Failed.name,
+                                progress = pct,
+                                onRetry = { onRetry(r.msg.clientMsgId) },
+                            )
+                        } else if (isFile) {
+                            PendingFileBubble(
+                                // 待发行还没有服务端地址，名字只能来自本地 meta
+                                fileName = r.msg.fileName.orEmpty()
+                                    .ifBlank { MediaUrl.displayFileName(r.msg.content) },
+                                fileSize = r.msg.fileSize,
+                                timestamp = r.msg.createdAt,
+                                sending = r.msg.state == SendState.Sending.name,
+                                failed = r.msg.state == SendState.Failed.name,
+                                progress = pct,
                                 onRetry = { onRetry(r.msg.clientMsgId) },
                             )
                         } else {
