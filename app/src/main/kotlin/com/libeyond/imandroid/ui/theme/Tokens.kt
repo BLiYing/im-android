@@ -174,7 +174,16 @@ val DarkIMColors = IMColors(
     isDark = true,
 )
 
-/** 圆角、间距等尺寸令牌（UI_COLOR.md §4）。 */
+/**
+ * 圆角、间距等尺寸令牌。
+ *
+ * 圆角与页面级留白见 IMServer `docs/UI_COLOR.md` §4；
+ * **组件级尺寸（头像、行高、气泡、输入栏）见 `docs/UI_SPEC.md`，每个值那里都标了三端出处。**
+ *
+ * 下面带「§」注释的值都是**从 iOS/Web 代码里量出来的**，不是按 Android 惯例拍的——
+ * 写死在页面里的魔法数字曾让本端头像 48（iOS/Web 都是 52）、气泡宽 280dp 固定
+ * （iOS/Web 都是比例）。要改先改 `UI_SPEC.md`，那是三端共同的基准。
+ */
 data class IMDimens(
     val radiusCard: Dp = 14.dp,
     val radiusBubble: Dp = 18.dp,
@@ -182,11 +191,40 @@ data class IMDimens(
     val space1: Dp = 4.dp,
     val space2: Dp = 8.dp,
     val space3: Dp = 12.dp,
-    /** 页面左右边距，§4 规定为 16。 */
+    /** 页面左右边距，UI_COLOR §4 规定为 16。 */
     val space4: Dp = 16.dp,
     /** 同级卡片间距 ≥12；外观设置里各卡间距 ≥24。 */
     val cardGap: Dp = 12.dp,
     val sectionGap: Dp = 24.dp,
+
+    // —— 会话列表（UI_SPEC §2）——
+    /** 会话行头像直径。iOS `kIMAvatarSize` / Web `.avatar` 同为 52。 */
+    val convAvatar: Dp = 52.dp,
+    /** 会话行高。iOS `tableView.rowHeight` 写死 76；本端按 12+52+12 自然得到，取 min 兜底。 */
+    val convRowHeight: Dp = 76.dp,
+    /** 分割线左缩进 = 行左边距 + 头像 + 间距，与头像右缘对齐（iOS `separatorInset` 同口径）。 */
+    val convSeparatorInset: Dp = space4 + convAvatar + space3,
+
+    // —— 聊天页（UI_SPEC §3）——
+    /**
+     * 气泡最大宽占内容区的**比例**。iOS `_bubble.widthAnchor` multiplier 0.75、Web `.row` 72%。
+     * **必须是比例不能是固定 dp**：280dp 在 360dp 机器上占 78%、411dp 机器上占 68%，两头都不对。
+     */
+    val bubbleMaxWidthFraction: Float = 0.75f,
+    /** 气泡左右内边距。三端 10/10/12，基准待定（UI_SPEC §6-C），暂随 Web。 */
+    val bubblePaddingH: Dp = 10.dp,
+    /** 气泡上下内边距。iOS/Web 同为 6。 */
+    val bubblePaddingV: Dp = 6.dp,
+    /** 群内发送者头像。iOS 30 / Web 28，基准待定（UI_SPEC §6-D），本端暂未实现。 */
+    val chatAvatar: Dp = 30.dp,
+    /** 日期分隔胶囊高。iOS `_datePillHeight` 24。 */
+    val datePillHeight: Dp = 24.dp,
+
+    // —— 输入栏（UI_SPEC §4）——
+    /** 输入栏**单行态**总高。iOS `inputBar.heightAnchor` 56；多行时本端允许长高。 */
+    val inputBarHeight: Dp = 56.dp,
+    /** 输入栏左右功能钮。iOS `plusButton`/`sendButton` 同为 36。 */
+    val inputControl: Dp = 36.dp,
 )
 
 /**

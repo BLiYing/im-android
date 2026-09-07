@@ -5,14 +5,20 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 时间格式化——与 iOS `IMTheme` 的会话列表口径对齐：
- * 今天显示 `HH:mm`、昨天显示「昨天」、同年显示 `M月d日`、跨年显示 `yyyy年M月d日`。
+ * 时间格式化。纯函数（吃时间戳吐字符串），便于单测；不要在 Composable 里现算格式。
  *
- * 纯函数（吃时间戳吐字符串），便于单测；不要在 Composable 里现算格式。
+ * **三端口径见 IMServer `docs/UI_SPEC.md` §5，动手改之前先读它。**
+ * 目前 [dayLabel] 三端一致（§5.2），[conversationTime] **三端各不相同**（§5.1，基准待定）。
  */
 object TimeFormat {
 
-    /** 会话列表右上角的时间。 */
+    /**
+     * 会话列表右上角的时间。
+     *
+     * ⚠️ **这不是"与 iOS 对齐"的实现**（此处注释一度这么写，是错的）。实测三端各不相同：
+     * iOS 是 `HH:mm` / 其余一律 `MM-dd`，Web 是恒 `HH:mm`（不区分日期，本身是 bug）。
+     * 本实现走四段式，与 [dayLabel] 共用同一套词汇。基准待人拍板，见 `docs/UI_SPEC.md` §5.1。
+     */
     fun conversationTime(tsMillis: Long, now: Long = System.currentTimeMillis()): String {
         if (tsMillis <= 0) return ""
         val c = Calendar.getInstance().apply { timeInMillis = tsMillis }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -111,6 +112,9 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // 行高 76 = 12 + 52 + 12（UI_SPEC §2，iOS 写死 rowHeight 76）。
+            // 用 heightIn(min) 不用 height：长昵称换行时允许长高，不裁内容。
+            .heightIn(min = d.convRowHeight)
             .background(c.pageBackground)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = d.space4, vertical = d.space3),
@@ -121,7 +125,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
             // 种子用 uid 不用显示名——改昵称不该换颜色
             seed = if (conv.isGroup) conv.convId else conv.peerUid.ifBlank { conv.convId },
             avatarUrl = conv.avatarUrl,
-            size = 48.dp,
+            size = d.convAvatar,
         )
         Spacer(Modifier.width(d.space3))
 
@@ -175,7 +179,7 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
         modifier = Modifier
             .fillMaxWidth()
             .height(0.5.dp)
-            .padding(start = 76.dp)
+            .padding(start = d.convSeparatorInset)
             .background(c.separator),
     )
 }

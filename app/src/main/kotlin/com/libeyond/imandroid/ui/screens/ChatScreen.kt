@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -384,21 +385,32 @@ private fun Composer(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // 单行态总高 56（UI_SPEC §4，iOS inputBar.heightAnchor 同值）；
+            // 多行时允许长高，故用 heightIn(min) 而非 height。
+            .heightIn(min = d.inputBarHeight)
             .background(c.surface)
             .padding(horizontal = d.space3, vertical = d.space2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(
-            imageVector = Lucide.Plus,
-            contentDescription = "发送图片",
-            modifier = Modifier.size(24.dp).clickable { onPickMedia() },
-            colorFilter = ColorFilter.tint(c.textSecondary),
-        )
+        // 点击区 36（与 iOS plusButton 同）；图标本身 24。
+        Box(
+            modifier = Modifier.size(d.inputControl).clickable { onPickMedia() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                imageVector = Lucide.Plus,
+                contentDescription = "发送图片",
+                modifier = Modifier.size(24.dp),
+                colorFilter = ColorFilter.tint(c.textSecondary),
+            )
+        }
         Spacer(Modifier.width(d.space2))
         Box(
             modifier = Modifier
                 .weight(1f)
-                .clip(RoundedCornerShape(20.dp))
+                // 输入框圆角**跟随气泡圆角**（外观页可调）——iOS 就是这么做的，
+                // 之前写死 20 等于把用户的圆角设置在输入框上吞掉了（UI_SPEC §4）。
+                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
                 .background(c.pageBackground)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
@@ -416,7 +428,7 @@ private fun Composer(
         Spacer(Modifier.width(d.space2))
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(d.inputControl)
                 .clip(CircleShape)
                 .background(if (input.isNotBlank()) c.accent else c.neutralControl)
                 .clickable(enabled = input.isNotBlank()) { onSend() },

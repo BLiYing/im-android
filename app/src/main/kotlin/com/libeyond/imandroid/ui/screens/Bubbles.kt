@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.data.db.MessageEntity
@@ -32,12 +34,16 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 @Composable
 internal fun DaySeparator(ts: Long) {
     val c = IMTheme.colors
+    val d = IMTheme.dimens
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
         Box(
+            // 胶囊高 24、圆角 = 半高（UI_SPEC §3，iOS _datePillHeight/_datePill.cornerRadius 同值）
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .height(d.datePillHeight)
+                .clip(RoundedCornerShape(d.datePillHeight / 2))
                 .background(c.datePillBackground)
-                .padding(horizontal = 10.dp, vertical = 3.dp),
+                .padding(horizontal = d.space3),
+            contentAlignment = Alignment.Center,
         ) {
             Text(TimeFormat.dayLabel(ts), color = c.onMedia, fontSize = 11.sp)
         }
@@ -82,7 +88,12 @@ internal fun Bubble(
     onRetry: (() -> Unit)? = null,
 ) {
     val c = IMTheme.colors
+    val d = IMTheme.dimens
     val appearance = IMTheme.appearance
+    // 气泡最大宽是**内容区的比例**不是固定 dp（UI_SPEC §3）：固定值在窄机上过宽、宽机上过窄。
+    // BoxWithConstraints 才能拿到本行可用宽度并按比例折算。
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+    val bubbleMax = bubbleMaxWidth(maxWidth, d.bubbleMaxWidthFraction)
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
@@ -107,7 +118,7 @@ internal fun Bubble(
             val recalled = (msg?.recalledAt ?: 0) > 0
             Box(
                 modifier = Modifier
-                    .widthIn(max = 280.dp)
+                    .widthIn(max = bubbleMax)
                     .clip(RoundedCornerShape(appearance.bubbleRadius))
                     .background(if (mine) c.bubbleMe else c.bubbleThem)
                     .then(
@@ -115,7 +126,7 @@ internal fun Bubble(
                             Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress)
                         } else Modifier
                     )
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                    .padding(horizontal = d.bubblePaddingH, vertical = d.bubblePaddingV),
             ) {
                 Column(horizontalAlignment = Alignment.End) {
                     // 引用条：被引用消息的降级快照（发送时冻结，原消息删了仍可展示）
@@ -175,6 +186,7 @@ internal fun Bubble(
             }
         }
     }
+    } // BoxWithConstraints（量本行可用宽 → 气泡最大宽按比例）
 }
 
 
@@ -195,6 +207,16 @@ internal fun localizeReplySnapshot(raw: String): String = when {
     else -> raw
 }
 
+
+/**
+ * 气泡最大宽 = 可用内容区宽 × 比例（UI_SPEC §3）。
+ *
+ * 抽成纯函数**只为一件事**：让「它是比例、不是固定 dp」这条不变式可以被单测钉住。
+ * 本端一度写成 `widthIn(max = 280.dp)`，在 360dp 宽的机器上占 78%、411dp 上占 68%，
+ * 两头都不对；而 iOS（multiplier 0.75）和 Web（`.row` 72%）从一开始就是比例。
+ * 固定值的坏处在模拟器单一机型上**看不出来**，所以必须靠测试而不是靠肉眼。
+ */
+internal fun bubbleMaxWidth(available: Dp, fraction: Float): Dp = available * fraction
 
 /** 走媒体渲染而不是纯文本的内容类型。 */
 private val MEDIA_TYPES = setOf("image", "video", "voice", "file")
