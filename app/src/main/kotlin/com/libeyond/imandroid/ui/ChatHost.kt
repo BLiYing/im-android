@@ -26,6 +26,9 @@ import androidx.compose.ui.text.AnnotatedString
 import com.libeyond.imandroid.data.MessageAction
 import com.libeyond.imandroid.data.MessageActions
 import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.screens.Bubble
+import com.libeyond.imandroid.ui.components.MessageContextMenu
+import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.Presence
@@ -99,6 +102,8 @@ fun ChatHost(
     // —— 转发（M4-3）——
     // 待转发的消息列表（null = 没在转发）。选完目标会话后逐条发出。
     var forwarding by remember(conv.convId) { mutableStateOf<List<MessageEntity>?>(null) }
+    /** 长按菜单锚点：被长按气泡在窗口坐标系里的矩形，菜单按它定位（对齐 iOS UIContextMenu）。 */
+    var menuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
 
     // 渲染窗口大小。**不能无界**——13 万条的会话会把聊天页渲染成空白（实测）。
@@ -235,7 +240,7 @@ fun ChatHost(
             // 再加只会让同一批数据反复重查
             if (messages.size >= windowLimit) windowLimit += WINDOW_PAGE
         },
-        onLongPress = { menuFor = it },
+        onLongPress = { m, rect -> menuFor = m; menuAnchor = rect },
         replyTo = replyTo,
         onCancelReply = { replyTo = null },
         host = client.host,
@@ -282,8 +287,22 @@ fun ChatHost(
     val target = menuFor
     if (target != null) {
         val actions = MessageActions.availableFor(target, owner, conv.isGroup, iAmManager)
-        ActionSheet(
-            title = target.content.take(30),
+        MessageContextMenu(
+            anchor = menuAnchor,
+            mine = target.sender == owner,
+            // 原位重绘被长按的气泡：iOS 是把它光栅化成位图钉回原位，这里直接再画一遍，
+            // **不带长按回调**——菜单开着时再长按自己没有意义。
+            preview = {
+                Bubble(
+                    text = target.content,
+                    msg = target,
+                    mine = target.sender == owner,
+                    timestamp = target.timestamp,
+                    senderName = null,
+                    host = client.host,
+                    useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+                )
+            },
             items = actions.map { a ->
                 SheetItem(a.label, a.destructive) {
                     when (a) {

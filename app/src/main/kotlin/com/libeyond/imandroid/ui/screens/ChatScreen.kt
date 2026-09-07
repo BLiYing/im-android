@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -149,7 +150,8 @@ fun ChatScreen(
     /** 输入变化时回调，供节流上报 typing。 */
     onTyping: () -> Unit,
     /** 长按一条消息。 */
-    onLongPress: (MessageEntity) -> Unit,
+    /** 长按一条消息，带上气泡在窗口里的矩形（菜单按它定位）。 */
+    onLongPress: (MessageEntity, Rect) -> Unit,
     /** 当前引用的目标；null=没在引用。 */
     replyTo: MessageEntity?,
     onCancelReply: () -> Unit,
@@ -299,7 +301,7 @@ fun ChatScreen(
                     } else Bubble(
                         text = r.msg.content,
                         msg = r.msg,
-                        onLongPress = { onLongPress(r.msg) },
+                        onLongPress = { rect -> onLongPress(r.msg, rect) },
                         host = host,
                         useTls = useTls,
                         mine = r.msg.sender == myUid,

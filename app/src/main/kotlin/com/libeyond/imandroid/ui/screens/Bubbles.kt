@@ -19,6 +19,13 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -105,7 +112,8 @@ internal fun Bubble(
     text: String,
     mine: Boolean,
     msg: MessageEntity? = null,
-    onLongPress: (() -> Unit)? = null,
+    /** 长按回调，带上**气泡在窗口里的矩形**——菜单要浮在气泡旁边（对齐 iOS UIContextMenu）。 */
+    onLongPress: ((Rect) -> Unit)? = null,
     /** 媒体地址补全用的当前 host。 */
     host: String = "",
     useTls: Boolean = false,
@@ -126,12 +134,18 @@ internal fun Bubble(
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val appearance = IMTheme.appearance
+    // 记住整行矩形：长按菜单按它定位（iOS 是 UITargetedPreview 把位图钉回原位）。
+    var bubbleRect by remember { mutableStateOf(Rect.Zero) }
     // 气泡最大宽是**内容区的比例**不是固定 dp（UI_SPEC §3）：固定值在窄机上过宽、宽机上过窄。
     // BoxWithConstraints 才能拿到本行可用宽度并按比例折算。
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
     val bubbleMax = bubbleMaxWidth(maxWidth, d.bubbleMaxWidthFraction)
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        // 菜单锚点取**整行**而不是气泡本体：整行天然是全宽，预览重绘时
+        // 「Row 的左右对齐」不会再叠加一次偏移（第一版挂在气泡 Box 上，预览就画偏了）。
+        modifier = Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { bubbleRect = it.boundsInWindow() },
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
         if (failed && onRetry != null) {
@@ -189,7 +203,10 @@ internal fun Bubble(
                     .background(if (mine) c.bubbleMe else c.bubbleThem)
                     .then(
                         if (onLongPress != null && !recalled) {
-                            Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress)
+                            Modifier.combinedClickable(
+                                onClick = {},
+                                onLongClick = { onLongPress(bubbleRect) },
+                            )
                         } else Modifier
                     )
                     .padding(horizontal = d.bubblePaddingH, vertical = d.bubblePaddingV),
