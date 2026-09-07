@@ -51,6 +51,7 @@ import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.SendHorizontal
 import com.libeyond.imandroid.data.ChatEntry
+import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.data.db.PendingMessageEntity
@@ -79,6 +80,17 @@ sealed interface ChatRow {
     data class Pending(val msg: PendingMessageEntity) : ChatRow {
         /** 待发消息还没有 convSeq，用 clientMsgId——它本就是幂等键。 */
         override val key get() = "c${msg.clientMsgId}"
+    }
+
+    /**
+     * 相册宫格：同 `group_id` 的连续多图/多视频聚成一格（M4+）。
+     *
+     * **成员仍是各自独立的消息**——撤回/引用/转发/收藏都作用在单条上，
+     * 这里只是显示层的聚簇。key 用组内**首条**的 convSeq：组成员集合变化
+     * （某张被撤回退出宫格）时 key 会变，正好触发重组。
+     */
+    data class Album(val msgs: List<MessageEntity>) : ChatRow {
+        override val key get() = "a${msgs.first().convSeq}_${msgs.size}"
     }
 
     data class DayLabel(val timestamp: Long) : ChatRow {
@@ -113,15 +125,40 @@ fun buildChatRows(
     val rows = mutableListOf<ChatRow>()
     var prevTs = 0L
     var dividerPlaced = !ChatEntry.hasUnread(unread)
-    for (m in confirmed.sortedWith(compareBy({ it.timestamp }, { it.convSeq }))) {
+    val sorted = confirmed.sortedWith(compareBy({ it.timestamp }, { it.convSeq }))
+    var i = 0
+    while (i < sorted.size) {
+        val m = sorted[i]
         if (TimeFormat.needsDaySeparator(prevTs, m.timestamp)) rows += ChatRow.DayLabel(m.timestamp)
         // 分割线插在首条未读**之前**
         if (!dividerPlaced && m.convSeq > readSeq) {
             rows += ChatRow.UnreadDivider
             dividerPlaced = true
         }
+
+        // —— 相册聚簇 ——
+        // 只并**相邻**的同组成员：中间隔了别的消息就不是一批发的，硬并会把时间顺序搅乱。
+        // 撤回的成员**退出宫格**单独显示墓碑（与 iOS 同）——所以 isAlbumMember 之外还要挡撤回。
+        if (AlbumLayout.isAlbumMember(m.contentType, m.groupId) && (m.recalledAt ?: 0) <= 0) {
+            var j = i + 1
+            while (j < sorted.size &&
+                sorted[j].groupId == m.groupId &&
+                AlbumLayout.isAlbumMember(sorted[j].contentType, sorted[j].groupId) &&
+                (sorted[j].recalledAt ?: 0) <= 0
+            ) j++
+            val group = sorted.subList(i, j)
+            // 只有一张的"相册"就是一张普通图，不要为它画一格宫格
+            if (group.size >= 2) {
+                rows += ChatRow.Album(group.take(AlbumLayout.MAX))
+                prevTs = group.last().timestamp
+                i = j
+                continue
+            }
+        }
+
         rows += ChatRow.Confirmed(m)
         prevTs = m.timestamp
+        i++
     }
     for (p in pending.sortedBy { it.createdAt }) {
         if (TimeFormat.needsDaySeparator(prevTs, p.createdAt)) rows += ChatRow.DayLabel(p.createdAt)
@@ -296,6 +333,13 @@ fun ChatScreen(
                 when (val r = rows[i]) {
                     is ChatRow.DayLabel -> DaySeparator(r.timestamp)
                     is ChatRow.UnreadDivider -> UnreadDividerRow()
+                    is ChatRow.Album -> AlbumBubble(
+                        msgs = r.msgs,
+                        mine = r.msgs.first().sender == myUid,
+                        host = host,
+                        useTls = useTls,
+                        onLongPress = { rect -> onLongPress(r.msgs.first(), rect) },
+                    )
                     // 系统消息走居中灰字，不进气泡分支（iOS IMSystemCell / Web .sys-note）。
                     // 不用 `when` 卫语句（Kotlin 2.0 仍是实验特性），在分支内早退。
                     is ChatRow.Confirmed -> if (r.msg.contentType == ContentType.SYSTEM) {

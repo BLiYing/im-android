@@ -394,4 +394,5 @@ private fun MessageData.toEntity(owner: String) = MessageEntity(
     editedAt = editedAt,
     pinnedAt = pinnedAt,
     forwardFrom = forwardFrom,
+    groupId = groupId,
 )

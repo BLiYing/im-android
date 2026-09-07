@@ -33,6 +33,7 @@ import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.Waveform
 import androidx.compose.runtime.remember
+import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -45,16 +46,29 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 @Composable
 fun MediaContent(msg: MessageEntity, host: String, useTls: Boolean, maxWidth: androidx.compose.ui.unit.Dp = 240.dp) {
     val url = MediaUrl.absolute(msg.content, host, useTls)
+    // **图说整体化**：有 caption 时媒体只圆上角，和下方文字连成一整块（iOS `_captionBG`）；
+    // 没有 caption 时四角都圆——此时媒体本身就是整个气泡。
+    val r = IMTheme.appearance.bubbleRadius
+    val shape = if (msg.caption.isNullOrBlank()) {
+        RoundedCornerShape(r)
+    } else {
+        RoundedCornerShape(topStart = r, topEnd = r, bottomStart = 0.dp, bottomEnd = 0.dp)
+    }
     when (msg.contentType) {
-        "image" -> ImageContent(url, msg, maxWidth)
-        "video" -> VideoContent(url, msg, maxWidth)
+        "image" -> ImageContent(url, msg, maxWidth, shape)
+        "video" -> VideoContent(url, msg, maxWidth, shape)
         "voice" -> VoiceContent(msg)
         else -> FileContent(msg)
     }
 }
 
 @Composable
-private fun ImageContent(url: String, msg: MessageEntity, maxWidth: androidx.compose.ui.unit.Dp) {
+private fun ImageContent(
+    url: String,
+    msg: MessageEntity,
+    maxWidth: androidx.compose.ui.unit.Dp,
+    shape: androidx.compose.ui.graphics.Shape,
+) {
     val c = IMTheme.colors
     // 有服务端给的宽高就按原比例占位，避免加载完跳一下把下面的消息挤走
     val ratio = if ((msg.mediaW ?: 0) > 0 && (msg.mediaH ?: 0) > 0) {
@@ -69,24 +83,24 @@ private fun ImageContent(url: String, msg: MessageEntity, maxWidth: androidx.com
                 .widthIn(max = maxWidth)
                 .fillMaxWidth()
                 .aspectRatio(ratio)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(shape)
                 .background(c.subtleFill),
         )
-        // 图说「有字显字」（Telegram 图说模型）
-        if (!msg.caption.isNullOrBlank()) {
-            Spacer(Modifier.height(4.dp))
-            Text(msg.caption, color = c.textPrimary, fontSize = IMTheme.appearance.chatFontSize)
-        }
     }
 }
 
 @Composable
-private fun VideoContent(url: String, msg: MessageEntity, maxWidth: androidx.compose.ui.unit.Dp) {
+private fun VideoContent(
+    url: String,
+    msg: MessageEntity,
+    maxWidth: androidx.compose.ui.unit.Dp,
+    shape: androidx.compose.ui.graphics.Shape,
+) {
     val c = IMTheme.colors
     Column {
         Box(
             modifier = Modifier.widthIn(max = maxWidth).fillMaxWidth().aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(10.dp)).background(c.subtleFill),
+                .clip(shape).background(c.subtleFill),
             contentAlignment = Alignment.Center,
         ) {
             Box(
@@ -104,10 +118,6 @@ private fun VideoContent(url: String, msg: MessageEntity, maxWidth: androidx.com
                         .padding(horizontal = 5.dp, vertical = 1.dp),
                 ) { Text(dur, color = c.onMedia, fontSize = 10.sp) }
             }
-        }
-        if (!msg.caption.isNullOrBlank()) {
-            Spacer(Modifier.height(4.dp))
-            Text(msg.caption, color = c.textPrimary, fontSize = IMTheme.appearance.chatFontSize)
         }
     }
 }
@@ -177,3 +187,43 @@ private fun FileContent(msg: MessageEntity) {
 
 /** 语音波形柱数。与气泡宽度无关（下采样已按比例取），够看出起伏即可。 */
 private const val BAR_COUNT = 24
+
+/**
+ * 媒体气泡右下角的时间 + 状态胶囊（对齐 iOS `IMImageCell` 的 `_metaWrap`）。
+ *
+ * **必须自带底色**：它浮在不透明的图片上，没底色时遇到浅色照片就完全看不见。
+ * iOS 用同款 badge wrap，两端一致。
+ */
+@Composable
+internal fun MediaMetaChip(
+    modifier: Modifier = Modifier,
+    timestamp: Long,
+    mine: Boolean,
+    sending: Boolean,
+    delivered: Boolean,
+    read: Boolean,
+) {
+    val c = IMTheme.colors
+    Row(
+        modifier = modifier
+            .padding(6.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(c.overlay)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(TimeFormat.bubbleTime(timestamp), color = c.onMedia, fontSize = 10.sp)
+        if (!mine) return@Row
+        if (sending) {
+            Spacer(Modifier.width(3.dp))
+            Text("🕐", fontSize = 9.sp)
+        } else if (delivered) {
+            Spacer(Modifier.width(3.dp))
+            Text(
+                text = if (read) "✓✓" else "✓",
+                color = if (read) c.checkRead else c.onMedia,
+                fontSize = 10.sp,
+            )
+        }
+    }
+}

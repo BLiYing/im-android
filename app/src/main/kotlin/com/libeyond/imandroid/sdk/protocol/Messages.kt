@@ -27,6 +27,8 @@ data class SendMsgData(
     @SerialName("file_size") val fileSize: Long? = null,
     val caption: String? = null,
     @SerialName("reply_to_conv_seq") val replyToConvSeq: Long? = null,
+    /** 相册分组（§4.3 M4+）：同批多图共享，服务端只透传 + 限长 64。 */
+    @SerialName("group_id") val groupId: String? = null,
     /**
      * 转发溯源（§4.3 M4-3）：**发送时冻结的"转发自"显示名**，限长 40。
      *
@@ -84,6 +86,11 @@ data class MessageData(
     @SerialName("pinned_at") val pinnedAt: Long? = null,
     /** 转发溯源显示名（§4.3 M4-3）；气泡上方显示「转发自 X」。 */
     @SerialName("forward_from") val forwardFrom: String? = null,
+    /**
+     * 相册分组（§4.3 M4+）：同批发出的多图/多视频共享一个客户端生成的 ID。
+     * **每张仍是独立消息**（可单独撤回/引用/转发/收藏），客户端把同组聚簇成宫格。
+     */
+    @SerialName("group_id") val groupId: String? = null,
 )
 
 /** receipt 上下行负载（PROTOCOL §5）。 */

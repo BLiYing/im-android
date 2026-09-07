@@ -52,6 +52,8 @@ data class MessageEntity(
     val pinnedAt: Long? = null,
     /** 转发自（显示名快照，公开名）。见 `MessageData.forwardFrom` 的两条纪律。 */
     val forwardFrom: String? = null,
+    /** 相册分组 ID：同批多图共享，聚簇成宫格用。 */
+    val groupId: String? = null,
 )
 
 /** 发送态。 */

@@ -63,6 +63,11 @@ else
 fi
 
 # Gradle 默认不打印用例数——从 XML 报告里数出来，免得"绿了但一条没跑"。
+#
+# ⚠️ 这里有个**坑，2026-09-07 踩过**：XML 目录是增量的。某次运行失败后 Gradle 只写了
+# 跑到失败点为止的那几个类；随后修好再跑，如果测试任务是 UP-TO-DATE 就**不重写目录**，
+# 于是按残留 XML 求和会**少报**（那次把 182 报成了 141，连报了四次）。
+# 所以下面同时数一遍源码里的测试类，两边对不上就明说——**宁可吵，也不要报一个假数字**。
 python3 - <<'PY' 2>/dev/null || true
 import glob, re
 t = f = e = s = 0
@@ -73,9 +78,18 @@ for p in files:
     f += int(re.search(r'failures="(\d+)"', h).group(1))
     e += int(re.search(r'errors="(\d+)"', h).group(1))
     s += int(re.search(r'skipped="(\d+)"', h).group(1))
+# 数**类声明**不是文件——有三个文件里各声明了两个测试类（EnvelopeTest / WakeActionTest /
+# MessageActionsTest），按文件数比会永远误报。
+src = []
+for path in glob.glob('app/src/test/**/*.kt', recursive=True):
+    src += re.findall(r'^class\s+\w+Test\b', open(path).read(), re.M)
 print(f"\n用例 {t} · 失败 {f} · 错误 {e} · 跳过 {s} （{len(files)} 个测试类）")
 if t == 0:
     print("⚠ 一条用例都没跑到——检查 --tests 过滤或源集配置。")
+elif len(files) != len(src):
+    print(f"⚠ 报告里 {len(files)} 个测试类，源码里 {len(src)} 个——**这个用例数不可信**。")
+    print("  多半是上一次失败留下的残留报告 + 本次 UP-TO-DATE 没重写。")
+    print("  跑 `rm -rf app/build/test-results && ./scripts/test.sh` 拿真实数字。")
 PY
 
 echo ""

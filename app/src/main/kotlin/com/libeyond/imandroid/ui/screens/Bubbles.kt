@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -189,6 +190,9 @@ internal fun Bubble(
                 )
             }
             val recalled = (msg?.recalledAt ?: 0) > 0
+            // 图/视频要贴着气泡边渲染（撤回墓碑是纯文字，不算）
+            val flushMedia = msg != null && !recalled &&
+                (msg.contentType == ContentType.IMAGE || msg.contentType == ContentType.VIDEO)
             // 「转发自 X」放在**气泡外上方**（与发送者昵称同一列），不进气泡内：
             // 进气泡内会被当成正文的一部分被复制/引用走。撤回墓碑上不显。
             val fwd = msg?.forwardFrom
@@ -213,14 +217,23 @@ internal fun Bubble(
                             )
                         } else Modifier
                     )
-                    .padding(horizontal = d.bubblePaddingH, vertical = d.bubblePaddingV),
+                    // **图说整体化**（Telegram/iOS `_captionBG` 模型）：媒体气泡的图要**贴着气泡边**，
+                    // 不能被 12/6 的内边距框出一圈底色。所以这里按类型给内边距，
+                    // 非媒体的子元素各自补回来（见下面每处的 innerPad）。
+                    .padding(if (flushMedia) PaddingValues(0.dp) else PaddingValues(d.bubblePaddingH, d.bubblePaddingV)),
             ) {
+                // 媒体贴边时，文字类子元素要自己把内边距补回来
+                val innerPad = if (flushMedia) {
+                    Modifier.padding(horizontal = d.bubblePaddingH)
+                } else Modifier
                 Column(horizontalAlignment = Alignment.End) {
                     // 引用条：被引用消息的降级快照（发送时冻结，原消息删了仍可展示）
                     val snap = msg?.replySnapshot
                     if (!snap.isNullOrBlank() && !recalled) {
                         Box(
                             modifier = Modifier
+                                .then(innerPad)
+                                .then(if (flushMedia) Modifier.padding(top = d.bubblePaddingV) else Modifier)
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(c.subtleFill)
@@ -242,7 +255,18 @@ internal fun Bubble(
                             color = c.textTertiary,
                             fontSize = appearance.chatFontSize,
                         )
-                        isMedia -> MediaContent(msg!!, host, useTls)
+
+                        isMedia -> Box {
+                            MediaContent(msg!!, host, useTls)
+                            // 时间胶囊**浮在媒体右下角**，不在下方另起一行——
+                            // iOS `IMImageCell` 的 `_metaWrap` 就恒定钉在 thumb 右下（不论有无图说）。
+                            // 图片是不透明的，所以胶囊必须自带底色才看得清。
+                            if (!flushMedia) Unit else MediaMetaChip(
+                                modifier = Modifier.align(Alignment.BottomEnd),
+                                timestamp = timestamp,
+                                mine = mine, sending = sending, delivered = delivered, read = read,
+                            )
+                        }
                         // 卡片类：名片 / 合并转发。**在这之前它们走 else 分支被当纯文本，
                         // 于是聊天页里直接显示裸 JSON**（实体机实测发现）。
                         msg?.contentType == ContentType.CONTACT -> ContactCardContent(text)
@@ -253,6 +277,18 @@ internal fun Bubble(
                             fontSize = appearance.chatFontSize,
                         )
                     }
+                    // 图说：媒体下方的随附文本，**在气泡内**补回左右内边距，
+                    // 与媒体一起构成 Telegram 式的一整块（iOS `_captionBG`）。
+                    val cap = msg?.caption
+                    if (flushMedia && !cap.isNullOrBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = cap,
+                            color = c.textPrimary,
+                            fontSize = appearance.chatFontSize,
+                            modifier = innerPad.fillMaxWidth(),
+                        )
+                    }
                     // 文本气泡里首个 URL 的富预览卡（iOS `IMLinkPreviewView`）。
                     // 只对**已确认的纯文本**出卡：待发消息还没落定、媒体气泡自己就有图。
                     if (!recalled && loadLinkPreview != null && msg != null &&
@@ -261,8 +297,14 @@ internal fun Bubble(
                         val url = remember(text) { LinkDetect.firstUrl(text) }
                         if (url != null) LinkPreviewCard(url, loadLinkPreview, host, useTls)
                     }
+                    // 媒体气泡的时间已经浮在图上了，下面这一行只给非媒体气泡画
+                    if (flushMedia && msg?.caption.isNullOrBlank()) return@Column
                     Spacer(Modifier.height(2.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = innerPad
+                            .then(if (flushMedia) Modifier.padding(bottom = d.bubblePaddingV) else Modifier),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text(
                             text = TimeFormat.bubbleTime(timestamp),
                             color = if (mine) c.metaTime else c.textTertiary,

@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -40,6 +40,13 @@ abstract class IMDatabase : RoomDatabase() {
             }
         }
 
+        /** v2 → v3：消息加 `groupId`（相册宫格，M4+）。老行为 NULL = 不属于任何相册。 */
+        internal val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE message ADD COLUMN groupId TEXT")
+            }
+        }
+
         fun get(context: Context): IMDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -48,7 +55,7 @@ abstract class IMDatabase : RoomDatabase() {
             )
                 // 刻意**不加** fallbackToDestructiveMigration：那会在版本号一变时
                 // 直接删库重建，用户的本地消息全没。加列要写真的 Migration。
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build().also { instance = it }
         }
     }
