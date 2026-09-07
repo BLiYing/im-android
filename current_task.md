@@ -7,16 +7,37 @@
 
 ## 当前焦点
 
-> **多选发图 + 待发也聚簇 ✅ 2026-09-07（晚）**——为了能真的测宫格。
-> `PickVisualMedia` → `PickMultipleVisualMedia(9)`；≥2 张共享 `alb-<uuid>` 的 `group_id`
+> **自建相册多选页 ✅ 2026-09-07（晚，真机端到端验过）**——用户拍板「**最低要支持 Android 11**」，
+> 这一句直接推翻了上一轮的选图方案。
+>
+> **实测数据（Pixel 2 XL / Android 11）**：`build.version.extensions.r = 0`、
+> `ACTION_PICK_IMAGES` 无任何 handler、Play 服务 26.32.68（是新的）。
+> 系统 Photo Picker 的回填靠**系统更新**下发的 SDK extension，不随 Play 服务走，
+> 这台 2020 年 EOL 的机器永远等不到 → androidx `PickMultipleVisualMedia` 必然落到
+> DocumentsUI 文件浏览器。**上一轮我说「Photo Picker 免权限、体验好」，那只在 Android 13+ 成立**，
+> 在本项目的最低版本上不成立。
+>
+> 于是自建 `ui/screens/MediaPickerScreen.kt`（4 列宫格 / 编号多选 / 相册切换 / 发送(n)），
+> 权限走 `MediaPermission`（三个版本段三个权限名），**被拒时降级回系统选择器**——
+> 读相册是敏感权限，用户完全可能拒绝，而「拒绝 = 发不了图」不能接受。
+>
+> **真机逐项验过**：授权 → 宫格出图（7 张 4 列）；选 3 张编号 1/2/3；取消中间一张后面顺延成 2；
+> 发送 → 服务端 `im_message` 三条共享 `alb-d732ec91…`、收端渲染成 `rowPattern(3)=[1,2]` 宫格；
+> `pm revoke` 后再点 ➕ → 拒绝 → 前台变成 `documentsui/PickActivity`（降级路径生效）。
+> 验完已把权限恢复授予。
+>
+> **刻意不做**（免得被当成漏做）：没有「原图/压缩」开关——本端压缩本身还是 TODO，
+> 放个不起作用的开关比没有更糟；没有预览大图——那需要可缩放查看器，本端还没有，
+> 单搓一个会变成第二份实现。视频也没放开：`sendMedia` 是整包字节上传、无分片，视频进来会 OOM。
+>
+> **顺带查到 im-web 一条缺口**：`Composer.tsx` 的 `<input type="file">` 没有 `multiple`，
+> 所以 Web 能**渲染**宫格却发不出宫格。已改 `CLIENT_PARITY` 那行的 Web 列为 🚧（不在本次范围）。
+
+> **多选发图 + 待发也聚簇 ✅ 2026-09-07（晚）**——≥2 张共享 `alb-<uuid>` 的 `group_id`
 > （1 张不带，与 iOS 同）；**待发消息也带 groupId 并聚簇**（Room 迁移 v3→v4）——
 > iOS 是「选完秒上屏」直接成宫格，只在确认消息上聚簇的话，用户会看见 N 张图先各自排一列、
-> 收到 ack 后再"啪"地拼成宫格。
->
-> ⚠️ **多图发送未完成真机验证**：这台 Pixel 2 XL 是 **Android 11**，
-> androidx 回退到 `ACTION_OPEN_DOCUMENT`（DocumentsUI）而不是系统 Photo Picker，
-> 而 DocumentsUI 的文件夹导航与长按多选对 adb 合成点击没反应。
-> **需要人手点一次**：➕ → 选 2~3 张 → 发送，看是否成宫格。
+> 收到 ack 后再"啪"地拼成宫格。ack 回包不带 `group_id`，要像 `forwardFrom` 一样从待发行里取，
+> 漏了这行则一组图在自己这侧收到 ack 后会从宫格散回单张（对端仍是宫格），比不聚簇更怪。
 
 > **群管理写操作落地 ✅ 2026-09-07（晚）**——第 ③ 项的第一块。此前本端群管理**完全只读**。
 > 补齐 `GroupApi` 全部 10 个写接口（改群资料/公告/全员禁言/单独禁言/移除成员/设撤管理员/
@@ -130,6 +151,13 @@
 > `12+30+6=48`（与 iOS `_leading.constant` 同值）。修后实测 12.0 / 30.2 / 48.4dp。
 
 ## 下一步
+
+**0. 完整 ➕ 附件面板**（用户批准的顺序里的第 2 步，本轮**未做**）：iOS `attachItems` 是 2×3 六项
+   （照片 / 拍摄 / 音视频 / 收藏 / 个人名片 / 文件，面板高 236）。本端 ➕ 现在**直接进相册页**，
+   没有面板。六项里「照片」已通，其余各自对应一个系统 contract（拍摄=`TakePicture`、
+   文件=`OpenDocument`），收藏/名片走本端已有的选择页。
+**0. Media3 ExoPlayer 放视频**（顺序里的第 3 步）：本端视频气泡只有封面，点不开。
+   注意**发视频**还另欠分片上传（`sendMedia` 整包字节，2GB 视频必 OOM），两件事别混。
 
 **0. 群成员头像图 URL 缺失**：`showsSenderAvatar` 挂的是首字母色块（取色三端同源，颜色对），
    但没有头像图——群成员头像无本地缓存。要接得先做 `POST /users/batch` 解析器（CLIENT_PARITY 有这行）。

@@ -1,9 +1,6 @@
 package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -72,22 +69,19 @@ fun ChatHost(
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
 
-    // 系统相册选择器。**用 PickVisualMedia 而不是 GetContent**：
-    // 前者是 Android 13+ 的 Photo Picker，**不需要读取全部相册的权限**——
-    // 用户只把选中的那张授权给你。声明 READ_MEDIA_IMAGES 去换一个选图功能
-    // 是典型的权限过度索取，商店审核也会问。
-    // **多选**（≤9，与 iOS PHPicker 的 selectionLimit 同值）。
-    // Photo Picker 是**进程外**选择器：用户只把选中的那几张授权给你，
-    // 不需要 READ_MEDIA_IMAGES 全相册读权限。
-    val pickMedia = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(AlbumLayout.MAX),
-    ) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+    /**
+     * 选中的图片一批发出。**两条选图路径（自建宫格页 / 降级的系统选择器）共用这一个出口**——
+     * 不共用的话，「≥2 张才带 group_id」这条聚簇判据就会有两份，迟早分叉成
+     * 「自建页发的成宫格、降级路径发的散成单张」。
+     */
+    fun sendPicked(uris: List<String>) {
+        if (uris.isEmpty()) return
         scope.launch {
             // ≥2 张共享一个 group_id → 两端聚簇成宫格；1 张不带（普通媒体气泡）。
             // 前缀 `alb-` 与 iOS 一致，便于日志里一眼认出。
             val gid = if (uris.size > 1) "alb-" + java.util.UUID.randomUUID() else null
-            for (uri in uris) {
+            for (u in uris) {
+                val uri = android.net.Uri.parse(u)
                 val picked = withContext(Dispatchers.IO) { readPickedImage(context, uri) }
                 if (picked == null) {
                     // 单张读失败不该中断整组——剩下的还能发出去
@@ -101,18 +95,21 @@ fun ChatHost(
                     fileName = picked.name,
                     mimeType = picked.mime,
                     contentType = ContentType.IMAGE,
-                    localPreviewUri = uri.toString(),
+                    localPreviewUri = u,
                     groupId = gid,
                 )
             }
         }
     }
+
     val owner = client.uid.orEmpty()
     var input by remember(conv.convId) { mutableStateOf("") }
 
     // —— 转发（M4-3）——
     // 待转发的消息列表（null = 没在转发）。选完目标会话后逐条发出。
     var forwarding by remember(conv.convId) { mutableStateOf<List<MessageEntity>?>(null) }
+    /** 选图中（覆盖在聊天页之上的自建相册页；无权限时它自己会降级到系统选择器）。 */
+    var picking by remember(conv.convId) { mutableStateOf(false) }
     /** 长按菜单锚点：被长按气泡在窗口坐标系里的矩形，菜单按它定位（对齐 iOS UIContextMenu）。 */
     var menuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
@@ -245,7 +242,7 @@ fun ChatHost(
         onRetry = { cid -> scope.launch { client.messages.resend(cid) } },
         onVisibleSeq = { seq -> scope.launch { client.messages.markRead(conv.convId, seq) } },
         onOpenInfo = onOpenInfo,
-        onPickMedia = { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        onPickMedia = { picking = true },
         onLoadOlder = {
             // 只有窗口已经装满时才继续加——没装满说明本地就这么多，
             // 再加只会让同一批数据反复重查
@@ -258,6 +255,18 @@ fun ChatHost(
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
     )
+
+    // —— 相册选择页（覆盖在聊天页之上）——
+    if (picking) {
+        MediaPickerHost(
+            onPicked = { uris ->
+                picking = false
+                sendPicked(uris)
+            },
+            onDismiss = { picking = false },
+            onToast = { toast = it },
+        )
+    }
 
     // —— 转发目标选择页（覆盖在聊天页之上）——
     val fwd = forwarding
