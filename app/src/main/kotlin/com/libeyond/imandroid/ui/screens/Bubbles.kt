@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 // 气泡与分隔行。从 ChatScreen 拆出（CODING_STYLE §7②）：
@@ -239,6 +240,10 @@ internal fun Bubble(
                             fontSize = appearance.chatFontSize,
                         )
                         isMedia -> MediaContent(msg!!, host, useTls)
+                        // 卡片类：名片 / 合并转发。**在这之前它们走 else 分支被当纯文本，
+                        // 于是聊天页里直接显示裸 JSON**（实体机实测发现）。
+                        msg?.contentType == ContentType.CONTACT -> ContactCardContent(text)
+                        msg?.contentType == ContentType.CHAT_RECORD -> ChatRecordCardContent(text)
                         else -> Text(
                             text = text,
                             color = c.textPrimary,
