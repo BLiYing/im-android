@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -99,6 +100,8 @@ fun IMTextField(
     modifier: Modifier = Modifier,
     isPassword: Boolean = false,
     enabled: Boolean = true,
+    /** 键盘类型/大小写策略。用户名那种 ASCII 小写字段必须传，否则输入法会自动首字母大写。 */
+    keyboard: KeyboardOptions = KeyboardOptions.Default,
 ) {
     val c = IMTheme.colors
     TextField(
@@ -107,6 +110,7 @@ fun IMTextField(
         label = { Text(label, color = c.textSecondary) },
         singleLine = true,
         enabled = enabled,
+        keyboardOptions = keyboard,
         visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(IMTheme.dimens.radiusCard),

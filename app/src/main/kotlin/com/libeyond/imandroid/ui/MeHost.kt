@@ -1,79 +1,75 @@
 package com.libeyond.imandroid.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.UserCard
-import com.libeyond.imandroid.ui.components.IMAvatar
-import com.libeyond.imandroid.ui.components.IMSecondaryButton
-import com.libeyond.imandroid.ui.theme.IMTheme
+import com.libeyond.imandroid.ui.components.IMConfirmDialog
+import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.screens.MeScreen
 
-/** 「我」页。当前只有资料卡 + 退出登录；设置逐项待接（CLIENT_PARITY「设置」行）。 */
+/** 「我」页里的二级页面。 */
+private enum class MePage { List, Profile, Qr, Devices }
+
+/**
+ * 「我」页（对齐 iOS `IMSettingsViewController` 及其 push 出去的几页）。
+ *
+ * 这里只做**路由 + 本人资料的取用**，各页自己的状态在各自的 Host 里
+ * ——把设备列表、二维码、编辑表单的状态都堆进这一个 Composable，就是
+ * `App.tsx` 长到四千行的第一步（CODING_STYLE §7）。
+ */
 @Composable
 fun MeHost(client: IMClient, onLogout: () -> Unit) {
-    val c = IMTheme.colors
-    val d = IMTheme.dimens
+    var page by remember { mutableStateOf(MePage.List) }
     var me by remember { mutableStateOf<UserCard?>(null) }
+    var confirmLogout by remember { mutableStateOf(false) }
+    var toast by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) { runCatching { me = client.contacts.me() } }
-
-    Column(
-        modifier = Modifier.fillMaxSize().background(c.groupedBackground)
-            .statusBarsPadding().padding(d.space4),
-        verticalArrangement = Arrangement.spacedBy(d.cardGap),
-    ) {
-        Text("我", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
-
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .background(c.cardBackground, androidx.compose.foundation.shape.RoundedCornerShape(d.radiusCard))
-                .padding(d.space4),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val card = me
-            IMAvatar(
-                displayName = card?.nickname ?: client.username.orEmpty(),
-                seed = client.uid.orEmpty(),
-                avatarUrl = card?.avatarUrl.orEmpty(),
-                size = 56.dp,
-            )
-            Spacer(Modifier.width(d.space3))
-            Column {
-                Text(
-                    text = card?.nickname?.ifBlank { null } ?: client.username.orEmpty(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = c.textPrimary,
-                )
-                // 标识行为空时整行隐藏——不显示「用户名：未设置」，更不回退内部 ID
-                val handle = card?.handle.orEmpty().ifBlank {
-                    client.username?.let { "@$it" }.orEmpty()
-                }
-                if (handle.isNotEmpty()) {
-                    Text(handle, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
+    // 每次回到列表页都重拉：从编辑页保存后返回，头部要立刻是新昵称/新头像。
+    // key 写 page 而不是 Unit——`LaunchedEffect(Unit)` 只在进入组合时跑一次，
+    // 编辑完回来不会重跑（CODING_STYLE §4 的那条坑）。
+    LaunchedEffect(page) {
+        if (page == MePage.List) {
+            runCatchingCancellable { client.contacts.me() }
+                .onSuccess { me = it }
+                .onFailure { /* 静默：头部回退本地句柄 + 首字母圈，不为一次拉取失败挡住整页 */ }
         }
-
-        Spacer(Modifier.weight(1f))
-        IMSecondaryButton(text = "退出登录", onClick = onLogout)
     }
+
+    when (page) {
+        MePage.Devices -> DevicesHost(client = client, onBack = { page = MePage.List })
+        MePage.Qr -> QrCardHost(client = client, me = me, onBack = { page = MePage.List })
+        MePage.Profile -> MyProfileHost(
+            client = client,
+            card = me,
+            onChanged = { me = it },
+            onBack = { page = MePage.List },
+        )
+        MePage.List -> MeScreen(
+            me = me,
+            fallbackName = client.myPublicName(),
+            seed = client.uid.orEmpty(),
+            onOpenProfile = { page = MePage.Profile },
+            onOpenQr = { page = MePage.Qr },
+            onOpenDevices = { page = MePage.Devices },
+            onComingSoon = { toast = "「$it」还没做" },
+            onLogout = { confirmLogout = true },
+        )
+    }
+
+    if (confirmLogout) {
+        IMConfirmDialog(
+            title = "退出登录",
+            message = "退出后需要重新登录。本机已下载的聊天记录会保留。",
+            confirmText = "退出登录",
+            onConfirm = onLogout,
+            onDismiss = { confirmLogout = false },
+        )
+    }
+
+    if (page == MePage.List) toast?.let { IMToast(it) { toast = null } }
 }

@@ -11,6 +11,8 @@ data class DeviceSession(
     @SerialName("device_name") val deviceName: String = "",
     @SerialName("app_version") val appVersion: String = "",
     @SerialName("login_ip") val loginIp: String = "",
+    /** 大致位置（服务端按 IP 反查，仅供识别，**不参与鉴权**）。可空。 */
+    @SerialName("login_loc") val loginLoc: String = "",
     @SerialName("created_at") val createdAt: Long = 0,
     @SerialName("last_active_at") val lastActiveAt: Long = 0,
     val online: Boolean = false,

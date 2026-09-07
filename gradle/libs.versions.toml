@@ -15,6 +15,7 @@ datastore = "1.1.1"
 room = "2.6.1"
 lucide = "1.1.0"
 coil = "2.7.0"
+zxing = "3.5.3"
 ksp = "2.0.21-1.0.28"
 junit = "4.13.2"
 androidxJunit = "1.2.1"
@@ -51,6 +52,12 @@ icons-lucide                = { group = "com.composables",         name = "icons
 # Coil 2.x（不是 coil3）：2.x 是纯 Android，依赖更少；本项目不做多平台。
 # 头像与图片消息都走它，自带内存+磁盘缓存，省得自己写一套。
 coil-compose                = { group = "io.coil-kt",              name = "coil-compose",             version.ref = "coil" }
+
+# --- 二维码编码（「我」页名片码）---
+# zxing core 是**纯 JVM**、无 Android 依赖：只要它把串编成 BitMatrix，画布交给 Compose 自己画。
+# 因此编码那一步能进普通单测（不需要 Robolectric/仪器测试）。
+# 只取 core，不取 android-core / android-integration——后两个带 Activity 与相机扫码，本页用不到。
+zxing-core                  = { group = "com.google.zxing",           name = "core",                     version.ref = "zxing" }
 
 # --- 本地存储（对应 iOS 的 SQLite/FMDB、Web 的 IndexedDB）---
 androidx-datastore-prefs    = { group = "androidx.datastore",        name = "datastore-preferences",    version.ref = "datastore" }

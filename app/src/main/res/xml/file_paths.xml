@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 的可共享目录白名单。
+  **只开 cache/share 一个子目录**：把整个 cache-path 或 files-path 开出去，等于允许任何
+  拿到 content:// 的应用读我们所有缓存（含消息媒体缓存）。分享出去的东西必须先复制进这里。
+-->
+<paths>
+    <cache-path name="share" path="share/" />
+</paths>
