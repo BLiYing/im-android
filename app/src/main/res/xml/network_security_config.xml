@@ -9,7 +9,12 @@
     <domain-config cleartextTrafficPermitted="true">
         <!-- Android 模拟器里指向宿主机的固定回环地址 -->
         <domain includeSubdomains="false">10.0.2.2</domain>
-        <!-- 真机连同一局域网内的开发机时按需加自己的内网 IP，勿留到生产 -->
+        <!--
+          真机连局域网内的开发机**不要往这里加 IP**：白名单不支持网段，而开发机 IP 由 DHCP 分配、
+          换个 WiFi 就变，加进来既治标不治本又容易漏到生产。
+          debug 变体另有一份 src/debug/res/xml/network_security_config.xml 整个放开明文，
+          真机开发走那条路；这一份只管 release。
+        -->
         <domain includeSubdomains="false">localhost</domain>
         <domain includeSubdomains="false">127.0.0.1</domain>
     </domain-config>

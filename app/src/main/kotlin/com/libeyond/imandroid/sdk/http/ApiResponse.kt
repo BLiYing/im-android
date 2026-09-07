@@ -50,6 +50,20 @@ class ApiException(
     /** 传输层失败（连不上/超时/响应体不是合法 JSON），**没有**业务码。 */
     val isTransport: Boolean get() = code == TRANSPORT
 
+    /**
+     * 被 Android 的**明文流量策略**挡下（`res/xml/network_security_config.xml`）。
+     *
+     * 必须与普通的连不上区分开：这时**请求根本没上路**——没有 DNS、没有 TCP、
+     * 服务端日志里一行都没有——但它和「地址写错了」长得一模一样。
+     * 2026-09-07 就因此绕了一圈：真机填 192.168.1.12:8080（iOS 同地址能连），
+     * 本端报「网络连接失败，请检查服务器地址」，于是人去反复核对一个完全正确的地址。
+     *
+     * OkHttp 在这种情况下抛 `UnknownServiceException`（message 是
+     * `CLEARTEXT communication to <host> not permitted by network security policy`）。
+     */
+    val isCleartextBlocked: Boolean
+        get() = isTransport && cause is java.net.UnknownServiceException
+
     override fun toString(): String =
         "ApiException(code=$code, http=$httpStatus, reqId=$requestId, msg=$message)"
 

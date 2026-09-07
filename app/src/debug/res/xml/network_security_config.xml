@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  **仅 debug 变体**（Gradle 按文件名覆盖 src/main 的同名资源）。release 用 src/main 那一份，
+  只放行 10.0.2.2 / localhost / 127.0.0.1，PROTOCOL §0.1「传输一律 wss/https」原样成立。
+
+  为什么 debug 要整个放开明文，而不是把开发机内网 IP 加进白名单：
+  白名单只能写具体主机名或 IP，**不支持网段**，而开发机的内网 IP 由 DHCP 分配、会变，
+  换个 WiFi 就换一个。于是每个开发者、每次换网都要改这个文件再重装一次——
+  2026-09-07 就因此卡了一次：真机填 192.168.1.12:8080（iOS 同地址能连），
+  Android 报「网络连接失败，请检查服务器地址」，而地址完全正确，
+  是 OkHttp 抛的 UnknownServiceException（CLEARTEXT ... not permitted），**请求根本没上路**，
+  服务端日志里一行都没有，最难查的那种。
+
+  debug 包不进商店、也不该装到普通用户机器上，这个口子只在开发链路上开。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

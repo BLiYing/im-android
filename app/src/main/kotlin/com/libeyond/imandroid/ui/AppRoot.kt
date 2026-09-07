@@ -104,7 +104,7 @@ fun AppRoot(client: IMClient) {
                         endedNotice = ""
                         phase = Phase.Main
                     } catch (e: ApiException) {
-                        error = friendlyMessage(e)
+                        error = LoginError.friendly(e)
                     } finally { busy = false }
                 }
             },
@@ -117,7 +117,7 @@ fun AppRoot(client: IMClient) {
                         endedNotice = ""
                         phase = Phase.Main
                     } catch (e: ApiException) {
-                        error = friendlyMessage(e)
+                        error = LoginError.friendly(e)
                     } finally { busy = false }
                 }
             },
@@ -130,7 +130,7 @@ fun AppRoot(client: IMClient) {
                         endedNotice = ""
                         phase = Phase.Main
                     } catch (e: ApiException) {
-                        error = friendlyMessage(e)
+                        error = LoginError.friendly(e)
                     } finally { busy = false }
                 }
             },
@@ -162,21 +162,3 @@ private fun Splash() {
     ) { CircularProgressIndicator(color = c.accent) }
 }
 
-/**
- * 业务码 → 用户可读文案。**按码分支，绝不 parse 服务端文案**
- * （文案会改、会多语言；PROTOCOL §8 也写明 message 只给开发看）。
- *
- * 未覆盖的码回退服务端文案——比显示一个码号强，且能暴露我们还没处理的分支。
- */
-private fun friendlyMessage(e: ApiException): String = when {
-    e.isTransport -> "网络连接失败，请检查服务器地址"
-    else -> when (e.code) {
-        com.libeyond.imandroid.sdk.protocol.ErrCode.WRONG_PASSWORD -> "用户名或密码错误"
-        com.libeyond.imandroid.sdk.protocol.ErrCode.USER_NOT_FOUND -> "用户不存在"
-        com.libeyond.imandroid.sdk.protocol.ErrCode.USER_ALREADY_EXISTS -> "该用户名已被占用"
-        com.libeyond.imandroid.sdk.protocol.ErrCode.ACCOUNT_BANNED -> "账号已被封禁"
-        com.libeyond.imandroid.sdk.protocol.ErrCode.PARAM_INVALID -> e.message.ifEmpty { "输入不合法" }
-        com.libeyond.imandroid.sdk.protocol.ErrCode.RATE_LIMITED -> "操作太频繁，请稍后再试"
-        else -> e.message.ifEmpty { "请求失败（${e.code}）" }
-    }
-}

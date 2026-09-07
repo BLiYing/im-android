@@ -7,6 +7,31 @@
 
 ## 当前焦点
 
+> **真机连内网开发机登不上 ✅ 2026-09-07（夜）—— 不是地址问题，是明文流量策略**。
+>
+> 现象：OPPO（Android 15）填 `192.168.1.12:8080`（**iOS 同地址能连**），登录报
+> 「网络连接失败，请检查服务器地址」。
+>
+> 真因：`res/xml/network_security_config.xml` 的明文白名单只有
+> `10.0.2.2 / localhost / 127.0.0.1`，内网 IP 不在里面 → OkHttp 抛
+> `UnknownServiceException`（`CLEARTEXT ... not permitted by network security policy`）。
+> **请求根本没上路**：没有 DNS、没有 TCP，服务端日志一行都没有。
+> iOS 那边是 ATS，与这套是两回事，所以「iOS 能连」反而误导。
+>
+> 两处改动，第二处更值钱：
+> ① **debug 变体单独一份策略**（`app/src/debug/res/xml/`，`<base-config cleartextTrafficPermitted="true">`），
+>    release 仍用 `src/main` 那份严格的，PROTOCOL §0.1 原样成立。
+>    **不往白名单加 IP**：白名单不支持网段，而开发机 IP 由 DHCP 分配、换个 WiFi 就变，
+>    每人每次都要改文件重装，还容易漏到生产。
+> ② **报错不再撒谎**：`ApiException.isCleartextBlocked` 把这一情形与普通「连不上」分开，
+>    文案改成「系统拦截了明文 HTTP 连接（地址没写错）」。
+>    原文案让人去反复核对一个**完全正确**的地址——这才是这次真正卡住人的东西。
+>    顺带把 `friendlyMessage` 从 `AppRoot.kt` 抽成 `ui/LoginError.kt` 以便测试。
+>
+> `LoginErrorTest` 4 例，两处变异各自精确变红（明文那条排到 isTransport 之后 → 永远走不到；
+> `isCleartextBlocked` 不要求 isTransport → 业务失败被误认）。真机验过：同一地址现在登录成功、
+> WS 连上、同步正常。全量 **263 例 / 43 类**绿。
+
 > **修「失败消息永久钉底」✅ 2026-09-07（夜）—— 与 iOS 2026-08-05 同一个坑的第三端重演**。
 >
 > 现象：user1001 与「光辉岁月」的聊天页，底部永远挂着一条红❗的失败媒体消息，
