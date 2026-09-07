@@ -130,8 +130,13 @@ fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
                 toast = "二维码还没准备好"
             } else {
                 scope.launch {
-                    val bmp = withContext(Dispatchers.Default) { qrToBitmap(matrix) }
-                    ImageExport.shareImage(context, bmp, code, "im_qr.png")?.let { toast = it }
+                    // 出图 **和写文件** 都在 IO 上：shareImage 会压一张 PNG 落到 cacheDir，
+                    // 留在主线程是实打实的磁盘写（存相册那条路本来就在 IO，两条要一致）。
+                    // startActivity 本身不限线程。
+                    val err = withContext(Dispatchers.IO) {
+                        ImageExport.shareImage(context, qrToBitmap(matrix), code, "im_qr.png")
+                    }
+                    err?.let { toast = it }
                 }
             }
         },

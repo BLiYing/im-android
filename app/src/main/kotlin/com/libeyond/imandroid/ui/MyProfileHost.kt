@@ -45,8 +45,12 @@ fun MyProfileHost(
     var form by remember { mutableStateOf(ProfileForm()) }
     /** 载入时的原始句柄。判「改没改」只跟它比，不跟当前输入比。 */
     var loadedUsername by remember { mutableStateOf("") }
-    /** 已上传但尚未随保存提交的新头像 URL。 */
-    var avatarUrl by remember { mutableStateOf("") }
+    /**
+     * 当前展示的头像 URL（选图上传后先落这里，随「保存」一起提交）。
+     * **初值取自传入的 card**——写死空串的话，进页那几帧会先回退成首字母色块、
+     * 等 `/users/me` 回来才跳成真头像，正是三端 2026-08-30 收口要消除的那种闪动。
+     */
+    var avatarUrl by remember { mutableStateOf(card?.avatarUrl.orEmpty()) }
     var editing by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
@@ -67,8 +71,10 @@ fun MyProfileHost(
 
     LaunchedEffect(Unit) {
         // 进页重拉一次权威资料：外层传进来的那份可能是几分钟前的
-        runCatchingCancellable { client.contacts.me() }.onSuccess { apply(it) }
-            .onFailure { c -> card?.let { apply(it) } }
+        runCatchingCancellable { client.contacts.me() }
+            .onSuccess { apply(it) }
+            // 拉不到就用外层传进来的那份定型，别把页面停在空表单上
+            .onFailure { card?.let { seed -> apply(seed) } }
     }
 
     val pickAvatar = rememberLauncherForActivityResult(
