@@ -33,6 +33,7 @@ import com.composables.icons.lucide.MessageCircle
 import com.composables.icons.lucide.User
 import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.db.ConversationEntity
@@ -58,12 +59,14 @@ private enum class Tab(val label: String) { Chats("消息"), Contacts("通讯录
 fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     val owner = client.uid.orEmpty()
     var tab by remember { mutableStateOf(Tab.Chats) }
-    // 本地好友关系表：uid → status。资料页进页即用它定型，避免闪动。
-    var knownRelations by remember(owner) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    // 本地好友表：uid → 整行。资料页进页即用它定型，避免闪动。
+    // **存整行不只存 status**：群成员资料页还要拿 remark 当种子，
+    // 否则给好友起过备注时，标题会先显昵称、拉到名片后再跳成备注——同一类闪动。
+    var knownFriends by remember(owner) { mutableStateOf<Map<String, FriendEntry>>(emptyMap()) }
     LaunchedEffect(owner) {
         if (owner.isNotEmpty()) {
             runCatching { client.contacts.friends() }
-                .onSuccess { list -> knownRelations = list.associate { it.userId to it.status } }
+                .onSuccess { list -> knownFriends = list.associateBy { it.userId } }
         }
     }
 
@@ -92,6 +95,9 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
             GroupInfoHost(
                 client = client,
                 convId = infoConv.convId,
+                knownFriends = knownFriends,
+                // 成员资料页里点「发消息」：关掉群资料、直接进与该成员的单聊
+                onOpenChat = { stub -> infoForConv = null; openConv = stub },
                 onBack = { infoForConv = null },
                 onLeft = { infoForConv = null; openConv = null },
             )
@@ -103,7 +109,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                 // 群成员单聊、系统账号…）。写死会让非好友进资料页先显示成好友、
                 // 拉到真实关系后再闪变成「加好友」——正是 2026-08-30 三端收口
                 // 要消除的那种闪动。空串=未知，由 Host 自己查本地好友表定型。
-                knownRelation = knownRelations[infoConv.peerUid].orEmpty(),
+                knownRelation = knownFriends[infoConv.peerUid]?.status.orEmpty(),
                 seed = UserCard(
                     userId = infoConv.peerUid,
                     nickname = infoConv.title,

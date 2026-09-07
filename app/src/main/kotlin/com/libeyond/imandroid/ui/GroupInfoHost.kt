@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.GroupPermissions
+import com.libeyond.imandroid.data.MemberProfile
 import com.libeyond.imandroid.ui.screens.GroupManageAction
 import com.libeyond.imandroid.ui.components.ActionSheet
 import com.libeyond.imandroid.ui.components.SheetItem
@@ -16,8 +17,10 @@ import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.IMTextPrompt
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
+import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.screens.GroupInfoScreen
 import kotlinx.coroutines.launch
@@ -30,7 +33,15 @@ import kotlinx.coroutines.launch
  * 普通群两条都能用，这里统一走分页——省得为两种群写两套加载逻辑。
  */
 @Composable
-fun GroupInfoHost(client: IMClient, convId: String, onBack: () -> Unit, onLeft: () -> Unit) {
+fun GroupInfoHost(
+    client: IMClient,
+    convId: String,
+    /** 本地好友表（uid → 行）。成员资料页进页即用它定型关系与备注，避免闪动。 */
+    knownFriends: Map<String, FriendEntry>,
+    onOpenChat: (ConversationEntity) -> Unit,
+    onBack: () -> Unit,
+    onLeft: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     var info by remember(convId) { mutableStateOf<GroupInfo?>(null) }
     var members by remember(convId) { mutableStateOf<List<GroupMember>>(emptyList()) }
@@ -38,7 +49,10 @@ fun GroupInfoHost(client: IMClient, convId: String, onBack: () -> Unit, onLeft: 
     var hasMore by remember(convId) { mutableStateOf(false) }
     var loading by remember(convId) { mutableStateOf(false) }
 
-    BackHandler(onBack = onBack)
+    // 点开的成员资料页盖在群资料之上；开着时本页的返回让位给它
+    var memberProfile by remember(convId) { mutableStateOf<GroupMember?>(null) }
+
+    BackHandler(enabled = memberProfile == null, onBack = onBack)
 
     LaunchedEffect(convId) {
         runCatching { info = client.groups.info(convId) }
@@ -73,6 +87,28 @@ fun GroupInfoHost(client: IMClient, convId: String, onBack: () -> Unit, onLeft: 
         }
     }
 
+    // —— 成员资料页 ——
+    // **不叠一层而是整页替换**：`GroupInfoHost` 的内容不在自己的 Box 里，
+    // 父布局是谁由调用方决定，叠出来可能是竖排而不是覆盖。整页替换还顺带让
+    // 群资料页的滚动位置与成员分页游标原样留着（那些 remember 都在上面，没被跳过）。
+    val mp = memberProfile
+    if (mp != null) {
+        val f = knownFriends[mp.userId]
+        UserProfileHost(
+            client = client,
+            userId = mp.userId,
+            // 关系与种子的口径都在 MemberProfile 里（那两条坑写在它的注释上）
+            knownRelation = MemberProfile.relationOf(mp.userId, myUid, f),
+            seed = MemberProfile.seedOf(mp, f),
+            onSendMessage = { card ->
+                memberProfile = null
+                onOpenChat(client.conversationStubFor(card.userId, card.displayName, card.avatarUrl))
+            },
+            onBack = { memberProfile = null },
+        )
+        return
+    }
+
     GroupInfoScreen(
         info = g,
         members = members,
@@ -95,7 +131,7 @@ fun GroupInfoHost(client: IMClient, convId: String, onBack: () -> Unit, onLeft: 
                 }
             }
         },
-        onOpenMember = { /* TODO(P13)：成员资料页 */ },
+        onOpenMember = { m -> memberProfile = m },
         myUid = client.uid.orEmpty(),
         onManage = { action -> manage = action },
         onMemberLongPress = { m -> memberMenu = m },

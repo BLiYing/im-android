@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.data.Presence
+import com.libeyond.imandroid.data.MemberProfile
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMPrimaryButton
@@ -136,6 +137,9 @@ fun UserProfileScreen(
                 )
                 relation == "pending" -> IMPrimaryButton("同意添加", onAddFriend)
                 relation == "blocked" -> Text("已拉黑", color = c.textTertiary)
+                // 看自己（从群成员列表点到自己头上）：不给任何关系操作。
+                // 给自己显示一个「加好友」按钮是本页最容易漏掉的一种荒谬状态。
+                relation == MemberProfile.RELATION_SELF -> Unit
                 // 陌生人：只给这一个入口
                 else -> IMPrimaryButton("加好友", onAddFriend)
             }
