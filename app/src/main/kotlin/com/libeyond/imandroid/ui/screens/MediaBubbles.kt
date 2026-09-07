@@ -31,6 +31,8 @@ import com.composables.icons.lucide.Mic
 import com.composables.icons.lucide.Play
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.data.Waveform
+import androidx.compose.runtime.remember
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -113,9 +115,10 @@ private fun VideoContent(url: String, msg: MessageEntity, maxWidth: androidx.com
 @Composable
 private fun VoiceContent(msg: MessageEntity) {
     val c = IMTheme.colors
-    // 宽度按时长走，与 iOS 同一个式子：96 + dur*3.6，封顶 240
+    // 宽度按时长走，与 iOS `IMVoiceBubbleCell` 同一个式子：MIN(240, MAX(160, 96 + dur*3.6))。
+    // **下限是 160 不是 96**——本端一开始写成 96，一秒的语音气泡只有 iOS 的一半宽。
     val secs = ((msg.duration ?: 0) / 1000f)
-    val w = (96f + secs * 3.6f).coerceIn(96f, 240f).dp
+    val w = minOf(240f, maxOf(160f, 96f + secs * 3.6f)).dp
     Row(
         modifier = Modifier.width(w).padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -125,14 +128,19 @@ private fun VoiceContent(msg: MessageEntity) {
             contentAlignment = Alignment.Center,
         ) { Image(Lucide.Mic, "语音", Modifier.size(14.dp), colorFilter = ColorFilter.tint(c.accent)) }
         Spacer(Modifier.width(8.dp))
-        // 波形待接（waveform 是 base64 振幅指纹）；先用等高条纹占位——
-        // PROTOCOL 明说「空=退化等高条纹」，缺 waveform 本就是合法状态
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            repeat(14) {
+        // 真波形：waveform(base64) → 0~1 柱高。缺字段时 Waveform 自己退化成等高条纹
+        // （协议允许的合法状态，不是错误）。桶内取**最大值**不是平均——取平均会把波形抹平。
+        val bars = remember(msg.waveform) { Waveform.barsOf(msg.waveform, BAR_COUNT) }
+        Row(
+            Modifier.weight(1f).height(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            bars.forEach { h ->
                 Box(
                     Modifier.padding(end = 2.dp).width(2.dp)
-                        .height((6 + (it * 7) % 12).dp)
-                        .background(c.accent.copy(alpha = 0.6f), RoundedCornerShape(1.dp)),
+                        // 最低 3dp：振幅为 0 的静音段也要看得见柱子，否则波形中间会"断掉"
+                        .height((3f + h * 15f).dp)
+                        .background(c.accent.copy(alpha = 0.7f), RoundedCornerShape(1.dp)),
                 )
             }
         }
@@ -166,3 +174,6 @@ private fun FileContent(msg: MessageEntity) {
         }
     }
 }
+
+/** 语音波形柱数。与气泡宽度无关（下采样已按比例取），够看出起伏即可。 */
+private const val BAR_COUNT = 24
