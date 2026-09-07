@@ -51,6 +51,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.SendHorizontal
 import com.libeyond.imandroid.data.ChatEntry
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.data.db.PendingMessageEntity
 import com.libeyond.imandroid.data.db.SendState
 import com.libeyond.imandroid.ui.components.TimeFormat
@@ -291,7 +292,11 @@ fun ChatScreen(
                 when (val r = rows[i]) {
                     is ChatRow.DayLabel -> DaySeparator(r.timestamp)
                     is ChatRow.UnreadDivider -> UnreadDividerRow()
-                    is ChatRow.Confirmed -> Bubble(
+                    // 系统消息走居中灰字，不进气泡分支（iOS IMSystemCell / Web .sys-note）。
+                    // 不用 `when` 卫语句（Kotlin 2.0 仍是实验特性），在分支内早退。
+                    is ChatRow.Confirmed -> if (r.msg.contentType == ContentType.SYSTEM) {
+                        SystemNote(r.msg.content)
+                    } else Bubble(
                         text = r.msg.content,
                         msg = r.msg,
                         onLongPress = { onLongPress(r.msg) },

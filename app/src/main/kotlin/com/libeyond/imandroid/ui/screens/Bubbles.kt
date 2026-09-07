@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +50,33 @@ internal fun DaySeparator(ts: Long) {
         ) {
             Text(TimeFormat.dayLabel(ts), color = c.onMedia, fontSize = 11.sp)
         }
+    }
+}
+
+/**
+ * 系统消息：**居中灰字，不是气泡**（与 iOS `IMSystemCell` / Web `.sys-note` 同一形态）。
+ *
+ * 本端此前把 `content_type=system` 当成对方的普通消息画成左气泡，还占了群头像列——
+ * 「光辉岁月 被设为管理员」显示成有人在说话。2026-09-07 实测发现。
+ *
+ * 字号走 `sysFontSize`（= 聊天字号 × 0.8，跟随用户设置），宽度上限 80%——
+ * 与 Web `.sys-note span { max-width: 80% }` 同口径，长系统消息换行而不贴边。
+ */
+@Composable
+internal fun SystemNote(text: String) {
+    val c = IMTheme.colors
+    val appearance = IMTheme.appearance
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            color = c.textSecondary,
+            fontSize = appearance.sysFontSize,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(0.8f),
+        )
     }
 }
 

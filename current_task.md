@@ -64,8 +64,9 @@
 
 **0. 群成员头像图 URL 缺失**：`showsSenderAvatar` 挂的是首字母色块（取色三端同源，颜色对），
    但没有头像图——群成员头像无本地缓存。要接得先做 `POST /users/batch` 解析器（CLIENT_PARITY 有这行）。
-**0b. 系统消息被渲染成普通左气泡**：iOS 是居中灰字（`IMSystemCell`）、Web 是 `.sys-note`，
-   本端当成对方消息画成气泡且占了头像列。属既有差异，本轮发现但未修。
+**0b. 系统消息渲染已改成居中灰字**（`SystemNote`）——但**只过了编译与单测，没实测**：
+   模拟器在做这一步时整体 ANR（连 Pixel Launcher 都卡死，机器负载过高），
+   下次起模拟器第一件事就是看一眼群聊里的「XX 被设为管理员」是不是居中灰字。
 
 按 `../IMServer/docs/CLIENT_PARITY.md` 追 iOS，优先级从高到低：
 
