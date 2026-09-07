@@ -2,6 +2,7 @@ package com.libeyond.imandroid.ui.screens
 
 import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.ChatEntry
+import com.libeyond.imandroid.data.MessageOrder
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.PendingMessageEntity
 import com.libeyond.imandroid.ui.components.TimeFormat
@@ -66,8 +67,15 @@ fun ChatRow.seqOrZero(): Long = when (this) {
 /**
  * 把已确认 + 待发两路合成一条显示流。**纯函数**，便于单测。
  *
- * 排序口径：`timestamp` 主排（三端契约）。待发消息恒在末尾——它们还没有服务端时间戳，
- * 用本地 createdAt，天然就是最新的。
+ * 排序口径见 [MessageOrder]（三端共享的不变式）：`timestamp` 主排，
+ * 同毫秒时 `conv_seq=0` 视为 +∞ 垫底。待发消息的时间戳取本地 `createdAt`。
+ *
+ * ⚠️ **两路必须合流后统一排序，不能「已确认一段 + 待发一段」拼起来**。
+ * 本函数原先就是拼起来的，注释还写着「待发消息恒在末尾——它们还没有服务端时间戳，
+ * 用本地 createdAt，天然就是最新的」。**那个假设对失败的消息不成立**：
+ * 16:34 发失败的那条，在 17:11 的消息到达后就不是最新的了，于是它永久钉在最底下，
+ * 用户滚到底只看到那条红❗，以为新消息没收到。
+ * iOS 2026-08-05 踩过一模一样的坑（`IMDatabase.m` 注释：「从『临时垫底』变成『永久钉底』」）。
  */
 fun buildChatRows(
     confirmed: List<MessageEntity>,
@@ -79,67 +87,103 @@ fun buildChatRows(
     val rows = mutableListOf<ChatRow>()
     var prevTs = 0L
     var dividerPlaced = !ChatEntry.hasUnread(unread)
-    val sorted = confirmed.sortedWith(compareBy({ it.timestamp }, { it.convSeq }))
-    var i = 0
-    while (i < sorted.size) {
-        val m = sorted[i]
-        if (TimeFormat.needsDaySeparator(prevTs, m.timestamp)) rows += ChatRow.DayLabel(m.timestamp)
-        // 分割线插在首条未读**之前**
-        if (!dividerPlaced && m.convSeq > readSeq) {
-            rows += ChatRow.UnreadDivider
-            dividerPlaced = true
-        }
 
-        // —— 相册聚簇 ——
-        // 只并**相邻**的同组成员：中间隔了别的消息就不是一批发的，硬并会把时间顺序搅乱。
-        // 撤回的成员**退出宫格**单独显示墓碑（与 iOS 同）——所以 isAlbumMember 之外还要挡撤回。
-        if (AlbumLayout.isAlbumMember(m.contentType, m.groupId) && (m.recalledAt ?: 0) <= 0) {
-            var j = i + 1
-            while (j < sorted.size &&
-                sorted[j].groupId == m.groupId &&
-                AlbumLayout.isAlbumMember(sorted[j].contentType, sorted[j].groupId) &&
-                (sorted[j].recalledAt ?: 0) <= 0
-            ) j++
-            val group = sorted.subList(i, j)
-            // 只有一张的"相册"就是一张普通图，不要为它画一格宫格
-            if (group.size >= 2) {
-                rows += ChatRow.Album(group.take(AlbumLayout.MAX))
-                prevTs = group.last().timestamp
-                i = j
-                continue
+    // 合流后**一次**排序。相册聚簇仍只并「相邻且同类」的成员：
+    // 一组图里已 ack 的那几张和还在发的那几张会挨着，但它们是两种行
+    // （Album / PendingAlbum），混并没有意义，也会让「发送中」的暗底失效。
+    val items = ArrayList<Item>(confirmed.size + pending.size)
+    confirmed.forEach { items += Item.C(it) }
+    pending.forEach { items += Item.P(it) }
+    items.sortWith { a, b -> MessageOrder.compare(a.ts, a.seq, b.ts, b.seq) }
+
+    var i = 0
+    while (i < items.size) {
+        val item = items[i]
+        if (TimeFormat.needsDaySeparator(prevTs, item.ts)) rows += ChatRow.DayLabel(item.ts)
+
+        when (item) {
+            is Item.C -> {
+                val m = item.msg
+                // 分割线插在首条未读**之前**
+                if (!dividerPlaced && m.convSeq > readSeq) {
+                    rows += ChatRow.UnreadDivider
+                    dividerPlaced = true
+                }
+                // —— 相册聚簇 ——
+                // 只并**相邻**的同组成员：中间隔了别的消息就不是一批发的，硬并会把时间顺序搅乱。
+                // 撤回的成员**退出宫格**单独显示墓碑（与 iOS 同）——所以 isAlbumMember 之外还要挡撤回。
+                if (AlbumLayout.isAlbumMember(m.contentType, m.groupId) && (m.recalledAt ?: 0) <= 0) {
+                    var j = i + 1
+                    while (j < items.size) {
+                        val n = (items[j] as? Item.C)?.msg ?: break
+                        if (n.groupId != m.groupId ||
+                            !AlbumLayout.isAlbumMember(n.contentType, n.groupId) ||
+                            (n.recalledAt ?: 0) > 0
+                        ) break
+                        j++
+                    }
+                    val group = (i until j).map { (items[it] as Item.C).msg }
+                    // 只有一张的"相册"就是一张普通图，不要为它画一格宫格
+                    if (group.size >= 2) {
+                        rows += ChatRow.Album(group.take(AlbumLayout.MAX))
+                        prevTs = group.last().timestamp
+                        i = j
+                        continue
+                    }
+                }
+                rows += ChatRow.Confirmed(m)
+            }
+
+            is Item.P -> {
+                val p = item.msg
+                // 待发也聚簇——判据与已确认那路**共用 AlbumLayout.isAlbumMember**，
+                // 两边各写一份的话，同一组图在发送中和发送后会长得不一样。
+                if (AlbumLayout.isAlbumMember(p.contentType, p.groupId)) {
+                    var j = i + 1
+                    while (j < items.size) {
+                        val n = (items[j] as? Item.P)?.msg ?: break
+                        if (n.groupId != p.groupId ||
+                            !AlbumLayout.isAlbumMember(n.contentType, n.groupId)
+                        ) break
+                        j++
+                    }
+                    val group = (i until j).map { (items[it] as Item.P).msg }
+                    if (group.size >= 2) {
+                        rows += ChatRow.PendingAlbum(group.take(AlbumLayout.MAX))
+                        prevTs = group.last().createdAt
+                        i = j
+                        continue
+                    }
+                }
+                rows += ChatRow.Pending(p)
             }
         }
-
-        rows += ChatRow.Confirmed(m)
-        prevTs = m.timestamp
+        prevTs = item.ts
         i++
     }
-    val sortedPending = pending.sortedBy { it.createdAt }
-    var k = 0
-    while (k < sortedPending.size) {
-        val p = sortedPending[k]
-        if (TimeFormat.needsDaySeparator(prevTs, p.createdAt)) rows += ChatRow.DayLabel(p.createdAt)
-
-        // 待发也聚簇——判据与已确认那路**共用 AlbumLayout.isAlbumMember**，
-        // 两边各写一份的话，同一组图在发送中和发送后会长得不一样。
-        if (AlbumLayout.isAlbumMember(p.contentType, p.groupId)) {
-            var j = k + 1
-            while (j < sortedPending.size &&
-                sortedPending[j].groupId == p.groupId &&
-                AlbumLayout.isAlbumMember(sortedPending[j].contentType, sortedPending[j].groupId)
-            ) j++
-            val group = sortedPending.subList(k, j)
-            if (group.size >= 2) {
-                rows += ChatRow.PendingAlbum(group.take(AlbumLayout.MAX))
-                prevTs = group.last().createdAt
-                k = j
-                continue
-            }
-        }
-
-        rows += ChatRow.Pending(p)
-        prevTs = p.createdAt
-        k++
-    }
     return rows
+}
+
+/**
+ * 合流排序用的中性包装：已确认与待发在**排序**这件事上是同一种东西
+ * （一个时间戳 + 一个 conv_seq），只是待发的 conv_seq 恒为 0。
+ * 不包一层就得写两个循环，而两个循环正是「待发永久钉底」那个 bug 的来源。
+ */
+private sealed interface Item {
+    val ts: Long
+    val seq: Long
+
+    @JvmInline
+    value class C(val msg: MessageEntity) : Item {
+        override val ts get() = msg.timestamp
+        override val seq get() = msg.convSeq
+    }
+
+    @JvmInline
+    value class P(val msg: PendingMessageEntity) : Item {
+        override val ts get() = msg.createdAt
+
+        /** 待发消息没有服务端序号——[MessageOrder.seqKey] 会把它当 +∞ 垫底。 */
+        override val seq get() = 0L
+    }
 }
