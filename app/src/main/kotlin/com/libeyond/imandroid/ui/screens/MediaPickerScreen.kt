@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -119,7 +121,7 @@ fun MediaPickerScreen(
                 )
                 if (buckets.size > 1) {
                     Spacer(Modifier.width(d.space1))
-                    androidx.compose.foundation.Image(
+                    Image(
                         imageVector = Lucide.ChevronDown,
                         contentDescription = "切换相册",
                         modifier = Modifier.size(16.dp),
@@ -139,7 +141,7 @@ fun MediaPickerScreen(
                     modifier = Modifier.fillMaxSize(),
                     horizontalArrangement = Arrangement.spacedBy(GAP),
                     verticalArrangement = Arrangement.spacedBy(GAP),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(GAP),
+                    contentPadding = PaddingValues(GAP),
                 ) {
                     items(shown, key = { it.id }) { a ->
                         MediaTile(
