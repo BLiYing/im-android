@@ -137,6 +137,85 @@ class GroupApi(private val http: HttpClient) {
     }
 
     /** 我在本群的昵称。空=清除，回退全局昵称。 */
+    // ————————————— 群管理写操作（G1/G2，PROTOCOL §11）—————————————
+    //
+    // 权限判定**不在这里做**，全部走 `GroupPermissions`（纯函数、已单测）。
+    // 在 API 层各判各的，早晚会和 UI 层的按钮显隐分叉——那时表现为
+    // 「按钮亮着但点了报 300204」或反过来，两种都很难自查。
+    // 服务端仍是权威：端上放行的操作被拒时按业务码提示即可。
+
+    /** 改群资料（群主/管理员）。整体替换，传空串即清空该字段。 */
+    suspend fun updateInfo(convId: String, name: String, avatarUrl: String, intro: String) {
+        http.call("PUT", "/api/v1/groups/$convId", buildJsonObject {
+            put("name", name); put("avatar_url", avatarUrl); put("intro", intro)
+        })
+    }
+
+    /** 发布/撤下群公告（≤500；**空串 = 撤下**）。发布会落一条系统消息。 */
+    suspend fun setAnnouncement(convId: String, text: String) {
+        http.call("PUT", "/api/v1/groups/$convId/announcement", buildJsonObject { put("text", text) })
+    }
+
+    /** 全员禁言：`0` 解除 / `-1` 永久 / 其余为到期毫秒。 */
+    suspend fun setMuteAll(convId: String, until: Long) {
+        http.call("PUT", "/api/v1/groups/$convId/mute", buildJsonObject { put("until", until) })
+    }
+
+    /** 单独禁言某成员，同一套 until 口径。**须严格高于对方**，否则服务端拒。 */
+    suspend fun muteMember(convId: String, uid: String, until: Long) {
+        http.call("PUT", "/api/v1/groups/$convId/members/$uid/mute", buildJsonObject { put("until", until) })
+    }
+
+    /**
+     * 移除成员。`ban` 三档：
+     * - `none` 只移出（还能再进）
+     * - `cooldown` 缺省，24h 冷却
+     * - `forever` 永久黑名单
+     */
+    suspend fun removeMember(convId: String, uid: String, ban: String = "cooldown") {
+        http.call("DELETE", "/api/v1/groups/$convId/members/$uid?ban=$ban")
+    }
+
+    /** 设/撤管理员（**仅群主**）。role 取 `admin` / `member`。 */
+    suspend fun setRole(convId: String, uid: String, role: String) {
+        http.call("PUT", "/api/v1/groups/$convId/members/$uid/role", buildJsonObject { put("role", role) })
+    }
+
+    /** 转让群主（**仅群主**；原群主降为普通成员，不可撤销）。 */
+    suspend fun transferOwner(convId: String, uid: String) {
+        http.call("POST", "/api/v1/groups/$convId/transfer", buildJsonObject { put("user_id", uid) })
+    }
+
+    /** 解除拉黑（把人从群黑名单里放出来，之后才能再入群）。 */
+    suspend fun unban(convId: String, uid: String) {
+        http.call("DELETE", "/api/v1/groups/$convId/bans/$uid")
+    }
+
+    /** 群治理开关组。**整体替换**——少传一个就是把它设成 false。 */
+    suspend fun updateSettings(
+        convId: String,
+        joinApproval: Boolean,
+        permInvite: Boolean,
+        permEditInfo: Boolean,
+        permPin: Boolean,
+        historyVisible: Boolean,
+    ) {
+        http.call("PUT", "/api/v1/groups/$convId/settings", buildJsonObject {
+            put("join_approval", joinApproval)
+            put("perm_invite", permInvite)
+            put("perm_edit_info", permEditInfo)
+            put("perm_pin", permPin)
+            put("history_visible", historyVisible)
+        })
+    }
+
+    /** 审批入群申请。action 取 `approve` / `reject`。 */
+    suspend fun reviewJoinRequest(convId: String, uid: String, approve: Boolean) {
+        http.call("POST", "/api/v1/groups/$convId/join-requests/$uid", buildJsonObject {
+            put("action", if (approve) "approve" else "reject")
+        })
+    }
+
     suspend fun setMyNickname(convId: String, nickname: String) {
         http.call("PUT", "/api/v1/groups/$convId/members/me/nickname", buildJsonObject {
             put("nickname", nickname)

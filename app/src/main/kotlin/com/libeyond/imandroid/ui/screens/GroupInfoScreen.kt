@@ -3,6 +3,7 @@ package com.libeyond.imandroid.ui.screens
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,7 @@ import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -40,6 +42,9 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  * **超级群不物化成员表**：`GET /groups/{id}` 对超级群只回我自己，
  * 成员必须走分页接口。故这里的成员区数据由调用方决定从哪来，本组件只管渲染。
  */
+/** 群资料页上的管理项。由 Host 决定弹什么框、调什么接口。 */
+enum class GroupManageAction { EditName, EditIntro, EditAnnouncement, ToggleMuteAll }
+
 @Composable
 fun GroupInfoScreen(
     info: GroupInfo,
@@ -49,6 +54,12 @@ fun GroupInfoScreen(
     onOpenMember: (GroupMember) -> Unit,
     onLeave: () -> Unit,
     onBack: () -> Unit,
+    /** 我的 uid——权限判定要用（不能踢自己、不能给自己设管理员）。 */
+    myUid: String,
+    /** 点管理项。由 Host 弹编辑框/确认框并调接口。 */
+    onManage: (GroupManageAction) -> Unit,
+    /** 长按成员。菜单项由 [GroupPermissions] 决定，Host 负责执行。 */
+    onMemberLongPress: (GroupMember) -> Unit,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -133,6 +144,55 @@ fun GroupInfoScreen(
                     }
                 }
 
+                // —— 群管理（G1/G2）——
+                // 每一项的显隐都走 GroupPermissions，**不在这里各判各的**：
+                // 与成员长按菜单、成员详情页同一份判据，分叉了会出现
+                // 「按钮亮着但点了报 300204」或反过来。
+                val manageItems = buildList {
+                    if (GroupPermissions.canEditInfo(info, permEditInfo = info.iAmManager)) {
+                        add(GroupManageAction.EditName to "群名称")
+                        add(GroupManageAction.EditIntro to "群简介")
+                    }
+                    if (GroupPermissions.canEditAnnouncement(info)) {
+                        add(GroupManageAction.EditAnnouncement to "群公告")
+                    }
+                    if (GroupPermissions.canMuteAll(info)) {
+                        val on = GroupPermissions.isMuteActive(info.muteUntil)
+                        add(GroupManageAction.ToggleMuteAll to if (on) "解除全员禁言" else "全员禁言")
+                    }
+                    // 「入群申请审批」暂不列入——审批列表页还没做，
+                    // 不带着只会弹「还没做」的死菜单项交付（判据 canReviewJoin 已就位并单测）。
+                }
+                if (manageItems.isNotEmpty()) {
+                    Spacer(Modifier.height(d.cardGap))
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
+                    ) {
+                        manageItems.forEachIndexed { i, (action, label) ->
+                            if (i > 0) {
+                                Box(Modifier.fillMaxWidth().padding(start = d.space4)
+                                    .height(0.5.dp).background(c.separator))
+                            }
+                            Row(
+                                Modifier.fillMaxWidth().clickable { onManage(action) }
+                                    .padding(horizontal = d.space4, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    label,
+                                    color = if (action == GroupManageAction.ToggleMuteAll &&
+                                        GroupPermissions.isMuteActive(info.muteUntil)
+                                    ) c.danger else c.textPrimary,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text("›", color = c.textTertiary)
+                            }
+                        }
+                    }
+                }
+
                 Text(
                     "成员（${info.memberCount}）",
                     color = c.textTertiary,
@@ -141,7 +201,9 @@ fun GroupInfoScreen(
                 )
             }
 
-            items(members, key = { it.userId }) { m -> MemberRow(m) { onOpenMember(m) } }
+            items(members, key = { it.userId }) { m ->
+                MemberRow(m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) })
+            }
 
             if (hasMoreMembers) {
                 item {
@@ -160,9 +222,18 @@ fun GroupInfoScreen(
                 Box(
                     Modifier.fillMaxWidth().padding(horizontal = d.space4)
                         .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
-                        .clickable { onLeave() }.padding(vertical = 14.dp),
+                        .clickable(enabled = GroupPermissions.canLeave(info)) { onLeave() }
+                        .padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text("退出群聊", color = c.danger) }
+                ) {
+                    // 群主退群会被服务端拒——**在这里就说清楚要先转让**，
+                    // 而不是让用户点一下拿个错误码。
+                    if (GroupPermissions.canLeave(info)) {
+                        Text("退出群聊", color = c.danger)
+                    } else {
+                        Text("群主需先转让群聊才能退出", color = c.textTertiary)
+                    }
+                }
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -170,11 +241,12 @@ fun GroupInfoScreen(
 }
 
 @Composable
-private fun MemberRow(m: GroupMember, onClick: () -> Unit) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun MemberRow(m: GroupMember, onClick: () -> Unit, onLongClick: () -> Unit) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Row(
-        modifier = Modifier.fillMaxWidth().background(c.pageBackground).clickable { onClick() }
+        modifier = Modifier.fillMaxWidth().background(c.pageBackground).combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = d.space4, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
