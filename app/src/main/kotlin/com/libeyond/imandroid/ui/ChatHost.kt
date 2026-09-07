@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import com.libeyond.imandroid.data.MessageAction
+import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.MessageActions
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.screens.Bubble
@@ -75,25 +76,35 @@ fun ChatHost(
     // 前者是 Android 13+ 的 Photo Picker，**不需要读取全部相册的权限**——
     // 用户只把选中的那张授权给你。声明 READ_MEDIA_IMAGES 去换一个选图功能
     // 是典型的权限过度索取，商店审核也会问。
+    // **多选**（≤9，与 iOS PHPicker 的 selectionLimit 同值）。
+    // Photo Picker 是**进程外**选择器：用户只把选中的那几张授权给你，
+    // 不需要 READ_MEDIA_IMAGES 全相册读权限。
     val pickMedia = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        ActivityResultContracts.PickMultipleVisualMedia(AlbumLayout.MAX),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
         scope.launch {
-            val picked = withContext(Dispatchers.IO) { readPickedImage(context, uri) }
-            if (picked == null) {
-                IMLog.tag("IM.Media").w("pick_read_failed")
-                return@launch
+            // ≥2 张共享一个 group_id → 两端聚簇成宫格；1 张不带（普通媒体气泡）。
+            // 前缀 `alb-` 与 iOS 一致，便于日志里一眼认出。
+            val gid = if (uris.size > 1) "alb-" + java.util.UUID.randomUUID() else null
+            for (uri in uris) {
+                val picked = withContext(Dispatchers.IO) { readPickedImage(context, uri) }
+                if (picked == null) {
+                    // 单张读失败不该中断整组——剩下的还能发出去
+                    IMLog.tag("IM.Media").w("pick_read_failed")
+                    continue
+                }
+                client.messages.sendMedia(
+                    convId = conv.convId,
+                    to = if (conv.isGroup) conv.convId else conv.peerUid,
+                    bytes = picked.bytes,
+                    fileName = picked.name,
+                    mimeType = picked.mime,
+                    contentType = ContentType.IMAGE,
+                    localPreviewUri = uri.toString(),
+                    groupId = gid,
+                )
             }
-            client.messages.sendMedia(
-                convId = conv.convId,
-                to = if (conv.isGroup) conv.convId else conv.peerUid,
-                bytes = picked.bytes,
-                fileName = picked.name,
-                mimeType = picked.mime,
-                contentType = ContentType.IMAGE,
-                localPreviewUri = uri.toString(),
-            )
         }
     }
     val owner = client.uid.orEmpty()

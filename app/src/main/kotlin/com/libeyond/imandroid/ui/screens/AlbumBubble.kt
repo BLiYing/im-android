@@ -48,18 +48,31 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  * ② **时间/状态是右下角的小胶囊**，浮在最后一张图上——图片是不透明的，
  *    时间落在图上必须有底色才看得清。
  */
+/**
+ * 宫格里一格要的数据。已确认与待发两路都映射到它——
+ * **不为两路各写一份宫格**：那两份迟早在圆角/间隙/时长角标上分叉。
+ */
+internal data class AlbumTile(
+    val url: String,
+    val contentType: String,
+    val durationMs: Int?,
+    /** 待发中（还没 ack）。用来压暗那一格，让人看出「还在发」。 */
+    val sending: Boolean = false,
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun AlbumBubble(
-    msgs: List<MessageEntity>,
+    tiles: List<AlbumTile>,
     mine: Boolean,
+    timestamp: Long,
     host: String,
     useTls: Boolean,
     onLongPress: (Rect) -> Unit,
 ) {
     val c = IMTheme.colors
     var rect by remember { mutableStateOf(Rect.Zero) }
-    val pattern = remember(msgs.size) { AlbumLayout.rowPattern(msgs.size) }
+    val pattern = remember(tiles.size) { AlbumLayout.rowPattern(tiles.size) }
 
     Row(
         modifier = Modifier
@@ -81,12 +94,12 @@ internal fun AlbumBubble(
                     Row {
                         repeat(cols) { col ->
                             if (col > 0) Spacer(Modifier.width(AlbumLayout.GAP.dp))
-                            val m = msgs.getOrNull(idx++)
+                            val m = tiles.getOrNull(idx++)
                             if (m == null) {
                                 // 格数比消息多（理论上不会，pattern 由 size 推出）——留空不崩
                                 Spacer(Modifier.size(tile))
                             } else {
-                                AlbumTile(m, tile, host, useTls)
+                                AlbumTileView(m, tile, host, useTls)
                             }
                         }
                     }
@@ -102,7 +115,7 @@ internal fun AlbumBubble(
                     .padding(horizontal = 6.dp, vertical = 2.dp),
             ) {
                 Text(
-                    TimeFormat.bubbleTime(msgs.last().timestamp),
+                    TimeFormat.bubbleTime(timestamp),
                     color = c.onMedia,
                     fontSize = 10.sp,
                 )
@@ -112,17 +125,28 @@ internal fun AlbumBubble(
 }
 
 @Composable
-private fun AlbumTile(m: MessageEntity, size: androidx.compose.ui.unit.Dp, host: String, useTls: Boolean) {
+private fun AlbumTileView(
+    m: AlbumTile,
+    size: androidx.compose.ui.unit.Dp,
+    host: String,
+    useTls: Boolean,
+) {
     val c = IMTheme.colors
     Box(modifier = Modifier.size(size).background(c.subtleFill)) {
         AsyncImage(
-            model = MediaUrl.absolute(m.content, host, useTls),
+            // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，
+            // 所以选完立刻有图，不用等上传完
+            model = MediaUrl.absolute(m.url, host, useTls),
             contentDescription = if (m.contentType == ContentType.VIDEO) "视频" else "图片",
             contentScale = ContentScale.Crop,
             modifier = Modifier.size(size),
         )
+        if (m.sending) {
+            // 还在发：压一层暗底，让人看出这一格没完成
+            Box(Modifier.size(size).background(c.overlay))
+        }
         // 视频格左上角显时长（服务端给了才显，**不为拿它去下载视频**）
-        if (m.contentType == ContentType.VIDEO && (m.duration ?: 0) > 0) {
+        if (m.contentType == ContentType.VIDEO && (m.durationMs ?: 0) > 0) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -131,7 +155,7 @@ private fun AlbumTile(m: MessageEntity, size: androidx.compose.ui.unit.Dp, host:
                     .background(c.overlay)
                     .padding(horizontal = 4.dp, vertical = 1.dp),
             ) {
-                Text(MediaUrl.formatDuration(m.duration), color = c.onMedia, fontSize = 9.sp)
+                Text(MediaUrl.formatDuration(m.durationMs), color = c.onMedia, fontSize = 9.sp)
             }
         }
     }

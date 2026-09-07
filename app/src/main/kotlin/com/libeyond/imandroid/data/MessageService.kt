@@ -195,11 +195,14 @@ class MessageService(
         contentType: String,
         caption: String? = null,
         localPreviewUri: String = "",
+        /** 相册分组：同批 ≥2 张时由调用方生成一个共享 ID，1 张传 null。 */
+        groupId: String? = null,
     ) {
         val owner = ownerProvider() ?: return
         val p = repo.createPending(
             owner = owner, convId = convId, to = to,
             content = localPreviewUri, contentType = contentType,
+            groupId = groupId,
         )
         val r = try {
             upload.upload(bytes, fileName, mimeType, asVoice = contentType == ContentType.VOICE)
@@ -214,7 +217,10 @@ class MessageService(
             return
         }
         repo.updatePendingContent(owner, p.clientMsgId, r.url, r.size)
-        transmit(p.clientMsgId, convId, to, contentType, r.url, null, fileName, r.size, caption)
+        transmit(
+            p.clientMsgId, convId, to, contentType, r.url, null,
+            fileName, r.size, caption, groupId = groupId,
+        )
     }
 
     /** 重发（红❗点击 / 重连后补发）。**沿用同一个 client_msg_id**，服务端幂等去重。 */
@@ -223,7 +229,7 @@ class MessageService(
         val p = repo.inFlight(owner).firstOrNull { it.clientMsgId == clientMsgId } ?: return
         transmit(
             p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
-            p.fileName, p.fileSize, p.caption, p.forwardFrom,
+            p.fileName, p.fileSize, p.caption, p.forwardFrom, p.groupId,
         )
     }
 
@@ -238,6 +244,7 @@ class MessageService(
         fileSize: Long? = null,
         caption: String? = null,
         forwardFrom: String? = null,
+        groupId: String? = null,
     ) {
         val payload = ProtocolJson.encodeToJsonElement(
             SendMsgData.serializer(),
@@ -252,6 +259,7 @@ class MessageService(
                 caption = caption,
                 replyToConvSeq = replyToConvSeq,
                 forwardFrom = forwardFrom,
+                groupId = groupId,
             ),
         )
         val sent = socket.send(FrameType.SEND_MSG, payload)

@@ -141,3 +141,47 @@ class AlbumClusterTest {
         assertTrue(r.none { it is com.libeyond.imandroid.ui.screens.ChatRow.Album })
     }
 }
+
+/** 待发相册聚簇——「选完秒上屏」那一路。 */
+class PendingAlbumClusterTest {
+
+    private fun pimg(cid: String, gid: String?, ts: Long) =
+        com.libeyond.imandroid.data.db.PendingMessageEntity(
+            ownerUid = "me", clientMsgId = cid, convId = "c1", to = "u2",
+            contentType = ContentType.IMAGE, content = "content://x/$cid",
+            groupId = gid, createdAt = ts,
+        )
+
+    private fun rows(vararg p: com.libeyond.imandroid.data.db.PendingMessageEntity) =
+        com.libeyond.imandroid.ui.screens.buildChatRows(emptyList(), p.toList())
+            .filterNot { it is com.libeyond.imandroid.ui.screens.ChatRow.DayLabel }
+
+    @Test
+    fun `选完立刻成宫格，不等 ack`() {
+        val r = rows(pimg("a", "g", 1), pimg("b", "g", 2), pimg("c", "g", 3))
+        assertEquals(1, r.size)
+        val a = r[0] as com.libeyond.imandroid.ui.screens.ChatRow.PendingAlbum
+        assertEquals(3, a.msgs.size)
+    }
+
+    @Test
+    fun `单张待发不画宫格`() {
+        val r = rows(pimg("a", "g", 1))
+        assertTrue(r[0] is com.libeyond.imandroid.ui.screens.ChatRow.Pending)
+    }
+
+    @Test
+    fun `没有 group_id 的多张各自独立`() {
+        val r = rows(pimg("a", null, 1), pimg("b", null, 2))
+        assertEquals(2, r.size)
+        assertTrue(r.none { it is com.libeyond.imandroid.ui.screens.ChatRow.PendingAlbum })
+    }
+
+    @Test
+    fun `待发与已确认用同一份聚簇判据`() {
+        // 两边各写一份的话，同一组图在发送中和发送后会长得不一样
+        assertTrue(AlbumLayout.isAlbumMember(ContentType.IMAGE, "g"))
+        val sending = rows(pimg("a", "g", 1), pimg("b", "g", 2))
+        assertTrue(sending[0] is com.libeyond.imandroid.ui.screens.ChatRow.PendingAlbum)
+    }
+}

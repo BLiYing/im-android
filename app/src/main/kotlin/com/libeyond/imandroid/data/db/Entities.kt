@@ -82,6 +82,12 @@ data class PendingMessageEntity(
     val replyToConvSeq: Long? = null,
     /** 转发自（公开名快照）。**必须落库**：否则杀进程后重发的那一条会丢掉「转发自」。 */
     val forwardFrom: String? = null,
+    /**
+     * 相册分组 ID。**待发消息就要带**——iOS 是「选完秒上屏」直接成宫格，
+     * 不等 ack。只在确认消息上聚簇的话，用户会看见 N 张图先各自排一列、
+     * 收到 ack 后再"啪"地拼成宫格。
+     */
+    val groupId: String? = null,
     /** [SendState] 的 name。 */
     val state: String = "Sending",
     val createdAt: Long = 0,

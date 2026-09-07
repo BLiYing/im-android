@@ -93,6 +93,11 @@ sealed interface ChatRow {
         override val key get() = "a${msgs.first().convSeq}_${msgs.size}"
     }
 
+    /** 待发的一组图。**选完立刻成宫格**（iOS 同），不等 ack。 */
+    data class PendingAlbum(val msgs: List<PendingMessageEntity>) : ChatRow {
+        override val key get() = "pa${msgs.first().clientMsgId}_${msgs.size}"
+    }
+
     data class DayLabel(val timestamp: Long) : ChatRow {
         override val key get() = "d$timestamp"
     }
@@ -160,10 +165,32 @@ fun buildChatRows(
         prevTs = m.timestamp
         i++
     }
-    for (p in pending.sortedBy { it.createdAt }) {
+    val sortedPending = pending.sortedBy { it.createdAt }
+    var k = 0
+    while (k < sortedPending.size) {
+        val p = sortedPending[k]
         if (TimeFormat.needsDaySeparator(prevTs, p.createdAt)) rows += ChatRow.DayLabel(p.createdAt)
+
+        // 待发也聚簇——判据与已确认那路**共用 AlbumLayout.isAlbumMember**，
+        // 两边各写一份的话，同一组图在发送中和发送后会长得不一样。
+        if (AlbumLayout.isAlbumMember(p.contentType, p.groupId)) {
+            var j = k + 1
+            while (j < sortedPending.size &&
+                sortedPending[j].groupId == p.groupId &&
+                AlbumLayout.isAlbumMember(sortedPending[j].contentType, sortedPending[j].groupId)
+            ) j++
+            val group = sortedPending.subList(k, j)
+            if (group.size >= 2) {
+                rows += ChatRow.PendingAlbum(group.take(AlbumLayout.MAX))
+                prevTs = group.last().createdAt
+                k = j
+                continue
+            }
+        }
+
         rows += ChatRow.Pending(p)
         prevTs = p.createdAt
+        k++
     }
     return rows
 }
@@ -334,11 +361,25 @@ fun ChatScreen(
                     is ChatRow.DayLabel -> DaySeparator(r.timestamp)
                     is ChatRow.UnreadDivider -> UnreadDividerRow()
                     is ChatRow.Album -> AlbumBubble(
-                        msgs = r.msgs,
+                        tiles = r.msgs.map {
+                            AlbumTile(it.content, it.contentType, it.duration)
+                        },
                         mine = r.msgs.first().sender == myUid,
+                        timestamp = r.msgs.last().timestamp,
                         host = host,
                         useTls = useTls,
                         onLongPress = { rect -> onLongPress(r.msgs.first(), rect) },
+                    )
+                    is ChatRow.PendingAlbum -> AlbumBubble(
+                        tiles = r.msgs.map {
+                            AlbumTile(it.content, it.contentType, null, sending = true)
+                        },
+                        mine = true,
+                        timestamp = r.msgs.last().createdAt,
+                        host = host,
+                        useTls = useTls,
+                        // 待发的整组还没 conv_seq，长按菜单无从下手（撤回/引用都要 seq）
+                        onLongPress = {},
                     )
                     // 系统消息走居中灰字，不进气泡分支（iOS IMSystemCell / Web .sys-note）。
                     // 不用 `when` 卫语句（Kotlin 2.0 仍是实验特性），在分支内早退。
