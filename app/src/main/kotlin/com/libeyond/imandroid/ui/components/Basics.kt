@@ -22,6 +22,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -124,4 +128,35 @@ fun IMTextField(
 fun IMErrorText(text: String, modifier: Modifier = Modifier) {
     if (text.isEmpty()) return
     Text(text = text, color = IMTheme.colors.danger, modifier = modifier)
+}
+
+/**
+ * 一次性提示条（对齐 iOS 的 toast / Web 的 `setToast`）。
+ *
+ * 刻意**不用 Material3 的 Snackbar**：那要一整套 `SnackbarHostState` + `Scaffold`，
+ * 而本端页面结构是自己拼的 Column，塞 Scaffold 只为一条提示不划算。
+ *
+ * 自动消失后回调 [onDismiss] 清状态——**不清的话同一条消息第二次触发时不会再显示**
+ * （状态没变，Compose 不重组）。
+ */
+@Composable
+fun IMToast(text: String, durationMs: Long = 2000, onDismiss: () -> Unit) {
+    val c = IMTheme.colors
+    LaunchedEffect(text) {
+        kotlinx.coroutines.delay(durationMs)
+        onDismiss()
+    }
+    Box(
+        modifier = Modifier.fillMaxSize().padding(bottom = 96.dp),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(c.datePillBackground)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            Text(text, color = c.onMedia, fontSize = 14.sp)
+        }
+    }
 }

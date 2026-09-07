@@ -7,6 +7,7 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
 enum class MessageAction(val label: String, val destructive: Boolean = false) {
     Copy("复制"),
     Reply("引用"),
+    Forward("转发"),
     Recall("撤回", destructive = true),
     /** 为所有人删除。 */
     DeleteForEveryone("为所有人删除", destructive = true),
@@ -52,6 +53,10 @@ object MessageActions {
 
         // 系统消息不可引用（它没有发送者，引用条显示不出来源）
         if (msg.contentType != ContentType.SYSTEM) out += MessageAction.Reply
+
+        // 转发 / 多选：条件与 Forward.canForward 同源——**别在这里重写一遍判据**，
+        // 两处判据分叉会让菜单里有「转发」但点了没反应（或反过来）。
+        if (Forward.canForward(msg)) out += MessageAction.Forward
 
         // 撤回：仅本人，且在时间窗内。服务端超窗回 300008
         if (mine && now - msg.timestamp <= RECALL_WINDOW_MS) out += MessageAction.Recall

@@ -171,6 +171,17 @@ internal fun Bubble(
                 )
             }
             val recalled = (msg?.recalledAt ?: 0) > 0
+            // 「转发自 X」放在**气泡外上方**（与发送者昵称同一列），不进气泡内：
+            // 进气泡内会被当成正文的一部分被复制/引用走。撤回墓碑上不显。
+            val fwd = msg?.forwardFrom
+            if (!fwd.isNullOrBlank() && !recalled) {
+                Text(
+                    text = "转发自 $fwd",
+                    color = c.textTertiary,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+                )
+            }
             Box(
                 modifier = Modifier
                     .widthIn(max = bubbleMax)

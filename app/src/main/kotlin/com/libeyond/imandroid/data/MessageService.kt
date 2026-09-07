@@ -4,6 +4,7 @@ import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.AckData
+import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.protocol.ErrorData
 import com.libeyond.imandroid.sdk.protocol.FrameType
@@ -152,6 +153,31 @@ class MessageService(
     }
 
     /**
+     * 转发一条消息到另一个会话（M4-3，PROTOCOL §4.3 `forward_from`）。
+     *
+     * **不是"复制文本再发一遍"**：要带上 `forward_from`，收端才显示「转发自 X」。
+     * 溯源名由 [Forward.originOf] 算——见那里的两条纪律（公开名 / 转发链保留最初作者）。
+     *
+     * 媒体消息**直接复用原 URL**，不重新上传：服务端存的是同一份文件，
+     * 再传一遍既慢又白占空间（iOS/Web 同口径）。
+     */
+    suspend fun forward(msg: MessageEntity, toConvId: String, to: String, origin: String) {
+        val owner = ownerProvider() ?: return
+        val p = repo.createPending(
+            owner = owner, convId = toConvId, to = to,
+            content = msg.content, contentType = msg.contentType,
+            forwardFrom = origin,
+        )
+        transmit(
+            p.clientMsgId, toConvId, to, msg.contentType, msg.content,
+            replyToConvSeq = null,   // 引用不跟着转发走：被引用的那条不在新会话里
+            fileName = msg.fileName, fileSize = msg.fileSize, caption = msg.caption,
+            forwardFrom = origin,
+        )
+        log.i("msg_forwarded", "from" to msg.convId, "to" to toConvId, "seq" to msg.convSeq)
+    }
+
+    /**
      * 发一条媒体消息（图片/视频/文件/语音）。
      *
      * **先落一条待发消息再上传**：上传可能几十秒，这期间用户得看得见「发送中」，
@@ -197,7 +223,7 @@ class MessageService(
         val p = repo.inFlight(owner).firstOrNull { it.clientMsgId == clientMsgId } ?: return
         transmit(
             p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
-            p.fileName, p.fileSize, p.caption,
+            p.fileName, p.fileSize, p.caption, p.forwardFrom,
         )
     }
 
@@ -211,6 +237,7 @@ class MessageService(
         fileName: String? = null,
         fileSize: Long? = null,
         caption: String? = null,
+        forwardFrom: String? = null,
     ) {
         val payload = ProtocolJson.encodeToJsonElement(
             SendMsgData.serializer(),
@@ -224,6 +251,7 @@ class MessageService(
                 fileSize = fileSize,
                 caption = caption,
                 replyToConvSeq = replyToConvSeq,
+                forwardFrom = forwardFrom,
             ),
         )
         val sent = socket.send(FrameType.SEND_MSG, payload)

@@ -27,6 +27,16 @@ data class SendMsgData(
     @SerialName("file_size") val fileSize: Long? = null,
     val caption: String? = null,
     @SerialName("reply_to_conv_seq") val replyToConvSeq: Long? = null,
+    /**
+     * 转发溯源（§4.3 M4-3）：**发送时冻结的"转发自"显示名**，限长 40。
+     *
+     * 两条纪律，任一条破了都是线上事故：
+     * ① **只能是公开名**——这个字符串会原样发给收件人。带备注就是把"我给他起的外号"
+     *    发出去（im-web 与 iOS 都为此各出过一次事故，见 docs/UI.md 隐私红线）。
+     * ② **转发链保留最初作者**——转发一条已被转发的消息，仍写最初作者而不是中间人
+     *    （对端口径：`m.forwardFrom || m.fromNickname || m.from`）。
+     */
+    @SerialName("forward_from") val forwardFrom: String? = null,
 )
 
 /** ack 下行负载（PROTOCOL §4.2）——对 send_msg 的确认。 */
@@ -72,6 +82,8 @@ data class MessageData(
     @SerialName("deleted_at") val deletedAt: Long? = null,
     @SerialName("edited_at") val editedAt: Long? = null,
     @SerialName("pinned_at") val pinnedAt: Long? = null,
+    /** 转发溯源显示名（§4.3 M4-3）；气泡上方显示「转发自 X」。 */
+    @SerialName("forward_from") val forwardFrom: String? = null,
 )
 
 /** receipt 上下行负载（PROTOCOL §5）。 */

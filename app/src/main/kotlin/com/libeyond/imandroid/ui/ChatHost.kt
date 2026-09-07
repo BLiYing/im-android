@@ -25,6 +25,9 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import com.libeyond.imandroid.data.MessageAction
 import com.libeyond.imandroid.data.MessageActions
+import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
+import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.MsgOp
@@ -92,6 +95,11 @@ fun ChatHost(
     }
     val owner = client.uid.orEmpty()
     var input by remember(conv.convId) { mutableStateOf("") }
+
+    // —— 转发（M4-3）——
+    // 待转发的消息列表（null = 没在转发）。选完目标会话后逐条发出。
+    var forwarding by remember(conv.convId) { mutableStateOf<List<MessageEntity>?>(null) }
+    var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
 
     // 渲染窗口大小。**不能无界**——13 万条的会话会把聊天页渲染成空白（实测）。
     // 滚到顶时加一页；不做减半回收：Compose 的 LazyColumn 本就只组合可见项，
@@ -234,6 +242,42 @@ fun ChatHost(
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
     )
 
+    // —— 转发目标选择页（覆盖在聊天页之上）——
+    val fwd = forwarding
+    if (fwd != null) {
+        val convs by client.repo.observeConversations(owner).collectAsState(initial = emptyList())
+        ForwardPickerScreen(
+            conversations = convs,
+            count = fwd.size,
+            onCancel = { forwarding = null },
+            onToast = { toast = it },
+            onConfirm = { targets ->
+                forwarding = null
+                scope.launch {
+                    // **逐条、逐会话串行发**：服务端对 send_msg 有限流，
+                    // 9 个会话 × 100 条并发打过去必然撞墙。
+                    // 合并转发（chat_record 一张卡片）本端还没做，见 current_task。
+                    val myName = client.myPublicName()
+                    for (t in targets) {
+                        val to = if (t.isGroup) "" else t.peerUid
+                        for (m in fwd) {
+                            client.messages.forward(
+                                msg = m, toConvId = t.convId, to = to,
+                                origin = Forward.originOf(m, owner, myName),
+                            )
+                        }
+                    }
+                    toast = if (targets.size > 1) "已转发到 ${targets.size} 个会话" else "已转发"
+                }
+            },
+        )
+        return
+    }
+
+    toast?.let { t ->
+        IMToast(t) { toast = null }
+    }
+
     // —— 消息长按菜单 ——
     val target = menuFor
     if (target != null) {
@@ -245,6 +289,8 @@ fun ChatHost(
                     when (a) {
                         MessageAction.Copy -> clipboard.setText(AnnotatedString(target.content))
                         MessageAction.Reply -> replyTo = target
+                        MessageAction.Forward -> forwarding = listOf(target)
+
                         MessageAction.Recall ->
                             client.messages.sendMsgOp(conv.convId, MsgOp.RECALL, target.convSeq)
                         MessageAction.DeleteForEveryone ->

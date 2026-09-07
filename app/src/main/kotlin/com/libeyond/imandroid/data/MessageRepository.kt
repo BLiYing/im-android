@@ -85,6 +85,7 @@ class MessageRepository(
         content: String,
         contentType: String = ContentType.TEXT,
         replyToConvSeq: Long? = null,
+        forwardFrom: String? = null,
     ): PendingMessageEntity {
         val p = PendingMessageEntity(
             ownerUid = owner,
@@ -94,6 +95,7 @@ class MessageRepository(
             contentType = contentType,
             content = content,
             replyToConvSeq = replyToConvSeq,
+            forwardFrom = forwardFrom,
             state = SendState.Sending.name,
             createdAt = System.currentTimeMillis(),
         )
@@ -130,6 +132,9 @@ class MessageRepository(
             fileName = cached?.fileName,
             fileSize = cached?.fileSize,
             replyToConvSeq = cached?.replyToConvSeq,
+            // ack 不回带 forward_from，从待发行里取——漏了这行，自己转发出去的消息
+            // 在**自己这一侧**就看不到「转发自 X」（对端看得到），是最难自查的一类不一致。
+            forwardFrom = cached?.forwardFrom,
             timestamp = ack.timestamp,
         )
         messages.upsert(row)
@@ -388,4 +393,5 @@ private fun MessageData.toEntity(owner: String) = MessageEntity(
     deletedAt = deletedAt,
     editedAt = editedAt,
     pinnedAt = pinnedAt,
+    forwardFrom = forwardFrom,
 )

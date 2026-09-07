@@ -50,6 +50,8 @@ data class MessageEntity(
     val deletedAt: Long? = null,
     val editedAt: Long? = null,
     val pinnedAt: Long? = null,
+    /** 转发自（显示名快照，公开名）。见 `MessageData.forwardFrom` 的两条纪律。 */
+    val forwardFrom: String? = null,
 )
 
 /** 发送态。 */
@@ -76,6 +78,8 @@ data class PendingMessageEntity(
     val fileName: String? = null,
     val fileSize: Long? = null,
     val replyToConvSeq: Long? = null,
+    /** 转发自（公开名快照）。**必须落库**：否则杀进程后重发的那一条会丢掉「转发自」。 */
+    val forwardFrom: String? = null,
     /** [SendState] 的 name。 */
     val state: String = "Sending",
     val createdAt: Long = 0,

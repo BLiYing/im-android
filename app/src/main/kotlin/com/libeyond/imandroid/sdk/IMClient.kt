@@ -122,6 +122,24 @@ class IMClient(context: Context) {
 
     val uid: String? get() = session.uid
     val username: String? get() = session.username
+
+    /**
+     * 我的**公开显示名**——会被写进发出去的字节的地方一律用它（转发溯源、合并转发条目名…）。
+     *
+     * 三条纪律（IMServer docs/UI.md 隐私红线 + im-web useForward.ts 的事故记录）：
+     * ① 绝不能带备注：备注只在本机渲染成立；
+     * ② 绝不能写死「我」：那是**看的人**才成立的称呼，而这串字会烧进发出去的内容
+     *    （im-web 2026-09-05 实测：收件人看到一排「我」）；
+     * ③ 末级不落 uid——10 位随机内部 ID 摆在「转发自」后面既难看也无意义。
+     *
+     * **当前限制**：本端还没缓存自己的昵称（ 不下发，也没做自身资料的自取），
+     * 所以取的是 。句柄是公开的，纪律不破，只是不如昵称好看。
+     * 接自身资料缓存后改成「昵称 → @句柄 → 未命名用户」，与 im-web  对齐。
+     */
+    fun myPublicName(): String {
+        val u = session.username
+        return if (u.isNullOrBlank()) "未命名用户" else "@$u"
+    }
     val isLoggedIn: Boolean get() = session.isLoggedIn
 
     init {
