@@ -3,6 +3,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+      仅为 Android 9 及更早系统保存二维码到相册。Android 10（Q）起 MediaStore 分区存储
+      不需要任何权限，故 maxSdkVersion=28 —— 不加这个上限，新系统上会白白多出一条
+      「访问所有文件」级别的敏感权限声明，商店审核会问，用户也会被吓到。
+    -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:name=".IMApp"
@@ -23,5 +30,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          分享二维码图片用。exported=false + grantUriPermissions：只有被我们显式授权的
+          那一个 Intent 能读，别的应用主动来读会被拒。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

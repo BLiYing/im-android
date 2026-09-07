@@ -13,6 +13,9 @@ import com.libeyond.imandroid.sdk.api.GroupApi
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.sdk.api.DevicesApi
+import com.libeyond.imandroid.sdk.api.ProfileApi
+import com.libeyond.imandroid.sdk.api.QrApi
+import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.HttpClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.session.DeviceIdentity
@@ -46,11 +49,15 @@ class IMClient(context: Context) {
     )
 
     private val auth = AuthApi(http, device)
-    private val devices = DevicesApi(http)
+    /** 已登录设备。**公开**：既是 [TokenSession] 的探活接口，也是「我」页设备管理页的数据源。 */
+    val devices = DevicesApi(http)
     val conversationsApi = ConversationsApi(http)
     val contacts = ContactApi(http)
     val groups = GroupApi(http)
-    private val uploadApi = UploadApi(http) { session.token }
+    val profile = ProfileApi(http)
+    val qr = QrApi(http)
+    /** 上传。**公开**：除消息媒体外，改头像也要用它（「我」页编辑资料）。 */
+    val upload = UploadApi(http) { session.token }
 
     private val db = IMDatabase.get(context)
     val repo = MessageRepository(db.messages(), db.pending(), db.conversations())
@@ -85,7 +92,7 @@ class IMClient(context: Context) {
         repo = repo,
         presence = presence,
         conversationsApi = conversationsApi,
-        upload = uploadApi,
+        upload = upload,
         ownerProvider = { session.uid },
     )
 
@@ -189,4 +196,17 @@ class IMClient(context: Context) {
 
     /** 网络恢复 / 回到前台。 */
     fun wake(reason: String) = socket.wake(reason)
+
+    /**
+     * 改公开句柄，并把新名**写回本地会话**。
+     *
+     * 写回这一步不能省：改名不吊销会话（当前 token 继续有效），但下次冷启动是拿
+     * 本地存的 username 去重登的——不写回，重启后拿旧名登录直接失败（iOS 同款处理）。
+     */
+    suspend fun changeUsername(newName: String): UserCard {
+        val card = profile.changeUsername(newName)
+        session.username = card.username.ifBlank { newName }
+        log.i("username_changed")
+        return card
+    }
 }

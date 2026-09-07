@@ -57,9 +57,33 @@ class UploadApi(
         fileName: String,
         mimeType: String,
         asVoice: Boolean = false,
+    ): UploadResult = post(
+        path = "/api/v1/upload" + if (asVoice) "?as=voice" else "",
+        bytes = bytes, fileName = fileName, mimeType = mimeType,
+    )
+
+    /**
+     * 头像专用上传（`POST /api/v1/avatar`）。
+     *
+     * **不是** `/upload` 的一个参数而是独立接口，因为服务端对头像另有一套规矩：
+     * 只收 jpg/png、上限 **2MB**、内容寻址去重、存独立目录且**永不参与清理**
+     * （消息媒体会过期，头像不能——用户三年前设的头像不该有一天变成裂图）。
+     * 超限回 500001，格式不对回 500002。
+     */
+    suspend fun uploadAvatar(
+        bytes: ByteArray,
+        fileName: String = "avatar.jpg",
+        mimeType: String = "image/jpeg",
+    ): UploadResult = post("/api/v1/avatar", bytes, fileName, mimeType)
+
+    private suspend fun post(
+        path: String,
+        bytes: ByteArray,
+        fileName: String,
+        mimeType: String,
     ): UploadResult = withContext(Dispatchers.IO) {
         val requestId = HttpClient.newRequestId()
-        val url = http.baseUrl() + "/api/v1/upload" + if (asVoice) "?as=voice" else ""
+        val url = http.baseUrl() + path
 
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)

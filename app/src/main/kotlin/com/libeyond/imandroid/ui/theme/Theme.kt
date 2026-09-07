@@ -27,6 +27,7 @@ enum class IMThemeMode { System, Light, Dark }
 private val LocalIMColors = staticCompositionLocalOf { LightIMColors }
 private val LocalIMDimens = staticCompositionLocalOf { IMDimens() }
 private val LocalIMAppearance = staticCompositionLocalOf { IMAppearance() }
+private val LocalSettingsIconColors = staticCompositionLocalOf { LightSettingsIconColors }
 
 /**
  * 令牌取用入口——业务代码一律 `IMTheme.colors.textSecondary`，不写 Hex。
@@ -42,6 +43,10 @@ object IMTheme {
     /** 用户可调的字号/圆角。 */
     val appearance: IMAppearance
         @Composable @ReadOnlyComposable get() = LocalIMAppearance.current
+
+    /** 「我」页设置行的图标底色（对齐 iOS system* 色）。 */
+    val settingsIcons: IMSettingsIconColors
+        @Composable @ReadOnlyComposable get() = LocalSettingsIconColors.current
 }
 
 /**
@@ -98,6 +103,7 @@ fun IMAppTheme(
         LocalIMColors provides colors,
         LocalIMDimens provides IMDimens(),
         LocalIMAppearance provides appearance,
+        LocalSettingsIconColors provides if (dark) DarkSettingsIconColors else LightSettingsIconColors,
     ) {
         MaterialTheme(colorScheme = m3, typography = IMTypography, content = content)
     }

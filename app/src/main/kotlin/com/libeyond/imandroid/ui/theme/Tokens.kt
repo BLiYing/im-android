@@ -234,6 +234,80 @@ data class IMDimens(
     val inputControl: Dp = 36.dp,
     /** 输入栏按钮距栏边。移动端基准 8（iOS `plusButton` leading）；Web 维持 16。 */
     val inputBarEdge: Dp = 8.dp,
+
+    // —— 「我」页 / 分组设置表 ——
+    // 出处一律是 iOS `IMSettingsViewController` / `IMDeviceListViewController` /
+    // `IMDeviceDetailViewController` / `IMProfileEditViewController` / `IMQRCardViewController`
+    // 里的常数（本页整体以 iOS 为基准）。**这一组还没进 `docs/UI_SPEC.md`**——
+    // 那张表目前只覆盖会话列表/聊天页/输入栏三块，「我」页是欠账；补表前请勿在页面里就地改数字。
+    /** 设置行最小高。iOS `heightForRowAtIndexPath` 返回 50。 */
+    val settingsRowHeight: Dp = 50.dp,
+    /** 彩色图标方块边长与圆角。iOS `_iconBg` 30 / `cornerRadius = 7`。 */
+    val settingsIcon: Dp = 30.dp,
+    val radiusSettingsIcon: Dp = 7.dp,
+    /** 方块里的图标本身。iOS `_iconView` 18。 */
+    val settingsIconGlyph: Dp = 18.dp,
+    /** 设置行分割线左缩进 = 行左边距 + 图标 + 间距，与标题起点对齐（iOS `separatorInset` 同口径）。 */
+    val settingsSeparatorInset: Dp = space4 + settingsIcon + space3,
+    /** 设备行的 emoji 图标盒。iOS `iconBox` 36 / `cornerRadius = 9`。 */
+    val deviceRowIcon: Dp = 36.dp,
+    val radiusDeviceIcon: Dp = 9.dp,
+    /** 「我」页头部与资料页只读态的大头像。iOS `roAvatar` 96。 */
+    val profileAvatar: Dp = 96.dp,
+    /** 资料页**编辑态**头像（比只读态小一圈，给相机角标让位）。iOS `avatarView` 86。 */
+    val profileEditAvatar: Dp = 86.dp,
+    /** 编辑态头像右下角的相机角标。iOS `cam` 28。 */
+    val cameraBadge: Dp = 28.dp,
+    /** 名片码卡片里的小头像。iOS `IMQRCardView` 头像 56。 */
+    val qrCardAvatar: Dp = 56.dp,
+    /** 二维码画布边长。iOS 是按卡片宽自适应，本端取一个够扫的定值。 */
+    val qrCode: Dp = 240.dp,
+)
+
+/**
+ * 「我」页设置行的**图标底色板**。
+ *
+ * 逐个对齐 iOS `IMSettingsViewController` 用的 `UIColor.system*`（Apple 公布的 sRGB 取值），
+ * 因为「我」页整体以 iOS 为基准。**它不在 `UI_COLOR.md` 里**：三端在这一处本就分叉
+ * —— Web 的设置行是无底色的 lucide 线图标，iOS 是彩色圆角方块。要统一是产品拍板的事，
+ * 不是在这里悄悄选一边。改动请连同 UI_COLOR.md / UI_SPEC.md 一起谈。
+ *
+ * 之所以仍收进令牌而不是就地写 Hex：散在页面里的颜色改不动也查不着（Tokens 顶部三条硬规则）。
+ * 深浅两套取值分别对应 Apple 的 light / dark 变体。
+ */
+data class IMSettingsIconColors(
+    val blue: Color,
+    val green: Color,
+    val orange: Color,
+    val red: Color,
+    val gray: Color,
+    val yellow: Color,
+    val purple: Color,
+    val teal: Color,
+)
+
+/** systemBlue/Green/... 的浅色取值。 */
+val LightSettingsIconColors = IMSettingsIconColors(
+    blue = Color(0xFF007AFF),
+    green = Color(0xFF34C759),
+    orange = Color(0xFFFF9500),
+    red = Color(0xFFFF3B30),
+    gray = Color(0xFF8E8E93),
+    yellow = Color(0xFFFFCC00),
+    purple = Color(0xFFAF52DE),
+    teal = Color(0xFF30B0C7),
+)
+
+/** systemBlue/Green/... 的深色取值（Apple 在深色下把这几个色调亮了一档）。 */
+val DarkSettingsIconColors = IMSettingsIconColors(
+    blue = Color(0xFF0A84FF),
+    green = Color(0xFF30D158),
+    orange = Color(0xFFFF9F0A),
+    red = Color(0xFFFF453A),
+    gray = Color(0xFF8E8E93),
+    yellow = Color(0xFFFFD60A),
+    purple = Color(0xFFBF5AF2),
+    teal = Color(0xFF40C8E0),
 )
 
 /**

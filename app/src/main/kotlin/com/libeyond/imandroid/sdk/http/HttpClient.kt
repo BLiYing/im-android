@@ -68,7 +68,7 @@ class HttpClient(
         }
 
         val payload = body?.let { ProtocolJson.encodeToString(JsonElement.serializer(), it) }
-        builder.method(method, payload?.toRequestBody(JSON_MEDIA))
+        builder.method(method, requestBodyFor(method, payload)?.toRequestBody(JSON_MEDIA))
 
         val started = System.currentTimeMillis()
         val raw: String
@@ -120,6 +120,35 @@ class HttpClient(
     companion object {
         const val HEADER_REQUEST_ID = "X-Request-ID"
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+
+        /** OkHttp 规定必须带请求体的方法；给它们传 null 会当场抛 IllegalArgumentException。 */
+        private val REQUIRES_BODY = setOf("POST", "PUT", "PATCH", "PROPPATCH", "REPORT")
+
+        /**
+         * 决定要发出去的请求体文本。
+         *
+         * **无体 POST 必须发 `{}` 而不是 null**：OkHttp 的 `Request.Builder.method("POST", null)`
+         * 直接抛 `IllegalArgumentException: method POST must have a request body`，而调用侧
+         * 普遍用 `runCatching` 兜底，于是表现成「点了没反应」——请求根本没上路，
+         * 服务端日志里连一行都没有，最难查的那种。
+         *
+         * 本仓有 4 个无体 POST 踩在这上面：`/logout`、`/devices/{sid}/revoke`、
+         * `/devices/revoke-others`、`/qr/me/reset`（2026-09-07 接「我」页设备管理时实测发现，
+         * 此前只有 `/logout` 在跑且失败被吞掉——退出登录只清了本地，服务端会话一直没吊销）。
+         *
+         * 发 `{}` 而不是空串：Go 那边若有 handler 做 `json.Decode(r.Body)`，空体会得到
+         * `EOF` 而 `{}` 得到一组零值——前者报 100001，后者行为正常。
+         *
+         * 反过来 **GET 一定要给 null**：OkHttp 对 GET 带体同样直接抛
+         * （`method GET must not have a request body`）。所以这里不能图省事一律发 `{}`。
+         *
+         * @return null = 不带请求体。
+         */
+        internal fun requestBodyFor(method: String, payload: String?): String? = when {
+            payload != null -> payload
+            method.uppercase() in REQUIRES_BODY -> "{}"
+            else -> null
+        }
 
         /**
          * 客户端侧 Request ID。服务端若回了自己的就以服务端的为准

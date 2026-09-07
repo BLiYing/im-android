@@ -79,6 +79,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.icons.lucide)
     implementation(libs.coil.compose)
+    implementation(libs.zxing.core)
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.okhttp)
