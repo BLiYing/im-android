@@ -59,6 +59,12 @@ data class MessageEntity(
     val forwardFrom: String? = null,
     /** 相册分组 ID：同批多图共享，聚簇成宫格用。 */
     val groupId: String? = null,
+    /**
+     * 系统消息分段的原始 JSON（PROTOCOL §6）。**必须落库**：不落的话刷新/重进会话后
+     * 分段丢失，同一条系统消息会退回"显真实昵称、不可点"，与刚收到时不一致。
+     * 存 JSON 而不是拆表——它只被渲染层解析一次，没有查询需求。
+     */
+    val sysSegments: String? = null
 )
 
 /** 发送态。 */

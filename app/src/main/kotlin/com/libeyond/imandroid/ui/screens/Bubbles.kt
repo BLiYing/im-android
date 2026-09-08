@@ -39,6 +39,13 @@ import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.data.LinkDetect
 import com.libeyond.imandroid.sdk.protocol.ContentType
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import com.libeyond.imandroid.data.SysSegments
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 // 气泡与分隔行。从 ChatScreen 拆出（CODING_STYLE §7②）：
@@ -73,22 +80,70 @@ internal fun DaySeparator(ts: Long) {
  * 与 Web `.sys-note span { max-width: 80% }` 同口径，长系统消息换行而不贴边。
  */
 @Composable
-internal fun SystemNote(text: String) {
+internal fun SystemNote(
+    text: String,
+    /** 落库的分段 JSON；null/坏数据 → 回退整句（历史消息本来就没有分段）。 */
+    sysSegments: String? = null,
+    /** 名字段的本地显示名：uid → 备注/群昵称。返回 null 用服务端给的公开昵称。 */
+    localName: (String) -> String? = { null },
+    /** 点名字。不传则名字只染色不可点（与 iOS `onTapUID` 为空时同）。 */
+    onTapUid: ((String) -> Unit)? = null,
+) {
     val c = IMTheme.colors
     val appearance = IMTheme.appearance
+    val segs = remember(sysSegments, text) { SysSegments.render(sysSegments, text) }
+
+    // 名字段用**琥珀色半粗**，不用 accent：胶囊底是主题绿，把名字染成同样是绿的 accent
+    // 两者色相几乎重合，看不出哪几个字是名字（iOS 2026-08-30 用户反馈过）。
+    // 也不用白——那与胶囊正文同色，只剩粗细之差。琥珀在绿胶囊与黑胶囊上都跳得出来。
+    val annotated = remember(segs, sysSegments) {
+        buildAnnotatedString {
+            segs.forEach { seg ->
+                if (!SysSegments.isName(seg)) {
+                    append(seg.text)
+                    return@forEach
+                }
+                val shown = SysSegments.displayName(seg, localName(seg.uid), null)
+                pushStringAnnotation(SYS_NAME_TAG, seg.uid)
+                withStyle(SpanStyle(color = SYS_NAME_COLOR, fontWeight = FontWeight.SemiBold)) {
+                    append(shown)
+                }
+                pop()
+            }
+        }
+    }
+
     Box(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 40.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = text,
-            color = c.textSecondary,
-            fontSize = appearance.sysFontSize,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(0.8f),
-        )
+        // 胶囊：对齐 iOS `IMSystemCell` 的 _pill（圆角 11、datePillBg、内边距 10/4）
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(11.dp))
+                .background(c.datePillBackground)
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+        ) {
+            ClickableText(
+                text = annotated,
+                style = TextStyle(
+                    color = c.onMedia,
+                    fontSize = appearance.sysFontSize,
+                    textAlign = TextAlign.Center,
+                ),
+                onClick = { offset ->
+                    // 点在名字上才响应，点在固定文案上不动作（同 iOS 的 TextKit 反查）
+                    annotated.getStringAnnotations(SYS_NAME_TAG, offset, offset)
+                        .firstOrNull()?.let { onTapUid?.invoke(it.item) }
+                },
+            )
+        }
     }
 }
+
+/** 名字段的标注 tag 与颜色（iOS `datePillNameText` = #FFD98A）。 */
+private const val SYS_NAME_TAG = "sysName"
+private val SYS_NAME_COLOR = androidx.compose.ui.graphics.Color(0xFFFFD98A)
 
 @Composable
 internal fun UnreadDividerRow() {

@@ -44,6 +44,7 @@ import com.composables.icons.lucide.Undo2
 import com.composables.icons.lucide.User
 import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.db.MessageEntity
@@ -102,6 +103,12 @@ fun ChatHost(
     var pickingFriend by remember(conv.convId) { mutableStateOf<List<FriendEntry>?>(null) }
     /** 正在全屏查看的媒体（null = 没在看）。 */
     var viewing by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
+    // 点系统消息里的名字进的资料页
+    var openUser by remember(conv.convId) { mutableStateOf<String?>(null) }
+    var friendsByUid by remember(conv.convId) { mutableStateOf<Map<String, FriendEntry>>(emptyMap()) }
+    LaunchedEffect(conv.convId) {
+        runCatching { client.contacts.friends() }.onSuccess { l -> friendsByUid = l.associateBy { it.userId } }
+    }
     var menuFor by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
 
     // 系统返回键：**先关最上面那层覆盖层，全关完了才回会话列表**。
@@ -110,6 +117,7 @@ fun ChatHost(
     BackHandler {
         val open = buildSet {
             if (viewing != null) add(ChatOverlays.Layer.Viewer)
+            if (openUser != null) add(ChatOverlays.Layer.UserProfile)
             if (pickingFriend != null) add(ChatOverlays.Layer.FriendPicker)
             if (picking) add(ChatOverlays.Layer.MediaPicker)
             if (forwarding != null) add(ChatOverlays.Layer.Forward)
@@ -117,6 +125,7 @@ fun ChatHost(
         }
         when (ChatOverlays.topmost(open)) {
             ChatOverlays.Layer.Viewer -> viewing = null
+            ChatOverlays.Layer.UserProfile -> openUser = null
             ChatOverlays.Layer.FriendPicker -> pickingFriend = null
             ChatOverlays.Layer.MediaPicker -> picking = false
             ChatOverlays.Layer.Forward -> forwarding = null
@@ -334,6 +343,10 @@ fun ChatHost(
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
         uploadProgress = uploadProgress,
         menuForSeq = menuFor?.convSeq ?: 0L,
+        // 系统消息里的名字：按本地口径重渲染（备注优先），并可点进资料页。
+        // **备注只在这里出现**——分段里的 text 恒为公开昵称，全群共享（IMServer docs/UI.md 隐私红线）。
+        localNameOf = { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
+        onOpenUser = { uid -> openUser = uid },
     )
 
     // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——
@@ -348,6 +361,25 @@ fun ChatHost(
             // 先关查看器再开转发选择页：两层叠着关掉上面一层会露出黑底大图
             onForward = { viewing = null; forwarding = listOf(m) },
             onClose = { viewing = null },
+        )
+    }
+
+    // —— 点系统消息里的名字 → 用户资料页 ——
+    openUser?.let { uid ->
+        val f = friendsByUid[uid]
+        UserProfileHost(
+            client = client,
+            userId = uid,
+            knownRelation = f?.status.orEmpty(),
+            seed = com.libeyond.imandroid.sdk.api.UserCard(
+                userId = uid,
+                username = f?.username.orEmpty(),
+                nickname = f?.nickname.orEmpty(),
+                avatarUrl = f?.avatarUrl.orEmpty(),
+                remark = f?.remark.orEmpty(),
+            ),
+            onSendMessage = { openUser = null },
+            onBack = { openUser = null },
         )
     }
 

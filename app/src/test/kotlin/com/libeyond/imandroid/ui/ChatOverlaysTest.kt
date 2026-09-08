@@ -30,9 +30,15 @@ class ChatOverlaysTest {
 
     @Test
     fun `层序就是渲染顺序`() {
-        // 改这个顺序 = 改返回键行为，必须同时改 ChatHost 里的渲染顺序
+        // 改这个顺序 = 改返回键行为，必须同时改 ChatHost 里的渲染顺序。
+        // 2026-09-08 加 UserProfile（点系统消息里的名字进资料页）时这条如期变红——
+        // 加一层就得说清它排在哪，这正是这条测试存在的意义。
+        // 它排在 Viewer 之下：查看器是从资料页也可能开出来的最临时的一层。
         assertEquals(
-            listOf(Layer.Viewer, Layer.FriendPicker, Layer.MediaPicker, Layer.Forward, Layer.ContextMenu),
+            listOf(
+                Layer.Viewer, Layer.UserProfile, Layer.FriendPicker,
+                Layer.MediaPicker, Layer.Forward, Layer.ContextMenu,
+            ),
             Layer.entries,
         )
     }

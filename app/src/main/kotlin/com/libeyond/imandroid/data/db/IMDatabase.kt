@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -65,6 +65,18 @@ internal val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+/**
+ * v5 → v6：消息加 `sysSegments`（系统消息分段，PROTOCOL §6）。
+ *
+ * 老行为 NULL —— **历史系统消息本来就没有分段**（服务端 2026-08-29 才加这一列），
+ * 收端回退按 `content` 整句渲染：名字仍是当时的昵称、且不可点。协议里明写"不做回溯"。
+ */
+internal val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE message ADD COLUMN sysSegments TEXT")
+    }
+}
+
         /** v2 → v3：消息加 `groupId`（相册宫格，M4+）。老行为 NULL = 不属于任何相册。 */
         internal val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -80,7 +92,7 @@ internal val MIGRATION_4_5 = object : Migration(4, 5) {
             )
                 // 刻意**不加** fallbackToDestructiveMigration：那会在版本号一变时
                 // 直接删库重建，用户的本地消息全没。加列要写真的 Migration。
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build().also { instance = it }
         }
     }

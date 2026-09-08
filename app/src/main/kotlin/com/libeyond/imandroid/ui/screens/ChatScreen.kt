@@ -127,6 +127,10 @@ fun ChatScreen(
     menuForSeq: Long,
     /** 可见即读：把已读位点推到这一条。 */
     onVisibleSeq: (Long) -> Unit,
+    /** 系统消息里名字段的本地显示名（备注/群昵称）。返回 null 用服务端给的公开昵称。 */
+    localNameOf: (String) -> String? = { null },
+    /** 点系统消息里的名字 → 进那个人的资料页（对齐 iOS `onTapUID`）。 */
+    onOpenUser: (String) -> Unit = {},
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -267,7 +271,12 @@ fun ChatScreen(
                     // 系统消息走居中灰字，不进气泡分支（iOS IMSystemCell / Web .sys-note）。
                     // 不用 `when` 卫语句（Kotlin 2.0 仍是实验特性），在分支内早退。
                     is ChatRow.Confirmed -> if (r.msg.contentType == ContentType.SYSTEM) {
-                        SystemNote(r.msg.content)
+                        SystemNote(
+                            text = r.msg.content,
+                            sysSegments = r.msg.sysSegments,
+                            localName = localNameOf,
+                            onTapUid = onOpenUser,
+                        )
                     } else Bubble(
                         text = r.msg.content,
                         msg = r.msg,

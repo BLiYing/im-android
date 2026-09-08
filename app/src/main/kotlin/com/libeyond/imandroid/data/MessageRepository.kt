@@ -3,6 +3,8 @@ package com.libeyond.imandroid.data
 import com.libeyond.imandroid.data.db.ConversationDao
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageDao
+import com.libeyond.imandroid.sdk.protocol.SysSegment
+import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.PendingMessageDao
 import com.libeyond.imandroid.data.db.PendingMessageEntity
@@ -416,4 +418,8 @@ private fun MessageData.toEntity(owner: String) = MessageEntity(
     pinnedAt = pinnedAt,
     forwardFrom = forwardFrom,
     groupId = groupId,
+    // 分段落库：不落的话刷新/重进会话后系统消息退回"显真实昵称、不可点"
+    sysSegments = sysSegments?.takeIf { it.isNotEmpty() }?.let {
+        ProtocolJson.encodeToString(kotlinx.serialization.builtins.ListSerializer(SysSegment.serializer()), it)
+    },
 )

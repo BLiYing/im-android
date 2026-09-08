@@ -18,6 +18,9 @@ internal object ChatOverlays {
         /** 全屏媒体查看器：最"临时"，永远盖在最上面。 */
         Viewer,
 
+        /** 点系统消息里的名字进的用户资料页。 */
+        UserProfile,
+
         /** 选联系人发名片。 */
         FriendPicker,
 

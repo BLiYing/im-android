@@ -30,6 +30,14 @@ data class SendMsgData(
     /** 相册分组（§4.3 M4+）：同批多图共享，服务端只透传 + 限长 64。 */
     @SerialName("group_id") val groupId: String? = null,
     /**
+     * 系统消息分段（PROTOCOL §6，2026-08-29）。`uid` 非空的那段是某人的名字，
+     * **收端按本地口径重渲染**（备注 > 群昵称 > 昵称）并挂点击；空 = 固定文案原样显示。
+     *
+     * `content` 恒等于各段 `text` 顺序拼接，所以不认识这个字段的端照旧显示整句。
+     * **必须落本地库**：不落的话刷新/重进会话后分段丢失，同一条消息退回"显真实昵称、不可点"。
+     */
+    @SerialName("sys_segments") val sysSegments: List<SysSegment>? = null,
+    /**
      * 转发溯源（§4.3 M4-3）：**发送时冻结的"转发自"显示名**，限长 40。
      *
      * 两条纪律，任一条破了都是线上事故：
@@ -71,6 +79,13 @@ data class AckData(
  *
  * 字段大多 `omitempty`——**缺字段按未知处理，不得为了拿尺寸或时长去预下载媒体**（§4.3 明文）。
  */
+/** [MessageData.sysSegments] 的一段。`uid` 空 = 固定文案。 */
+@Serializable
+data class SysSegment(
+    val uid: String = "",
+    val text: String = "",
+)
+
 @Serializable
 data class MessageData(
     @SerialName("server_msg_id") val serverMsgId: String = "",
@@ -112,6 +127,14 @@ data class MessageData(
      * **每张仍是独立消息**（可单独撤回/引用/转发/收藏），客户端把同组聚簇成宫格。
      */
     @SerialName("group_id") val groupId: String? = null,
+    /**
+     * 系统消息分段（PROTOCOL §6，2026-08-29）。`uid` 非空的那段是某人的名字，
+     * **收端按本地口径重渲染**（备注 > 群昵称 > 昵称）并挂点击；空 = 固定文案原样显示。
+     *
+     * `content` 恒等于各段 `text` 顺序拼接，所以不认识这个字段的端照旧显示整句。
+     * **必须落本地库**：不落的话刷新/重进会话后分段丢失，同一条消息退回"显真实昵称、不可点"。
+     */
+    @SerialName("sys_segments") val sysSegments: List<SysSegment>? = null,
 )
 
 /** receipt 上下行负载（PROTOCOL §5）。 */
