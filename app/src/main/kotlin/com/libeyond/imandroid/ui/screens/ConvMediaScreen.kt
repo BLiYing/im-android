@@ -102,7 +102,7 @@ internal fun ConvMediaScreen(
 }
 
 @Composable
-private fun MediaSeg(label: String, on: Boolean, onClick: () -> Unit) {
+internal fun MediaSeg(label: String, on: Boolean, onClick: () -> Unit) {
     val c = IMTheme.colors
     Box(
         Modifier.clip(RoundedCornerShape(16.dp))
@@ -115,7 +115,7 @@ private fun MediaSeg(label: String, on: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Hint(text: String) {
+internal fun Hint(text: String) {
     Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
         Text(text, color = IMTheme.colors.textTertiary, style = MaterialTheme.typography.bodyMedium)
     }
@@ -131,7 +131,7 @@ private fun LoadMore(onLoadMore: () -> Unit) {
 }
 
 @Composable
-private fun MediaTile(item: ConvMediaItem, host: String, useTls: Boolean, onOpen: (ConvMediaItem) -> Unit) {
+internal fun MediaTile(item: ConvMediaItem, host: String, useTls: Boolean, onOpen: (ConvMediaItem) -> Unit) {
     val c = IMTheme.colors
     val isVideo = item.contentType == ContentType.VIDEO
     Box(
@@ -170,7 +170,7 @@ private fun MediaTile(item: ConvMediaItem, host: String, useTls: Boolean, onOpen
 }
 
 @Composable
-private fun FileRow(item: ConvMediaItem, onOpen: (ConvMediaItem) -> Unit) {
+internal fun FileRow(item: ConvMediaItem, onOpen: (ConvMediaItem) -> Unit) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Column {
