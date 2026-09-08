@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
+import com.libeyond.imandroid.data.SeqPoint
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -97,17 +98,50 @@ interface MessageDao {
     suspend fun search(owner: String, convId: String, like: String, limit: Int): List<MessageEntity>
 
     /**
-     * 显示序上「这一条及其之后」共有多少条 —— 也就是**要把渲染窗口撑到多大才能包含它**。
+     * 观察一段**锚点窗**（`ChatWindow.Anchored`），返回显示序（旧→新）。
      *
-     * 比较式必须与 [observeWindow] 的 `ORDER BY timestamp DESC, convSeq DESC` 逐字对应
-     * （同毫秒时按 convSeq），否则算出来的窗口会差几条、跳转落空。
+     * 与 [observeWindow] 的区别只有一个：那个是"最近 N 条"（上界开着，新消息会进来），
+     * 这个是**两端都闭**的区间——用户正在看历史，新消息不该把他拽走
+     * （`MESSAGE_WINDOW_DESIGN` §4.2：跳转即换窗，想回最新走 ↓ 按钮）。
+     *
+     * 边界比较式必须与 `ORDER BY timestamp, convSeq` 逐字对应，否则在"同毫秒多条"
+     * 那一小段上会多取或少取几行。
      */
     @Query("""
-        SELECT COUNT(*) FROM message
+        SELECT * FROM message
+        WHERE ownerUid = :owner AND convId = :convId
+          AND (timestamp > :loTs OR (timestamp = :loTs AND convSeq >= :loSeq))
+          AND (timestamp < :hiTs OR (timestamp = :hiTs AND convSeq <= :hiSeq))
+        ORDER BY timestamp ASC, convSeq ASC
+    """)
+    fun observeRange(
+        owner: String,
+        convId: String,
+        loTs: Long,
+        loSeq: Long,
+        hiTs: Long,
+        hiSeq: Long,
+    ): Flow<List<MessageEntity>>
+
+    /** 显示序上**严格早于**给定坐标的若干行（近→远）。算锚点窗下界用。 */
+    @Query("""
+        SELECT timestamp, convSeq FROM message
+        WHERE ownerUid = :owner AND convId = :convId
+          AND (timestamp < :ts OR (timestamp = :ts AND convSeq < :seq))
+        ORDER BY timestamp DESC, convSeq DESC
+        LIMIT :limit
+    """)
+    suspend fun pointsBefore(owner: String, convId: String, ts: Long, seq: Long, limit: Int): List<SeqPoint>
+
+    /** 显示序上**不早于**给定坐标的若干行（远→近的反向，即正序）。算锚点窗上界用。 */
+    @Query("""
+        SELECT timestamp, convSeq FROM message
         WHERE ownerUid = :owner AND convId = :convId
           AND (timestamp > :ts OR (timestamp = :ts AND convSeq >= :seq))
+        ORDER BY timestamp ASC, convSeq ASC
+        LIMIT :limit
     """)
-    suspend fun countAtOrAfter(owner: String, convId: String, ts: Long, seq: Long): Int
+    suspend fun pointsAtOrAfter(owner: String, convId: String, ts: Long, seq: Long, limit: Int): List<SeqPoint>
 
     @Query("SELECT MAX(convSeq) FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun maxConvSeq(owner: String, convId: String): Long?

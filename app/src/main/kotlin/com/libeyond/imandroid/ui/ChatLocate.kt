@@ -8,6 +8,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.ChatSearch
+import com.libeyond.imandroid.data.ChatWindow
+import com.libeyond.imandroid.data.ChatWindows
 import com.libeyond.imandroid.sdk.IMClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -15,14 +17,14 @@ import kotlinx.coroutines.launch
 /**
  * 「跳到某条 conv_seq」的**唯一出口**（引用块跳转 / 搜索命中共用）。
  *
- * 为什么要独立一层而不是让 `ChatScreen` 自己滚：本端的渲染窗口是「最近 N 条」
- * （`ChatHost` 的 `windowLimit`），目标多半**不在窗口里**，只滚列表必然落空。
- * 这一层先查本地库确认那条在不在、要把窗口撑到多大，撑完再让 `ChatScreen` 滚过去。
+ * 为什么要独立一层而不是让 `ChatScreen` 自己滚：目标多半**不在当前窗口里**，只滚列表必然落空。
+ * 这一层负责「先保证目标进得了视野」——**按锚点换窗**（[ChatWindow.Anchored]），
+ * 本地有就开本地窗，本地没有就发 `window_req` 让服务端给一窗（`MESSAGE_WINDOW_DESIGN` §4）。
  *
- * 对端是 iOS 的 `-[IMChatViewController jumpToConvSeq:]` 与 im-web 的 `locateInChat`
- * ——**要一致的是「先保证目标进得了视野再滚」这条不变式**，手段各端不同：
- * 那两端是按锚点开窗（`window_req`），本端是撑窗口（见 [ChatSearch.MAX_LOCATE_WINDOW]
- * 的注释：锚点开窗是还欠着的一档）。
+ * 对端是 iOS 的 `-[IMChatViewController jumpToConvSeq:]` 与 im-web 的 `locateInChat`，
+ * 三端同一条不变式、同一条协议。2026-09-09 上午本端曾用「把最近 N 条的 N 撑大」凑合过，
+ * 那必须带一个 5000 条的上限（13 万条整窗会把聊天页渲染成空白），上限之外只能说跳不过去；
+ * 锚点窗没有这个问题——不论目标多早，取的都是它前后各一页。
  */
 @Stable
 class ChatLocator internal constructor() {
@@ -53,20 +55,14 @@ class ChatLocator internal constructor() {
 }
 
 /**
- * @param currentWindow 取**此刻**的渲染窗口条数。**必须是取值函数不是数值**：查库要花时间，
- *                      按组合时捕获的快照去比较，会把这期间用户上翻撑大的窗口又缩回去；
- *                      窗口一缩，`ChatScreen` 的翻页保位条件（rows 变多）再也不成立，
- *                      「滚到顶加载更早」就被在途标志永久卡死了。
- * @param onGrowWindow  请求把窗口撑到给定条数。「只增不减」这条不变式**下沉在它的实现里**
- *                      （`ChatHost` 取 max），不靠这里比一下就算数。
- * @param onToast       跳不了时如实说一句
+ * @param onOpenWindow 换到给定的锚点窗（`ChatHost` 持有窗口状态）。
+ * @param onToast      跳不了时如实说一句（搜索那一路会把它接管到搜索条上方那一行）
  */
 @Composable
 fun rememberChatLocator(
     client: IMClient,
     convId: String,
-    currentWindow: () -> Int,
-    onGrowWindow: (Int) -> Unit,
+    onOpenWindow: (ChatWindow.Anchored) -> Unit,
     onToast: (String) -> Unit,
 ): ChatLocator {
     val owner = client.uid.orEmpty()
@@ -77,32 +73,38 @@ fun rememberChatLocator(
         if (seq > 0 && owner.isNotEmpty()) {
             val gen = ++locator.generation
             scope.launch {
-                // 本地有没有这一条 + 要多大的窗口才盖得住它
-                val need = client.repo.windowNeededFor(owner, convId, seq)
-                when {
-                    // 本地根本没有。**如实说，且要说对原因**：本地有缺口 = 还没同步下来；
-                    // 本地齐全 = 它是真的没了（撤回 / 为所有人删除 / 仅为我删除都是物理删行）。
-                    // 只在这条落空的路上多查一次库，不占正常路径。
-                    need <= 0 -> refuse(
-                        if (client.repo.isLocalComplete(owner, convId)) ChatSearch.GONE_NOTICE
-                        else ChatSearch.NEED_NETWORK_NOTICE,
-                    )
-                    need > ChatSearch.MAX_LOCATE_WINDOW -> refuse(ChatSearch.TOO_EARLY_NOTICE)
-                    else -> {
-                        // 多给一页余量：刚好撑到目标那一条时余量为 0，
-                        // 期间只要再落库一条消息，最新 N 条就已经不含目标（见 LOCATE_WINDOW_MARGIN）。
-                        val want = need + ChatSearch.LOCATE_WINDOW_MARGIN
-                        if (want > currentWindow()) onGrowWindow(want)
-                        locator.target = seq
-                        // 兜底：窗口撑完还是没滚过去，就认输并说一句。
-                        // 没有它的话，这是本功能里唯一一个**不给任何反馈**的失败分支。
-                        // 认领要看 generation 不能只看 seq：连点同一条时，上一次的超时会误伤这一次。
-                        delay(ChatSearch.LOCATE_TIMEOUT_MS)
-                        if (gen == locator.generation && locator.target == seq) {
-                            locator.target = 0L
-                            refuse(ChatSearch.LOCATE_FAILED_NOTICE)
-                        }
+                // ① 本地有这一条 → 直接开本地锚点窗
+                var window = client.repo.windowAround(owner, convId, seq)
+                if (window == null) {
+                    // ② 本地没有。有缺口且在线 → 问服务端要一窗（window_req）；
+                    //    本地齐全 → 它是真的没了（撤回 / 为所有人删除 / 仅为我删除都是物理删行）。
+                    if (client.repo.isLocalComplete(owner, convId)) {
+                        refuse(ChatWindows.GONE_NOTICE)
+                        return@launch
                     }
+                    val resp = client.messages.windows.await(
+                        convId, anchor = seq,
+                        before = ChatWindows.ANCHOR_HALF, after = ChatWindows.ANCHOR_HALF,
+                    )
+                    when {
+                        resp == null -> { refuse(ChatWindows.NEED_NETWORK_NOTICE); return@launch }
+                        // anchor_found=false 才是**真的**「不在了」——这正是这条协议要区分的两件事
+                        !resp.anchorFound -> { refuse(ChatWindows.GONE_NOTICE); return@launch }
+                    }
+                    // 服务端那一窗已经落库（MessageService 收帧时落的），再算一次本地窗
+                    window = client.repo.windowAround(owner, convId, seq)
+                    if (window == null) { refuse(ChatWindows.LOCATE_FAILED_NOTICE); return@launch }
+                }
+                if (gen != locator.generation) return@launch // 期间又点了别的，这一次作废
+                onOpenWindow(window)
+                locator.target = seq
+                // 兜底：换完窗还是没滚过去，就认输并说一句。
+                // 没有它的话，这是本功能里唯一一个**不给任何反馈**的失败分支。
+                // 认领要看 generation 不能只看 seq：连点同一条时，上一次的超时会误伤这一次。
+                delay(ChatWindows.LOCATE_TIMEOUT_MS)
+                if (gen == locator.generation && locator.target == seq) {
+                    locator.target = 0L
+                    refuse(ChatWindows.LOCATE_FAILED_NOTICE)
                 }
             }
         }

@@ -46,6 +46,8 @@ import com.libeyond.imandroid.ui.screens.Bubble
 import com.libeyond.imandroid.ui.components.MessageContextMenu
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
+import com.libeyond.imandroid.data.ChatWindow
+import com.libeyond.imandroid.data.ChatWindows
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.db.MessageEntity
@@ -65,12 +67,6 @@ import kotlinx.coroutines.launch
 
 /** typing 上报节流：每次按键都发是错的，服务端要给全体成员中继。 */
 private const val TYPING_THROTTLE_MS = 3_000L
-
-/** 进会话先渲染多少条。 */
-private const val INITIAL_WINDOW = 200
-
-/** 滚到顶再加一页的条数。 */
-private const val WINDOW_PAGE = 200
 
 /**
  * 聊天页的接线层：读库、算副标题、发消息、管 watch。
@@ -119,11 +115,11 @@ fun ChatHost(
     }
     var menuFor by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
 
-    // 渲染窗口大小。**不能无界**——13 万条的会话会把聊天页渲染成空白（实测）。
-    // 滚到顶时加一页；不做减半回收：Compose 的 LazyColumn 本就只组合可见项，
-    // 内存压力来自这个 List 本身，而用户主动翻上去的部分他还想看得到。
-    // **定位也靠它**：跳到窗口外的一条要先把它撑到盖得住（见 ChatLocator）。
-    var windowLimit by remember(conv.convId) { mutableStateOf(INITIAL_WINDOW) }
+    // 渲染窗口（MESSAGE_WINDOW_DESIGN §4）。两态：贴最新的尾窗 / 钉在某段历史的锚点窗。
+    // **不能无界**——13 万条的会话整窗构造对象会把聊天页渲染成空白（2026-09-07 实测）。
+    var window by remember(conv.convId) {
+        mutableStateOf<ChatWindow>(ChatWindow.Tail(ChatWindows.TAIL_LIMIT))
+    }
 
     // —— 定位与会话内搜索 ——
     // 顺序有讲究：locator 先建（search 要用它当跳转出口），两者都要在 BackHandler 之前
@@ -132,12 +128,7 @@ fun ChatHost(
     val locator = rememberChatLocator(
         client = client,
         convId = conv.convId,
-        currentWindow = { windowLimit },
-        // **窗口只增不减这条不变式下沉在这里**（唯一的写入点），不靠调用方先比一下：
-        // 调用方那一侧的 windowLimit 跨过查库就是过期快照，用它比较会把
-        // 并发上翻已经撑大的窗口缩回去 —— 窗口一缩，翻页保位的条件（rows 变多）
-        // 永远不成立，「滚到顶加载更早」会被在途标志永久卡死。
-        onGrowWindow = { windowLimit = maxOf(windowLimit, it) },
+        onOpenWindow = { window = it },
         onToast = { toast = it },
     )
     val search = rememberChatSearch(
@@ -218,8 +209,8 @@ fun ChatHost(
     /** 长按菜单锚点：被长按气泡在窗口坐标系里的矩形，菜单按它定位（对齐 iOS UIContextMenu）。 */
     var menuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
 
-    val messages by remember(owner, conv.convId, windowLimit) {
-        client.repo.observeMessages(owner, conv.convId, windowLimit)
+    val messages by remember(owner, conv.convId, window) {
+        client.repo.observeWindow(owner, conv.convId, window)
     }.collectAsState(initial = emptyList())
 
     val pending by remember(owner, conv.convId) {
@@ -351,6 +342,9 @@ fun ChatHost(
                 val quoted = replyTo
                 input = ""
                 replyTo = null
+                // **自己发消息必须回到最新**：停在历史时发出去的那条在锚点窗里看不见，
+                // 用户会以为没发出去（im-web 2026-09-05 修过同一条，收口在"出箱回显唯一入口"上）
+                window = ChatWindow.Tail(ChatWindows.TAIL_LIMIT)
                 scope.launch {
                     client.messages.sendText(
                         convId = conv.convId,
@@ -395,10 +389,21 @@ fun ChatHost(
             }
         },
         onLoadOlder = {
-            // 只有窗口已经装满时才继续加——没装满说明本地就这么多，
-            // 再加只会让同一批数据反复重查
-            if (messages.size >= windowLimit) windowLimit += WINDOW_PAGE
+            when (val w = window) {
+                // 尾窗：只有装满时才继续加——没装满说明本地就这么多，再加只会让同一批数据反复重查
+                is ChatWindow.Tail -> if (messages.size >= w.limit) {
+                    window = ChatWindow.Tail(w.limit + ChatWindows.TAIL_PAGE)
+                }
+                // 锚点窗：把下界再往前挪一页。到会话开头时 extendWindowOlder 原样返回，
+                // 赋回同一个值不会触发重组（data class 相等），自然停下
+                is ChatWindow.Anchored -> scope.launch {
+                    window = client.repo.extendWindowOlder(owner, conv.convId, w)
+                }
+            }
         },
+        // 「回到最新」：锚点窗要**换回尾窗**，只滚列表是回不去的（那一窗里根本没有最新那条）
+        onJumpToLatest = { window = ChatWindow.Tail(ChatWindows.TAIL_LIMIT) },
+        showsJumpToLatest = { away -> ChatWindows.showsJumpToLatest(window, away) },
         onLongPress = { m, rect -> menuFor = m; menuAnchor = rect },
         onOpenMedia = { viewing = it },
         replyTo = replyTo,

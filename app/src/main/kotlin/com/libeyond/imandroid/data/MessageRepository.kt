@@ -71,6 +71,49 @@ class MessageRepository(
     fun observeMessages(owner: String, convId: String, limit: Int): Flow<List<MessageEntity>> =
         messages.observeWindow(owner, convId, limit).map { it.asReversed() }
 
+    /**
+     * 观察一个**渲染窗口**（[ChatWindow]）。尾窗 = 最近 N 条（新消息会进来），
+     * 锚点窗 = 一段闭区间（新消息不进来，用户正在看历史）。
+     */
+    fun observeWindow(owner: String, convId: String, window: ChatWindow): Flow<List<MessageEntity>> =
+        when (window) {
+            is ChatWindow.Tail -> observeMessages(owner, convId, window.limit)
+            is ChatWindow.Anchored ->
+                messages.observeRange(owner, convId, window.loTs, window.loSeq, window.hiTs, window.hiSeq)
+        }
+
+    /**
+     * 围绕 `convSeq` 那条消息开一个锚点窗（本地库）。回 `null` = **本地没有这一条**，
+     * 调用方据此决定是问服务端（`window_req`）还是如实说它不在了。
+     */
+    suspend fun windowAround(
+        owner: String,
+        convId: String,
+        convSeq: Long,
+        half: Int = ChatWindows.ANCHOR_HALF,
+    ): ChatWindow.Anchored? {
+        val m = messages.byConvSeq(owner, convId, convSeq) ?: return null
+        return ChatWindows.boundsOf(
+            before = messages.pointsBefore(owner, convId, m.timestamp, m.convSeq, half),
+            atOrAfter = messages.pointsAtOrAfter(owner, convId, m.timestamp, m.convSeq, half),
+        )
+    }
+
+    /**
+     * 把锚点窗的**下界**再往前挪一页（向上翻页）。没有更早的了就原样返回——
+     * 调用方据此知道"到头了"，不必再问。
+     */
+    suspend fun extendWindowOlder(
+        owner: String,
+        convId: String,
+        window: ChatWindow.Anchored,
+        page: Int = ChatWindows.ANCHOR_PAGE,
+    ): ChatWindow.Anchored {
+        val older = messages.pointsBefore(owner, convId, window.loTs, window.loSeq, page)
+        val lo = older.lastOrNull() ?: return window
+        return window.copy(loTs = lo.timestamp, loSeq = lo.convSeq)
+    }
+
     suspend fun messageCount(owner: String, convId: String): Int = messages.countIn(owner, convId)
 
     /**
@@ -97,18 +140,6 @@ class MessageRepository(
             rows = raw.filter { ChatSearch.matches(it.contentType, it.content, it.caption, it.fileName, lowered) },
             truncated = raw.size >= limit,
         )
-    }
-
-    /**
-     * 要把渲染窗口撑到多少条才能包含 `convSeq` 那条消息。
-     *
-     * 回 `0` = **本地根本没有这条**（服务端命中但本地有缺口 / 已被删除），
-     * 调用方据此如实提示，而不是滚到一个错的位置（滚错比不滚更糟）。
-     */
-    suspend fun windowNeededFor(owner: String, convId: String, convSeq: Long): Int {
-        if (convSeq <= 0) return 0
-        val m = messages.byConvSeq(owner, convId, convSeq) ?: return 0
-        return messages.countAtOrAfter(owner, convId, m.timestamp, m.convSeq)
     }
 
     /** 本地这个会话齐不齐（[ChatSearch.isLocalComplete] 的取数版本）。 */

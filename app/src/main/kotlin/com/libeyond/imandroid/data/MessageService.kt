@@ -22,6 +22,8 @@ import com.libeyond.imandroid.sdk.protocol.TypingData
 import com.libeyond.imandroid.sdk.protocol.WatchData
 import com.libeyond.imandroid.sdk.protocol.PresenceFrame
 import com.libeyond.imandroid.sdk.protocol.SyncRespData
+import com.libeyond.imandroid.sdk.protocol.WindowReqData
+import com.libeyond.imandroid.sdk.protocol.WindowRespData
 import com.libeyond.imandroid.sdk.ws.IMSocketManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -48,6 +50,9 @@ class MessageService(
     /** 当前账号；未登录为 null。切账号时必须换掉，否则新账号会写进旧账号的行。 */
     private val ownerProvider: () -> String?,
 ) {
+    /** 「按锚点开窗」的一问一答（MESSAGE_WINDOW_DESIGN §3.2），实现在 [WindowRequester]。 */
+    internal val windows = WindowRequester(socket, scope)
+
     private val log = IMLog.tag("IM.Msg")
 
     /**
@@ -97,6 +102,18 @@ class MessageService(
 
             FrameType.SYNC_RESP -> data?.let {
                 applySync(owner, ProtocolJson.decodeFromJsonElement(SyncRespData.serializer(), it))
+            }
+
+            // 按锚点开窗（MESSAGE_WINDOW_DESIGN §3.2）。**只落库、不推进同步游标**——
+            // 窗口取数是一次性快照，推进游标会让 sync 以为这一段已经覆盖过了。
+            FrameType.WINDOW_RESP -> data?.let {
+                val resp = ProtocolJson.decodeFromJsonElement(WindowRespData.serializer(), it)
+                repo.onIncomingBatch(owner, resp.messages)
+                windows.deliver(resp)
+                log.i(
+                    "window_applied", "convId" to resp.convId, "msgs" to resp.messages.size,
+                    "anchorFound" to resp.anchorFound,
+                )
             }
 
             FrameType.RECEIPT -> data?.let {
@@ -457,6 +474,12 @@ class MessageService(
         }
     }
 
+    /**
+     * 请求一窗（`window_req`）。**本地没有那一条时才用**——本地有就直接开本地窗，
+     * 没有理由为一个已经在库里的锚点去问服务端（MESSAGE_WINDOW_DESIGN §4）。
+     *
+     * 结果从 [windowResults] 出来（帧上没有请求关联 id，按 conv_id 认领）。
+     */
     private suspend fun requestSync(owner: String) {
         val cursors = repo.syncCursors(owner).map { (convId, seq) -> SyncCursorItem(convId, seq) }
         if (cursors.isEmpty()) return

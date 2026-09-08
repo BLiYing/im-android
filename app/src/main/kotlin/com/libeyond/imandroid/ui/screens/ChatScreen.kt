@@ -97,6 +97,17 @@ fun ChatScreen(
     onCancelReply: () -> Unit,
     /** 滚到顶部附近时回调，加载更早的消息。 */
     onLoadOlder: () -> Unit,
+    /**
+     * 「回到最新」。**不是"滚到列表底部"**——窗口停在历史时，最新那条根本不在这一窗里，
+     * 只滚列表回不去（`MESSAGE_WINDOW_DESIGN` §4.2：跳转即换窗，回最新要换回尾窗）。
+     */
+    onJumpToLatest: () -> Unit = {},
+    /**
+     * 「回到最新」按钮该不该亮。判据在 `ChatWindows.showsJumpToLatest`：
+     * **窗口停在历史时必须亮**——跳转不产生滚动事件，而且跳过去的那一段常常整屏放得下，
+     * 连"离底很远"的兜底都轮不到。这一条 iOS 与 Web 都栽过（CLIENT_PARITY「有回程」那条的 ③）。
+     */
+    showsJumpToLatest: (awayFromBottom: Boolean) -> Boolean = { it },
     /** 点「+」选图片。 */
     onAttach: (AttachItems.Kind) -> Unit,
     /**
@@ -172,9 +183,18 @@ fun ChatScreen(
         }
     }
 
-    // —— 新内容到达时贴底：只在用户本来就贴着底时 ——
+    // 「回到最新」按下之后的待办：等换窗后的那一批 rows 到了再贴底。
+    // **不能在点击回调里直接滚**——那时 rows 还是旧那一窗（换窗是异步的）。
+    var pendingScrollToBottom by remember(convId) { mutableStateOf(false) }
+
+    // —— 新内容到达时贴底：只在用户本来就贴着底时（或刚点过「回到最新」）——
     LaunchedEffect(rows.size) {
         if (!didEntryScroll || rows.isEmpty()) return@LaunchedEffect
+        if (pendingScrollToBottom) {
+            pendingScrollToBottom = false
+            listState.scrollToItem(rows.size - 1) // 瞬时，不用 animate（跨窗那一跳距离没有意义）
+            return@LaunchedEffect
+        }
         val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
         if (ChatEntry.shouldAutoScroll(last, rows.size)) {
             listState.animateScrollToItem(rows.size - 1)
@@ -337,10 +357,10 @@ fun ChatScreen(
             }
         }
 
-        // ↓ 悬浮跳转：离底较远时出现，点了瞬时贴底
+        // ↓ 悬浮跳转：离底较远、**或窗口停在历史**时出现
         val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
         val awayFromBottom = rows.isNotEmpty() && lastVisible in 0 until (rows.size - 1 - ChatEntry.NEAR_BOTTOM_SLACK)
-        if (awayFromBottom) {
+        if (showsJumpToLatest(awayFromBottom)) {
             val scope = rememberCoroutineScope()
             Box(
                 modifier = Modifier
@@ -350,8 +370,14 @@ fun ChatScreen(
                     .clip(CircleShape)
                     .background(c.surfaceElevated)
                     .clickable {
-                        // 瞬时滚动，不用 animate——长列表上动画会滚很久，看着像卡住
-                        scope.launch { listState.scrollToItem(rows.size - 1) }
+                        // 先请宿主换回尾窗（历史窗里没有"最新那条"可滚）。
+                        // **贴底不能在这里做**：换窗是异步的，此刻 rows 还是旧那一窗，
+                        // 滚过去只会落在旧窗的末尾（真机撞见：从会话开头点↓，落在半空中）。
+                        // 记一个待办，等新的一窗到了再贴底。
+                        onJumpToLatest()
+                        pendingScrollToBottom = true
+                        // 本来就在尾窗里（只是离底远）时不会有新数据到达，直接滚
+                        scope.launch { listState.scrollToItem((rows.size - 1).coerceAtLeast(0)) }
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -433,99 +459,6 @@ fun ChatScreen(
     }
 }
 
-@Composable
-private fun Composer(
-    input: String,
-    onInputChange: (String) -> Unit,
-    onSend: () -> Unit,
-    onPlus: () -> Unit,
-    onInputFocus: () -> Unit,
-) {
-    val c = IMTheme.colors
-    val d = IMTheme.dimens
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            // 单行态总高 56（UI_SPEC §4，iOS inputBar.heightAnchor 同值）；
-            // 多行时允许长高，故用 heightIn(min) 而非 height。
-            .heightIn(min = d.inputBarHeight)
-            .background(c.surface)
-            // 按钮距栏边 8（UI_SPEC §4，iOS plusButton leading）——移动端要给拇指留满宽，
-            // 不走 Web 的 --space-4 页面节奏。
-            .padding(horizontal = d.inputBarEdge, vertical = d.space2),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // 点击区 36（与 iOS plusButton 同）；图标本身 24。
-        Box(
-            modifier = Modifier.size(d.inputControl).clickable { onPlus() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                imageVector = Lucide.Plus,
-                contentDescription = "更多",
-                modifier = Modifier.size(24.dp),
-                colorFilter = ColorFilter.tint(c.textSecondary),
-            )
-        }
-        Spacer(Modifier.width(d.space2))
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .clickable { onInputFocus() }
-                // 输入框圆角**跟随气泡圆角**（外观页可调）——iOS 就是这么做的，
-                // 之前写死 20 等于把用户的圆角设置在输入框上吞掉了（UI_SPEC §4）。
-                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
-                .background(c.pageBackground)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-        ) {
-            if (input.isEmpty()) {
-                Text("发送消息…", color = c.textTertiary, fontSize = 15.sp)
-            }
-            BasicTextField(
-                value = input,
-                onValueChange = onInputChange,
-                textStyle = TextStyle(color = c.textPrimary, fontSize = 15.sp),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        Spacer(Modifier.width(d.space2))
-        Box(
-            modifier = Modifier
-                .size(d.inputControl)
-                .clip(CircleShape)
-                .background(if (input.isNotBlank()) c.accent else c.neutralControl)
-                .clickable(enabled = input.isNotBlank()) { onSend() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                imageVector = Lucide.SendHorizontal,
-                contentDescription = "发送",
-                modifier = Modifier.size(20.dp),
-                colorFilter = ColorFilter.tint(c.onAccent),
-            )
-        }
-    }
-}
-
-/**
- * 把第 [index] 行滚到视口**中间**。
- *
- * `scrollToItem` 是把目标顶到视口**顶端**，而 `CHAT_UX.md §3.1` 的三端契约是**居中**
- * ——顶端对齐时目标上方的上下文一行都看不到，"跳到了但不知道跳到哪"。
- * iOS 用 `UITableViewScrollPositionMiddle`，Web 用 `scrollIntoView({block:"center"})`，
- * Compose 没有对应参数，只能先顶上去再补一段偏移。
- *
- * 目标比视口还高时不补（`delta <= 0`），补了反而把它的开头推出屏幕。
- * 靠边的行由 `scrollBy` 自己夹住，不必特判。
- */
-private suspend fun centerItem(listState: LazyListState, index: Int) {
-    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
-    val viewport = listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset
-    val delta = (viewport - info.size) / 2f
-    if (delta > 0f) listState.scrollBy(-delta)
-}
-
 /**
  * 一条消息的引用快照该显示什么。
  *
@@ -573,4 +506,22 @@ internal fun quoteSnapshotFor(rows: List<ChatRow>, msg: MessageEntity): String? 
     msg.replySnapshot?.takeIf { it.isNotBlank() }?.let { return it }
     val original = originalOf(rows, seq) ?: return "原消息"
     return replyPreviewOf(original.contentType, original.content, original.fileName, original.caption)
+}
+
+/**
+ * 把第 [index] 行滚到视口**中间**。
+ *
+ * `scrollToItem` 是把目标顶到视口**顶端**，而 `CHAT_UX.md §3.1` 的三端契约是**居中**
+ * ——顶端对齐时目标上方的上下文一行都看不到，"跳到了但不知道跳到哪"。
+ * iOS 用 `UITableViewScrollPositionMiddle`，Web 用 `scrollIntoView({block:"center"})`，
+ * Compose 没有对应参数，只能先顶上去再补一段偏移。
+ *
+ * 目标比视口还高时不补（`delta <= 0`），补了反而把它的开头推出屏幕。
+ * 靠边的行由 `scrollBy` 自己夹住，不必特判。
+ */
+private suspend fun centerItem(listState: LazyListState, index: Int) {
+    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val viewport = listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset
+    val delta = (viewport - info.size) / 2f
+    if (delta > 0f) listState.scrollBy(-delta)
 }

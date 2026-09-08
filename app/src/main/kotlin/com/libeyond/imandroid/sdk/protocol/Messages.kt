@@ -203,6 +203,42 @@ data class SyncConversation(
 @Serializable
 data class SyncRespData(val conversations: List<SyncConversation> = emptyList())
 
+/**
+ * 按锚点开窗（`window_req` / `window_resp`，见
+ * `../IMServer/docs/design/MESSAGE_WINDOW_DESIGN.md` §3.2）。
+ *
+ * **刻意不复用 `sync_req`**：sync 的语义是「按游标推进、覆盖区间、可推进本地位点」，
+ * 窗口取数是「一次性快照，**不推进任何位点**」。混在一起会让 `covered_conv_seq` 的
+ * "可安全推进游标"语义变含糊——那是同步正确性的核心。
+ * 所以本端收到 `window_resp` **只落库、不动 syncedConvSeq**。
+ */
+@Serializable
+data class WindowReqData(
+    @SerialName("conv_id") val convId: String,
+    /** 锚点 conv_seq；`0` = 最新（进会话用）。 */
+    val anchor: Long,
+    /** 锚点之前取多少条（不含锚点）。 */
+    val before: Int,
+    /** 锚点之后取多少条（不含锚点）。 */
+    val after: Int,
+)
+
+@Serializable
+data class WindowRespData(
+    @SerialName("conv_id") val convId: String = "",
+    /** conv_seq 升序，含锚点本身（若它对我可见）。 */
+    val messages: List<MessageData> = emptyList(),
+    /**
+     * 锚点消息是否**存在且对我可见**。
+     *
+     * 这是这条协议的重点：它把「消息不存在/已删除」与「消息在，只是没在这一窗」分开。
+     * 没有它就只能靠"翻了很多页还没见到"去猜，猜错就报一句假的「原消息已被删除」。
+     */
+    @SerialName("anchor_found") val anchorFound: Boolean = false,
+    @SerialName("has_before") val hasBefore: Boolean = false,
+    @SerialName("has_after") val hasAfter: Boolean = false,
+)
+
 /** typing（§5.5）。 */
 @Serializable
 data class TypingData(
