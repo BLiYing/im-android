@@ -177,7 +177,7 @@ internal fun ChatDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
                             ) {
-                                items(archive, key = { it.convSeq }) { ArchiveTile(it, host, useTls, onOpenArchive) }
+                                items(archive, key = { it.convSeq }) { ArchiveTile(it, host, useTls, onOpen = onOpenArchive) }
                             }
                         }
                         if (hasMore) item { LoadMoreRow(onLoadMore) }

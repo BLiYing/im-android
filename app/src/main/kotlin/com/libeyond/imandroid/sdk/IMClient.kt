@@ -12,7 +12,12 @@ import com.libeyond.imandroid.sdk.api.ContactApi
 import com.libeyond.imandroid.sdk.api.GroupApi
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.api.ConversationsApi
+import com.libeyond.imandroid.data.DownloadPolicy
+import com.libeyond.imandroid.data.DownloadSettings
+import com.libeyond.imandroid.data.MediaCache
+import com.libeyond.imandroid.data.MediaDownloader
 import com.libeyond.imandroid.sdk.api.DevicesApi
+import com.libeyond.imandroid.sdk.api.DownloadSettingsApi
 import com.libeyond.imandroid.sdk.api.ProfileApi
 import com.libeyond.imandroid.sdk.api.QrApi
 import com.libeyond.imandroid.sdk.api.UserCard
@@ -58,6 +63,50 @@ class IMClient(context: Context) {
     val qr = QrApi(http)
     /** 上传。**公开**：除消息媒体外，改头像也要用它（「我」页编辑资料）。 */
     val upload = UploadApi(http) { session.token }
+    val downloadSettingsApi = DownloadSettingsApi(http)
+
+    /**
+     * 已下载媒体的落盘 + 下载编排（M4-7）。
+     *
+     * 放在 [IMClient] 而不是各页自己 new：气泡 / 宫格 / 文件 / 详情四处必须共用**同一份**
+     * 在途状态，各建一个的话同一条媒体会被下两遍、进度各显各的。
+     */
+    val mediaCache = MediaCache(java.io.File(context.filesDir, "media"))
+    val downloads = MediaDownloader(
+        scope = scope,
+        cache = mediaCache,
+        absolute = { url -> com.libeyond.imandroid.data.MediaUrl.absolute(url, http.host, http.useTls) },
+        tokenProvider = { session.token },
+    )
+
+    /**
+     * 自动下载策略。**进程内缓存一份**——它每渲染一格媒体都要读一次，
+     * 每次都去问服务端是不可能的。登录后拉一次，`capabilities_update` 到了重拉。
+     */
+    @Volatile
+    var downloadSettings: DownloadSettings = DownloadPolicy.defaults()
+        private set
+
+    suspend fun refreshDownloadSettings() {
+        runCatching { downloadSettingsApi.get() }
+            .onSuccess { (_, s) -> downloadSettings = s }
+            // 拉不到就按出厂默认走（DownloadPolicy.defaults 与服务端 Defaults 逐字对齐），
+            // **不是全关**——全关会让所有图片都要手点，比策略稍微不准糟得多
+            .onFailure { log.w("download_settings_fetch_failed") }
+    }
+
+    suspend fun saveDownloadSettings(s: DownloadSettings) {
+        downloadSettings = s
+        runCatching { downloadSettingsApi.put(s) }
+            .onSuccess { (_, saved) -> downloadSettings = saved }
+            .onFailure { log.w("download_settings_save_failed") }
+    }
+
+    suspend fun resetDownloadSettings() {
+        runCatching { downloadSettingsApi.reset() }
+            .onSuccess { (_, saved) -> downloadSettings = saved }
+            .onFailure { log.w("download_settings_reset_failed") }
+    }
 
     private val db = IMDatabase.get(context)
     val repo = MessageRepository(db.messages(), db.pending(), db.conversations())

@@ -214,6 +214,8 @@ internal fun Bubble(
     showAvatar: Boolean = false,
     /** 头像取色种子——用 uid 不用昵称，改昵称不该换颜色。 */
     avatarSeed: String = "",
+    /** 群聊——自动下载策略的单聊/群聊分档要用。 */
+    isGroup: Boolean = false,
     /** 取链接预览。传 null = 不出预览卡（长按菜单里的原位重绘就传 null，别重复请求）。 */
     loadLinkPreview: (suspend (String) -> com.libeyond.imandroid.sdk.api.LinkPreview?)? = null,
 ) {
@@ -343,7 +345,7 @@ internal fun Bubble(
                         )
 
                         isMedia -> Box {
-                            MediaContent(msg!!, host, useTls)
+                            MediaContent(msg!!, host, useTls, isGroup = isGroup)
                             // 时间胶囊**浮在媒体右下角**，不在下方另起一行——
                             // iOS `IMImageCell` 的 `_metaWrap` 就恒定钉在 thumb 右下（不论有无图说）。
                             // 图片是不透明的，所以胶囊必须自带底色才看得清。

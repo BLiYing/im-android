@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.ui.rememberFrostedPainter
+import com.libeyond.imandroid.ui.components.DownloadBadge
+import com.libeyond.imandroid.ui.components.rememberGate
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -79,6 +81,8 @@ internal data class AlbumTile(
     val failed: Boolean = false,
     /** 极小模糊缩略（M4-7）——原图到位前的磨砂占位。 */
     val thumb: String? = null,
+    /** 服务端给的字节数（自动下载的大小闸要用）。 */
+    val sizeBytes: Long = 0,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -86,6 +90,8 @@ internal data class AlbumTile(
 internal fun AlbumBubble(
     tiles: List<AlbumTile>,
     mine: Boolean,
+    /** 群聊——自动下载策略的单聊/群聊分档要用。 */
+    isGroup: Boolean = false,
     timestamp: Long,
     host: String,
     useTls: Boolean,
@@ -135,7 +141,7 @@ internal fun AlbumBubble(
                                 // 挂在外层容器上的 combinedClickable 永远收不到长按
                                 // ——2026-09-08 用户报的「九宫格消息不支持长按」就是这个。
                                 AlbumTileView(
-                                    m, tile, host, useTls,
+                                    m, tile, host, useTls, isGroup,
                                     onTap = { onTapTile(at) },
                                     onLongPress = { r -> onLongPressTile(at, r) },
                                     hidden = at == hiddenIndex,
@@ -171,6 +177,7 @@ private fun AlbumTileView(
     size: androidx.compose.ui.unit.Dp,
     host: String,
     useTls: Boolean,
+    isGroup: Boolean,
     onTap: () -> Unit = {},
     onLongPress: (Rect) -> Unit = {},
     hidden: Boolean = false,

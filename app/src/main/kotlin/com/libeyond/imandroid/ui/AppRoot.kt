@@ -33,6 +33,9 @@ import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.ui.screens.ChatScreen
 import com.libeyond.imandroid.ui.screens.ConversationListScreen
 import com.libeyond.imandroid.ui.screens.LoginScreen
+import androidx.compose.runtime.CompositionLocalProvider
+import com.libeyond.imandroid.ui.components.LocalMediaGate
+import com.libeyond.imandroid.ui.components.MediaGateEnv
 import com.libeyond.imandroid.ui.screens.buildChatRows
 import kotlinx.coroutines.flow.emptyFlow
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -141,15 +144,31 @@ fun AppRoot(client: IMClient) {
             devLoginEnabled = BuildConfig.DEBUG,
         )
 
-        Phase.Main -> MainScreen(
-            client = client,
-            onLogout = {
-                scope.launch {
-                    client.logout()
-                    phase = Phase.Login
-                }
-            },
-        )
+        Phase.Main -> {
+            // 自动下载策略：登录后拉一次，之后进程内缓存（每渲染一格媒体都要读它）。
+            // **拉不到就按出厂默认走**，不是全关——全关会让所有图片都要手点。
+            LaunchedEffect(Unit) { client.refreshDownloadSettings() }
+            // 下载门控的环境（下载器 + 策略 + 网络类型）。**整棵树共用一份**：
+            // 气泡 / 宫格 / 文件 / 详情四处必须看到同一份在途状态，
+            // 各建一个的话同一条媒体会被下两遍、进度各显各的。
+            CompositionLocalProvider(
+                LocalMediaGate provides MediaGateEnv(
+                    downloads = client.downloads,
+                    settings = { client.downloadSettings },
+                    onWifi = rememberOnWifi(),
+                ),
+            ) {
+                MainScreen(
+                    client = client,
+                    onLogout = {
+                        scope.launch {
+                            client.logout()
+                            phase = Phase.Login
+                        }
+                    },
+                )
+            }
+        }
     }
 }
 

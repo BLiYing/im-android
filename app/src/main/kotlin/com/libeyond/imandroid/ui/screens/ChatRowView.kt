@@ -61,13 +61,15 @@ internal fun ChatRowView(
         is ChatRow.DayLabel -> DaySeparator(r.timestamp)
         is ChatRow.UnreadDivider -> UnreadDividerRow()
         is ChatRow.Album -> AlbumBubble(
+            isGroup = isGroup,
             // **一个宫格里两种格并存**：已确认的正常显示，还在传的那几格压暗底。
             // 状态由每一格自己带（AlbumMember.sending），不再靠"整行是不是待发行"——
             // 靠行类型的话，一批图必然经历"散成单张 → 逐个变确认 → 最后凑回宫格"。
             tiles = r.members.map { m ->
                 when (m) {
                     is AlbumMember.Sent -> AlbumTile(
-                        m.msg.content, m.msg.contentType, m.msg.duration, thumb = m.msg.thumb,
+                        m.msg.content, m.msg.contentType, m.msg.duration,
+                        thumb = m.msg.thumb, sizeBytes = m.msg.fileSize ?: 0L,
                     )
                     is AlbumMember.Sending -> AlbumTile(
                         m.msg.content, m.msg.contentType, null,

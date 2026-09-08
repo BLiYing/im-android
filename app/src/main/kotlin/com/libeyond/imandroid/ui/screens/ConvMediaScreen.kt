@@ -42,6 +42,8 @@ import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.sdk.api.MediaKind
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.rememberFrostedPainter
+import com.libeyond.imandroid.ui.components.DownloadBadge
+import com.libeyond.imandroid.ui.components.rememberGate
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.FileTypeIcon
@@ -68,6 +70,8 @@ internal fun ConvMediaScreen(
     onOpen: (ConvMediaItem) -> Unit,
     host: String,
     useTls: Boolean,
+    /** 群聊——自动下载策略的单聊/群聊分档要用。 */
+    isGroup: Boolean = false,
     onBack: () -> Unit,
 ) {
     val c = IMTheme.colors
@@ -99,7 +103,7 @@ internal fun ConvMediaScreen(
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                items(items, key = { it.convSeq }) { MediaTile(it, host, useTls, onOpen) }
+                items(items, key = { it.convSeq }) { MediaTile(it, host, useTls, isGroup, onOpen) }
                 if (hasMore) {
                     item { LoadMore(onLoadMore) }
                 }
@@ -146,9 +150,17 @@ private fun LoadMore(onLoadMore: () -> Unit) {
 }
 
 @Composable
-internal fun MediaTile(item: ConvMediaItem, host: String, useTls: Boolean, onOpen: (ConvMediaItem) -> Unit) {
+internal fun MediaTile(
+    item: ConvMediaItem,
+    host: String,
+    useTls: Boolean,
+    isGroup: Boolean,
+    onOpen: (ConvMediaItem) -> Unit,
+) {
     val c = IMTheme.colors
     val isVideo = item.contentType == ContentType.VIDEO
+    // 视频这一格显示的是**封面**（小），门控作用在视频本体上；图片这一格门控的就是它自己
+    val gate = rememberGate(item.content, item.contentType, item.fileSize, isGroup)
     Box(
         Modifier.aspectRatio(1f).background(c.subtleFill).clickable { onOpen(item) },
     ) {
@@ -156,13 +168,23 @@ internal fun MediaTile(item: ConvMediaItem, host: String, useTls: Boolean, onOpe
         val frosted = rememberFrostedPainter(item.thumb)
         AsyncImage(
             // 视频用 poster：直接把视频 URL 交给 Coil 会去下整段再抽帧
-            model = MediaUrl.absolute(if (isVideo) item.poster else item.content, host, useTls),
+            model = if (isVideo) {
+                MediaUrl.absolute(item.poster, host, useTls).takeIf { item.poster.isNotBlank() }
+            } else {
+                gate.model
+            },
             contentDescription = if (isVideo) "视频" else "图片",
             contentScale = ContentScale.Crop,
             placeholder = frosted,
             error = frosted,
+            fallback = frosted,
             modifier = Modifier.fillMaxSize(),
         )
+        if (!gate.ready && !isVideo) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                DownloadBadge(gate.state, item.fileSize, gate.onTap, compact = true)
+            }
+        }
         if (isVideo) {
             Box(
                 Modifier.align(Alignment.Center).size(28.dp).clip(CircleShape).background(c.overlay),

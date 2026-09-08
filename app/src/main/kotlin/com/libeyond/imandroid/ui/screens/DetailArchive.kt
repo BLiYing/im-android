@@ -150,6 +150,12 @@ internal fun linkUrlOf(contentType: String, content: String, convSeq: Long): Str
 
 /** 媒体宫格的一格（供详情页内联复用）。 */
 @Composable
-internal fun ArchiveTile(item: ConvMediaItem, host: String, useTls: Boolean, onOpen: (ConvMediaItem) -> Unit) {
-    Box(Modifier.aspectRatio(1f)) { MediaTile(item, host, useTls, onOpen) }
+internal fun ArchiveTile(
+    item: ConvMediaItem,
+    host: String,
+    useTls: Boolean,
+    isGroup: Boolean = false,
+    onOpen: (ConvMediaItem) -> Unit,
+) {
+    Box(Modifier.aspectRatio(1f)) { MediaTile(item, host, useTls, isGroup, onOpen) }
 }

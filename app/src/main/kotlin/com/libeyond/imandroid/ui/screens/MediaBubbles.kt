@@ -35,6 +35,8 @@ import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.Waveform
 import androidx.compose.runtime.remember
 import com.libeyond.imandroid.ui.rememberFrostedPainter
+import com.libeyond.imandroid.ui.components.DownloadBadge
+import com.libeyond.imandroid.ui.components.rememberGate
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.FileTypeIcon
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -47,7 +49,14 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  * 用一个中性占位比先下完再排版好——后者会让长列表滚动时疯狂拉流量。
  */
 @Composable
-fun MediaContent(msg: MessageEntity, host: String, useTls: Boolean, maxWidth: androidx.compose.ui.unit.Dp = 240.dp) {
+fun MediaContent(
+    msg: MessageEntity,
+    host: String,
+    useTls: Boolean,
+    maxWidth: androidx.compose.ui.unit.Dp = 240.dp,
+    /** 群聊——自动下载策略的单聊/群聊分档要用（`DownloadPolicy.shouldAutoDownload`）。 */
+    isGroup: Boolean = false,
+) {
     val url = MediaUrl.absolute(msg.content, host, useTls)
     // **图说整体化**：有 caption 时媒体只圆上角，和下方文字连成一整块（iOS `_captionBG`）；
     // 没有 caption 时四角都圆——此时媒体本身就是整个气泡。
@@ -58,10 +67,10 @@ fun MediaContent(msg: MessageEntity, host: String, useTls: Boolean, maxWidth: an
         RoundedCornerShape(topStart = r, topEnd = r, bottomStart = 0.dp, bottomEnd = 0.dp)
     }
     when (msg.contentType) {
-        "image" -> ImageContent(url, msg, maxWidth, shape)
-        "video" -> VideoContent(url, msg, maxWidth, shape, host, useTls)
+        "image" -> ImageContent(url, msg, maxWidth, shape, isGroup)
+        "video" -> VideoContent(url, msg, maxWidth, shape, host, useTls, isGroup)
         "voice" -> VoiceContent(msg)
-        else -> FileContent(msg)
+        else -> FileContent(msg, isGroup)
     }
 }
 
@@ -71,6 +80,7 @@ private fun ImageContent(
     msg: MessageEntity,
     maxWidth: androidx.compose.ui.unit.Dp,
     shape: androidx.compose.ui.graphics.Shape,
+    isGroup: Boolean,
 ) {
     val c = IMTheme.colors
     // 有服务端给的宽高就按原比例占位，避免加载完跳一下把下面的消息挤走
@@ -80,20 +90,28 @@ private fun ImageContent(
     // 磨砂占位（M4-7）：原图到位之前显示消息里内嵌的 ~20px 缩略放大 + 模糊，
     // 而不是一块空底。没有 thumb（老消息 / 对端没带）就回退中性底——**不为占位联网**。
     val frosted = rememberFrostedPainter(msg.thumb)
-    Column {
+    // 下载门控（M4-7）：**未就绪时 model 是 null 而不是远端地址**——给远端地址等于
+    // Coil 照样把原图拉下来，门控就成了纯装饰。
+    val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
+    Box(
+        modifier = Modifier
+            .widthIn(max = maxWidth)
+            .fillMaxWidth()
+            .aspectRatio(ratio)
+            .clip(shape)
+            .background(c.subtleFill),
+        contentAlignment = Alignment.Center,
+    ) {
         AsyncImage(
-            model = url,
+            model = gate.model,
             contentDescription = "图片",
             contentScale = ContentScale.Crop,
             placeholder = frosted,
             error = frosted,
-            modifier = Modifier
-                .widthIn(max = maxWidth)
-                .fillMaxWidth()
-                .aspectRatio(ratio)
-                .clip(shape)
-                .background(c.subtleFill),
+            fallback = frosted,
+            modifier = Modifier.fillMaxSize(),
         )
+        DownloadBadge(gate.state, msg.fileSize ?: 0L, gate.onTap)
     }
 }
 
@@ -105,6 +123,7 @@ private fun VideoContent(
     shape: androidx.compose.ui.graphics.Shape,
     host: String,
     useTls: Boolean,
+    isGroup: Boolean,
 ) {
     val c = IMTheme.colors
     Column {
@@ -143,11 +162,19 @@ private fun VideoContent(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            Box(
-                modifier = Modifier.size(44.dp).clip(CircleShape).background(c.overlay),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(Lucide.Play, "播放", Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onMedia))
+            // 门控作用在**视频本体**上，封面照常加载——封面就几十 KB，
+            // 它是"信封"的一部分；把封面也门控掉的话，未下载的视频只剩一团磨砂，
+            // 用户连要不要下都判断不了。
+            val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
+            if (gate.ready) {
+                Box(
+                    modifier = Modifier.size(44.dp).clip(CircleShape).background(c.overlay),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(Lucide.Play, "播放", Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onMedia))
+                }
+            } else {
+                DownloadBadge(gate.state, msg.fileSize ?: 0L, gate.onTap)
             }
             // 时长角标：服务端给了才显，**不为拿它去下载视频**。
             // 位置是**左上角**——协议 §4.1 明写「据 duration 在视频封面左上角显 mm:ss」，
@@ -202,15 +229,21 @@ private fun VoiceContent(msg: MessageEntity) {
 }
 
 @Composable
-private fun FileContent(msg: MessageEntity) {
+private fun FileContent(msg: MessageEntity, isGroup: Boolean) {
     val c = IMTheme.colors
+    val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
     Row(
         modifier = Modifier.widthIn(max = 240.dp).padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 按扩展名给图（对齐 iOS `IMFileTypeIconForName`）——一个通用文件图标下，
-        // 一眼分不出这是表格还是压缩包
-        FileTypeIcon(MediaUrl.displayFileName(msg.content, msg.fileName.orEmpty()), size = 38.dp)
+        // 一眼分不出这是表格还是压缩包。
+        // **未就绪时图标上压门控徽标**：文件气泡没有"图"可以磨砂，
+        // 状态只能挂在这枚图标上（iOS `IMBubbleCell` 的 `_fileIconWrap` 同理）。
+        Box(contentAlignment = Alignment.Center) {
+            FileTypeIcon(MediaUrl.displayFileName(msg.content, msg.fileName.orEmpty()), size = 38.dp)
+            DownloadBadge(gate.state, sizeBytes = 0, onTap = gate.onTap, compact = true)
+        }
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -221,7 +254,17 @@ private fun FileContent(msg: MessageEntity) {
             )
             // 大小直接用服务端给的字节数格式化，**不重新下载文件去算**
             val size = MediaUrl.formatSize(msg.fileSize ?: 0)
-            if (size.isNotEmpty()) Text(size, color = c.textSecondary, fontSize = 11.sp)
+            // 未下载时把状态写在大小旁边——徽标只是个 ↓，说不清"是没下还是下失败了"
+            val hint = when (gate.state.phase) {
+                com.libeyond.imandroid.data.DownloadPhase.Ready -> ""
+                com.libeyond.imandroid.data.DownloadPhase.Downloading -> " · 下载中"
+                com.libeyond.imandroid.data.DownloadPhase.Failed -> " · 下载失败，点重试"
+                com.libeyond.imandroid.data.DownloadPhase.Expired -> " · 文件已失效"
+                else -> " · 未下载"
+            }
+            if (size.isNotEmpty() || hint.isNotEmpty()) {
+                Text(size + hint, color = c.textSecondary, fontSize = 11.sp)
+            }
         }
     }
 }
