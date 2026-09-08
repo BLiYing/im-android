@@ -14,19 +14,23 @@ class GroupInfoNavTest {
     fun `层级由深到浅：待审 大于 成员资料 大于 管理页 大于 详情`() {
         assertEquals(
             GroupInfoPage.JoinRequests,
-            GroupInfoNav.current(joinRequestsOpen = true, memberProfileOpen = true, managing = true),
+            GroupInfoNav.current(joinRequestsOpen = true, memberProfileOpen = true, mediaOpen = true, managing = true),
         )
         assertEquals(
             GroupInfoPage.MemberProfile,
-            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = true, managing = true),
+            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = true, mediaOpen = true, managing = true),
+        )
+        assertEquals(
+            GroupInfoPage.Media,
+            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = false, mediaOpen = true, managing = true),
         )
         assertEquals(
             GroupInfoPage.Manage,
-            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = false, managing = true),
+            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = false, mediaOpen = false, managing = true),
         )
         assertEquals(
             GroupInfoPage.Detail,
-            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = false, managing = false),
+            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = false, mediaOpen = false, managing = false),
         )
     }
 
@@ -41,8 +45,9 @@ class GroupInfoNavTest {
     }
 
     @Test
-    fun `成员资料与管理页都退回详情`() {
+    fun `成员资料、媒体归档、管理页都退回详情`() {
         assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.MemberProfile))
+        assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.Media))
         assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.Manage))
     }
 

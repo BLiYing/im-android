@@ -12,21 +12,26 @@ package com.libeyond.imandroid.data
  * **一个按当前页派发的 `when`**：枚举加一个值，`when` 就编译不过，漏不掉。
  * 同 `ChatOverlays.topmost` 的思路。
  */
-enum class GroupInfoPage { JoinRequests, MemberProfile, Manage, Detail }
+enum class GroupInfoPage { JoinRequests, MemberProfile, Media, Manage, Detail }
 
 object GroupInfoNav {
 
     /**
      * 当前页。**顺序即层级**，由深到浅：
-     * 待审申请（从管理页进）> 成员资料（从详情进）> 管理页 > 详情。
+     * 待审申请（从管理页进）> 成员资料（从详情进）> 媒体归档（从详情进）> 管理页 > 详情。
      */
-    fun current(joinRequestsOpen: Boolean, memberProfileOpen: Boolean, managing: Boolean): GroupInfoPage =
-        when {
-            joinRequestsOpen -> GroupInfoPage.JoinRequests
-            memberProfileOpen -> GroupInfoPage.MemberProfile
-            managing -> GroupInfoPage.Manage
-            else -> GroupInfoPage.Detail
-        }
+    fun current(
+        joinRequestsOpen: Boolean,
+        memberProfileOpen: Boolean,
+        mediaOpen: Boolean,
+        managing: Boolean,
+    ): GroupInfoPage = when {
+        joinRequestsOpen -> GroupInfoPage.JoinRequests
+        memberProfileOpen -> GroupInfoPage.MemberProfile
+        mediaOpen -> GroupInfoPage.Media
+        managing -> GroupInfoPage.Manage
+        else -> GroupInfoPage.Detail
+    }
 
     /**
      * 按下返回后应该回到哪一页（`null` = 已经在最外层，该退出整条链）。
@@ -37,6 +42,7 @@ object GroupInfoNav {
     fun back(page: GroupInfoPage): GroupInfoPage? = when (page) {
         GroupInfoPage.JoinRequests -> GroupInfoPage.Manage
         GroupInfoPage.MemberProfile -> GroupInfoPage.Detail
+        GroupInfoPage.Media -> GroupInfoPage.Detail
         GroupInfoPage.Manage -> GroupInfoPage.Detail
         GroupInfoPage.Detail -> null
     }

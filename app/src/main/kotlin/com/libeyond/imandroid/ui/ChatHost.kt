@@ -327,7 +327,9 @@ fun ChatHost(
     // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——
     viewing?.let { m ->
         MediaViewerScreen(
-            msg = m,
+            contentType = m.contentType,
+            content = m.content,
+            poster = m.poster.orEmpty(),
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
             onSave = saveMedia,

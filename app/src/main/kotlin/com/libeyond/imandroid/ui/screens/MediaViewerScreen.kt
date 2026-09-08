@@ -29,7 +29,6 @@ import com.composables.icons.lucide.Forward
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.libeyond.imandroid.data.MediaUrl
-import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.mediapicker.ZoomableImage
 
@@ -48,27 +47,34 @@ import com.libeyond.mediapicker.ZoomableImage
  */
 @Composable
 internal fun MediaViewerScreen(
-    msg: MessageEntity,
+    /** [ContentType] 之一。**不吃 MessageEntity**：会话媒体归档那条路手上只有
+     *  `ConvMediaItem`，为了调它去伪造一个 MessageEntity 是本末倒置。 */
+    contentType: String,
+    /** 媒体地址；待发消息是本地 `content://`。 */
+    content: String,
+    /** 视频封面（图片传空）。 */
+    poster: String,
     host: String,
     useTls: Boolean,
     onSave: (url: String, isVideo: Boolean) -> Unit,
-    onForward: () -> Unit,
+    /** 不传 = 这一处没有转发能力，**按钮直接不画**。摆一个点了没反应的按钮比没有更糟。 */
+    onForward: (() -> Unit)? = null,
     onClose: () -> Unit,
 ) {
-    val isVideo = msg.contentType == ContentType.VIDEO
+    val isVideo = contentType == ContentType.VIDEO
     // 待发/失败的那条 content 是本地 content:// —— 原样用，别拼服务端前缀。
     // 存相册与渲染必须是**同一个地址**：分开算过一次就会出现「看到的是本地原图、
     // 存下来的是服务端压缩件」这种对不上账的情况。
-    val source = if (msg.content.startsWith("content://")) {
-        msg.content
+    val source = if (content.startsWith("content://")) {
+        content
     } else {
-        MediaUrl.absolute(msg.content, host, useTls)
+        MediaUrl.absolute(content, host, useTls)
     }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (isVideo) {
             VideoPlayer(
-                url = msg.content,
-                posterUrl = msg.poster,
+                url = content,
+                posterUrl = poster,
                 host = host,
                 useTls = useTls,
             )
@@ -98,8 +104,10 @@ internal fun MediaViewerScreen(
             // 转发**先关查看器再执行**：转发选择页要盖在聊天页上下文里，
             // 叠在查看器之上会出现「关掉选择页还留着一层黑底大图」的怪状态。
             // iOS 的 `showMoreSheet` 对外部动作也是这么处理的。
-            ViewerButton(Lucide.Forward, "转发", onForward)
-            Spacer(Modifier.width(12.dp))
+            if (onForward != null) {
+                ViewerButton(Lucide.Forward, "转发", onForward)
+                Spacer(Modifier.width(12.dp))
+            }
             ViewerButton(Lucide.Download, "保存到相册") { onSave(source, isVideo) }
         }
     }

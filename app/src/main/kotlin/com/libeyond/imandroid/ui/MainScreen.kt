@@ -102,21 +102,13 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                 onLeft = { infoForConv = null; openConv = null },
             )
         } else {
-            UserProfileHost(
+            // **单聊进的是「聊天信息」不是「用户资料」**：后者回答"这个人是谁"，
+            // 前者回答"这段对话怎么设置"（置顶/免打扰/发过哪些媒体）。
+            // 用户资料页现在是它 push 出去的一页，与 iOS `IMChatDetailViewController` 同构。
+            ChatDetailHost(
                 client = client,
-                userId = infoConv.peerUid,
-                // **不能写死 accepted**：和非好友也可能有会话（对方先加了我又删、
-                // 群成员单聊、系统账号…）。写死会让非好友进资料页先显示成好友、
-                // 拉到真实关系后再闪变成「加好友」——正是 2026-08-30 三端收口
-                // 要消除的那种闪动。空串=未知，由 Host 自己查本地好友表定型。
-                knownRelation = knownFriends[infoConv.peerUid]?.status.orEmpty(),
-                seed = UserCard(
-                    userId = infoConv.peerUid,
-                    nickname = infoConv.title,
-                    avatarUrl = infoConv.avatarUrl,
-                    remark = infoConv.peerRemark,
-                ),
-                onSendMessage = { infoForConv = null },
+                conv = infoConv,
+                knownFriends = knownFriends,
                 onBack = { infoForConv = null },
             )
         }

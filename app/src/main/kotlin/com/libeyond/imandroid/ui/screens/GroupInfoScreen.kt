@@ -65,6 +65,8 @@ fun GroupInfoScreen(
     onMemberLongPress: (GroupMember) -> Unit,
     /** 进「群管理」二级页（仅群主/管理员看得到这个入口）。 */
     onOpenManage: () -> Unit,
+    /** 进「聊天媒体」归档（与单聊详情同一个页面，所有成员可见）。 */
+    onOpenMedia: () -> Unit,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -135,6 +137,23 @@ fun GroupInfoScreen(
                             Text(info.intro, color = c.textPrimary,
                                 style = MaterialTheme.typography.bodyLarge)
                         }
+                    }
+                }
+
+                // —— 聊天媒体（所有成员可见）——
+                Spacer(Modifier.height(d.cardGap))
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onOpenMedia() }
+                            .padding(horizontal = d.space4, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("聊天媒体", color = c.textPrimary,
+                            style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        Text("›", color = c.textTertiary)
                     }
                 }
 

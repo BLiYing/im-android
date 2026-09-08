@@ -95,6 +95,28 @@ class ConversationsApi(private val http: HttpClient) {
      * 删除会话。**不物理删消息**：记 cleared_at + deleted=1，会话从列表隐藏，
      * 对方再发消息即复现，复现后仅新消息计未读。
      */
+    /**
+     * 会话媒体归档分页（详情页「媒体 / 文件」，M4.5-3）。
+     *
+     * `kind` 见 [MediaKind]。**按 conv_seq 倒序（新在前）**，游标就是上页的 `next_cursor`。
+     * 服务端已经把撤回 / 为所有人删除 / 「仅为我删除」 / history_visible 下界都滤掉了，
+     * 端上**不要**再自己判一遍——判据分叉的话，详情页里会出现聊天页看不到的消息。
+     *
+     * **「链接」这一格服务端不覆盖**：链接不是独立的 content_type，是从文本里识别出来的，
+     * 服务端没有可索引的列（`internal/conversation/media.go` 开头写明了）。
+     */
+    suspend fun media(convId: String, kind: String, cursor: Long = 0, limit: Int = 60): ConvMediaPage {
+        val query = buildMap {
+            put("kind", kind)
+            put("limit", limit.toString())
+            if (cursor > 0) put("cursor", cursor.toString())
+        }
+        return decode(
+            http.call("GET", "/api/v1/conversations/$convId/media", query = query),
+            ConvMediaPage.serializer(),
+        )
+    }
+
     suspend fun delete(convId: String) {
         http.call("DELETE", "/api/v1/conversations/$convId")
     }
@@ -112,6 +134,40 @@ class ConversationsApi(private val http: HttpClient) {
 }
 
 /** 链接富预览（PROTOCOL §11 `GET /api/v1/link-preview`）。字段都可能缺。 */
+/** [ConversationsApi.media] 的 kind。**服务端未知 kind 回空集，不报错**，所以别拼错。 */
+object MediaKind {
+    /** 图片 + 视频混排。查看器左右翻页要的就是这一条序列，分两次拉再归并得处理两条游标。 */
+    const val MEDIA = "media"
+    const val FILE = "file"
+    const val VOICE = "voice"
+}
+
+/** 会话媒体列表的一项。字段 = 缩略渲染 + 打开 + 跳回聊天所需的最小集。 */
+@Serializable
+data class ConvMediaItem(
+    @SerialName("conv_seq") val convSeq: Long = 0,
+    val sender: String = "",
+    @SerialName("content_type") val contentType: String = "",
+    /** 媒体/文件的 URL（相对路径，端上按自己连的 host 补全）。 */
+    val content: String = "",
+    val caption: String = "",
+    val timestamp: Long = 0,
+    @SerialName("file_name") val fileName: String = "",
+    @SerialName("file_size") val fileSize: Long = 0,
+    val poster: String = "",
+    @SerialName("media_w") val mediaW: Int = 0,
+    @SerialName("media_h") val mediaH: Int = 0,
+    val duration: Int = 0,
+    @SerialName("group_id") val groupId: String = "",
+)
+
+@Serializable
+data class ConvMediaPage(
+    val items: List<ConvMediaItem> = emptyList(),
+    @SerialName("next_cursor") val nextCursor: Long = 0,
+    @SerialName("has_more") val hasMore: Boolean = false,
+)
+
 @Serializable
 data class LinkPreview(
     val url: String = "",

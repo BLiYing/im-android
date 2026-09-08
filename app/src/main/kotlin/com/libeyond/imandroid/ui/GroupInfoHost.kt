@@ -63,18 +63,22 @@ fun GroupInfoHost(
     var deciding by remember(convId) { mutableStateOf("") }
     // 群管理二级页（仅群主/管理员能进）
     var managing by remember(convId) { mutableStateOf(false) }
+    // 会话媒体归档（详情页的「聊天媒体」，与单聊那侧同一个组件）
+    var mediaOpen by remember(convId) { mutableStateOf(false) }
 
     // 返回键**一处派发**，不再靠每个子页面自己记得接（一天漏了三次，见 GroupInfoPage 的注释）。
     // 枚举加一页，这个 when 就编译不过——漏不掉。
     val page = GroupInfoNav.current(
         joinRequestsOpen = joinReqs != null,
         memberProfileOpen = memberProfile != null,
+        mediaOpen = mediaOpen,
         managing = managing,
     )
     BackHandler {
         when (page) {
             GroupInfoPage.JoinRequests -> joinReqs = null
             GroupInfoPage.MemberProfile -> memberProfile = null
+            GroupInfoPage.Media -> mediaOpen = false
             GroupInfoPage.Manage -> managing = false
             GroupInfoPage.Detail -> onBack()
         }
@@ -163,6 +167,14 @@ fun GroupInfoHost(
             },
             onBack = { memberProfile = null },
         )
+    } else if (mediaOpen) {
+        // 与单聊详情用的是同一个 ConvMediaHost —— 归档这件事在群聊和单聊里
+        // 完全一样（同一个接口、同一套分页、同一个查看器），没有分两份的理由
+        ConvMediaHost(
+            client = client,
+            convId = convId,
+            onBack = { mediaOpen = false },
+        )
     } else if (managing) {
         GroupManageScreen(
             info = g,
@@ -217,6 +229,7 @@ fun GroupInfoHost(
         onOpenMember = { m -> memberProfile = m },
         myUid = client.uid.orEmpty(),
         onOpenManage = { managing = true },
+            onOpenMedia = { mediaOpen = true },
         onMemberLongPress = { m -> memberMenu = m },
         onLeave = {
             scope.launch {
