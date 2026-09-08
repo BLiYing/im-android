@@ -191,14 +191,31 @@ private fun AlbumTileView(
             .alpha(if (hidden) 0f else 1f)
             .combinedClickable(onClick = onTap, onLongClick = { onLongPress(tileRect) }),
     ) {
+        val frosted = rememberFrostedPainter(m.thumb)
+        // 待发那格（本地 content:// uri）不进门控——它还没上传，本来就在本地。
+        // **已确认的那几格必须走门控**：不走的话 Coil 见到远端地址照样把原件拉下来，
+        // 门控就成了纯装饰（2026-09-08 这一处的编辑静默没生效过一次，
+        // 表现正是"文件气泡有门控徽标、宫格却在偷偷下原图"）。
+        val sending = m.sending || m.failed
+        val gate = if (sending) null else rememberGate(m.url, m.contentType, m.sizeBytes, isGroup)
         AsyncImage(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，
             // 所以选完立刻有图，不用等上传完
-            model = MediaUrl.absolute(m.url, host, useTls),
+            model = if (sending) MediaUrl.absolute(m.url, host, useTls) else gate?.model,
             contentDescription = if (m.contentType == ContentType.VIDEO) "视频" else "图片",
             contentScale = ContentScale.Crop,
+            // 磨砂占位（M4-7）：宫格逐格都要有，不然一屏九张全是空底
+            placeholder = frosted,
+            error = frosted,
+            fallback = frosted,
             modifier = Modifier.size(size),
         )
+        // 门控徽标：小格子用 compact（44dp 的环在 79dp 的格子里占掉大半格）
+        if (gate != null && !gate.ready) {
+            Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+                DownloadBadge(gate.state, m.sizeBytes, gate.onTap, compact = size < 100.dp)
+            }
+        }
         if (m.sending || m.failed) {
             // 还在发 / 发失败：压一层暗底，让人看出这一格没完成
             Box(Modifier.size(size).background(c.overlay))

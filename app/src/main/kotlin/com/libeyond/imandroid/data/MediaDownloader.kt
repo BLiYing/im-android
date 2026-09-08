@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -45,7 +46,16 @@ class MediaDownloader(
     /** url → 状态。UI 直接 collect；**没有条目 = 还没问过**，由调用方按"在不在本地"定初值。 */
     val states: StateFlow<Map<String, DownloadState>> = _states
 
-    private val jobs = HashMap<String, Job>()
+    /**
+     * 在途任务。**必须是并发安全的**：`start` 从主线程（重组/点击）调，
+     * 而 `finally { jobs.remove }` 跑在下载协程的后台线程上——用普通 HashMap
+     * 会漏判"已在途"，同一条媒体被下两遍（2026-09-08 真机日志里实测到过：
+     * 同一段 10MB 视频 `media_download_ok` 打了两次）。
+     */
+    private val jobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
+
+    /** `start` 的临界区：判"在不在途"与"起任务"必须是一步，否则两次调用会各起一个。 */
+    private val startLock = Any()
 
     /** 本会话内已知失效的地址——不再回源（iOS `IMMediaExpiryRegistry` 的内存态那半）。 */
     private val expired = HashSet<String>()
@@ -66,9 +76,11 @@ class MediaDownloader(
     fun start(url: String, isVideo: Boolean = false, expectedBytes: Long = 0) {
         if (url.isBlank() || url in expired) return
         if (cache.isReady(url, isVideo)) return
-        if (jobs[url]?.isActive == true) return
-        put(url, DownloadState(DownloadPhase.Downloading, 0, expectedBytes))
-        jobs[url] = scope.launch { run(url, isVideo, expectedBytes) }
+        synchronized(startLock) {
+            if (jobs[url]?.isActive == true) return
+            put(url, DownloadState(DownloadPhase.Downloading, 0, expectedBytes))
+            jobs[url] = scope.launch { run(url, isVideo, expectedBytes) }
+        }
     }
 
     /** 暂停：取消协程并删掉半截文件（**没有续传**，见类注释）。 */
@@ -78,8 +90,12 @@ class MediaDownloader(
         put(url, DownloadState(DownloadPhase.Paused))
     }
 
+    /**
+     * **用 update 不用 `value = value + …`**：后者是读-改-写，
+     * 多条下载并发上报进度时会互相覆盖（丢的是进度，表现为环卡在某个百分比不动）。
+     */
     private fun put(url: String, s: DownloadState) {
-        _states.value = _states.value + (url to s)
+        _states.update { it + (url to s) }
     }
 
     private suspend fun run(url: String, isVideo: Boolean, expectedBytes: Long) {

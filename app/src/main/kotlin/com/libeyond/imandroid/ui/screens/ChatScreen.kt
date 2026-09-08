@@ -348,6 +348,10 @@ fun ChatScreen(
                         replyTo.contentType, replyTo.content, replyTo.fileName, replyTo.caption,
                     ),
                     fromName = if (isGroup) replyTo.fromNickname else null,
+                    // 输入栏这条引用条与气泡里的引用块**是同一个组件、同一句话、同一张缩略**
+                    // （iOS 的 IMMediaPlaceholder 也是这两处共用）。少传一个 thumb 就会出现
+                    // 「引的时候只有图标、发出去之后才有缩略」这种说不清的差别。
+                    thumb = replyTo.thumb,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(8.dp))
