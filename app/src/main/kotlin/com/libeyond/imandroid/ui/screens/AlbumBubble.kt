@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -61,6 +62,20 @@ internal data class AlbumTile(
     val durationMs: Int?,
     /** 待发中（还没 ack）。用来压暗那一格，让人看出「还在发」。 */
     val sending: Boolean = false,
+    /**
+     * 分片上传百分比；`null` = 不在分片上传中（图片走整包上传，没有回调）。
+     *
+     * **宫格里也要有进度**：此前只有单条待发气泡（[PendingMediaBubble]）画进度环，
+     * 宫格的格子只压一层暗底——于是「九宫格里混发图片和视频」时，那段几十上百 MB 的
+     * 视频传上几分钟，屏幕上一点进度都没有（2026-09-08 用户报的就是这个）。
+     * iOS 的 `IMAlbumTileView` 逐格有环（`kIMDownloadRingSide`），本端补齐。
+     */
+    val progress: Int? = null,
+    /**
+     * 这一格发失败了。**必须与 [sending] 分开**：失败的格子若还按"在传"画，
+     * 转圈会一直转下去——用户以为还在传，实际上永远不会好。
+     */
+    val failed: Boolean = false,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -174,9 +189,36 @@ private fun AlbumTileView(
             contentScale = ContentScale.Crop,
             modifier = Modifier.size(size),
         )
-        if (m.sending) {
-            // 还在发：压一层暗底，让人看出这一格没完成
+        if (m.sending || m.failed) {
+            // 还在发 / 发失败：压一层暗底，让人看出这一格没完成
             Box(Modifier.size(size).background(c.overlay))
+            // 进度：分片上传有百分比就画环 + 数字；整包上传（图片）没有回调，
+            // 给一个转圈的——**"在传但不知道传到哪"也是信息**，比只有一层暗底强。
+            // 环的尺寸跟着格子走：3 列宫格里格子只有 79dp，44dp 的环会顶满整格。
+            val ring = AlbumLayout.ringSize(size.value).dp
+            Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+                if (m.failed) {
+                    // 失败：红❗（点击重发挂在格子上，与单条待发气泡同一套语义）
+                    Text("！", color = c.danger, fontSize = 22.sp)
+                } else if (m.progress != null) {
+                    CircularProgressIndicator(
+                        progress = { m.progress / 100f },
+                        modifier = Modifier.size(ring),
+                        color = c.onMedia,
+                        trackColor = c.overlay,
+                        strokeWidth = 2.dp,
+                    )
+                    if (AlbumLayout.showsRingPercent(size.value)) {
+                        Text("${m.progress}%", color = c.onMedia, fontSize = 10.sp)
+                    }
+                } else {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(ring),
+                        color = c.onMedia,
+                        strokeWidth = 2.dp,
+                    )
+                }
+            }
         }
         // 视频格左上角显时长（服务端给了才显，**不为拿它去下载视频**）
         if (m.contentType == ContentType.VIDEO && (m.durationMs ?: 0) > 0) {

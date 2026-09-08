@@ -47,6 +47,18 @@ object AlbumLayout {
     fun tileSize(cols: Int): Float =
         if (cols == 1) SINGLE_ROW_HEIGHT else (WIDTH - (cols - 1) * GAP) / cols
 
+    /**
+     * 上传进度环在某个格子里该多大。
+     *
+     * **不是固定 44**：3 列宫格里格子只有 (240-4)/3 ≈ 78.7dp，44dp 的环占掉大半格、
+     * 还压在时长角标上；而 2 列的格子有 119dp，28dp 的环又小得看不清。
+     * 阈值取 100——2 列(119) 以上给大环，3 列(79) 给小环。
+     */
+    fun ringSize(tile: Float): Float = if (tile < 100f) 28f else 44f
+
+    /** 环里还放不放得下百分比数字（小环放不下，只画环）。 */
+    fun showsRingPercent(tile: Float): Boolean = tile >= 100f
+
     /** 整个宫格的总高。行高确定 → cell 高确定，加载图片时不会跳版。 */
     fun heightFor(n: Int): Float {
         val rows = rowPattern(n)

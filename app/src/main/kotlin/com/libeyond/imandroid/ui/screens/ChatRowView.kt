@@ -68,8 +68,13 @@ internal fun ChatRowView(
                 when (m) {
                     is AlbumMember.Sent ->
                         AlbumTile(m.msg.content, m.msg.contentType, m.msg.duration)
-                    is AlbumMember.Sending ->
-                        AlbumTile(m.msg.content, m.msg.contentType, null, sending = true)
+                    is AlbumMember.Sending -> AlbumTile(
+                        m.msg.content, m.msg.contentType, null,
+                        sending = m.msg.state == SendState.Sending.name,
+                        // 分片上传的百分比（视频/大文件）；图片整包上传时为 null → 转圈
+                        progress = uploadProgress[m.msg.clientMsgId],
+                        failed = m.msg.state == SendState.Failed.name,
+                    )
                 }
             },
             // 宫格**逐格**点开（iOS 同）：点第 3 格就该看第 3 张，

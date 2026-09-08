@@ -55,6 +55,21 @@ class AlbumLayoutTest {
     }
 
     @Test
+    fun `进度环按格子大小分档，3 列的小格给小环`() {
+        // 44dp 的环塞进 3 列宫格的 79dp 格子里会占掉大半格、还压住时长角标；
+        // 2 列的 119dp 格子给 28dp 又小得看不清。这条是**实测出来的**，别改成一个固定值。
+        assertEquals(44f, AlbumLayout.ringSize(AlbumLayout.tileSize(2)), 0.01f)
+        assertEquals(28f, AlbumLayout.ringSize(AlbumLayout.tileSize(3)), 0.01f)
+        assertEquals(44f, AlbumLayout.ringSize(AlbumLayout.SINGLE_ROW_HEIGHT), 0.01f)
+    }
+
+    @Test
+    fun `小环里不画百分比数字`() {
+        assertTrue(AlbumLayout.showsRingPercent(AlbumLayout.tileSize(2)))
+        assertFalse(AlbumLayout.showsRingPercent(AlbumLayout.tileSize(3)))
+    }
+
+    @Test
     fun `只有图片和视频进宫格——同组混进文件时那几条要单独显示`() {
         assertTrue(AlbumLayout.isAlbumMember(ContentType.IMAGE, "g1"))
         assertTrue(AlbumLayout.isAlbumMember(ContentType.VIDEO, "g1"))
