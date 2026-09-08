@@ -287,6 +287,16 @@ fun ChatScreen(
                         mine = r.msg.sender == myUid,
                         timestamp = r.msg.timestamp,
                         senderName = if (r.msg.sender != myUid) r.msg.fromNickname else null,
+                        // 群聊两行式引用条（对齐 iOS）：被引用者昵称独占一行。
+                        // 单聊传 null——只有两个人，写谁的名字都是废话。
+                        // 快照三档：服务端冻结的 > 本地那条原消息现算 > 「原消息」。
+                        // 第二档是必需的——ack 回不来冻结快照，自己发的引用消息在自己这侧没有它。
+                        quoteSnapshot = quoteSnapshotFor(rows, r.msg),
+                        replyFromName = if (isGroup) {
+                            r.msg.replyToFrom?.let { localNameOf(it) ?: it.takeIf { u -> u.isNotBlank() } }
+                        } else {
+                            null
+                        },
                         // 已读双勾：我发的、且对端读位点已越过它
                         read = r.msg.sender == myUid && peerReadSeq >= r.msg.convSeq,
                         delivered = r.msg.sender == myUid,
@@ -378,13 +388,17 @@ fun ChatScreen(
             ) {
                 Box(Modifier.width(2.dp).height(28.dp).background(c.accent))
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    text = replyTo.content.take(60).ifBlank { "[媒体]" },
-                    color = c.textSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 1,
+                // **与气泡内引用块同一套渲染**：引用时看到的那句话，
+                // 发出去以后在气泡里显示的必须是同一句（此前这里直接截 content，
+                // 引用一张图会显示 `/uploads/req-xxx__原名.jpg`）。
+                QuoteBlock(
+                    snapshot = replyPreviewOf(
+                        replyTo.contentType, replyTo.content, replyTo.fileName, replyTo.caption,
+                    ),
+                    fromName = if (isGroup) replyTo.fromNickname else null,
                     modifier = Modifier.weight(1f),
                 )
+                Spacer(Modifier.width(8.dp))
                 Text("✕", color = c.textTertiary, modifier = Modifier.clickable { onCancelReply() })
             }
         }
@@ -490,4 +504,24 @@ private fun Composer(
     }
 }
 
-
+/**
+ * 一条消息的引用快照该显示什么。
+ *
+ * 三档，优先级从高到低：
+ * ① 服务端**发送时冻结**的 `reply_snapshot`（原消息后续被删/撤回仍可展示）；
+ * ② 本地那条原消息**现算**——`ack` 只回 5 个字段，冻结快照回不来，
+ *    所以自己发的引用消息在自己这一侧只有这一档可用；
+ * ③ 都没有 → 「原消息」（同 iOS `IMBubbleCell` 的兜底文案）。
+ *
+ * `replyToConvSeq <= 0` 表示这条不是引用，返回 null 让调用方整块不画。
+ */
+internal fun quoteSnapshotFor(rows: List<ChatRow>, msg: MessageEntity): String? {
+    val seq = msg.replyToConvSeq ?: return null
+    if (seq <= 0) return null
+    msg.replySnapshot?.takeIf { it.isNotBlank() }?.let { return it }
+    val original = rows.asSequence()
+        .mapNotNull { (it as? ChatRow.Confirmed)?.msg }
+        .firstOrNull { it.convSeq == seq }
+        ?: return "原消息"
+    return replyPreviewOf(original.contentType, original.content, original.fileName, original.caption)
+}

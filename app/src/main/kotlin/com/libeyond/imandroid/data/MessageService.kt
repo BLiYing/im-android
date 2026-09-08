@@ -14,6 +14,7 @@ import com.libeyond.imandroid.sdk.protocol.MsgHiddenData
 import com.libeyond.imandroid.sdk.protocol.MsgOpData
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import com.libeyond.imandroid.sdk.protocol.ReceiptData
+import com.libeyond.imandroid.sdk.protocol.ReplyToData
 import com.libeyond.imandroid.sdk.protocol.SendMsgData
 import com.libeyond.imandroid.sdk.protocol.SyncCursorItem
 import com.libeyond.imandroid.sdk.protocol.SyncReqData
@@ -355,7 +356,7 @@ class MessageService(
                 fileName = fileName,
                 fileSize = fileSize,
                 caption = caption,
-                replyToConvSeq = replyToConvSeq,
+                replyTo = replyToConvSeq?.takeIf { it > 0 }?.let { ReplyToData(it) },
                 forwardFrom = forwardFrom,
                 groupId = groupId,
                 mediaW = mediaW,

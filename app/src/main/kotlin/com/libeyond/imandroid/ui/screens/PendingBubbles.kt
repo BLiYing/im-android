@@ -33,6 +33,7 @@ import com.composables.icons.lucide.Play
 import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.ui.components.TimeFormat
+import com.libeyond.imandroid.ui.components.FileTypeIcon
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -162,17 +163,7 @@ internal fun PendingFileBubble(
                 .padding(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(c.accentSoft),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    androidx.compose.foundation.Image(
-                        imageVector = Lucide.File,
-                        contentDescription = "文件",
-                        modifier = Modifier.size(18.dp),
-                        colorFilter = ColorFilter.tint(c.accent),
-                    )
-                }
+                FileTypeIcon(fileName, size = 36.dp)
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(fileName, color = c.textPrimary, fontSize = 13.sp, maxLines = 2)

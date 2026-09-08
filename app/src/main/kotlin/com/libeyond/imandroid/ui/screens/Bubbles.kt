@@ -46,6 +46,19 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.libeyond.imandroid.data.SysSegments
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.text.style.TextOverflow
+import com.composables.icons.lucide.IdCard
+import com.composables.icons.lucide.Image
+import com.composables.icons.lucide.MessageSquare
+import com.composables.icons.lucide.Mic
+import com.composables.icons.lucide.Video
+import com.libeyond.imandroid.ui.components.FileTypeIcon
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ColorFilter
+import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 // 气泡与分隔行。从 ChatScreen 拆出（CODING_STYLE §7②）：
@@ -179,6 +192,17 @@ internal fun Bubble(
     useTls: Boolean = false,
     timestamp: Long,
     senderName: String?,
+    /** 被引用者的显示名（群聊两行式引用条用）。单聊传 null。 */
+    replyFromName: String? = null,
+    /**
+     * 引用快照。**由调用方给**，因为它有三个来源、优先级不同：
+     * 服务端冻结的 `reply_snapshot` > 本地那条原消息现算 > 「原消息」。
+     *
+     * 为什么要"现算"这一档：`ack` 只回 5 个字段（client_msg_id/server_msg_id/conv_id/
+     * conv_seq/timestamp），**冻结的快照回不来**——所以自己发的引用消息在**自己这一侧**
+     * 恒无快照，而对端一切正常。又是 ack 不回带那一族（第五次）。
+     */
+    quoteSnapshot: String? = null,
     sending: Boolean = false,
     failed: Boolean = false,
     delivered: Boolean = false,
@@ -293,25 +317,21 @@ internal fun Bubble(
                     Modifier.padding(horizontal = d.bubblePaddingH)
                 } else Modifier
                 Column(horizontalAlignment = Alignment.End) {
-                    // 引用条：被引用消息的降级快照（发送时冻结，原消息删了仍可展示）
-                    val snap = msg?.replySnapshot
+                    // 引用条：被引用消息的降级快照（发送时冻结，原消息删了仍可展示）。
+                    // **判据是 replyToConvSeq > 0 而不是"有没有快照"**（同 iOS `IMBubbleCell`）：
+                    // 自己发的那条拿不到冻结快照，按"有快照才画"就会在自己这一侧整个不显示。
+                    val snap = quoteSnapshot ?: msg?.replySnapshot
                     if (!snap.isNullOrBlank() && !recalled) {
-                        Box(
+                        QuoteBlock(
+                            snapshot = snap,
+                            // 群聊两行式（对齐 iOS `IMBubbleCell`）：被引用者昵称独占一行。
+                            // 单聊不显——只有两个人，写谁的名字都是废话。
+                            fromName = replyFromName,
                             modifier = Modifier
                                 .then(innerPad)
                                 .then(if (flushMedia) Modifier.padding(top = d.bubblePaddingV) else Modifier)
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(c.subtleFill)
-                                .padding(horizontal = 6.dp, vertical = 4.dp),
-                        ) {
-                            Text(
-                                text = localizeReplySnapshot(snap),
-                                color = c.textSecondary,
-                                fontSize = 11.sp,
-                                maxLines = 2,
-                            )
-                        }
+                                .fillMaxWidth(),
+                        )
                         Spacer(Modifier.height(3.dp))
                     }
                     val isMedia = msg != null && msg.contentType in MEDIA_TYPES
@@ -443,3 +463,106 @@ internal fun bubbleMaxWidth(available: Dp, fraction: Float): Dp = available * fr
 
 /** 走媒体渲染而不是纯文本的内容类型。 */
 private val MEDIA_TYPES = setOf("image", "video", "voice", "file")
+
+/**
+ * 气泡顶部的引用块（M4-2），结构对齐 iOS `IMBubbleCell` 的引用段：
+ * **左侧竖条 + 群聊两行式（被引用者昵称独占一行）+ 类型图标 + 灰字快照**。
+ *
+ * 此前本端只有一个灰底圆角框套一行小字——竖条、昵称行、类型图标三样都没有，
+ * 与 iOS 差得最明显的就是"看不出引用的是什么类型"。
+ *
+ * **文件类快照用文件类型图标**（对齐 iOS 的 `IMFileTypeIconForName`）：
+ * 快照形如 `[文件] 报表.xlsx`，能取到名字就按扩展名给图。
+ */
+@Composable
+internal fun QuoteBlock(snapshot: String, fromName: String?, modifier: Modifier = Modifier) {
+    val c = IMTheme.colors
+    val localized = localizeReplySnapshot(snapshot)
+    val kindGlyph = quoteGlyphFor(localized)
+    val fileName = quoteFileNameOf(localized)
+
+    Row(modifier = modifier.height(IntrinsicSize.Min)) {
+        // 竖条：iOS 用 `▏` 字形，本端画一条真的——字形在不同字体下宽窄不一
+        Box(Modifier.width(2.dp).fillMaxHeight().clip(RoundedCornerShape(1.dp)).background(c.accent))
+        Spacer(Modifier.width(6.dp))
+        Column(Modifier.weight(1f)) {
+            if (!fromName.isNullOrBlank()) {
+                Text(
+                    fromName,
+                    color = c.accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    fileName != null -> {
+                        FileTypeIcon(fileName, size = 16.dp)
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    kindGlyph != null -> {
+                        Image(
+                            kindGlyph, null, Modifier.size(13.dp),
+                            colorFilter = ColorFilter.tint(c.textSecondary),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                }
+                Text(
+                    text = localized,
+                    color = c.textSecondary,
+                    fontSize = 13.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** 快照是媒体占位时给个小图标（对齐 iOS `IMMediaGlyphForSnippet`）；否则 null。 */
+private fun quoteGlyphFor(localized: String): androidx.compose.ui.graphics.vector.ImageVector? = when {
+    localized.startsWith("[图片]") -> Lucide.Image
+    localized.startsWith("[视频]") -> Lucide.Video
+    localized.startsWith("[语音]") -> Lucide.Mic
+    localized.startsWith("[聊天记录]") -> Lucide.MessageSquare
+    localized.startsWith("[个人名片]") -> Lucide.IdCard
+    else -> null
+}
+
+/**
+ * `[文件] 报表.xlsx` → `报表.xlsx`（对齐 iOS `IMReplySnippetFileName`）。
+ * 没带名字（只有 `[文件]`）返回 null，让调用方退回通用图标。
+ */
+private fun quoteFileNameOf(localized: String): String? {
+    if (!localized.startsWith("[文件]")) return null
+    return localized.removePrefix("[文件]").trim().takeIf { it.isNotEmpty() }
+}
+
+/**
+ * 本机为「正在引用的那条」生成的快照文案（输入栏引用条用）。
+ *
+ * **不能直接用 `msg.content`**：媒体消息的 content 是 `/uploads/req-xxx__原名.jpg`，
+ * 直接截 60 个字符显示出来就是一串路径（2026-09-08 撞见）。
+ * 口径与服务端冻结的 `reply_snapshot` 一致（PROTOCOL §4.3），
+ * 这样"引用时看到的"和"发出去以后气泡里显示的"是同一句话。
+ */
+internal fun replyPreviewOf(
+    contentType: String,
+    content: String,
+    fileName: String?,
+    caption: String?,
+): String = when (contentType) {
+    ContentType.IMAGE -> "[图片]" + captionSuffix(caption)
+    ContentType.VIDEO -> "[视频]" + captionSuffix(caption)
+    ContentType.VOICE -> "[语音]"
+    ContentType.FILE -> "[文件] " + MediaUrl.displayFileName(content, fileName.orEmpty())
+    ContentType.CONTACT -> "[个人名片]"
+    ContentType.CHAT_RECORD -> "[聊天记录]"
+    else -> content
+}
+
+private fun captionSuffix(caption: String?): String =
+    if (caption.isNullOrBlank()) "" else " " + caption

@@ -126,6 +126,26 @@ Profile     （无标题）群名称 / 简介 / 群公告        footer：简介
 
 ---
 
+## 3.5 消息气泡与聊天页
+
+| 项 | iOS | Android | 判定 |
+|---|---|---|---|
+| 系统消息 | 胶囊（圆角 11 / `datePillBg` / 白字 12）+ 名字段琥珀半粗可点<br>`IMSystemCell` | 同（`SystemNote` + `SysSegments`） | ✅ |
+| 引用块 | 竖条 + 群聊两行式（被引用者昵称独占一行）+ 类型图标 + 灰字快照<br>`IMBubbleCell` | 同（`QuoteBlock`） | ✅ |
+| 引用块内**真缩略图** | 引用图片/视频时内嵌 24×24 真缩略图（异步） | 只给类型图标 | 🔴 欠账 |
+| 点引用块**跳转原消息** | 有 | 没有（本端还没有跳到指定 `conv_seq` 的能力） | 🔴 欠账 |
+| 文件类型图标 | 22 张 SVG（`FileType_*.imageset`）+ `IMFileTypeIconForName` | **Compose 重画同一套**（`FileTypeIcon`） | 🟡 见下 |
+| 长按菜单 | `UIContextMenu`：原位、每项带 SF Symbol、删除是 inline submenu | 同（`MessageContextMenu`，Lucide 图标） | ✅ |
+| 长按时原气泡 | `UITargetedPreview` 自动藏原视图 | 手动把那一行 `alpha=0` | ✅ 语义一致 |
+| 「转文字 / 收藏 / 置顶 / 编辑 / 多选 / 翻译 / 举报」菜单项 | 有 | 没有（对应功能本端都还没做） | 🔴 欠账 |
+
+**文件类型图标为什么是重画不是转换**：iOS 那 22 张是 SVG，而 Android 的 vector drawable
+**不支持 `<text>`**——那些图的角标（PDF / W / X / `{ }` / `</>`）全是文字元素，直接转会丢光。
+于是按同样的页面外形（path 逐字取自 SVG）、同样的渐变色、同样的角标在 Compose 里画。
+扩展名 → 类型的清单**逐条照抄 iOS**：两端认的类型不一样，同一个文件在两端就是两种图标。
+
+---
+
 ## 4. 标题栏
 
 见 [`../IMServer/docs/UI_SPEC.md`](../../IMServer/docs/UI_SPEC.md) §4.5（三端共用基准，不在本表重复）。

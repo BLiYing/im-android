@@ -42,6 +42,7 @@ import com.libeyond.imandroid.sdk.api.MediaKind
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.components.TimeFormat
+import com.libeyond.imandroid.ui.components.FileTypeIcon
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -179,14 +180,7 @@ internal fun FileRow(item: ConvMediaItem, onOpen: (ConvMediaItem) -> Unit) {
                 .padding(horizontal = d.space4, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(c.accentSoft),
-                contentAlignment = Alignment.Center,
-            ) {
-                androidx.compose.foundation.Image(
-                    Lucide.File, "文件", Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.accent),
-                )
-            }
+            FileTypeIcon(MediaUrl.displayFileName(item.content, item.fileName), size = 36.dp)
             Spacer(Modifier.width(d.space3))
             Column(Modifier.weight(1f)) {
                 Text(

@@ -16,6 +16,10 @@ object ContentType {
 }
 
 /** send_msg 上行负载（PROTOCOL §4.1）。 */
+/** [SendMsgData.replyTo] 的载荷。上行只带 conv_seq。 */
+@Serializable
+data class ReplyToData(@SerialName("conv_seq") val convSeq: Long)
+
 @Serializable
 data class SendMsgData(
     @SerialName("client_msg_id") val clientMsgId: String,
@@ -26,17 +30,20 @@ data class SendMsgData(
     @SerialName("file_name") val fileName: String? = null,
     @SerialName("file_size") val fileSize: Long? = null,
     val caption: String? = null,
-    @SerialName("reply_to_conv_seq") val replyToConvSeq: Long? = null,
+    /**
+     * 引用回复（M4-2）。**上行是嵌套对象 `reply_to: {conv_seq}`，不是扁平的
+     * `reply_to_conv_seq`**——后者是**下行**字段名（`new_msg`/`sync_resp` 回带的那个）。
+     *
+     * 本端一直发的是扁平名，服务端读 `data.ReplyTo.ConvSeq` 读不到，**静默忽略**：
+     * 菜单能点、输入栏引用条能显示、消息也发得出去，就是不带引用——
+     * 一直到 2026-09-08 对着 iOS 核引用样式时，才发现服务端库里
+     * `reply_to_conv_seq` 恒为 0。上下行同名不同形，是这类"看着做了其实没接上"的典型。
+     *
+     * 快照由服务端在发送时**冻结**（原消息后续被删/撤回仍可展示降级预览），所以上行只带 seq。
+     */
+    @SerialName("reply_to") val replyTo: ReplyToData? = null,
     /** 相册分组（§4.3 M4+）：同批多图共享，服务端只透传 + 限长 64。 */
     @SerialName("group_id") val groupId: String? = null,
-    /**
-     * 系统消息分段（PROTOCOL §6，2026-08-29）。`uid` 非空的那段是某人的名字，
-     * **收端按本地口径重渲染**（备注 > 群昵称 > 昵称）并挂点击；空 = 固定文案原样显示。
-     *
-     * `content` 恒等于各段 `text` 顺序拼接，所以不认识这个字段的端照旧显示整句。
-     * **必须落本地库**：不落的话刷新/重进会话后分段丢失，同一条消息退回"显真实昵称、不可点"。
-     */
-    @SerialName("sys_segments") val sysSegments: List<SysSegment>? = null,
     /**
      * 转发溯源（§4.3 M4-3）：**发送时冻结的"转发自"显示名**，限长 40。
      *

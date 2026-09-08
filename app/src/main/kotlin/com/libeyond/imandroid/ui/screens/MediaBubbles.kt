@@ -35,6 +35,7 @@ import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.Waveform
 import androidx.compose.runtime.remember
 import com.libeyond.imandroid.ui.components.TimeFormat
+import com.libeyond.imandroid.ui.components.FileTypeIcon
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -189,10 +190,9 @@ private fun FileContent(msg: MessageEntity) {
         modifier = Modifier.widthIn(max = 240.dp).padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(c.accentSoft),
-            contentAlignment = Alignment.Center,
-        ) { Image(Lucide.File, "文件", Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.accent)) }
+        // 按扩展名给图（对齐 iOS `IMFileTypeIconForName`）——一个通用文件图标下，
+        // 一眼分不出这是表格还是压缩包
+        FileTypeIcon(MediaUrl.displayFileName(msg.content, msg.fileName.orEmpty()), size = 38.dp)
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(
