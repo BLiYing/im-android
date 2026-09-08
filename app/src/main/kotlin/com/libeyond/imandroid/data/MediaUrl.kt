@@ -18,8 +18,19 @@ object MediaUrl {
      */
     fun absolute(raw: String, host: String, useTls: Boolean): String {
         if (raw.isBlank()) return ""
-        // 已是绝对地址或 data URI → 原样用
-        if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("data:")) return raw
+        // **已经带 scheme 的一律原样用**，只有服务端那种相对路径才补 host。
+        //
+        // `content://` 与 `file://` 必须在这里挡住：待发消息的正文是相册的
+        // `content://media/...`，已下载媒体是沙盒里的 `file://...`——拼上 host 会得到
+        // `http://10.0.2.2:8080/content://media/…` 这种谁也加载不了的东西，
+        // 表现是「选完图宫格里那几格是空的」。2026-09-08 实测撞见：
+        // 调用点各自 `startsWith("content://")` 挡一次（MediaViewerScreen / VideoPlayer 有，
+        // AlbumBubble 没有）——**判据散在调用点就一定会漏一处**，收进这里。
+        if (raw.startsWith("http://") || raw.startsWith("https://") ||
+            raw.startsWith("data:") || raw.startsWith("content://") || raw.startsWith("file://")
+        ) {
+            return raw
+        }
         val scheme = if (useTls) "https" else "http"
         val path = if (raw.startsWith("/")) raw else "/$raw"
         return "$scheme://$host$path"

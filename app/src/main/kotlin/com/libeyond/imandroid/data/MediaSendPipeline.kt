@@ -17,6 +17,7 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
  */
 internal class MediaSendPipeline(
     private val repo: MessageRepository,
+    private val cache: MediaCache,
     private val upload: UploadApi,
     private val uploadProgress: UploadProgress,
     private val ownerProvider: () -> String?,
@@ -154,6 +155,11 @@ internal class MediaSendPipeline(
             uploading -= cid
         }
         repo.updatePendingContent(owner, cid, r.url, r.size)
+        // **自己发的那份字节直接进缓存**：不然发完自己看自己的文件是「未下载 ↓」，
+        // 还要再从服务端下回来一遍（对齐 iOS 的 adopt）。
+        // 只有整包这条路能这么做——分片那条（视频/大文件）字节从没同时在内存里，
+        // 为了 adopt 去复制一份几百 MB 的副本不划算，那种自己发的大件仍会显 ↓。
+        cache.adopt(r.url, bytes, isVideo = contentType == ContentType.VIDEO)
         transmit(
             cid, convId, to, contentType, r.url, null,
             fileName, r.size, caption, null, groupId,

@@ -158,7 +158,7 @@ internal fun ChatDetailScreen(
                     archiveList(archive, loading, hasMore, tab, onLoadMore) { item -> VoiceRow(item) }
                 }
                 DetailTab.Files -> archiveList(archive, loading, hasMore, tab, onLoadMore) { item ->
-                    FileRow(item, onOpenArchive)
+                    FileRow(item, isGroup = false, onOpen = onOpenArchive)
                 }
                 DetailTab.Media -> {
                     if (loading && archive.isEmpty()) {
@@ -177,7 +177,8 @@ internal fun ChatDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
                             ) {
-                                items(archive, key = { it.convSeq }) { ArchiveTile(it, host, useTls, onOpen = onOpenArchive) }
+                                items(archive, key = { it.convSeq }) { // 本页是**单聊**详情，策略走单聊档——显式传，别靠默认值
+                                    ArchiveTile(it, host, useTls, isGroup = false, onOpen = onOpenArchive) }
                             }
                         }
                         if (hasMore) item { LoadMoreRow(onLoadMore) }

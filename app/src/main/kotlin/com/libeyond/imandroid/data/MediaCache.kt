@@ -31,6 +31,23 @@ class MediaCache(private val root: File) {
     fun partFor(url: String, isVideo: Boolean = false): File =
         File(fileFor(url, isVideo).absolutePath + ".part")
 
+    /**
+     * 把**自己刚发出去**的那份字节直接放进缓存（对齐 iOS `adoptFileAtPath:forContent:`）。
+     *
+     * 不这么做的话，自己发完一个文件，气泡上立刻显示「未下载 ↓」——
+     * 字节明明刚从这台设备传上去。收下来自己发的东西是最没道理的一次下载。
+     *
+     * 失败静默：这是优化不是功能，写不进去最多是多下一次。
+     */
+    fun adopt(url: String, bytes: ByteArray, isVideo: Boolean = false) {
+        if (url.isBlank() || bytes.isEmpty()) return
+        runCatching {
+            val f = fileFor(url, isVideo)
+            f.parentFile?.mkdirs()
+            f.writeBytes(bytes)
+        }
+    }
+
     fun delete(url: String, isVideo: Boolean = false) {
         runCatching { fileFor(url, isVideo).delete() }
         runCatching { partFor(url, isVideo).delete() }

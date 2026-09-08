@@ -20,7 +20,9 @@ import com.libeyond.imandroid.data.DetailTabs
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.UserCard
@@ -155,6 +157,7 @@ fun ChatDetailHost(
                 contentType = m.contentType,
                 content = m.content,
                 poster = m.poster,
+                localFile = client.downloads.localFile(m.content, m.contentType == ContentType.VIDEO),
                 host = client.host,
                 useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
                 onSave = saveMedia,
@@ -194,7 +197,18 @@ fun ChatDetailHost(
             loading = loading,
             hasMore = hasMore,
             onLoadMore = { if (hasMore) load(reset = false) },
-            onOpenArchive = { viewing = it },
+            onOpenArchive = { item ->
+                // **文件不进图片查看器**：那里没有文件分支，一个 PDF 会被当成图片
+                // 交给 ZoomableImage，屏幕上一片空白（2026-09-08 查出来的死路）。
+                if (item.contentType == ContentType.FILE) {
+                    client.downloads.localFile(item.content)?.let { f ->
+                        OpenFile.open(context, f, MediaUrl.displayFileName(item.content, item.fileName))
+                            ?.let { toast = it }
+                    } ?: run { toast = "文件不在本地，请先下载" }
+                } else {
+                    viewing = item
+                }
+            },
             // 链接用系统浏览器打开。**不做"定位到聊天"**：本端还没有跳到指定 conv_seq 的能力，
             // 与其做个跳回去但落在别处的假跳转，不如先给一个真的有用的动作。
             onOpenLink = { url ->

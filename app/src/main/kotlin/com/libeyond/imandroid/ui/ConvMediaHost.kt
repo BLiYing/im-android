@@ -8,7 +8,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.sdk.api.MediaKind
 import com.libeyond.imandroid.sdk.logging.IMLog
@@ -28,9 +30,18 @@ import kotlinx.coroutines.launch
 internal fun ConvMediaHost(
     client: IMClient,
     convId: String,
+    /**
+     * 群会话——自动下载策略的单聊/群聊分档要用。
+     *
+     * **不给默认值**：本页现在只有群详情一个入口，给个 `false` 的默认值就等于
+     * 让群会话悄悄走单聊档（2026-09-08 实测就是这样：加参数时给了默认值，
+     * 调用方没传，门控一路按单聊判）。要加入口时编译器会逼调用方想一下。
+     */
+    isGroup: Boolean,
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var kind by remember(convId) { mutableStateOf(MediaKind.MEDIA) }
     var items by remember(convId) { mutableStateOf<List<ConvMediaItem>>(emptyList()) }
     var cursor by remember(convId) { mutableStateOf(0L) }
@@ -73,6 +84,7 @@ internal fun ConvMediaHost(
             contentType = v.contentType,
             content = v.content,
             poster = v.poster,
+            localFile = client.downloads.localFile(v.content, v.contentType == ContentType.VIDEO),
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
             onSave = saveMedia,
@@ -89,9 +101,21 @@ internal fun ConvMediaHost(
             loading = loading,
             hasMore = hasMore,
             onLoadMore = { if (hasMore) load(reset = false) },
-            onOpen = { viewing = it },
+            onOpen = { item ->
+                // **文件不进图片查看器**：那里没有文件分支，一个 PDF 会被当成图片
+                // 交给 ZoomableImage，屏幕上一片空白（2026-09-08 查出来的死路）。
+                if (item.contentType == ContentType.FILE) {
+                    client.downloads.localFile(item.content)?.let { f ->
+                        OpenFile.open(context, f, MediaUrl.displayFileName(item.content, item.fileName))
+                            ?.let { toast = it }
+                    } ?: run { toast = "文件不在本地，请先下载" }
+                } else {
+                    viewing = item
+                }
+            },
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+            isGroup = isGroup,
             onBack = onBack,
         )
     }

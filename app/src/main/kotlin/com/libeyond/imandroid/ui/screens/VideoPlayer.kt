@@ -71,6 +71,8 @@ import kotlinx.coroutines.delay
  */
 @Composable
 internal fun VideoPlayer(
+    /** 已下载到本地的原件；有就放它，没有才流式拉远端。 */
+    localFile: java.io.File? = null,
     /** 远端 URL 或本地 `content://`（待发/失败的那条也能点开看）。 */
     url: String,
     posterUrl: String?,
@@ -81,8 +83,12 @@ internal fun VideoPlayer(
     val c = IMTheme.colors
     val context = LocalContext.current
     val log = remember { com.libeyond.imandroid.sdk.logging.IMLog.tag("IM.Video") }
-    val absolute = remember(url, host, useTls) {
-        if (url.startsWith("content://")) url else MediaUrl.absolute(url, host, useTls)
+    // **已下载的原件优先**（对齐 iOS：策略放行 → 整段预取 → 查看器放本地）。
+    // 不用它的话，用户点 ↓ 下完 10MB，点开播放又从网络重新流一遍——门控白做了。
+    // 没有本地文件才回落流式（归档那条路可以打开一条没下过的视频，iOS 那侧同样是流式 + 「查看原视频」）。
+    val absolute = remember(url, host, useTls, localFile) {
+        localFile?.let { android.net.Uri.fromFile(it).toString() }
+            ?: MediaUrl.absolute(url, host, useTls)
     }
 
     val player = remember(absolute) {

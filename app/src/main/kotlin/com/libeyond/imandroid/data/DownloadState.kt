@@ -57,3 +57,19 @@ data class DownloadState(
 }
 
 enum class DownloadTap { Start, Pause, Open, None }
+
+/**
+ * 文件行/文件气泡上跟在大小后面的那句状态。
+ *
+ * **气泡与详情页的文件行共用这一份**——两处各写一张表，迟早出现「气泡说下载失败、
+ * 详情页说未下载」。就绪态返回空串：给已经下好的东西标一句"已下载"只是噪声
+ * （iOS 详情行会写「· 已下载」，本端气泡侧不写，两处保持一致即可）。
+ */
+fun DownloadPhase.fileHint(): String = when (this) {
+    DownloadPhase.Ready -> ""
+    DownloadPhase.Downloading -> " · 下载中"
+    DownloadPhase.Paused -> " · 已暂停，点继续"
+    DownloadPhase.Failed -> " · 下载失败，点重试"
+    DownloadPhase.Expired -> " · 文件已失效"
+    DownloadPhase.NotStarted -> " · 未下载"
+}

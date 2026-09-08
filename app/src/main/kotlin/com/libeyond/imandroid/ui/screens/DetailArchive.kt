@@ -154,7 +154,7 @@ internal fun ArchiveTile(
     item: ConvMediaItem,
     host: String,
     useTls: Boolean,
-    isGroup: Boolean = false,
+    isGroup: Boolean,
     onOpen: (ConvMediaItem) -> Unit,
 ) {
     Box(Modifier.aspectRatio(1f)) { MediaTile(item, host, useTls, isGroup, onOpen) }

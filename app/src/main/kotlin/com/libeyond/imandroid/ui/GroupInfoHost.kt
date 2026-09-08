@@ -326,6 +326,7 @@ fun GroupInfoHost(
         ConvMediaHost(
             client = client,
             convId = convId,
+            isGroup = true,
             onBack = { mediaOpen = false },
         )
     } else if (managing) {

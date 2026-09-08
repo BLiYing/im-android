@@ -56,6 +56,8 @@ internal fun MediaViewerScreen(
     poster: String,
     host: String,
     useTls: Boolean,
+    /** 已下载到本地的原件（由 Host 从下载器取）。有就用它显示/播放/存相册。 */
+    localFile: java.io.File? = null,
     onSave: (url: String, isVideo: Boolean) -> Unit,
     /** 不传 = 这一处没有转发能力，**按钮直接不画**。摆一个点了没反应的按钮比没有更糟。 */
     onForward: (() -> Unit)? = null,
@@ -65,14 +67,15 @@ internal fun MediaViewerScreen(
     // 待发/失败的那条 content 是本地 content:// —— 原样用，别拼服务端前缀。
     // 存相册与渲染必须是**同一个地址**：分开算过一次就会出现「看到的是本地原图、
     // 存下来的是服务端压缩件」这种对不上账的情况。
-    val source = if (content.startsWith("content://")) {
-        content
-    } else {
-        MediaUrl.absolute(content, host, useTls)
-    }
+    // **已下载的原件优先**：门控刚把它下到本地，查看器再从网络拉一遍就是白下。
+    // 断网时也只有这条路能看（这正是"下载"的意义）。
+    // `MediaUrl.absolute` 现在自己认得 `content://` / `file://`，不用在这里各挡一次。
+    val source = localFile?.let { android.net.Uri.fromFile(it).toString() }
+        ?: MediaUrl.absolute(content, host, useTls)
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (isVideo) {
             VideoPlayer(
+                localFile = localFile,
                 url = content,
                 posterUrl = poster,
                 host = host,

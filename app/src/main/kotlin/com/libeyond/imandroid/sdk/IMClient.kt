@@ -150,6 +150,7 @@ class IMClient(context: Context) {
         presence = presence,
         conversationsApi = conversationsApi,
         upload = upload,
+        mediaCache = mediaCache,
         ownerProvider = { session.uid },
     )
 

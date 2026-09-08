@@ -43,6 +43,8 @@ class MessageService(
     val presence: PresenceStore,
     private val conversationsApi: ConversationsApi,
     private val upload: UploadApi,
+    /** 已下载媒体的落盘。自己发出去的字节直接放进它，免得发完再下回来一遍。 */
+    private val mediaCache: MediaCache,
     /** 当前账号；未登录为 null。切账号时必须换掉，否则新账号会写进旧账号的行。 */
     private val ownerProvider: () -> String?,
 ) {
@@ -212,6 +214,7 @@ class MessageService(
     // 状态机分叉过一次就会出现「视频发失败了但没有红❗」这种查不出来的事。
     private val media = MediaSendPipeline(
         repo = repo,
+        cache = mediaCache,
         upload = upload,
         uploadProgress = uploadProgress,
         ownerProvider = ownerProvider,

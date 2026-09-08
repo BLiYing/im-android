@@ -390,6 +390,8 @@ fun ChatHost(
             contentType = m.contentType,
             content = m.content,
             poster = m.poster.orEmpty(),
+            // 门控已经把它下到本地了，查看器就该放本地那份（断网也看得了）
+            localFile = client.downloads.localFile(m.content, m.contentType == ContentType.VIDEO),
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
             onSave = saveMedia,

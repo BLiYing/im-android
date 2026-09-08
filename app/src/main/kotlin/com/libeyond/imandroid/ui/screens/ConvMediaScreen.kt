@@ -37,6 +37,7 @@ import coil.compose.AsyncImage
 import com.composables.icons.lucide.File
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
+import com.libeyond.imandroid.data.fileHint
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.sdk.api.MediaKind
@@ -71,7 +72,8 @@ internal fun ConvMediaScreen(
     host: String,
     useTls: Boolean,
     /** 群聊——自动下载策略的单聊/群聊分档要用。 */
-    isGroup: Boolean = false,
+    /** 群会话——策略分档要用。**不给默认值**，理由见 `ConvMediaHost` 的同名参数。 */
+    isGroup: Boolean,
     onBack: () -> Unit,
 ) {
     val c = IMTheme.colors
@@ -94,7 +96,7 @@ internal fun ConvMediaScreen(
             loading && items.isEmpty() -> Hint("加载中…")
             items.isEmpty() -> Hint(if (kind == MediaKind.FILE) "这个会话还没有文件" else "这个会话还没有图片或视频")
             kind == MediaKind.FILE -> LazyColumn(Modifier.fillMaxSize()) {
-                items(items, key = { it.convSeq }) { FileRow(it, onOpen) }
+                items(items, key = { it.convSeq }) { FileRow(it, isGroup, onOpen) }
                 if (hasMore) item { LoadMore(onLoadMore) }
             }
             else -> LazyVerticalGrid(
@@ -160,7 +162,7 @@ internal fun MediaTile(
     val c = IMTheme.colors
     val isVideo = item.contentType == ContentType.VIDEO
     // 视频这一格显示的是**封面**（小），门控作用在视频本体上；图片这一格门控的就是它自己
-    val gate = rememberGate(item.content, item.contentType, item.fileSize, isGroup)
+    val gate = rememberGate(item.content, item.contentType, item.fileSize, isGroup, autoPrefetch = false)
     Box(
         Modifier.aspectRatio(1f).background(c.subtleFill).clickable { onOpen(item) },
     ) {
@@ -211,26 +213,41 @@ internal fun MediaTile(
 }
 
 @Composable
-internal fun FileRow(item: ConvMediaItem, onOpen: (ConvMediaItem) -> Unit) {
+internal fun FileRow(
+    item: ConvMediaItem,
+    isGroup: Boolean,
+    onOpen: (ConvMediaItem) -> Unit,
+) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
+    val name = MediaUrl.displayFileName(item.content, item.fileName)
+    // 详情页是"翻历史"，**不自动下**（对齐 iOS 的 autoPrefetchEnabled = NO）：
+    // 一屏能列出几十个文件，自动下会在用户只想看一眼列表时静默拉走几百 MB。
+    val gate = rememberGate(item.content, item.contentType, item.fileSize, isGroup, autoPrefetch = false)
     Column {
         Row(
-            Modifier.fillMaxWidth().background(c.surface).clickable { onOpen(item) }
+            // 就绪 → 点开文件；没就绪 → 点一下等于点 ↓（对齐 iOS：整行在门控态下等价于点下载）
+            Modifier.fillMaxWidth().background(c.surface)
+                .clickable { if (gate.ready) onOpen(item) else gate.onTap() }
                 .padding(horizontal = d.space4, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FileTypeIcon(MediaUrl.displayFileName(item.content, item.fileName), size = 36.dp)
+            Box(contentAlignment = Alignment.Center) {
+                FileTypeIcon(name, size = 36.dp)
+                // 文件行没有"图"可以磨砂，状态只能挂在这枚图标上（同 iOS `_fileIconWrap`）
+                DownloadBadge(gate.state, sizeBytes = 0, onTap = gate.onTap, compact = true)
+            }
             Spacer(Modifier.width(d.space3))
             Column(Modifier.weight(1f)) {
                 Text(
-                    MediaUrl.displayFileName(item.content, item.fileName),
+                    name,
                     color = c.textPrimary, style = MaterialTheme.typography.bodyLarge, maxLines = 2,
                 )
                 val size = MediaUrl.formatSize(item.fileSize)
                 val when1 = TimeFormat.conversationTime(item.timestamp)
                 Text(
-                    listOf(size, when1).filter { it.isNotEmpty() }.joinToString(" · "),
+                    listOf(size, when1).filter { it.isNotEmpty() }.joinToString(" · ") +
+                        gate.state.phase.fileHint(),
                     color = c.textSecondary, style = MaterialTheme.typography.bodyMedium,
                 )
             }

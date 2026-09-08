@@ -59,6 +59,8 @@ data class GateInfo(
     /** 喂给 Coil 的东西：就绪 → 本地文件；否则 null（**不要给远端 URL**，那就绕过门控了）。 */
     val model: Any?,
     val onTap: () -> Unit,
+    /** 已下载到本地的原件；未就绪为 null。查看器/播放器/存相册都该优先用它。 */
+    val localFile: java.io.File? = null,
 ) {
     val ready: Boolean get() = state.phase == DownloadPhase.Ready
 }
@@ -75,13 +77,22 @@ fun rememberGate(
     contentType: String,
     sizeBytes: Long,
     isGroup: Boolean,
+    /**
+     * 策略放行时是否**自动开下**。
+     *
+     * **详情页归档与会话媒体库必须传 false**（对齐 iOS `IMChatDetailViewController`
+     * 与 `IMConversationMediaViewController` 的 `autoPrefetchEnabled = NO`）：
+     * 那两处是"翻历史"，一屏能列出几十条媒体，自动下会在用户只想看一眼列表时
+     * 静默拉走几百 MB。它们只**反映**状态，下不下由用户点。
+     */
+    autoPrefetch: Boolean = true,
 ): GateInfo {
     val env = LocalMediaGate.current
     val isVideo = contentType == "video"
 
     // 没装门控（预览/测试）→ 直接放行走远端地址，与接门控之前的行为一致
     if (env == null) {
-        return GateInfo(DownloadState(DownloadPhase.Ready), url.ifBlank { null }) {}
+        return GateInfo(DownloadState(DownloadPhase.Ready), url.ifBlank { null }, onTap = {})
     }
 
     val states by env.downloads.states.collectAsState()
@@ -89,26 +100,22 @@ fun rememberGate(
 
     // 策略放行就自动开下。**每条只判一次**（key 用 url）——不然每次重组都会再调一次 start，
     // start 内部虽然幂等，但每帧调一次是纯浪费。
-    LaunchedEffect(url, isGroup) {
-        if (url.isBlank()) return@LaunchedEffect
+    LaunchedEffect(url, isGroup, autoPrefetch) {
+        if (url.isBlank() || !autoPrefetch) return@LaunchedEffect
         val auto = DownloadPolicy.shouldAutoDownload(
             env.settings(), contentType, sizeBytes, isGroup, env.onWifi,
         )
         if (auto) env.downloads.start(url, isVideo, sizeBytes)
     }
 
-    val model = if (state.phase == DownloadPhase.Ready) {
-        env.downloads.localFile(url, isVideo)
-    } else {
-        null
-    }
-    return GateInfo(state, model) {
+    val local = if (state.phase == DownloadPhase.Ready) env.downloads.localFile(url, isVideo) else null
+    return GateInfo(state, local, localFile = local, onTap = {
         when (state.tapAction()) {
             DownloadTap.Start -> env.downloads.start(url, isVideo, sizeBytes)
             DownloadTap.Pause -> env.downloads.pause(url, isVideo)
             DownloadTap.Open, DownloadTap.None -> Unit
         }
-    }
+    })
 }
 
 /** `remember` 的一层薄封装，只为让上面那行读起来是「按 states 与 url 重算」。 */

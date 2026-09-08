@@ -2,6 +2,7 @@ package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +31,7 @@ import com.composables.icons.lucide.File
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Mic
 import com.composables.icons.lucide.Play
+import com.libeyond.imandroid.data.fileHint
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.Waveform
@@ -231,9 +233,30 @@ private fun VoiceContent(msg: MessageEntity) {
 @Composable
 private fun FileContent(msg: MessageEntity, isGroup: Boolean) {
     val c = IMTheme.colors
+    val context = androidx.compose.ui.platform.LocalContext.current
     val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
+    val toast = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    toast.value?.let { com.libeyond.imandroid.ui.components.IMToast(it) { toast.value = null } }
     Row(
-        modifier = Modifier.widthIn(max = 240.dp).padding(vertical = 2.dp),
+        modifier = Modifier.widthIn(max = 240.dp).padding(vertical = 2.dp)
+            // **就绪就能点开**（对齐 iOS：文件行/气泡在 ready 态点一下就是打开它）；
+            // 没就绪时点一下等于点 ↓。此前这条气泡完全不可点——下下来了也没办法看。
+            .clickable {
+                if (gate.ready) {
+                    val f = gate.localFile
+                    toast.value = if (f == null) {
+                        // 缓存被清了：退回"点一下开始下载"，别报错
+                        gate.onTap()
+                        "文件已不在本地，正在重新下载"
+                    } else {
+                        com.libeyond.imandroid.ui.OpenFile.open(
+                            context, f, MediaUrl.displayFileName(msg.content, msg.fileName.orEmpty()),
+                        )
+                    }
+                } else {
+                    gate.onTap()
+                }
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 按扩展名给图（对齐 iOS `IMFileTypeIconForName`）——一个通用文件图标下，
@@ -255,13 +278,7 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean) {
             // 大小直接用服务端给的字节数格式化，**不重新下载文件去算**
             val size = MediaUrl.formatSize(msg.fileSize ?: 0)
             // 未下载时把状态写在大小旁边——徽标只是个 ↓，说不清"是没下还是下失败了"
-            val hint = when (gate.state.phase) {
-                com.libeyond.imandroid.data.DownloadPhase.Ready -> ""
-                com.libeyond.imandroid.data.DownloadPhase.Downloading -> " · 下载中"
-                com.libeyond.imandroid.data.DownloadPhase.Failed -> " · 下载失败，点重试"
-                com.libeyond.imandroid.data.DownloadPhase.Expired -> " · 文件已失效"
-                else -> " · 未下载"
-            }
+            val hint = gate.state.phase.fileHint()
             if (size.isNotEmpty() || hint.isNotEmpty()) {
                 Text(size + hint, color = c.textSecondary, fontSize = 11.sp)
             }
