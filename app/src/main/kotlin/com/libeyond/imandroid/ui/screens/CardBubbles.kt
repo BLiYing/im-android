@@ -18,6 +18,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.ui.components.IMAvatar
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ColorFilter
+import com.composables.icons.lucide.Contact
+import com.composables.icons.lucide.MessageSquare
+import com.composables.icons.lucide.Lucide
+import androidx.compose.foundation.layout.size
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -71,7 +77,16 @@ internal fun ContactCardContent(content: String) {
         Spacer(Modifier.height(8.dp))
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
         Spacer(Modifier.height(6.dp))
-        Text2("个人名片", c.textSecondary, 11.sp)
+        // 脚注前那枚小图标：iOS 用 `person.crop.square`（11pt，textSecondary）。
+        // 只有文字没有图标时，名片卡和聊天记录卡的底部长得一模一样，一眼分不出是哪种卡。
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                Lucide.Contact, null, Modifier.size(11.dp),
+                colorFilter = ColorFilter.tint(c.textSecondary),
+            )
+            Spacer(Modifier.width(4.dp))
+            Text2("个人名片", c.textSecondary, 11.sp)
+        }
     }
 }
 
@@ -107,6 +122,11 @@ internal fun ChatRecordCardContent(content: String) {
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                Lucide.MessageSquare, null, Modifier.size(11.dp),
+                colorFilter = ColorFilter.tint(c.textSecondary),
+            )
+            Spacer(Modifier.width(4.dp))
             Text2("聊天记录", c.textSecondary, 11.sp)
             if (rec.total > rec.lines.size) {
                 Spacer(Modifier.width(6.dp))
