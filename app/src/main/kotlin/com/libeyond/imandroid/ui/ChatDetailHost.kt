@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Rect
+import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.ChatDetailNav
 import com.libeyond.imandroid.data.ChatDetailPage
@@ -55,6 +57,8 @@ fun ChatDetailHost(
     knownFriends: Map<String, FriendEntry>,
     /** 「搜索」pill：关掉本页、回聊天页开搜索态（本页盖在聊天页之上，只能这么绕）。 */
     onSearchInChat: () -> Unit = {},
+    /** 归档长按「定位到聊天」：同上，关掉本页、把 conv_seq 交给聊天页。 */
+    onLocateInChat: (Long) -> Unit = {},
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -82,6 +86,10 @@ fun ChatDetailHost(
 
     var pinned by remember(conv.convId) { mutableStateOf(conv.pinnedAt > 0) }
     var muted by remember(conv.convId) { mutableStateOf(conv.muted) }
+
+    // 归档长按菜单（媒体/文件/语音/链接四格共用；接线在 ArchiveActionsHost）
+    var archiveMenuFor by remember(conv.convId) { mutableStateOf<ArchiveTarget?>(null) }
+    var archiveMenuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
 
     var tab by remember(conv.convId) { mutableStateOf(DetailTab.Media) }
     var archive by remember(conv.convId) { mutableStateOf<List<ConvMediaItem>>(emptyList()) }
@@ -213,6 +221,7 @@ fun ChatDetailHost(
             },
             // 链接用系统浏览器打开。**不做"定位到聊天"**：本端还没有跳到指定 conv_seq 的能力，
             // 与其做个跳回去但落在别处的假跳转，不如先给一个真的有用的动作。
+            onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
             onOpenLink = { url ->
                 runCatching {
                     context.startActivity(
@@ -379,6 +388,21 @@ fun ChatDetailHost(
             },
         )
     }
+
+    // 归档长按菜单 + 转发选择页（与群资料那侧共用同一份接线）
+    ArchiveActionsHost(
+        client = client,
+        convId = conv.convId,
+        isGroup = false,
+        // 单聊没有管理员这回事；「为所有人删除」只对自己发的开（ArchiveActions 里判）
+        iAmManager = false,
+        target = archiveMenuFor,
+        anchor = archiveMenuAnchor,
+        onLocateInChat = { seq -> archiveMenuFor = null; onLocateInChat(seq) },
+        onChanged = { load(reset = true) },
+        onToast = { toast = it },
+        onDismiss = { archiveMenuFor = null },
+    )
 
     // toast 放最后：它是一层 fillMaxSize 的浮层，画在页面之前会被页面盖住
     toast?.let { t -> IMToast(t) { toast = null } }

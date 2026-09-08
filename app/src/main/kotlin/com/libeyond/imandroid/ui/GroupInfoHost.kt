@@ -62,6 +62,8 @@ fun GroupInfoHost(
     onOpenChat: (ConversationEntity) -> Unit,
     /** 「搜索」pill：关掉本页、回聊天页开搜索态（本页盖在聊天页之上，只能这么绕）。 */
     onSearchInChat: () -> Unit = {},
+    /** 归档长按「定位到聊天」：同上，关掉本页、把 conv_seq 交给聊天页。 */
+    onLocateInChat: (Long) -> Unit = {},
     onBack: () -> Unit,
     onLeft: () -> Unit,
 ) {
@@ -329,6 +331,8 @@ fun GroupInfoHost(
             client = client,
             convId = convId,
             isGroup = true,
+            iAmManager = info?.iAmManager == true,
+            onLocateInChat = onLocateInChat,
             onBack = { mediaOpen = false },
         )
     } else if (managing) {
@@ -526,47 +530,17 @@ fun GroupInfoHost(
         null -> Unit
     }
 
-    // —— 成员长按菜单 ——
+    // —— 成员长按菜单 ——（判据与拼装在 GroupMemberMenu.kt）
     memberMenu?.let { m ->
-        val actions = buildList {
-            if (GroupPermissions.canSetRole(g, m, myUid)) {
-                val makeAdmin = !m.isAdmin
-                add(SheetItem(if (makeAdmin) "设为管理员" else "撤销管理员") {
-                    runManage(if (makeAdmin) "设为管理员" else "撤销管理员") {
-                        client.groups.setRole(convId, m.userId, if (makeAdmin) "admin" else "member")
-                    }
-                })
-            }
-            if (GroupPermissions.canMute(g, m, myUid)) {
-                val muted = GroupPermissions.isMuteActive(m.muteUntil)
-                add(SheetItem(if (muted) "解除禁言" else "禁言") {
-                    runManage(if (muted) "解除禁言" else "禁言") {
-                        client.groups.muteMember(convId, m.userId, if (muted) 0L else -1L)
-                    }
-                })
-            }
-            if (GroupPermissions.canTransfer(g, m, myUid)) {
-                add(SheetItem("转让群主", destructive = true) {
-                    runManage("转让群主") { client.groups.transferOwner(convId, m.userId) }
-                })
-            }
-            if (GroupPermissions.canRemove(g, m, myUid)) {
-                add(SheetItem("移出群聊", destructive = true) {
-                    // 缺省 cooldown=24h：只移出（none）会让人立刻又进来，
-                    // 永久黑名单（forever）对一次误操作又太重（PROTOCOL §11 三档）
-                    runManage("移出群聊") { client.groups.removeMember(convId, m.userId, ban = "cooldown") }
-                })
-            }
-        }
-        if (actions.isEmpty()) {
-            memberMenu = null
-        } else {
-            ActionSheet(
-                title = m.displayName,
-                items = actions,
-                onDismiss = { memberMenu = null },
-            )
-        }
+        GroupMemberMenu(
+            member = m,
+            info = g,
+            myUid = myUid,
+            client = client,
+            convId = convId,
+            runManage = ::runManage,
+            onDismiss = { memberMenu = null },
+        )
     }
 
     confirmTransfer?.let { m ->

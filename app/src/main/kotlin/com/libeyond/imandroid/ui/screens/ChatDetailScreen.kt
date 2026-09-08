@@ -27,12 +27,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.geometry.Rect
+import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailAction
 import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.data.DetailTab
 import com.libeyond.imandroid.data.DetailTabs
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.data.toArchiveTarget
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.DetailActionBar
@@ -70,6 +73,8 @@ internal fun ChatDetailScreen(
     hasMore: Boolean,
     onLoadMore: () -> Unit,
     onOpenArchive: (ConvMediaItem) -> Unit,
+    /** 长按归档里的一项 → 归档菜单。链接页签传的是那条本地消息。 */
+    onLongPressArchive: (ArchiveTarget, Rect) -> Unit,
     onOpenLink: (String) -> Unit,
     onTogglePinned: (Boolean) -> Unit,
     onToggleMuted: (Boolean) -> Unit,
@@ -149,16 +154,23 @@ internal fun ChatDetailScreen(
                         item { Hint(DetailTabs.emptyText(tab)) }
                     } else {
                         items(linkMessages, key = { it.first.convSeq }) { (m, url) ->
-                            LinkRow(m.content, m.timestamp, url) { onOpenLink(url) }
+                            LinkRow(
+                                m.content, m.timestamp, url,
+                                onLongPress = { r -> onLongPressArchive(m.toArchiveTarget(), r) },
+                            ) { onOpenLink(url) }
                         }
                     }
                 }
                 DetailTab.Voice -> {
                     item { Footnote(VOICE_TAB_NOTE) }
-                    archiveList(archive, loading, hasMore, tab, onLoadMore) { item -> VoiceRow(item) }
+                    archiveList(archive, loading, hasMore, tab, onLoadMore) { item ->
+                        VoiceRow(item) { r -> onLongPressArchive(item.toArchiveTarget(), r) }
+                    }
                 }
                 DetailTab.Files -> archiveList(archive, loading, hasMore, tab, onLoadMore) { item ->
-                    FileRow(item, isGroup = false, onOpen = onOpenArchive)
+                    FileRow(item, isGroup = false, onOpen = onOpenArchive) { r ->
+                        onLongPressArchive(item.toArchiveTarget(), r)
+                    }
                 }
                 DetailTab.Media -> {
                     if (loading && archive.isEmpty()) {
@@ -177,8 +189,13 @@ internal fun ChatDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
                             ) {
-                                items(archive, key = { it.convSeq }) { // 本页是**单聊**详情，策略走单聊档——显式传，别靠默认值
-                                    ArchiveTile(it, host, useTls, isGroup = false, onOpen = onOpenArchive) }
+                                items(archive, key = { it.convSeq }) { item ->
+                                    // 本页是**单聊**详情，策略走单聊档——显式传，别靠默认值
+                                    ArchiveTile(
+                                        item, host, useTls, isGroup = false, onOpen = onOpenArchive,
+                                        onLongPress = { r -> onLongPressArchive(item.toArchiveTarget(), r) },
+                                    )
+                                }
                             }
                         }
                         if (hasMore) item { LoadMoreRow(onLoadMore) }

@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
@@ -69,6 +70,8 @@ internal fun ConvMediaScreen(
     hasMore: Boolean,
     onLoadMore: () -> Unit,
     onOpen: (ConvMediaItem) -> Unit,
+    /** 长按一项 → 归档菜单（定位到聊天 / 转发 / 删除…）。 */
+    onLongPress: (ConvMediaItem, Rect) -> Unit,
     host: String,
     useTls: Boolean,
     /** 群聊——自动下载策略的单聊/群聊分档要用。 */
@@ -96,7 +99,7 @@ internal fun ConvMediaScreen(
             loading && items.isEmpty() -> Hint("加载中…")
             items.isEmpty() -> Hint(if (kind == MediaKind.FILE) "这个会话还没有文件" else "这个会话还没有图片或视频")
             kind == MediaKind.FILE -> LazyColumn(Modifier.fillMaxSize()) {
-                items(items, key = { it.convSeq }) { FileRow(it, isGroup, onOpen) }
+                items(items, key = { it.convSeq }) { i -> FileRow(i, isGroup, onOpen) { r -> onLongPress(i, r) } }
                 if (hasMore) item { LoadMore(onLoadMore) }
             }
             else -> LazyVerticalGrid(
@@ -105,7 +108,7 @@ internal fun ConvMediaScreen(
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                items(items, key = { it.convSeq }) { MediaTile(it, host, useTls, isGroup, onOpen) }
+                items(items, key = { it.convSeq }) { i -> MediaTile(i, host, useTls, isGroup, onOpen) { r -> onLongPress(i, r) } }
                 if (hasMore) {
                     item { LoadMore(onLoadMore) }
                 }
@@ -158,13 +161,15 @@ internal fun MediaTile(
     useTls: Boolean,
     isGroup: Boolean,
     onOpen: (ConvMediaItem) -> Unit,
+    onLongPress: ((Rect) -> Unit)? = null,
 ) {
     val c = IMTheme.colors
     val isVideo = item.contentType == ContentType.VIDEO
     // 视频这一格显示的是**封面**（小），门控作用在视频本体上；图片这一格门控的就是它自己
     val gate = rememberGate(item.content, item.contentType, item.fileSize, isGroup, autoPrefetch = false)
     Box(
-        Modifier.aspectRatio(1f).background(c.subtleFill).clickable { onOpen(item) },
+        Modifier.aspectRatio(1f).background(c.subtleFill)
+            .archiveItemGestures(onClick = { onOpen(item) }, onLongPress = onLongPress),
     ) {
         // 磨砂占位（M4-7）：一屏四列十几格全从空底开始加载最难看，这一格最该有它
         val frosted = rememberFrostedPainter(item.thumb)
@@ -217,6 +222,7 @@ internal fun FileRow(
     item: ConvMediaItem,
     isGroup: Boolean,
     onOpen: (ConvMediaItem) -> Unit,
+    onLongPress: ((Rect) -> Unit)? = null,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -228,7 +234,10 @@ internal fun FileRow(
         Row(
             // 就绪 → 点开文件；没就绪 → 点一下等于点 ↓（对齐 iOS：整行在门控态下等价于点下载）
             Modifier.fillMaxWidth().background(c.surface)
-                .clickable { if (gate.ready) onOpen(item) else gate.onTap() }
+                .archiveItemGestures(
+                    onClick = { if (gate.ready) onOpen(item) else gate.onTap() },
+                    onLongPress = onLongPress,
+                )
                 .padding(horizontal = d.space4, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

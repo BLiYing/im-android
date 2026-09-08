@@ -1,7 +1,8 @@
 package com.libeyond.imandroid.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
@@ -62,17 +70,35 @@ internal fun DetailTabBar(tabs: List<DetailTab>, current: DetailTab, onSelect: (
 }
 
 /**
- * 语音行。**不可点**——归档里播放要接进聊天页那套单例播放器（否则会同时响两处），
- * 「定位到聊天」也还没有（本端没有跳转到指定 conv_seq 的能力）。
- * 与其给一个点了没反应的行，不如不给点击态，并在页签下注明。
+ * 长按上报「这一项在窗口里的矩形」——菜单要贴着它弹（同气泡长按那套 `boundsInWindow()`）。
+ *
+ * 四类归档行/格共用这一个：各写一遍的话，迟早有一处忘了记矩形，
+ * 表现是"长按有反应但菜单弹在屏幕角落"。
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun Modifier.archiveItemGestures(
+    onClick: () -> Unit,
+    onLongPress: ((Rect) -> Unit)?,
+): Modifier {
+    var rect by remember { mutableStateOf(Rect.Zero) }
+    return this
+        .onGloballyPositioned { rect = it.boundsInWindow() }
+        .combinedClickable(onClick = onClick, onLongClick = onLongPress?.let { cb -> { cb(rect) } })
+}
+
+/**
+ * 语音行。**点不响**——归档里播放要接进聊天页那套单例播放器（否则会同时响两处，iOS 是复用
+ * `IMVoicePlayer sharedPlayer`，本端还没接）。但**长按可以**：定位回聊天、转发、删除。
  */
 @Composable
-internal fun VoiceRow(item: ConvMediaItem) {
+internal fun VoiceRow(item: ConvMediaItem, onLongPress: ((Rect) -> Unit)? = null) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Column {
         Row(
             Modifier.fillMaxWidth().background(c.surface)
+                .archiveItemGestures(onClick = {}, onLongPress = onLongPress)
                 .padding(horizontal = d.space4, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -100,12 +126,19 @@ internal fun VoiceRow(item: ConvMediaItem) {
 
 /** 链接行。左边一枚图标 + URL + 原文摘要。 */
 @Composable
-internal fun LinkRow(text: String, timestamp: Long, url: String, onClick: () -> Unit) {
+internal fun LinkRow(
+    text: String,
+    timestamp: Long,
+    url: String,
+    onLongPress: ((Rect) -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Column {
         Row(
-            Modifier.fillMaxWidth().background(c.surface).clickable(onClick = onClick)
+            Modifier.fillMaxWidth().background(c.surface)
+                .archiveItemGestures(onClick = onClick, onLongPress = onLongPress)
                 .padding(horizontal = d.space4, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -142,7 +175,7 @@ internal fun LinkRow(text: String, timestamp: Long, url: String, onClick: () -> 
 internal const val LINK_TAB_NOTE = "链接由本机已加载的聊天记录扫出，往上翻得越多、这里越全。点一条用浏览器打开。"
 
 /** 语音页签的脚注。如实写清楚这一格现在能做什么、不能做什么。 */
-internal const val VOICE_TAB_NOTE = "归档里暂不能播放，也还不能定位回聊天。"
+internal const val VOICE_TAB_NOTE = "归档里暂不能播放（长按可定位回聊天、转发或删除）。"
 
 /** 判定一条本地消息是不是链接（薄封装，方便调用点读起来短）。 */
 internal fun linkUrlOf(contentType: String, content: String, convSeq: Long): String? =
@@ -156,6 +189,7 @@ internal fun ArchiveTile(
     useTls: Boolean,
     isGroup: Boolean,
     onOpen: (ConvMediaItem) -> Unit,
+    onLongPress: ((Rect) -> Unit)? = null,
 ) {
-    Box(Modifier.aspectRatio(1f)) { MediaTile(item, host, useTls, isGroup, onOpen) }
+    Box(Modifier.aspectRatio(1f)) { MediaTile(item, host, useTls, isGroup, onOpen, onLongPress) }
 }

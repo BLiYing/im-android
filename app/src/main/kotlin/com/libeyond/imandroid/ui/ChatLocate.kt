@@ -109,3 +109,20 @@ fun rememberChatLocator(
     }
     return locator
 }
+
+/**
+ * 从覆盖页（会话详情 / 群资料）回到聊天页时，**顺带要做的那一件事**。
+ *
+ * 为什么需要它：那两页是**盖在**聊天页之上的另一棵组合树（导航层里一个 `return` 就把
+ * `ChatHost` 整个移出了组合），所以它们做不了"在聊天页里定位/开搜索"这类事——只能先关掉自己，
+ * 再由导航层把这件待办交给重新组合起来的聊天页。同 im-web `useChatSearch.armInChatSearch`。
+ *
+ * 两件待办合成一个类型而不是两个布尔/长整型参数：**它们互斥**（一次只可能带一件回去），
+ * 分开放迟早出现"既要开搜索又要定位"的状态组合，而那个组合没有意义。
+ */
+data class ChatArm(
+    val openSearch: Boolean = false,
+    val locateSeq: Long = 0L,
+) {
+    val isEmpty: Boolean get() = !openSearch && locateSeq <= 0L
+}

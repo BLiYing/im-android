@@ -97,13 +97,10 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     // —— 二级页：聊天 / 群资料（占满全屏，不显 Tab 栏）——
     var infoForConv by remember { mutableStateOf<ConversationEntity?>(null) }
     /**
-     * 「关掉详情页，回聊天页并开搜索」的待办（会话详情/群资料的「搜索」pill）。
-     *
-     * 详情页是**盖在**聊天页之上的另一棵组合树（下面那段 `return` 让 ChatHost 整个不组合），
-     * 所以不能在详情页里直接开聊天页的搜索——得先关掉它，再由 ChatHost 接手。
-     * 同 im-web `useChatSearch.armInChatSearch` 的待办套路。
+     * 「关掉详情页，回聊天页顺带做一件事」的待办（开搜索 / 定位到某条）。
+     * 为什么要绕这一道、为什么两件事合成一个类型，见 [ChatArm]。
      */
-    var armChatSearch by remember { mutableStateOf(false) }
+    var chatArm by remember { mutableStateOf(ChatArm()) }
     val infoConv = infoForConv
     if (infoConv != null) {
         if (infoConv.isGroup) {
@@ -113,7 +110,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                 knownFriends = knownFriends,
                 // 成员资料页里点「发消息」：关掉群资料、直接进与该成员的单聊
                 onOpenChat = { stub -> infoForConv = null; openConv = stub },
-                onSearchInChat = { infoForConv = null; armChatSearch = true },
+                onSearchInChat = { infoForConv = null; chatArm = ChatArm(openSearch = true) },
+                onLocateInChat = { seq -> infoForConv = null; chatArm = ChatArm(locateSeq = seq) },
                 onBack = { infoForConv = null },
                 onLeft = { infoForConv = null; openConv = null },
             )
@@ -125,7 +123,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                 client = client,
                 conv = infoConv,
                 knownFriends = knownFriends,
-                onSearchInChat = { infoForConv = null; armChatSearch = true },
+                onSearchInChat = { infoForConv = null; chatArm = ChatArm(openSearch = true) },
+                onLocateInChat = { seq -> infoForConv = null; chatArm = ChatArm(locateSeq = seq) },
                 onBack = { infoForConv = null },
             )
         }
@@ -139,8 +138,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
             conv = conv,
             onBack = { openConv = null },
             onOpenInfo = { infoForConv = conv },
-            openSearchOnEnter = armChatSearch,
-            onSearchOpened = { armChatSearch = false },
+            arm = chatArm,
+            onArmConsumed = { chatArm = ChatArm() },
         )
         return
     }

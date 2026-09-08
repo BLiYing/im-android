@@ -8,7 +8,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Rect
+import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.data.toArchiveTarget
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
@@ -38,6 +41,10 @@ internal fun ConvMediaHost(
      * 调用方没传，门控一路按单聊判）。要加入口时编译器会逼调用方想一下。
      */
     isGroup: Boolean,
+    /** 我是不是本群群主/管理员——决定「为所有人删除」给不给（服务端仍会独立校验）。 */
+    iAmManager: Boolean,
+    /** 归档长按「定位到聊天」：本页盖在聊天页之上，只能把 conv_seq 交给导航层。 */
+    onLocateInChat: (Long) -> Unit,
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -49,6 +56,8 @@ internal fun ConvMediaHost(
     var loading by remember(convId) { mutableStateOf(false) }
     var viewing by remember(convId) { mutableStateOf<ConvMediaItem?>(null) }
     var toast by remember(convId) { mutableStateOf<String?>(null) }
+    var menuFor by remember(convId) { mutableStateOf<ArchiveTarget?>(null) }
+    var menuAnchor by remember(convId) { mutableStateOf(Rect.Zero) }
     val saveMedia = rememberMediaSaver { toast = it }
 
     // 只有两层，直接判；层多了再上枚举（见 ChatDetailPage）
@@ -113,12 +122,27 @@ internal fun ConvMediaHost(
                     viewing = item
                 }
             },
+            onLongPress = { i, r -> menuFor = i.toArchiveTarget(); menuAnchor = r },
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
             isGroup = isGroup,
             onBack = onBack,
         )
     }
+
+    // 归档长按菜单 + 转发选择页（与单聊详情那侧共用同一份接线）
+    ArchiveActionsHost(
+        client = client,
+        convId = convId,
+        isGroup = isGroup,
+        iAmManager = iAmManager,
+        target = menuFor,
+        anchor = menuAnchor,
+        onLocateInChat = { seq -> menuFor = null; onLocateInChat(seq) },
+        onChanged = { load(reset = true) },
+        onToast = { toast = it },
+        onDismiss = { menuFor = null },
+    )
 
     // toast 放最后：它是一层 fillMaxSize 的浮层，画在页面之前会被盖住
     toast?.let { t -> IMToast(t) { toast = null } }

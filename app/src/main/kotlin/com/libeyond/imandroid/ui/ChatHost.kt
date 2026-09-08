@@ -47,7 +47,6 @@ import com.libeyond.imandroid.ui.components.MessageContextMenu
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
 import com.libeyond.imandroid.data.DisplayName
-import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.MsgOp
@@ -83,9 +82,12 @@ fun ChatHost(
     conv: ConversationEntity,
     onBack: () -> Unit,
     onOpenInfo: () -> Unit,
-    /** 进来就开搜索态（从会话详情页的「搜索」pill 过来）。开过一次即回调 [onSearchOpened] 复位。 */
-    openSearchOnEnter: Boolean = false,
-    onSearchOpened: () -> Unit = {},
+    /**
+     * 从详情页/群资料带回来的待办（开搜索 / 定位到某条）。
+     * 做过一次即回调 [onArmConsumed] 复位，否则每次重组都会再做一遍。
+     */
+    arm: ChatArm = ChatArm(),
+    onArmConsumed: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -146,13 +148,12 @@ fun ChatHost(
         // 吐司恰好落在键盘背后，等于没提示。
         onLocate = { seq, refuse -> locator.locate(seq, refuse) },
     )
-    // 从会话详情页的「搜索」pill 进来：那一页是**盖在**聊天页之上的另一棵组合树，
-    // 关掉它才轮得到这里，所以由调用方把"要开搜索"这件事带过来（同 im-web 的 armInChatSearch）。
-    LaunchedEffect(openSearchOnEnter) {
-        if (openSearchOnEnter) {
-            search.begin()
-            onSearchOpened()
-        }
+    // 详情页/群资料带回来的待办（见 ChatArm 的注释：那两页关掉之后才轮得到这里）
+    LaunchedEffect(arm) {
+        if (arm.isEmpty) return@LaunchedEffect
+        if (arm.openSearch) search.begin()
+        if (arm.locateSeq > 0) locator.locate(arm.locateSeq)
+        onArmConsumed()
     }
 
     // 系统返回键：**先关最上面那层覆盖层，全关完了才回会话列表**。
@@ -500,24 +501,10 @@ fun ChatHost(
             count = fwd.size,
             onCancel = { forwarding = null },
             onToast = { toast = it },
+            // 串行发送与 forwardFrom 口径收在 forwardMessages 里（详情页归档转发共用同一份）
             onConfirm = { targets ->
                 forwarding = null
-                scope.launch {
-                    // **逐条、逐会话串行发**：服务端对 send_msg 有限流，
-                    // 9 个会话 × 100 条并发打过去必然撞墙。
-                    // 合并转发（chat_record 一张卡片）本端还没做，见 current_task。
-                    val myName = client.myPublicName()
-                    for (t in targets) {
-                        val to = if (t.isGroup) "" else t.peerUid
-                        for (m in fwd) {
-                            client.messages.forward(
-                                msg = m, toConvId = t.convId, to = to,
-                                origin = Forward.originOf(m, owner, myName),
-                            )
-                        }
-                    }
-                    toast = if (targets.size > 1) "已转发到 ${targets.size} 个会话" else "已转发"
-                }
+                scope.launch { toast = forwardMessages(client, fwd, targets) }
             },
         )
         return
@@ -527,62 +514,18 @@ fun ChatHost(
         IMToast(t) { toast = null }
     }
 
-    // —— 消息长按菜单 ——
-    val target = menuFor
-    if (target != null) {
-        val actions = MessageActions.availableFor(target, owner, conv.isGroup, iAmManager)
-        MessageContextMenu(
+    // —— 消息长按菜单 ——（拼装与原位重绘都在 MessageMenuItems.kt）
+    menuFor?.let { target ->
+        ChatMessageMenu(
+            target = target,
             anchor = menuAnchor,
-            mine = target.sender == owner,
-            // 原位重绘被长按的那一**行**：iOS 是把它光栅化成位图钉回原位（UITargetedPreview），
-            // 这里直接再画一遍。**必须按行的真实形态画**——宫格要画成宫格：
-            // 起初这里一律画 Bubble，长按宫格里的一格会重绘成一张大图，
-            // 与原位那一行完全对不上（2026-09-08 真机撞见）。
-            preview = {
-                // **与列表本身共用同一段渲染**（ChatRowView）：预览与原位由两份代码画时，
-                // 本端连栽两次——宫格被画成一张大图、带链接的文本少了富预览卡。
-                val idx = rows.indexOfFirst { r ->
-                    when (r) {
-                        is ChatRow.Confirmed -> r.msg.convSeq == target.convSeq
-                        is ChatRow.Album -> r.sent.any { it.convSeq == target.convSeq }
-                        else -> false
-                    }
-                }
-                val row = rows.getOrNull(idx)
-                if (row is ChatRow.Album) {
-                    // 宫格浮起的是**手指按住的那一格**（同 iOS）：anchor 就是那一格的矩形，
-                    // 这里按它铺满即可（格子是正方形）。
-                    AsyncImage(
-                        model = MediaUrl.absolute(
-                            target.content, client.host, com.libeyond.imandroid.BuildConfig.USE_TLS,
-                        ),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                            .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius)),
-                    )
-                } else if (idx >= 0) {
-                    ChatRowView(rows = rows, i = idx, style = rowStyle)
-                }
-            },
-            items = buildMessageMenu(actions) { a ->
-                when (a) {
-                    MessageAction.Copy -> clipboard.setText(AnnotatedString(target.content))
-                    MessageAction.Reply -> replyTo = target
-                    MessageAction.Forward -> forwarding = listOf(target)
-
-                    MessageAction.Recall ->
-                        client.messages.sendMsgOp(conv.convId, MsgOp.RECALL, target.convSeq)
-                    MessageAction.DeleteForEveryone ->
-                        client.messages.sendMsgOp(conv.convId, MsgOp.DELETE, target.convSeq)
-                    MessageAction.HideForMe -> scope.launch {
-                        // 走 REST，不是 msg_op——「仅为我删除」是每用户私有偏好，
-                        // 不进会话事件流、不占 conv_seq、不广播给其他成员（§6.7.1）
-                        runCatching { client.conversationsApi.hideMessage(conv.convId, target.convSeq) }
-                        client.repo.applyMsgHidden(owner, conv.convId, target.convSeq)
-                    }
-                }
-            },
+            rows = rows,
+            rowStyle = rowStyle,
+            client = client,
+            conv = conv,
+            iAmManager = iAmManager,
+            onReply = { replyTo = it },
+            onForward = { forwarding = listOf(it) },
             onDismiss = { menuFor = null },
         )
     }
