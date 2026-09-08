@@ -23,15 +23,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
-import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMErrorText
 import com.libeyond.imandroid.ui.components.IMTextField
+import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -62,19 +61,7 @@ fun UserSearchScreen(
         modifier = Modifier.fillMaxSize().background(c.groupedBackground)
             .systemBarsPadding().imePadding(),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(c.surface)
-                .padding(horizontal = d.space3, vertical = d.space3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                imageVector = Lucide.ArrowLeft, contentDescription = "返回",
-                modifier = Modifier.size(24.dp).clickable { onBack() },
-                colorFilter = ColorFilter.tint(c.accent),
-            )
-            Spacer(Modifier.width(d.space3))
-            Text("找人", style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
-        }
+        IMTopBar(title = "找人", onLeft = onBack)
 
         Column(Modifier.padding(d.space4)) {
             IMTextField(query, onQueryChange, "用户名或手机号")

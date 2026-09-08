@@ -243,6 +243,7 @@ fun ChatHost(
     ChatScreen(
         convId = conv.convId,
         title = conv.title.ifBlank { conv.convId },
+        avatarUrl = conv.avatarUrl,
         myUid = owner,
         rows = rows,
         readSeq = entry.first,

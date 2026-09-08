@@ -1,6 +1,5 @@
 package com.libeyond.imandroid.ui.screens
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,12 +27,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
-import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.sdk.api.JoinRequest
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -56,27 +54,13 @@ internal fun JoinRequestsScreen(
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
-    // **本页自己接返回键**。宿主 GroupInfoHost 在本页打开时会关掉它那个 BackHandler
-    // 让位，这里不接就没人接了——真机实测：按返回直接退出整个 App
-    // （与 ChatOverlays 注释里那条「每加一个覆盖层都没人想起返回键」同一个坑）。
-    BackHandler(onBack = onBack)
     var showDone by remember { mutableStateOf(false) }
     val pending = requests.filter { it.isPending }
     val done = requests.filterNot { it.isPending }
     val shown = if (showDone) done else pending
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        Row(
-            Modifier.fillMaxWidth().background(c.surface).padding(horizontal = d.space3, vertical = d.space3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                Lucide.ArrowLeft, "返回", Modifier.size(24.dp).clickable { onBack() },
-                colorFilter = ColorFilter.tint(c.accent),
-            )
-            Spacer(Modifier.width(d.space3))
-            Text("入群申请", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
-        }
+        IMTopBar(title = "入群申请", onLeft = onBack)
 
         Row(Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = 10.dp)) {
             SegButton("待处理" + if (pending.isNotEmpty()) "（${pending.size}）" else "", !showDone) { showDone = false }

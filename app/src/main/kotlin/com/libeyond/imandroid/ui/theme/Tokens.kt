@@ -227,6 +227,17 @@ data class IMDimens(
     /** 日期分隔胶囊高。iOS `_datePillHeight` 24。 */
     val datePillHeight: Dp = 24.dp,
 
+    // —— 顶部标题栏（UI_SPEC §4.5）——
+    /**
+     * 标题栏左右两侧的固定占位宽。**必须是固定值**：靠 weight 撑，标题会随左右内容长度左右漂，
+     * 翻页时肉眼可见地抖一下（这正是「居中」这个需求的由来）。
+     */
+    val topBarSide: Dp = 64.dp,
+    /** 右侧会话头像直径。**这是 Android 先行的能力**，iOS 标题栏右侧目前只有图标/文字动作。 */
+    val topBarAvatar: Dp = 32.dp,
+    /** 左键图标（返回箭头等）。 */
+    val topBarIcon: Dp = 24.dp,
+
     // —— 输入栏（UI_SPEC §4）——
     /** 输入栏**单行态**总高。iOS `inputBar.heightAnchor` 56；多行时本端允许长高。 */
     val inputBarHeight: Dp = 56.dp,

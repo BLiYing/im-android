@@ -23,9 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
-import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.MemberProfile
@@ -33,6 +31,7 @@ import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMPrimaryButton
 import com.libeyond.imandroid.ui.components.IMSecondaryButton
+import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -63,16 +62,8 @@ fun UserProfileScreen(
         Modifier.fillMaxSize().background(c.groupedBackground)
             .systemBarsPadding().verticalScroll(rememberScrollState()),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(c.surface)
-                .padding(horizontal = d.space3, vertical = d.space3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                Lucide.ArrowLeft, "返回", Modifier.size(24.dp).clickable { onBack() },
-                colorFilter = ColorFilter.tint(c.accent),
-            )
-        }
+        // 标题留空：这一页的"标题"就是下面那张大头像 + 名字（iOS 同）
+        IMTopBar(title = "", onLeft = onBack, showDivider = false)
 
         // —— 头部 ——
         Row(

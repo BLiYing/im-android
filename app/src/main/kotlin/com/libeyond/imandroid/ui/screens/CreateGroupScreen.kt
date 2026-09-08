@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
-import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.sdk.api.FriendEntry
@@ -33,6 +32,7 @@ import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMErrorText
 import com.libeyond.imandroid.ui.components.IMPrimaryButton
 import com.libeyond.imandroid.ui.components.IMTextField
+import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -60,21 +60,12 @@ fun CreateGroupScreen(
     val atLimit = maxMembers > 0 && selected.size + 1 >= maxMembers
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding().imePadding()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(c.surface)
-                .padding(horizontal = d.space3, vertical = d.space3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                Lucide.ArrowLeft, "返回", Modifier.size(24.dp).clickable { onBack() },
-                colorFilter = ColorFilter.tint(c.accent),
-            )
-            Spacer(Modifier.width(d.space3))
-            Text("发起群聊", style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
-            Spacer(Modifier.weight(1f))
-            Text("已选 ${selected.size}", color = c.textSecondary,
-                style = MaterialTheme.typography.bodyMedium)
-        }
+        // 「已选 N」放副标题：右边那格要留给动作/头像，塞进去标题就不居中了
+        IMTopBar(
+            title = "发起群聊",
+            subtitle = if (selected.isEmpty()) "" else "已选 ${selected.size}",
+            onLeft = onBack,
+        )
 
         Column(Modifier.padding(d.space4)) {
             IMTextField(name, onNameChange, "群名称", enabled = !busy)

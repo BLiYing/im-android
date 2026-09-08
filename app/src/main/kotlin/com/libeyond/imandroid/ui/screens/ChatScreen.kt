@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Lucide
@@ -59,6 +58,8 @@ import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.data.db.PendingMessageEntity
 import com.libeyond.imandroid.data.db.SendState
+import com.libeyond.imandroid.ui.components.IMTopBar
+import com.libeyond.imandroid.ui.components.TopBarAvatar
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -95,8 +96,13 @@ fun ChatScreen(
     onLoadOlder: () -> Unit,
     /** 点「+」选图片。 */
     onAttach: (AttachItems.Kind) -> Unit,
-    /** 点标题进详情（群资料 / 用户资料）。 */
+    /**
+     * 进会话详情。**入口是右上角那个会话头像**（UI_SPEC §4.5）——
+     * 此前只能点标题进，而"标题可以点"这件事界面上没有任何提示，等于没有入口。
+     */
     onOpenInfo: () -> Unit,
+    /** 会话头像（右上角那个）。空串则显示首字母色块。 */
+    avatarUrl: String,
     /** 取链接富预览（文本气泡里首个 URL）。由 Host 注入，screen 不持有 IMClient。 */
     loadLinkPreview: suspend (String) -> com.libeyond.imandroid.sdk.api.LinkPreview?,
     /** 媒体地址补全用。 */
@@ -189,38 +195,21 @@ fun ChatScreen(
             .systemBarsPadding()
             .imePadding(),
     ) {
-        // —— 标题栏 ——
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(c.surface)
-                .padding(horizontal = d.space3, vertical = d.space3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                imageVector = Lucide.ArrowLeft,
-                contentDescription = "返回",
-                modifier = Modifier.size(24.dp).clickable { onBack() },
-                colorFilter = ColorFilter.tint(c.accent),
-            )
-            Spacer(Modifier.width(d.space3))
-            Column(Modifier.clickable { onOpenInfo() }) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = c.textPrimary,
-                    maxLines = 1,
-                )
-                if (subtitle.isNotEmpty()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (subtitle == "在线") c.online else c.textSecondary,
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
+        // —— 标题栏（全局共用 IMTopBar，规格见 UI_SPEC §4.5）——
+        IMTopBar(
+            title = title,
+            subtitle = subtitle,
+            subtitleAccent = subtitle == "在线",
+            onLeft = onBack,
+            // 标题也保留可点（iOS 就是点标题进详情），但**可见入口是右边那个头像**
+            onTitleClick = onOpenInfo,
+            avatar = TopBarAvatar(
+                label = title,
+                seed = convId,
+                url = avatarUrl,
+                onClick = onOpenInfo,
+            ),
+        )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(

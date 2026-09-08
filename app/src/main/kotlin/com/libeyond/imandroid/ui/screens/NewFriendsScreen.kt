@@ -22,12 +22,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
-import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -45,18 +44,7 @@ fun NewFriendsScreen(
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(c.surface)
-                .padding(horizontal = d.space3, vertical = d.space3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                Lucide.ArrowLeft, "返回", Modifier.size(24.dp).clickable { onBack() },
-                colorFilter = ColorFilter.tint(c.accent),
-            )
-            Spacer(Modifier.width(d.space3))
-            Text("新的朋友", style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
-        }
+        IMTopBar(title = "新的朋友", onLeft = onBack)
 
         if (pending.isEmpty() && requested.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

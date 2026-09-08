@@ -8,6 +8,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.libeyond.imandroid.data.GroupInfoNav
+import com.libeyond.imandroid.data.GroupInfoPage
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.data.GroupSettings
 import com.libeyond.imandroid.data.MemberProfile
@@ -25,6 +27,7 @@ import com.libeyond.imandroid.sdk.api.JoinRequest
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.screens.GroupInfoScreen
+import com.libeyond.imandroid.ui.screens.GroupManageScreen
 import com.libeyond.imandroid.ui.screens.JoinRequestsScreen
 import kotlinx.coroutines.launch
 
@@ -58,8 +61,24 @@ fun GroupInfoHost(
     var joinReqs by remember(convId) { mutableStateOf<List<JoinRequest>?>(null) }
     var joinReqsLoading by remember(convId) { mutableStateOf(false) }
     var deciding by remember(convId) { mutableStateOf("") }
+    // 群管理二级页（仅群主/管理员能进）
+    var managing by remember(convId) { mutableStateOf(false) }
 
-    BackHandler(enabled = memberProfile == null && joinReqs == null, onBack = onBack)
+    // 返回键**一处派发**，不再靠每个子页面自己记得接（一天漏了三次，见 GroupInfoPage 的注释）。
+    // 枚举加一页，这个 when 就编译不过——漏不掉。
+    val page = GroupInfoNav.current(
+        joinRequestsOpen = joinReqs != null,
+        memberProfileOpen = memberProfile != null,
+        managing = managing,
+    )
+    BackHandler {
+        when (page) {
+            GroupInfoPage.JoinRequests -> joinReqs = null
+            GroupInfoPage.MemberProfile -> memberProfile = null
+            GroupInfoPage.Manage -> managing = false
+            GroupInfoPage.Detail -> onBack()
+        }
+    }
 
     LaunchedEffect(convId) {
         runCatching { info = client.groups.info(convId) }
@@ -102,6 +121,11 @@ fun GroupInfoHost(
     }
 
     val reqs = joinReqs
+    val mp = memberProfile
+    // **四个页面互斥、且都不 return**：底下的编辑框/确认框/toast 要对每一页都生效。
+    // 此前待审列表那条是 `return` 的，结果审批完的 toast 根本不显示——
+    // 与「每加一个覆盖层都没人想起返回键」是同一类账：加页面时忘了页面之外还有东西要渲染。
+    // 层级由深到浅：待审(从管理页进) > 成员资料(从详情进) > 管理页 > 详情。
     if (reqs != null) {
         JoinRequestsScreen(
             requests = reqs,
@@ -125,15 +149,7 @@ fun GroupInfoHost(
             },
             onBack = { joinReqs = null },
         )
-        return
-    }
-
-    // —— 成员资料页 ——
-    // **不叠一层而是整页替换**：`GroupInfoHost` 的内容不在自己的 Box 里，
-    // 父布局是谁由调用方决定，叠出来可能是竖排而不是覆盖。整页替换还顺带让
-    // 群资料页的滚动位置与成员分页游标原样留着（那些 remember 都在上面，没被跳过）。
-    val mp = memberProfile
-    if (mp != null) {
+    } else if (mp != null) {
         val f = knownFriends[mp.userId]
         UserProfileHost(
             client = client,
@@ -147,10 +163,36 @@ fun GroupInfoHost(
             },
             onBack = { memberProfile = null },
         )
-        return
-    }
-
-    GroupInfoScreen(
+    } else if (managing) {
+        GroupManageScreen(
+            info = g,
+            onManage = { action -> manage = action },
+            onToggleSetting = { key ->
+                // **整体替换**：五个值一次全传，翻转哪一个由纯函数算（见 GroupSettings）
+                val v = GroupSettings.toggled(g, key)
+                runManage(GroupSettings.label(key)) {
+                    client.groups.updateSettings(
+                        convId,
+                        joinApproval = v.joinApproval,
+                        permInvite = v.permInvite,
+                        permEditInfo = v.permEditInfo,
+                        permPin = v.permPin,
+                        historyVisible = v.historyVisible,
+                    )
+                }
+            },
+            onOpenJoinRequests = {
+                joinReqs = emptyList()
+                joinReqsLoading = true
+                scope.launch { reloadJoinRequests(); joinReqsLoading = false }
+            },
+            onBack = { managing = false },
+        )
+    } else {
+        // **整页替换而不是叠一层**：`GroupInfoHost` 的内容不在自己的 Box 里，
+        // 父布局是谁由调用方决定，叠出来可能是竖排而不是覆盖。替换还顺带让
+        // 详情页的滚动位置与成员分页游标原样留着（那些 remember 都在上面，没被跳过）。
+        GroupInfoScreen(
         info = g,
         members = members,
         hasMoreMembers = hasMore,
@@ -173,27 +215,8 @@ fun GroupInfoHost(
             }
         },
         onOpenMember = { m -> memberProfile = m },
-        onToggleSetting = { key ->
-            // **整体替换**：五个值一次全传，翻转哪一个由纯函数算（见 GroupSettings）
-            val v = GroupSettings.toggled(g, key)
-            runManage(GroupSettings.label(key)) {
-                client.groups.updateSettings(
-                    convId,
-                    joinApproval = v.joinApproval,
-                    permInvite = v.permInvite,
-                    permEditInfo = v.permEditInfo,
-                    permPin = v.permPin,
-                    historyVisible = v.historyVisible,
-                )
-            }
-        },
-        onOpenJoinRequests = {
-            joinReqs = emptyList()
-            joinReqsLoading = true
-            scope.launch { reloadJoinRequests(); joinReqsLoading = false }
-        },
         myUid = client.uid.orEmpty(),
-        onManage = { action -> manage = action },
+        onOpenManage = { managing = true },
         onMemberLongPress = { m -> memberMenu = m },
         onLeave = {
             scope.launch {
@@ -202,10 +225,11 @@ fun GroupInfoHost(
                 onLeft()
             }
         },
-        onBack = onBack,
-    )
+            onBack = onBack,
+        )
+    }
 
-    // —— 管理项的编辑框 ——
+    // —— 管理项的编辑框（对四个页面都生效）——
     when (manage) {
         GroupManageAction.EditName -> IMTextPrompt(
             title = "群名称", initial = g.name, maxLen = 30,
