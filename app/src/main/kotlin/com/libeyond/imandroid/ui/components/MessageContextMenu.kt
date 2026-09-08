@@ -16,6 +16,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +56,9 @@ fun MessageContextMenu(
     onDismiss: () -> Unit,
     preview: (@Composable () -> Unit)? = null,
 ) {
+    // 展开中的子菜单（对齐 iOS UIMenu 的 inline submenu）。null = 显示顶层。
+    var submenu by remember { mutableStateOf<SheetItem?>(null) }
+    val shown = submenu?.submenu ?: items
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val density = LocalDensity.current
@@ -63,7 +70,7 @@ fun MessageContextMenu(
 
     // 菜单高度按项数估算（每项 48 + 上下 8）——只用来判断"下方放不放得下"，
     // 估偏一点不影响正确性：放不下就翻上方，翻上方也放不下就贴顶。
-    val estMenuH: Dp = (items.size * 48 + 16).dp
+    val estMenuH: Dp = (shown.size * 48 + 16).dp
     val gap = 8.dp
     val below = anchorBottom + gap
     val fitsBelow = below + estMenuH < screenH - 24.dp
@@ -97,9 +104,9 @@ fun MessageContextMenu(
                     // 行内的左右对齐由 Bubble 自己做——与真气泡逐像素同一套算法。
                     .padding(top = anchorTop)
                     .fillMaxWidth()
-                    .padding(horizontal = d.chatAvatarLeading)
-                    // 吞掉点击：点气泡本身不该关菜单（与 iOS 一致）
-                    .clickable(enabled = false) {},
+                    .padding(horizontal = d.chatAvatarLeading),
+                // **不吞点击**：这一层是整行全宽的，吞了就等于「气泡旁边的空白区点了没反应」——
+                // 2026-09-08 用户报的正是这个。iOS 点预览本身也是关菜单，所以让点击穿到背景最省事。
             ) { preview() }
         }
 
@@ -112,34 +119,58 @@ fun MessageContextMenu(
                 .background(c.surfaceElevated)
                 .clickable(enabled = false) {},
         ) {
-            items.forEachIndexed { i, item ->
-                if (i > 0) {
-                    Box(
-                        Modifier
-                            .padding(start = d.space4)
-                            .height(0.5.dp)
-                            .fillMaxWidth()
-                            .background(c.separator),
-                    )
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            item.onClick()
-                            onDismiss()
-                        }
-                        .padding(horizontal = d.space4, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = item.label,
-                        color = if (item.destructive) c.danger else c.textPrimary,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Spacer(Modifier.width(d.space2))
+            // 子菜单里给一行返回上一级——否则进了子菜单只能关掉重来
+            if (submenu != null) {
+                MenuRow(
+                    SheetItem("‹ 返回", icon = null) { },
+                    onClick = { submenu = null },
+                )
+                MenuDivider()
+            }
+            shown.forEachIndexed { i, item ->
+                if (i > 0) MenuDivider()
+                MenuRow(item) {
+                    if (item.submenu.isNotEmpty()) {
+                        submenu = item
+                    } else {
+                        item.onClick()
+                        onDismiss()
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MenuDivider() {
+    Box(
+        Modifier.padding(start = IMTheme.dimens.space4).height(0.5.dp)
+            .fillMaxWidth().background(IMTheme.colors.separator),
+    )
+}
+
+/** 一行：图标 + 文案（+ 有子菜单时右侧 `›`）。图标列即便某项没图标也占位，文字才对得齐。 */
+@Composable
+private fun MenuRow(item: SheetItem, onClick: () -> Unit) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    val fg = if (item.destructive) c.danger else c.textPrimary
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+            .padding(horizontal = d.space4, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(28.dp)) {
+            item.icon?.let {
+                androidx.compose.foundation.Image(
+                    it, null, Modifier.width(18.dp).height(18.dp),
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(fg),
+                )
+            }
+        }
+        Text(item.label, color = fg, style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f))
+        if (item.submenu.isNotEmpty()) Text("›", color = c.textTertiary)
     }
 }

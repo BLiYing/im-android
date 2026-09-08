@@ -36,6 +36,14 @@ import com.libeyond.imandroid.ui.screens.Bubble
 import com.libeyond.imandroid.ui.components.MessageContextMenu
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
+import com.composables.icons.lucide.Copy
+import com.composables.icons.lucide.CornerUpLeft
+import com.composables.icons.lucide.Forward
+import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.Undo2
+import com.composables.icons.lucide.User
+import com.composables.icons.lucide.Users
+import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.db.MessageEntity
@@ -44,6 +52,9 @@ import com.libeyond.imandroid.ui.components.ActionSheet
 import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.ui.screens.AlbumBubble
+import com.libeyond.imandroid.ui.screens.AlbumTile
+import com.libeyond.imandroid.ui.screens.ChatRow
 import com.libeyond.imandroid.ui.screens.ChatScreen
 import com.libeyond.imandroid.ui.screens.buildChatRows
 import kotlinx.coroutines.delay
@@ -322,6 +333,7 @@ fun ChatHost(
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
         uploadProgress = uploadProgress,
+        menuForSeq = menuFor?.convSeq ?: 0L,
     )
 
     // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——
@@ -408,36 +420,54 @@ fun ChatHost(
         MessageContextMenu(
             anchor = menuAnchor,
             mine = target.sender == owner,
-            // 原位重绘被长按的气泡：iOS 是把它光栅化成位图钉回原位，这里直接再画一遍，
-            // **不带长按回调**——菜单开着时再长按自己没有意义。
+            // 原位重绘被长按的那一**行**：iOS 是把它光栅化成位图钉回原位（UITargetedPreview），
+            // 这里直接再画一遍。**必须按行的真实形态画**——宫格要画成宫格：
+            // 起初这里一律画 Bubble，长按宫格里的一格会重绘成一张大图，
+            // 与原位那一行完全对不上（2026-09-08 真机撞见）。
             preview = {
-                Bubble(
-                    text = target.content,
-                    msg = target,
-                    mine = target.sender == owner,
-                    timestamp = target.timestamp,
-                    senderName = null,
-                    host = client.host,
-                    useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
-                )
+                val row = rows.firstOrNull { r ->
+                    when (r) {
+                        is ChatRow.Confirmed -> r.msg.convSeq == target.convSeq
+                        is ChatRow.Album -> r.msgs.any { it.convSeq == target.convSeq }
+                        else -> false
+                    }
+                }
+                when (row) {
+                    is ChatRow.Album -> AlbumBubble(
+                        tiles = row.msgs.map { AlbumTile(it.content, it.contentType, it.duration) },
+                        mine = row.msgs.first().sender == owner,
+                        timestamp = row.msgs.last().timestamp,
+                        host = client.host,
+                        useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+                        // 菜单开着时再长按/点开自己没有意义
+                        onLongPress = {},
+                    )
+                    else -> Bubble(
+                        text = target.content,
+                        msg = target,
+                        mine = target.sender == owner,
+                        timestamp = target.timestamp,
+                        senderName = null,
+                        host = client.host,
+                        useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+                    )
+                }
             },
-            items = actions.map { a ->
-                SheetItem(a.label, a.destructive) {
-                    when (a) {
-                        MessageAction.Copy -> clipboard.setText(AnnotatedString(target.content))
-                        MessageAction.Reply -> replyTo = target
-                        MessageAction.Forward -> forwarding = listOf(target)
+            items = buildMessageMenu(actions) { a ->
+                when (a) {
+                    MessageAction.Copy -> clipboard.setText(AnnotatedString(target.content))
+                    MessageAction.Reply -> replyTo = target
+                    MessageAction.Forward -> forwarding = listOf(target)
 
-                        MessageAction.Recall ->
-                            client.messages.sendMsgOp(conv.convId, MsgOp.RECALL, target.convSeq)
-                        MessageAction.DeleteForEveryone ->
-                            client.messages.sendMsgOp(conv.convId, MsgOp.DELETE, target.convSeq)
-                        MessageAction.HideForMe -> scope.launch {
-                            // 走 REST，不是 msg_op——「仅为我删除」是每用户私有偏好，
-                            // 不进会话事件流、不占 conv_seq、不广播给其他成员（§6.7.1）
-                            runCatching { client.conversationsApi.hideMessage(conv.convId, target.convSeq) }
-                            client.repo.applyMsgHidden(owner, conv.convId, target.convSeq)
-                        }
+                    MessageAction.Recall ->
+                        client.messages.sendMsgOp(conv.convId, MsgOp.RECALL, target.convSeq)
+                    MessageAction.DeleteForEveryone ->
+                        client.messages.sendMsgOp(conv.convId, MsgOp.DELETE, target.convSeq)
+                    MessageAction.HideForMe -> scope.launch {
+                        // 走 REST，不是 msg_op——「仅为我删除」是每用户私有偏好，
+                        // 不进会话事件流、不占 conv_seq、不广播给其他成员（§6.7.1）
+                        runCatching { client.conversationsApi.hideMessage(conv.convId, target.convSeq) }
+                        client.repo.applyMsgHidden(owner, conv.convId, target.convSeq)
                     }
                 }
             },
@@ -447,4 +477,50 @@ fun ChatHost(
     }
 }
 
+/**
+ * 把动作列表拼成菜单项，**两档删除收进一个「删除」子菜单**。
+ *
+ * 对齐 iOS `deleteMenuActionForMessage:`：两档删除是**同一个动作的两种范围**，
+ * 摊成两个平级项会让人以为是两件不同的事（而且「为所有人删除」这种长文案会把菜单撑宽）。
+ * 只有一档可用时不套子菜单——为一个选项造一层菜单是纯粹的多余点击。
+ */
+private fun buildMessageMenu(
+    actions: List<MessageAction>,
+    run: (MessageAction) -> Unit,
+): List<SheetItem> {
+    val deletes = actions.filter {
+        it == MessageAction.DeleteForEveryone || it == MessageAction.HideForMe
+    }
+    val head = actions.filterNot { it in deletes }.map { a ->
+        SheetItem(a.label, a.destructive, icon = messageActionIcon(a)) { run(a) }
+    }
+    val tail = when {
+        deletes.isEmpty() -> emptyList()
+        deletes.size == 1 -> listOf(
+            SheetItem("删除", destructive = true, icon = Lucide.Trash2) { run(deletes.first()) },
+        )
+        else -> listOf(
+            SheetItem(
+                "删除", destructive = true, icon = Lucide.Trash2,
+                submenu = deletes.map { a ->
+                    SheetItem(a.label, destructive = true, icon = messageActionIcon(a)) { run(a) }
+                },
+            ),
+        )
+    }
+    return head + tail
+}
 
+/**
+ * 消息菜单项图标。**逐项对齐 iOS `messageActionsForMessage:` 里的 SF Symbol**
+ * （doc.on.doc / arrowshape.turn.up.left / arrowshape.turn.up.right /
+ * arrow.uturn.backward / trash），用 Lucide 里语义最近的一枚。
+ */
+private fun messageActionIcon(a: MessageAction) = when (a) {
+    MessageAction.Copy -> Lucide.Copy
+    MessageAction.Reply -> Lucide.CornerUpLeft
+    MessageAction.Forward -> Lucide.Forward
+    MessageAction.Recall -> Lucide.Undo2
+    MessageAction.DeleteForEveryone -> Lucide.Users
+    MessageAction.HideForMe -> Lucide.User
+}

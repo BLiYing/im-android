@@ -25,6 +25,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,7 +54,8 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 fun ConversationListScreen(
     conversations: List<ConversationEntity>,
     onOpen: (ConversationEntity) -> Unit,
-    onLongPress: (ConversationEntity) -> Unit,
+    /** 长按一行，带上它在窗口坐标系里的矩形——菜单要贴着这一行弹（对齐 iOS UIContextMenu）。 */
+    onLongPress: (ConversationEntity, androidx.compose.ui.geometry.Rect) -> Unit,
     onSettings: () -> Unit,
     connected: Boolean,
 ) {
@@ -96,7 +103,7 @@ fun ConversationListScreen(
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(conversations, key = { it.convId }) { conv ->
-                    ConversationRow(conv, onClick = { onOpen(conv) }, onLongClick = { onLongPress(conv) })
+                    ConversationRow(conv, onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) })
                 }
             }
         }
@@ -105,7 +112,12 @@ fun ConversationListScreen(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun ConversationRow(
+    conv: ConversationEntity,
+    onClick: () -> Unit,
+    onLongClick: (androidx.compose.ui.geometry.Rect) -> Unit,
+) {
+    var rect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val title = conv.title.ifBlank { conv.convId }
@@ -117,7 +129,8 @@ private fun ConversationRow(conv: ConversationEntity, onClick: () -> Unit, onLon
             // 用 heightIn(min) 不用 height：长昵称换行时允许长高，不裁内容。
             .heightIn(min = d.convRowHeight)
             .background(c.pageBackground)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .onGloballyPositioned { rect = it.boundsInWindow() }
+            .combinedClickable(onClick = onClick, onLongClick = { onLongClick(rect) })
             .padding(horizontal = d.space4, vertical = d.space3),
         verticalAlignment = Alignment.CenterVertically,
     ) {

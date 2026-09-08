@@ -87,8 +87,7 @@ internal fun AlbumBubble(
         Box(
             modifier = Modifier
                 .width(AlbumLayout.WIDTH.dp)
-                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
-                .combinedClickable(onClick = {}, onLongClick = { onLongPress(rect) }),
+                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius)),
         ) {
             Column {
                 var idx = 0
@@ -104,7 +103,14 @@ internal fun AlbumBubble(
                                 Spacer(Modifier.size(tile))
                             } else {
                                 val at = idx - 1 // idx 已在上面自增过
-                                AlbumTileView(m, tile, host, useTls, onTap = { onTapTile(at) })
+                                // **长按必须挂在每一格上**：格子自己的 clickable 会吃掉 down 事件，
+                                // 挂在外层容器上的 combinedClickable 永远收不到长按
+                                // ——2026-09-08 用户报的「九宫格消息不支持长按」就是这个。
+                                AlbumTileView(
+                                    m, tile, host, useTls,
+                                    onTap = { onTapTile(at) },
+                                    onLongPress = { onLongPress(rect) },
+                                )
                             }
                         }
                     }
@@ -129,6 +135,7 @@ internal fun AlbumBubble(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AlbumTileView(
     m: AlbumTile,
@@ -136,9 +143,13 @@ private fun AlbumTileView(
     host: String,
     useTls: Boolean,
     onTap: () -> Unit = {},
+    onLongPress: () -> Unit = {},
 ) {
     val c = IMTheme.colors
-    Box(modifier = Modifier.size(size).background(c.subtleFill).clickable(onClick = onTap)) {
+    Box(
+        modifier = Modifier.size(size).background(c.subtleFill)
+            .combinedClickable(onClick = onTap, onLongClick = onLongPress),
+    ) {
         AsyncImage(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，
             // 所以选完立刻有图，不用等上传完

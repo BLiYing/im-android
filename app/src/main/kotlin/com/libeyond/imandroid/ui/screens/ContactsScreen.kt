@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -53,7 +54,10 @@ fun ContactsScreen(
     val c = IMTheme.colors
     val d = IMTheme.dimens
 
-    Column(modifier = Modifier.fillMaxSize().background(c.groupedBackground)) {
+    // **systemBarsPadding 不能漏**：Tab 根页面自己顶到屏幕边缘，不加这一句标题会压到状态栏上去
+    // （2026-09-08 用户报的就是这个：「通讯录」四个字骑在时间和信号图标上）。
+    // 会话列表与「我」页早就有，唯独这一页漏了。
+    Column(modifier = Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().background(c.surface)
                 .padding(horizontal = d.space4, vertical = d.space3),

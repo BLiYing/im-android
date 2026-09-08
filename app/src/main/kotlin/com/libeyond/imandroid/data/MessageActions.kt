@@ -78,8 +78,9 @@ enum class ConversationAction(val label: String, val destructive: Boolean = fals
     Mute("免打扰"),
     Unmute("取消免打扰"),
     MarkUnread("标为未读"),
-    MarkRead("标为已读"),
-    Delete("删除会话", destructive = true),
+    // 文案逐字对齐 iOS `conversationActionsFor:`（「设为已读」不是「标为已读」、「删除」不是「删除会话」）
+    MarkRead("设为已读"),
+    Delete("删除", destructive = true),
 }
 
 object ConversationActions {

@@ -36,6 +36,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.text.SpanStyle
@@ -116,6 +117,14 @@ fun ChatScreen(
     onRetry: (String) -> Unit,
     /** 分片上传进度：clientMsgId → 百分比。没有条目 = 不在分片上传中。 */
     uploadProgress: Map<String, Int>,
+    /**
+     * 正被长按（菜单开着）的那条的 `conv_seq`；`0` = 没有。
+     *
+     * **那一行要整行隐形**：长按菜单会在原位重绘一份气泡浮在压暗层之上，
+     * 底下这份真气泡透过半透明的压暗层还看得见，两份错开一点点就是用户说的「重叠感」。
+     * iOS 的 `UITargetedPreview` 会自动把原视图藏起来，本端得自己藏。
+     */
+    menuForSeq: Long,
     /** 可见即读：把已读位点推到这一条。 */
     onVisibleSeq: (Long) -> Unit,
 ) {
@@ -220,6 +229,14 @@ fun ChatScreen(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(rows.size, key = { rows[it].key }) { i ->
+                val r0 = rows[i]
+                // 菜单开着的那一行整行隐形（保留占位，列表不跳）
+                val hidden = menuForSeq > 0 && when (r0) {
+                    is ChatRow.Confirmed -> r0.msg.convSeq == menuForSeq
+                    is ChatRow.Album -> r0.msgs.any { it.convSeq == menuForSeq }
+                    else -> false
+                }
+                Box(Modifier.alpha(if (hidden) 0f else 1f)) {
                 when (val r = rows[i]) {
                     is ChatRow.DayLabel -> DaySeparator(r.timestamp)
                     is ChatRow.UnreadDivider -> UnreadDividerRow()
@@ -310,6 +327,7 @@ fun ChatScreen(
                             )
                         }
                     }
+                }
                 }
             }
         }

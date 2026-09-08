@@ -28,7 +28,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.Bell
+import com.composables.icons.lucide.BellOff
+import com.composables.icons.lucide.Circle
+import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.PinOff
+import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.MessageCircle
 import com.composables.icons.lucide.User
 import com.composables.icons.lucide.Users
@@ -39,7 +46,7 @@ import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.ConversationAction
 import com.libeyond.imandroid.data.ConversationActions
-import com.libeyond.imandroid.ui.components.ActionSheet
+import com.libeyond.imandroid.ui.components.MessageContextMenu
 import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.ui.screens.ConversationListScreen
 import kotlinx.coroutines.launch
@@ -127,6 +134,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     }
 
     var menuFor by remember { mutableStateOf<ConversationEntity?>(null) }
+    var menuAnchor by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     val scope = rememberCoroutineScope()
 
 
@@ -137,7 +145,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                 Tab.Chats -> ConversationListScreen(
                     conversations = conversations,
                     onOpen = { openConv = it },
-                    onLongPress = { menuFor = it },
+                    onLongPress = { conv, rect -> menuFor = conv; menuAnchor = rect },
                     onSettings = { tab = Tab.Me },
                     connected = connState == ConnState.Connected,
                 )
@@ -151,12 +159,17 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     // —— 会话长按菜单（CHAT_UX §12/§14）——
     val target = menuFor
     if (target != null) {
-        ActionSheet(
-            title = target.title,
+        // **不是底部弹窗**：iOS 会话列表长按走的是 UIContextMenu（原位、贴着那一行）。
+        // 底部弹窗把「操作哪一条」这个信息丢了——手指在屏幕上半部长按，眼睛却要跑到底部找菜单。
+        // 与消息长按共用同一个组件，两处交互才一致。
+        MessageContextMenu(
+            anchor = menuAnchor,
+            // 会话行是整行全宽的，菜单靠左（跟着行的起始边，与 iOS 的 preview 锚点同侧）
+            mine = false,
             items = ConversationActions
                 .availableFor(target.pinnedAt, target.muted, target.markedUnread, target.unread)
                 .map { a ->
-                    SheetItem(a.label, a.destructive) {
+                    SheetItem(a.label, a.destructive, icon = convActionIcon(a)) {
                         scope.launch {
                             runCatching {
                                 when (a) {
@@ -177,6 +190,22 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
         )
     }
     }
+}
+
+/**
+ * 会话菜单项的图标。**逐项对齐 iOS `conversationActionsFor:` 里的 SF Symbol**
+ * （pin / pin.slash / bell / bell.slash / checkmark.circle / circle / trash），
+ * 用 Lucide 里语义最近的一枚——SF Symbol 在 Android 上不存在，
+ * 要对齐的是「每项都有图标且认得出」，不是同一张图（docs/UI_PARITY_IOS.md §3）。
+ */
+private fun convActionIcon(a: ConversationAction) = when (a) {
+    ConversationAction.Pin -> Lucide.Pin
+    ConversationAction.Unpin -> Lucide.PinOff
+    ConversationAction.Mute -> Lucide.BellOff
+    ConversationAction.Unmute -> Lucide.Bell
+    ConversationAction.MarkRead -> Lucide.CircleCheck
+    ConversationAction.MarkUnread -> Lucide.Circle
+    ConversationAction.Delete -> Lucide.Trash2
 }
 
 /**

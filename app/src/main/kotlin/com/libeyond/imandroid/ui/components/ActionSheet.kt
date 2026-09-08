@@ -21,7 +21,22 @@ import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /** 底部动作菜单的一项。 */
-data class SheetItem(val label: String, val destructive: Boolean = false, val onClick: () -> Unit)
+data class SheetItem(
+    val label: String,
+    val destructive: Boolean = false,
+    /**
+     * 行图标。iOS 的长按菜单**每一项都有图标**（SF Symbol），只有文字的菜单在观感上差一截。
+     * Android 用 Lucide 里语义最近的一枚（见 `docs/UI_PARITY_IOS.md` §3 那条同样的说明）。
+     */
+    val icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    /**
+     * 子菜单。非空时点这一项**不执行动作、改为在原位展开子项**（对齐 iOS `UIMenu` 的
+     * inline submenu）——「删除」就是这么用的：两档删除是一个动作的两种范围，
+     * 摊成两个平级项会让人以为是两件事。
+     */
+    val submenu: List<SheetItem> = emptyList(),
+    val onClick: () -> Unit = {},
+)
 
 /**
  * 底部动作菜单——**数据驱动**（CHAT_UX §14）：新增一项 = 数组加一项，
