@@ -12,21 +12,28 @@ package com.libeyond.imandroid.data
  * **一个按当前页派发的 `when`**：枚举加一个值，`when` 就编译不过，漏不掉。
  * 同 `ChatOverlays.topmost` 的思路。
  */
-enum class GroupInfoPage { JoinRequests, MemberProfile, Media, Manage, Detail }
+enum class GroupInfoPage { Pick, JoinRequests, Bans, Admins, MemberProfile, Media, Manage, Detail }
 
 object GroupInfoNav {
 
     /**
      * 当前页。**顺序即层级**，由深到浅：
-     * 待审申请（从管理页进）> 成员资料（从详情进）> 媒体归档（从详情进）> 管理页 > 详情。
+     * 选人页（从管理员页/管理页进，最深）> 待审申请 / 黑名单 / 管理员（都从管理页进）>
+     * 成员资料（从详情进）> 媒体归档（从详情进）> 管理页 > 详情。
      */
     fun current(
+        pickOpen: Boolean,
         joinRequestsOpen: Boolean,
+        bansOpen: Boolean,
+        adminsOpen: Boolean,
         memberProfileOpen: Boolean,
         mediaOpen: Boolean,
         managing: Boolean,
     ): GroupInfoPage = when {
+        pickOpen -> GroupInfoPage.Pick
         joinRequestsOpen -> GroupInfoPage.JoinRequests
+        bansOpen -> GroupInfoPage.Bans
+        adminsOpen -> GroupInfoPage.Admins
         memberProfileOpen -> GroupInfoPage.MemberProfile
         mediaOpen -> GroupInfoPage.Media
         managing -> GroupInfoPage.Manage
@@ -40,6 +47,12 @@ object GroupInfoNav {
      * 待审申请退回**管理页**（不是详情页——它是从管理页点进去的）。
      */
     fun back(page: GroupInfoPage): GroupInfoPage? = when (page) {
+        // 选人页可能从「管理员」页进（添加管理员），也可能从管理页直接进（转让群主/邀请入群）。
+        // 退一层统一回管理页——**不做"记住从哪来"**：那需要一个真的返回栈，
+        // 而这条链一共就几页，多退一层的代价远小于维护一个手写栈。
+        GroupInfoPage.Pick -> GroupInfoPage.Manage
+        GroupInfoPage.Bans -> GroupInfoPage.Manage
+        GroupInfoPage.Admins -> GroupInfoPage.Manage
         GroupInfoPage.JoinRequests -> GroupInfoPage.Manage
         GroupInfoPage.MemberProfile -> GroupInfoPage.Detail
         GroupInfoPage.Media -> GroupInfoPage.Detail
@@ -47,3 +60,6 @@ object GroupInfoNav {
         GroupInfoPage.Detail -> null
     }
 }
+
+/** 群这条链上「选人页是为了做什么」。三种用途共用一个选择页（见 `PickListScreen`）。 */
+enum class PickPurpose { AddAdmin, Transfer, Invite }

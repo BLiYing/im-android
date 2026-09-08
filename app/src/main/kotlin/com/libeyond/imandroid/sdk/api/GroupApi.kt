@@ -115,6 +115,26 @@ data class JoinRequest(
 
 @Serializable private data class JoinRequestsResp(val requests: List<JoinRequest> = emptyList())
 
+/** 群黑名单的一项（G2）。`expiresAt=0` 表示永久。 */
+@Serializable
+data class GroupBan(
+    @SerialName("user_id") val userId: String = "",
+    val username: String = "",
+    val nickname: String = "",
+    @SerialName("avatar_url") val avatarUrl: String = "",
+    @SerialName("banned_by") val bannedBy: String = "",
+    @SerialName("banned_at") val bannedAt: Long = 0,
+    @SerialName("expires_at") val expiresAt: Long = 0,
+) {
+    /** 显示名。**末级绝不是 user_id**（那是 10 位内部 ID）。 */
+    val displayName: String
+        get() = nickname.ifBlank { if (username.isBlank()) "未命名用户" else "@$username" }
+
+    val isPermanent: Boolean get() = expiresAt <= 0
+}
+
+@Serializable private data class GroupBansResp(val bans: List<GroupBan> = emptyList())
+
 /** 成员分页（`GET /groups/{id}/members`）。**成员数组在 `items` 不是 `members`。** */
 @Serializable
 data class GroupMembersPage(
@@ -222,6 +242,13 @@ class GroupApi(private val http: HttpClient) {
     suspend fun transferOwner(convId: String, uid: String) {
         http.call("POST", "/api/v1/groups/$convId/transfer", buildJsonObject { put("user_id", uid) })
     }
+
+    /**
+     * 黑名单（群主/管理员，G2）。**数组在 `bans`**——本仓群相关接口的数组名各不相同
+     * （`members` / `items` / `requests` / `bans`），照直觉写会静默拿到空列表。
+     */
+    suspend fun bans(convId: String): List<GroupBan> =
+        decode(http.call("GET", "/api/v1/groups/$convId/bans"), GroupBansResp.serializer()).bans
 
     /** 解除拉黑（把人从群黑名单里放出来，之后才能再入群）。 */
     suspend fun unban(convId: String, uid: String) {

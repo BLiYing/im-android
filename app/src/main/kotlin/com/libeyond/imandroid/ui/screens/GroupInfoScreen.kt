@@ -67,6 +67,9 @@ fun GroupInfoScreen(
     onOpenManage: () -> Unit,
     /** 进「聊天媒体」归档（与单聊详情同一个页面，所有成员可见）。 */
     onOpenMedia: () -> Unit,
+    /** 邀请好友入群。**入口按 [GroupPermissions.canInvite] 显隐**——
+     *  开了「仅管理员可邀请」还给普通成员留入口，点进去只会拿到 300212。 */
+    onInvite: () -> Unit,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -154,6 +157,19 @@ fun GroupInfoScreen(
                         Text("聊天媒体", color = c.textPrimary,
                             style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                         Text("›", color = c.textTertiary)
+                    }
+                    if (GroupPermissions.canInvite(info)) {
+                        Box(Modifier.fillMaxWidth().padding(start = d.space4)
+                            .height(0.5.dp).background(c.separator))
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onInvite() }
+                                .padding(horizontal = d.space4, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("邀请好友入群", color = c.textPrimary,
+                                style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                            Text("›", color = c.textTertiary)
+                        }
                     }
                 }
 

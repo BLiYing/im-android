@@ -10,6 +10,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.GroupInfoNav
 import com.libeyond.imandroid.data.GroupInfoPage
+import com.libeyond.imandroid.data.PickPurpose
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.data.GroupSettings
 import com.libeyond.imandroid.data.MemberProfile
@@ -22,11 +23,16 @@ import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.GroupInfo
+import com.libeyond.imandroid.sdk.api.GroupBan
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.sdk.api.JoinRequest
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.ui.screens.GroupAdminListScreen
+import com.libeyond.imandroid.ui.screens.GroupBanListScreen
 import com.libeyond.imandroid.ui.screens.GroupInfoScreen
+import com.libeyond.imandroid.ui.screens.PickListScreen
+import com.libeyond.imandroid.ui.screens.PickRow
 import com.libeyond.imandroid.ui.screens.GroupManageScreen
 import com.libeyond.imandroid.ui.screens.JoinRequestsScreen
 import kotlinx.coroutines.launch
@@ -65,10 +71,21 @@ fun GroupInfoHost(
     var managing by remember(convId) { mutableStateOf(false) }
     // 会话媒体归档（详情页的「聊天媒体」，与单聊那侧同一个组件）
     var mediaOpen by remember(convId) { mutableStateOf(false) }
+    // 治理三页 + 一个通用选人页
+    var bans by remember(convId) { mutableStateOf<List<GroupBan>?>(null) }
+    var bansLoading by remember(convId) { mutableStateOf(false) }
+    var adminsOpen by remember(convId) { mutableStateOf(false) }
+    var pick by remember(convId) { mutableStateOf<PickPurpose?>(null) }
+    var picked by remember(convId) { mutableStateOf<Set<String>>(emptySet()) }
+    var friends by remember(convId) { mutableStateOf<List<FriendEntry>>(emptyList()) }
+    var confirmTransfer by remember(convId) { mutableStateOf<GroupMember?>(null) }
 
     // 返回键**一处派发**，不再靠每个子页面自己记得接（一天漏了三次，见 GroupInfoPage 的注释）。
     // 枚举加一页，这个 when 就编译不过——漏不掉。
     val page = GroupInfoNav.current(
+        pickOpen = pick != null,
+        bansOpen = bans != null,
+        adminsOpen = adminsOpen,
         joinRequestsOpen = joinReqs != null,
         memberProfileOpen = memberProfile != null,
         mediaOpen = mediaOpen,
@@ -76,6 +93,9 @@ fun GroupInfoHost(
     )
     BackHandler {
         when (page) {
+            GroupInfoPage.Pick -> { pick = null; picked = emptySet() }
+            GroupInfoPage.Bans -> bans = null
+            GroupInfoPage.Admins -> adminsOpen = false
             GroupInfoPage.JoinRequests -> joinReqs = null
             GroupInfoPage.MemberProfile -> memberProfile = null
             GroupInfoPage.Media -> mediaOpen = false
@@ -130,7 +150,104 @@ fun GroupInfoHost(
     // 此前待审列表那条是 `return` 的，结果审批完的 toast 根本不显示——
     // 与「每加一个覆盖层都没人想起返回键」是同一类账：加页面时忘了页面之外还有东西要渲染。
     // 层级由深到浅：待审(从管理页进) > 成员资料(从详情进) > 管理页 > 详情。
-    if (reqs != null) {
+    // **每页各自记住自己的滚动位置**。本页用"整页替换"做导航，切页时旧页整个离开组合，
+    // 没有 SaveableStateHolder 的话 rememberScrollState / LazyListState 全部丢失——
+    // 表现是：从 2000 人成员列表点进一个人，返回后弹回列表顶部。
+    // iOS 的 push/pop 天然保住这些，本端得自己兜。
+    val stateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+
+    val pk = pick
+    stateHolder.SaveableStateProvider(page) {
+    if (pk != null) {
+        // 三种用途共用一个选择页（见 PickListScreen 的注释）：为每种单写一个，
+        // 最后必然在「已选计数」「上限截断」「空态文案」上各写各的。
+        val rows = when (pk) {
+            PickPurpose.AddAdmin -> members
+                .filter { it.role == GroupMember.ROLE_MEMBER }
+                .map { PickRow(it.userId, it.displayName, it.avatarUrl, it.handle) }
+            PickPurpose.Transfer -> members
+                .filter { it.userId != myUid }
+                .map { PickRow(it.userId, it.displayName, it.avatarUrl, it.handle) }
+            PickPurpose.Invite -> {
+                val inGroup = members.mapTo(HashSet()) { it.userId }
+                friends.filter { it.userId !in inGroup }
+                    .map { PickRow(it.userId, it.displayName, it.avatarUrl, it.handle) }
+            }
+        }
+        PickListScreen(
+            title = when (pk) {
+                PickPurpose.AddAdmin -> "添加管理员"
+                PickPurpose.Transfer -> "选择新群主"
+                PickPurpose.Invite -> "邀请入群"
+            },
+            rows = rows,
+            selected = picked,
+            multi = pk == PickPurpose.Invite,
+            emptyText = when (pk) {
+                PickPurpose.AddAdmin -> "没有可设为管理员的普通成员"
+                PickPurpose.Transfer -> "群里还没有别人"
+                PickPurpose.Invite -> "好友都已在群里"
+            },
+            onToggle = { id -> picked = if (id in picked) picked - id else picked + id },
+            onPick = { row ->
+                when (pk) {
+                    // 设管理员是可撤销的，直接做；转让不可逆，先二次确认
+                    PickPurpose.AddAdmin -> {
+                        pick = null
+                        runManage("设为管理员") { client.groups.setRole(convId, row.id, GroupMember.ROLE_ADMIN) }
+                    }
+                    PickPurpose.Transfer -> confirmTransfer = members.firstOrNull { it.userId == row.id }
+                    PickPurpose.Invite -> Unit
+                }
+            },
+            onConfirm = {
+                val ids = picked.toList()
+                pick = null
+                picked = emptySet()
+                if (ids.isNotEmpty()) runManage("邀请入群") { client.groups.invite(convId, ids) }
+            },
+            onBack = { pick = null; picked = emptySet() },
+        )
+    } else if (bans != null) {
+        GroupBanListScreen(
+            bans = bans.orEmpty(),
+            loading = bansLoading,
+            busyUid = deciding,
+            onUnban = { uid ->
+                deciding = uid
+                scope.launch {
+                    val r = runCatching { client.groups.unban(convId, uid) }
+                    toast = if (r.isSuccess) "已解除" else "解除失败"
+                    runCatching { client.groups.bans(convId) }.onSuccess { bans = it }
+                    deciding = ""
+                }
+            },
+            onBack = { bans = null },
+        )
+    } else if (adminsOpen) {
+        GroupAdminListScreen(
+            admins = members.filter { it.role == GroupMember.ROLE_ADMIN },
+            // 群主可增删、管理员只读（同 im-web）
+            canEdit = g.myRole == GroupMember.ROLE_OWNER,
+            busyUid = deciding,
+            onRevoke = { m ->
+                deciding = m.userId
+                scope.launch {
+                    val r = runCatching { client.groups.setRole(convId, m.userId, GroupMember.ROLE_MEMBER) }
+                    toast = if (r.isSuccess) "已撤销" else "撤销失败"
+                    // 撤销后重拉首页成员——角色变了，管理员列表要跟着变
+                    loadMore(client, convId, "") { pg ->
+                        members = pg.items
+                        cursor = pg.nextCursor
+                        hasMore = pg.hasMore
+                    }
+                    deciding = ""
+                }
+            },
+            onAdd = { pick = PickPurpose.AddAdmin },
+            onBack = { adminsOpen = false },
+        )
+    } else if (reqs != null) {
         JoinRequestsScreen(
             requests = reqs,
             loading = joinReqsLoading,
@@ -178,6 +295,8 @@ fun GroupInfoHost(
     } else if (managing) {
         GroupManageScreen(
             info = g,
+            banCount = bans?.size,
+            members = members,
             onManage = { action -> manage = action },
             onToggleSetting = { key ->
                 // **整体替换**：五个值一次全传，翻转哪一个由纯函数算（见 GroupSettings）
@@ -198,6 +317,18 @@ fun GroupInfoHost(
                 joinReqsLoading = true
                 scope.launch { reloadJoinRequests(); joinReqsLoading = false }
             },
+            onOpenBans = {
+                bans = emptyList()
+                bansLoading = true
+                scope.launch {
+                    runCatching { client.groups.bans(convId) }
+                        .onSuccess { bans = it }
+                        .onFailure { IMLog.tag("IM.Group").w("group_bans_failed") }
+                    bansLoading = false
+                }
+            },
+            onOpenAdmins = { adminsOpen = true },
+            onTransferOwner = { pick = PickPurpose.Transfer },
             onBack = { managing = false },
         )
     } else {
@@ -230,6 +361,15 @@ fun GroupInfoHost(
         myUid = client.uid.orEmpty(),
         onOpenManage = { managing = true },
             onOpenMedia = { mediaOpen = true },
+            onInvite = {
+                pick = PickPurpose.Invite
+                picked = emptySet()
+                scope.launch {
+                    runCatching { client.contacts.friends() }
+                        .onSuccess { list -> friends = list.filter { it.status == FriendEntry.ACCEPTED } }
+                        .onFailure { toast = "好友列表加载失败" }
+                }
+            },
         onMemberLongPress = { m -> memberMenu = m },
         onLeave = {
             scope.launch {
@@ -241,8 +381,9 @@ fun GroupInfoHost(
             onBack = onBack,
         )
     }
+    }
 
-    // —— 管理项的编辑框（对四个页面都生效）——
+    // —— 管理项的编辑框（对每一页都生效）——
     when (manage) {
         GroupManageAction.EditName -> IMTextPrompt(
             title = "群名称", initial = g.name, maxLen = 30,
@@ -335,6 +476,21 @@ fun GroupInfoHost(
                 onDismiss = { memberMenu = null },
             )
         }
+    }
+
+    confirmTransfer?.let { m ->
+        IMConfirmDialog(
+            title = "转让群组",
+            message = "转让给「${m.displayName}」后你将立即变为普通成员，且不可撤销。",
+            confirmText = "转让",
+            destructive = true,
+            onDismiss = { confirmTransfer = null },
+            onConfirm = {
+                confirmTransfer = null
+                pick = null
+                runManage("转让群组") { client.groups.transferOwner(convId, m.userId) }
+            },
+        )
     }
 
     toast?.let { t -> IMToast(t) { toast = null } }

@@ -11,26 +11,31 @@ import org.junit.Test
 class GroupInfoNavTest {
 
     @Test
-    fun `层级由深到浅：待审 大于 成员资料 大于 管理页 大于 详情`() {
+    fun `层级由深到浅：选人 大于 待审 大于 成员资料 大于 管理页 大于 详情`() {
+        assertEquals(
+            GroupInfoPage.Pick,
+            GroupInfoNav.current(pickOpen = true, joinRequestsOpen = true, bansOpen = true,
+                adminsOpen = true, memberProfileOpen = true, mediaOpen = true, managing = true),
+        )
         assertEquals(
             GroupInfoPage.JoinRequests,
-            GroupInfoNav.current(joinRequestsOpen = true, memberProfileOpen = true, mediaOpen = true, managing = true),
+            GroupInfoNav.current(pickOpen = false, joinRequestsOpen = true, bansOpen = true, adminsOpen = true, memberProfileOpen = true, mediaOpen = true, managing = true),
         )
         assertEquals(
             GroupInfoPage.MemberProfile,
-            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = true, mediaOpen = true, managing = true),
+            GroupInfoNav.current(pickOpen = false, joinRequestsOpen = false, bansOpen = false, adminsOpen = false, memberProfileOpen = true, mediaOpen = true, managing = true),
         )
         assertEquals(
             GroupInfoPage.Media,
-            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = false, mediaOpen = true, managing = true),
+            GroupInfoNav.current(pickOpen = false, joinRequestsOpen = false, bansOpen = false, adminsOpen = false, memberProfileOpen = false, mediaOpen = true, managing = true),
         )
         assertEquals(
             GroupInfoPage.Manage,
-            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = false, mediaOpen = false, managing = true),
+            GroupInfoNav.current(pickOpen = false, joinRequestsOpen = false, bansOpen = false, adminsOpen = false, memberProfileOpen = false, mediaOpen = false, managing = true),
         )
         assertEquals(
             GroupInfoPage.Detail,
-            GroupInfoNav.current(joinRequestsOpen = false, memberProfileOpen = false, mediaOpen = false, managing = false),
+            GroupInfoNav.current(pickOpen = false, joinRequestsOpen = false, bansOpen = false, adminsOpen = false, memberProfileOpen = false, mediaOpen = false, managing = false),
         )
     }
 
@@ -40,8 +45,11 @@ class GroupInfoNavTest {
      * 再按一次就退出了整条链，像是"返回键有时候要按两下有时候一下"。
      */
     @Test
-    fun `待审申请退回管理页`() {
+    fun `从管理页进的几页都退回管理页`() {
         assertEquals(GroupInfoPage.Manage, GroupInfoNav.back(GroupInfoPage.JoinRequests))
+        assertEquals(GroupInfoPage.Manage, GroupInfoNav.back(GroupInfoPage.Bans))
+        assertEquals(GroupInfoPage.Manage, GroupInfoNav.back(GroupInfoPage.Admins))
+        assertEquals(GroupInfoPage.Manage, GroupInfoNav.back(GroupInfoPage.Pick))
     }
 
     @Test

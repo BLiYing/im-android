@@ -41,6 +41,12 @@ fun ChatDetailHost(
     var pinned by remember(conv.convId) { mutableStateOf(conv.pinnedAt > 0) }
     var muted by remember(conv.convId) { mutableStateOf(conv.muted) }
 
+    // **每页各自记住自己的滚动位置**。本页用"整页替换"做导航，切页时旧页整个离开组合，
+    // 没有 SaveableStateHolder 的话 rememberScrollState / LazyListState 全部丢失——
+    // 表现是：从 2000 人成员列表点进一个人，返回后弹回列表顶部。
+    // iOS 的 push/pop 天然保住这些，本端得自己兜。
+    val stateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+
     val page = ChatDetailNav.current(mediaOpen = mediaOpen, profileOpen = profile)
     // 返回键一处派发（同 GroupInfoHost；理由见 ChatDetailPage 的注释）
     BackHandler {
@@ -69,6 +75,7 @@ fun ChatDetailHost(
         }
     }
 
+    stateHolder.SaveableStateProvider(page) {
     when (page) {
         // **与群聊详情共用 ConvMediaHost**：归档在两种会话里完全一样，
         // 分两份的代价不是重复代码，是分页语义会分叉
@@ -105,5 +112,6 @@ fun ChatDetailHost(
             onOpenMedia = { mediaOpen = true },
             onBack = onBack,
         )
+    }
     }
 }
