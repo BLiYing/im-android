@@ -30,9 +30,15 @@ object GroupPermissions {
      */
     fun outranks(myRole: String, theirRole: String): Boolean = rank(myRole) > rank(theirRole)
 
-    /** 改群名/头像/简介：群主/管理员；普通成员在「允许成员改群资料」开关打开时也可以。 */
-    fun canEditInfo(info: GroupInfo, permEditInfo: Boolean): Boolean =
-        info.iAmManager || permEditInfo
+    /**
+     * 改群名/头像/简介：群主/管理员恒可；普通成员只在**没开**「仅管理员可改群资料」时可以。
+     *
+     * ⚠️ **开关名是「仅管理员可…」，`true` = 收紧**（服务端 `internal/group/group.go`：
+     * `perm_edit_info` 开启后仅群主/管理员可改）。本端此前读成了「允许成员改」，
+     * 判据整个反了，而且开关值当时还从**调用方**传进来——调用点直接把 `iAmManager`
+     * 当成了这个参数，等于这个开关根本没起作用。现在直接从 [info] 里取，堵掉传错的可能。
+     */
+    fun canEditInfo(info: GroupInfo): Boolean = info.iAmManager || !info.permEditInfo
 
     /** 发布/撤下公告：仅群主/管理员（**不受 perm_edit_info 影响**，公告比资料重）。 */
     fun canEditAnnouncement(info: GroupInfo): Boolean = info.iAmManager
@@ -68,8 +74,8 @@ object GroupPermissions {
      */
     fun canLeave(info: GroupInfo): Boolean = info.myRole != GroupMember.ROLE_OWNER
 
-    /** 邀请人入群：所有人可邀，除非群开了「仅管理员可邀请」。 */
-    fun canInvite(info: GroupInfo): Boolean = info.permInvite || info.iAmManager
+    /** 邀请人入群：所有人可邀，除非群开了「仅管理员可邀请」。语义同 [canEditInfo] 那条注释。 */
+    fun canInvite(info: GroupInfo): Boolean = info.iAmManager || !info.permInvite
 
     /** 我现在是不是被禁言（全员禁言或单独禁言）。`-1` 是永久。 */
     fun amMuted(info: GroupInfo, now: Long = System.currentTimeMillis()): Boolean {

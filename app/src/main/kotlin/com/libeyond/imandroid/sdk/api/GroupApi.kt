@@ -65,7 +65,19 @@ data class GroupInfo(
     @SerialName("mute_until") val muteUntil: Long = 0,
     @SerialName("my_mute_until") val myMuteUntil: Long = 0,
     @SerialName("pending_count") val pendingCount: Int = 0,
+    /**
+     * G2 群治理开关组（PROTOCOL §11）。**名字都是「仅管理员可…」，不是「允许成员…」**：
+     * `true` = 收紧。读反了两条判据就会同时错向两边（既让无权者看到入口，
+     * 又让有权者看不到）——2026-09-08 就是这么错的。
+     *
+     * **五个必须都在**：`PUT /groups/{id}/settings` 是**整体替换**，
+     * 读不回来的那几个在下一次改任意一项时会被当成 false 写回去，
+     * 等于悄悄替群主关掉他设过的开关。
+     */
+    @SerialName("join_approval") val joinApproval: Boolean = false,
     @SerialName("perm_invite") val permInvite: Boolean = false,
+    @SerialName("perm_edit_info") val permEditInfo: Boolean = false,
+    @SerialName("perm_pin") val permPin: Boolean = false,
     @SerialName("history_visible") val historyVisible: Boolean = false,
     /**
      * 超级群（2 万人量级）。客户端据此**隐藏**正在输入/已读双勾/成员在线态
@@ -77,6 +89,31 @@ data class GroupInfo(
     val iAmManager: Boolean
         get() = myRole == GroupMember.ROLE_OWNER || myRole == GroupMember.ROLE_ADMIN
 }
+
+/**
+ * 待审入群申请（G3，`GET /groups/{id}/join-requests`）。
+ *
+ * `status`：`pending` | `approved` | `rejected`。**已处理的也会回**（拉全量时），
+ * 端上分「待处理 / 已处理」两段——只显待处理的话，审批完那一下列表会空掉，
+ * 看着像操作没生效。
+ */
+@Serializable
+data class JoinRequest(
+    @SerialName("user_id") val userId: String = "",
+    val nickname: String = "",
+    @SerialName("avatar_url") val avatarUrl: String = "",
+    /** 申请人填的验证消息。 */
+    val hello: String = "",
+    val status: String = "",
+    @SerialName("created_at") val createdAt: Long = 0,
+) {
+    val isPending: Boolean get() = status == "pending"
+
+    /** 列表显示名。**末级绝不是 user_id**（那是 10 位内部 ID）。 */
+    val displayName: String get() = nickname.ifBlank { "未命名用户" }
+}
+
+@Serializable private data class JoinRequestsResp(val requests: List<JoinRequest> = emptyList())
 
 /** 成员分页（`GET /groups/{id}/members`）。**成员数组在 `items` 不是 `members`。** */
 @Serializable
@@ -207,6 +244,21 @@ class GroupApi(private val http: HttpClient) {
             put("perm_pin", permPin)
             put("history_visible", historyVisible)
         })
+    }
+
+    /**
+     * 待审入群申请（群主/管理员）。`status` 留空 = 全部（待处理 + 已处理）。
+     *
+     * **数组在 `requests`**（不是 `items`、也不是 `members`）——本仓三个群相关接口
+     * 三个不同的数组名，照直觉写会静默拿到空列表（`GroupInfo.members` 的注释里记着
+     * 2026-08-31 那次两端同时踩中）。
+     */
+    suspend fun joinRequests(convId: String, status: String = ""): List<JoinRequest> {
+        val query = if (status.isBlank()) emptyMap() else mapOf("status" to status)
+        return decode(
+            http.call("GET", "/api/v1/groups/$convId/join-requests", query = query),
+            JoinRequestsResp.serializer(),
+        ).requests
     }
 
     /** 审批入群申请。action 取 `approve` / `reject`。 */

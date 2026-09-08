@@ -12,9 +12,14 @@ import org.junit.Test
  */
 class GroupPermissionsTest {
 
-    private fun info(myRole: String, permInvite: Boolean = false, muteAll: Long = 0, myMute: Long = 0) =
-        GroupInfo(convId = "g1", myRole = myRole, permInvite = permInvite,
-            muteUntil = muteAll, myMuteUntil = myMute)
+    private fun info(
+        myRole: String,
+        permInvite: Boolean = false,
+        permEditInfo: Boolean = false,
+        muteAll: Long = 0,
+        myMute: Long = 0,
+    ) = GroupInfo(convId = "g1", myRole = myRole, permInvite = permInvite, permEditInfo = permEditInfo,
+        muteUntil = muteAll, myMuteUntil = myMute)
 
     private fun member(uid: String, role: String) =
         GroupMember(userId = uid, role = role)
@@ -81,7 +86,7 @@ class GroupPermissionsTest {
         assertTrue(GroupPermissions.canEditAnnouncement(info(admin)))
         assertFalse(GroupPermissions.canEditAnnouncement(info(plain)))
         // 资料可以被开关放开，公告不行——公告比资料重
-        assertTrue(GroupPermissions.canEditInfo(info(plain), permEditInfo = true))
+        assertTrue("关掉「仅管理员可改群资料」后全员可改", GroupPermissions.canEditInfo(info(plain, permEditInfo = false)))
         assertFalse(GroupPermissions.canEditAnnouncement(info(plain)))
     }
 
@@ -104,10 +109,27 @@ class GroupPermissionsTest {
         assertTrue(GroupPermissions.amMuted(info(plain, myMute = now + 5000), now))
     }
 
+    /**
+     * **这两个开关的名字是「仅管理员可…」，不是「允许成员…」**——服务端语义见
+     * `internal/group/group.go`（`perm_invite` 开启后仅群主/管理员可邀请；
+     * `perm_edit_info` 开启后仅群主/管理员可改群资料），im-web 的
+     * `canInviteHere = !gp?.perm_invite || canManage` 同口径。
+     *
+     * 本端此前把它读成了「允许成员…」，两条判据**都反了**，而且这个测试自己的名字
+     * 与断言互相矛盾（名字说「不能邀」，断言写的是 assertTrue）——写错的语义被测试钉住，
+     * 于是一直是绿的。2026-09-08 接群治理开关组 UI 时才看出来。
+     */
     @Test
     fun `邀请：开了「仅管理员可邀请」后普通成员不能邀`() {
-        assertTrue(GroupPermissions.canInvite(info(plain, permInvite = true)))
-        assertFalse(GroupPermissions.canInvite(info(plain, permInvite = false)))
-        assertTrue("管理层恒可邀", GroupPermissions.canInvite(info(admin, permInvite = false)))
+        assertFalse(GroupPermissions.canInvite(info(plain, permInvite = true)))
+        assertTrue("没开这个开关时人人可邀", GroupPermissions.canInvite(info(plain, permInvite = false)))
+        assertTrue("管理层恒可邀", GroupPermissions.canInvite(info(admin, permInvite = true)))
+    }
+
+    @Test
+    fun `改群资料：开了「仅管理员可改」后普通成员不能改`() {
+        assertFalse(GroupPermissions.canEditInfo(info(plain, permEditInfo = true)))
+        assertTrue(GroupPermissions.canEditInfo(info(plain, permEditInfo = false)))
+        assertTrue("管理层恒可改", GroupPermissions.canEditInfo(info(admin, permEditInfo = true)))
     }
 }

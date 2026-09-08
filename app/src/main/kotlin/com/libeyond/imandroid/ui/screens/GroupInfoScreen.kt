@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,6 +35,7 @@ import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.data.GroupPermissions
+import com.libeyond.imandroid.data.GroupSettings
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -60,6 +62,10 @@ fun GroupInfoScreen(
     onManage: (GroupManageAction) -> Unit,
     /** 长按成员。菜单项由 [GroupPermissions] 决定，Host 负责执行。 */
     onMemberLongPress: (GroupMember) -> Unit,
+    /** 拨一个群治理开关。载荷由 [GroupSettings.toggled] 算好，Host 只管发。 */
+    onToggleSetting: (GroupSettings.Key) -> Unit,
+    /** 打开待审入群申请列表。 */
+    onOpenJoinRequests: () -> Unit,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -149,7 +155,7 @@ fun GroupInfoScreen(
                 // 与成员长按菜单、成员详情页同一份判据，分叉了会出现
                 // 「按钮亮着但点了报 300204」或反过来。
                 val manageItems = buildList {
-                    if (GroupPermissions.canEditInfo(info, permEditInfo = info.iAmManager)) {
+                    if (GroupPermissions.canEditInfo(info)) {
                         add(GroupManageAction.EditName to "群名称")
                         add(GroupManageAction.EditIntro to "群简介")
                     }
@@ -189,6 +195,42 @@ fun GroupInfoScreen(
                                 )
                                 Text("›", color = c.textTertiary)
                             }
+                        }
+                    }
+                }
+
+                // —— 群治理开关组 + 待审入群申请（G2/G3）——
+                // 仅群主/管理员可见。开关一律**整体替换**（见 GroupSettings 的注释），
+                // 所以这里只上报「拨了哪一个」，载荷由纯函数算。
+                if (GroupPermissions.canEditSettings(info)) {
+                    SettingsGroup("加入与发言", GroupSettings.JOIN_GROUP, info, onToggleSetting)
+                    SettingsGroup("成员权限", GroupSettings.PERM_GROUP, info, onToggleSetting)
+                    Text(
+                        "「新成员仅可见入群后历史」开启后，新成员看不到加入前的聊天记录。",
+                        color = c.textTertiary,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = d.space4, vertical = 8.dp),
+                    )
+
+                    CardTitle("治理")
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onOpenJoinRequests() }
+                                .padding(horizontal = d.space4, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("待审入群申请", color = c.textPrimary,
+                                style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                            // pending_count 只对群主/管理员下发（PROTOCOL §11），普通成员恒 0
+                            Text(
+                                if (info.pendingCount > 0) "${info.pendingCount} 待处理" else "无",
+                                color = if (info.pendingCount > 0) c.accent else c.textTertiary,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text("  ›", color = c.textTertiary)
                         }
                     }
                 }
@@ -287,5 +329,51 @@ private fun RoleBadge(text: String, owner: Boolean) {
             fontSize = 10.sp,
             fontWeight = FontWeight.Medium,
         )
+    }
+}
+
+/** 分组小标题（对齐 im-web 的 `detail-card-title`）。 */
+@Composable
+private fun CardTitle(text: String) {
+    Text(
+        text,
+        color = IMTheme.colors.textTertiary,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(start = IMTheme.dimens.space4, top = 16.dp, bottom = 6.dp),
+    )
+}
+
+/** 一组开关。**开=收紧**（"仅管理员可…"），别把它读成"允许成员…"。 */
+@Composable
+private fun SettingsGroup(
+    title: String,
+    keys: List<GroupSettings.Key>,
+    info: GroupInfo,
+    onToggle: (GroupSettings.Key) -> Unit,
+) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    CardTitle(title)
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = d.space4)
+            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
+    ) {
+        keys.forEachIndexed { i, k ->
+            if (i > 0) {
+                Box(Modifier.fillMaxWidth().padding(start = d.space4).height(0.5.dp).background(c.separator))
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(start = d.space4, end = d.space3, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    GroupSettings.label(k),
+                    color = c.textPrimary,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = GroupSettings.isOn(info, k), onCheckedChange = { onToggle(k) })
+            }
+        }
     }
 }

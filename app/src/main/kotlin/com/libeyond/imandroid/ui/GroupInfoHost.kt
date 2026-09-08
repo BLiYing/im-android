@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.GroupPermissions
+import com.libeyond.imandroid.data.GroupSettings
 import com.libeyond.imandroid.data.MemberProfile
 import com.libeyond.imandroid.ui.screens.GroupManageAction
 import com.libeyond.imandroid.ui.components.ActionSheet
@@ -20,9 +21,11 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
+import com.libeyond.imandroid.sdk.api.JoinRequest
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.screens.GroupInfoScreen
+import com.libeyond.imandroid.ui.screens.JoinRequestsScreen
 import kotlinx.coroutines.launch
 
 /**
@@ -51,8 +54,12 @@ fun GroupInfoHost(
 
     // 点开的成员资料页盖在群资料之上；开着时本页的返回让位给它
     var memberProfile by remember(convId) { mutableStateOf<GroupMember?>(null) }
+    // 待审入群申请（G3）。null = 没打开过
+    var joinReqs by remember(convId) { mutableStateOf<List<JoinRequest>?>(null) }
+    var joinReqsLoading by remember(convId) { mutableStateOf(false) }
+    var deciding by remember(convId) { mutableStateOf("") }
 
-    BackHandler(enabled = memberProfile == null, onBack = onBack)
+    BackHandler(enabled = memberProfile == null && joinReqs == null, onBack = onBack)
 
     LaunchedEffect(convId) {
         runCatching { info = client.groups.info(convId) }
@@ -85,6 +92,40 @@ fun GroupInfoHost(
             if (r.isSuccess) toast = "${label}成功"
             runCatching { client.groups.info(convId) }.onSuccess { info = it }
         }
+    }
+
+    /** 拉全量（待处理 + 已处理）——只拉待处理的话，审批完列表会空掉，看着像没生效。 */
+    suspend fun reloadJoinRequests() {
+        runCatching { client.groups.joinRequests(convId) }
+            .onSuccess { joinReqs = it }
+            .onFailure { IMLog.tag("IM.Group").w("join_requests_failed") }
+    }
+
+    val reqs = joinReqs
+    if (reqs != null) {
+        JoinRequestsScreen(
+            requests = reqs,
+            loading = joinReqsLoading,
+            busyUid = deciding,
+            onDecide = { uid, approve ->
+                deciding = uid
+                scope.launch {
+                    val r = runCatching { client.groups.reviewJoinRequest(convId, uid, approve) }
+                    r.onFailure { e ->
+                        val code = (e as? com.libeyond.imandroid.sdk.http.ApiException)?.code
+                        toast = if (code != null) "操作失败（$code）" else "操作失败"
+                    }
+                    if (r.isSuccess) toast = if (approve) "已同意入群" else "已拒绝"
+                    // 无论成败都重拉：失败可能是别人已经审过了，本地那条状态已经不对了
+                    reloadJoinRequests()
+                    // 顺带刷群资料，pending_count 角标要跟着掉
+                    runCatching { client.groups.info(convId) }.onSuccess { info = it }
+                    deciding = ""
+                }
+            },
+            onBack = { joinReqs = null },
+        )
+        return
     }
 
     // —— 成员资料页 ——
@@ -132,6 +173,25 @@ fun GroupInfoHost(
             }
         },
         onOpenMember = { m -> memberProfile = m },
+        onToggleSetting = { key ->
+            // **整体替换**：五个值一次全传，翻转哪一个由纯函数算（见 GroupSettings）
+            val v = GroupSettings.toggled(g, key)
+            runManage(GroupSettings.label(key)) {
+                client.groups.updateSettings(
+                    convId,
+                    joinApproval = v.joinApproval,
+                    permInvite = v.permInvite,
+                    permEditInfo = v.permEditInfo,
+                    permPin = v.permPin,
+                    historyVisible = v.historyVisible,
+                )
+            }
+        },
+        onOpenJoinRequests = {
+            joinReqs = emptyList()
+            joinReqsLoading = true
+            scope.launch { reloadJoinRequests(); joinReqsLoading = false }
+        },
         myUid = client.uid.orEmpty(),
         onManage = { action -> manage = action },
         onMemberLongPress = { m -> memberMenu = m },
