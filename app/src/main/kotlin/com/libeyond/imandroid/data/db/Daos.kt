@@ -67,6 +67,48 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun countIn(owner: String, convId: String): Int
 
+    /**
+     * 会话内搜索（SEARCH_DESIGN §4）：**整个会话查库，不是在渲染窗口里过滤**。
+     *
+     * 判据逐条镜像后端 G4（`internal/store/sqlite_message.go` 的 `SearchConvMessages`）：
+     * `text` 的 content / 任意 caption / file_name 三源子串，排除撤回与删除；
+     * 系统消息不参与（它的 content 是全群共享的一句话，搜出来点不进去也没意义）。
+     * `:like` 由调用方拼成 `%需求%` 并**已过 [com.libeyond.imandroid.data.ChatSearch.escapeLike]**。
+     *
+     * 排序与 [observeWindow] 同口径（timestamp 主排），取**最新的 limit 条**——
+     * 命中更多时调用方要把计数补 `+`，不能悄悄截断。
+     *
+     * ⚠️ **不要改成在内存里过滤 `observeWindow` 的结果**：那是"渲染当前屏"用的一窗，
+     * 而搜索问的是"整个会话"。im-web 正是这么错过一次——3 万条的群里只命中 98 条
+     * （= 窗口条数），界面照常、结果是错的（`current_task.archive.md` 2026-09-01 那条）。
+     */
+    @Query("""
+        SELECT * FROM message
+        WHERE ownerUid = :owner AND convId = :convId
+          AND recalledAt IS NULL AND deletedAt IS NULL AND contentType <> 'system'
+          AND (
+                (contentType = 'text' AND content LIKE :like ESCAPE '\')
+             OR (caption IS NOT NULL AND caption <> '' AND caption LIKE :like ESCAPE '\')
+             OR (fileName IS NOT NULL AND fileName <> '' AND fileName LIKE :like ESCAPE '\')
+          )
+        ORDER BY timestamp DESC, convSeq DESC
+        LIMIT :limit
+    """)
+    suspend fun search(owner: String, convId: String, like: String, limit: Int): List<MessageEntity>
+
+    /**
+     * 显示序上「这一条及其之后」共有多少条 —— 也就是**要把渲染窗口撑到多大才能包含它**。
+     *
+     * 比较式必须与 [observeWindow] 的 `ORDER BY timestamp DESC, convSeq DESC` 逐字对应
+     * （同毫秒时按 convSeq），否则算出来的窗口会差几条、跳转落空。
+     */
+    @Query("""
+        SELECT COUNT(*) FROM message
+        WHERE ownerUid = :owner AND convId = :convId
+          AND (timestamp > :ts OR (timestamp = :ts AND convSeq >= :seq))
+    """)
+    suspend fun countAtOrAfter(owner: String, convId: String, ts: Long, seq: Long): Int
+
     @Query("SELECT MAX(convSeq) FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun maxConvSeq(owner: String, convId: String): Long?
 

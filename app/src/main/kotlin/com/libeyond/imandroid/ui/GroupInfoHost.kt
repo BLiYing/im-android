@@ -60,6 +60,8 @@ fun GroupInfoHost(
     /** 本地好友表（uid → 行）。成员资料页进页即用它定型关系与备注，避免闪动。 */
     knownFriends: Map<String, FriendEntry>,
     onOpenChat: (ConversationEntity) -> Unit,
+    /** 「搜索」pill：关掉本页、回聊天页开搜索态（本页盖在聊天页之上，只能这么绕）。 */
+    onSearchInChat: () -> Unit = {},
     onBack: () -> Unit,
     onLeft: () -> Unit,
 ) {
@@ -423,7 +425,7 @@ fun GroupInfoHost(
         ),
         onAction = { a ->
             // 群这一侧 pills 只有「搜索 / 更多」，更多由 onMore 走
-            if (a == DetailAction.Search) toast = "会话内搜索还没做"
+            if (a == DetailAction.Search) onSearchInChat()
         },
         onMore = { m -> confirmMore = m },
         onMemberLongPress = { m -> memberMenu = m },

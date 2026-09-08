@@ -46,14 +46,6 @@ import com.libeyond.imandroid.ui.screens.Bubble
 import com.libeyond.imandroid.ui.components.MessageContextMenu
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
-import com.composables.icons.lucide.Copy
-import com.composables.icons.lucide.CornerUpLeft
-import com.composables.icons.lucide.Forward
-import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.Undo2
-import com.composables.icons.lucide.User
-import com.composables.icons.lucide.Users
-import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.Presence
@@ -63,6 +55,7 @@ import com.libeyond.imandroid.ui.components.ActionSheet
 import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.ui.screens.AlbumBubble
 import com.libeyond.imandroid.ui.screens.AlbumTile
 import com.libeyond.imandroid.ui.screens.ChatRow
@@ -90,6 +83,9 @@ fun ChatHost(
     conv: ConversationEntity,
     onBack: () -> Unit,
     onOpenInfo: () -> Unit,
+    /** 进来就开搜索态（从会话详情页的「搜索」pill 过来）。开过一次即回调 [onSearchOpened] 复位。 */
+    openSearchOnEnter: Boolean = false,
+    onSearchOpened: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -121,6 +117,44 @@ fun ChatHost(
     }
     var menuFor by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
 
+    // 渲染窗口大小。**不能无界**——13 万条的会话会把聊天页渲染成空白（实测）。
+    // 滚到顶时加一页；不做减半回收：Compose 的 LazyColumn 本就只组合可见项，
+    // 内存压力来自这个 List 本身，而用户主动翻上去的部分他还想看得到。
+    // **定位也靠它**：跳到窗口外的一条要先把它撑到盖得住（见 ChatLocator）。
+    var windowLimit by remember(conv.convId) { mutableStateOf(INITIAL_WINDOW) }
+
+    // —— 定位与会话内搜索 ——
+    // 顺序有讲究：locator 先建（search 要用它当跳转出口），两者都要在 BackHandler 之前
+    // ——返回键第一层关的是搜索态。
+    val connected = client.socket.state.collectAsState().value == ConnState.Connected
+    val locator = rememberChatLocator(
+        client = client,
+        convId = conv.convId,
+        currentWindow = { windowLimit },
+        // **窗口只增不减这条不变式下沉在这里**（唯一的写入点），不靠调用方先比一下：
+        // 调用方那一侧的 windowLimit 跨过查库就是过期快照，用它比较会把
+        // 并发上翻已经撑大的窗口缩回去 —— 窗口一缩，翻页保位的条件（rows 变多）
+        // 永远不成立，「滚到顶加载更早」会被在途标志永久卡死。
+        onGrowWindow = { windowLimit = maxOf(windowLimit, it) },
+        onToast = { toast = it },
+    )
+    val search = rememberChatSearch(
+        client = client,
+        convId = conv.convId,
+        online = connected,
+        // 拒绝原因由搜索那侧接管（写进搜索条上方那一行）——搜索态下键盘占着下半屏，
+        // 吐司恰好落在键盘背后，等于没提示。
+        onLocate = { seq, refuse -> locator.locate(seq, refuse) },
+    )
+    // 从会话详情页的「搜索」pill 进来：那一页是**盖在**聊天页之上的另一棵组合树，
+    // 关掉它才轮得到这里，所以由调用方把"要开搜索"这件事带过来（同 im-web 的 armInChatSearch）。
+    LaunchedEffect(openSearchOnEnter) {
+        if (openSearchOnEnter) {
+            search.begin()
+            onSearchOpened()
+        }
+    }
+
     // 系统返回键：**先关最上面那层覆盖层，全关完了才回会话列表**。
     // 不分层的话「打开大图 → 按返回 → 连会话都退了」，用户还得重新滚回刚才的位置。
     // 层序在 ChatOverlays.Layer（= 渲染顺序），有测试钉着。
@@ -140,9 +174,10 @@ fun ChatHost(
             ChatOverlays.Layer.MediaPicker -> picking = false
             ChatOverlays.Layer.Forward -> forwarding = null
             ChatOverlays.Layer.ContextMenu -> menuFor = null
-            // 没有覆盖层才真的退出本页。不拦的话「进会话 → 按返回 → App 没了」，
+            // 没有覆盖层时：搜索态先退回普通聊天页，再按一次才离开会话
+            //（微信/Telegram 同）。不拦的话「进会话 → 按返回 → App 没了」，
             // 这是 Android 用户最直觉的一个动作。
-            null -> onBack()
+            null -> if (search.open) search.close() else onBack()
         }
     }
     val mediaSend = remember(conv.convId) { MediaSendFlow(context, client, conv) }
@@ -181,11 +216,6 @@ fun ChatHost(
     }
     /** 长按菜单锚点：被长按气泡在窗口坐标系里的矩形，菜单按它定位（对齐 iOS UIContextMenu）。 */
     var menuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
-
-    // 渲染窗口大小。**不能无界**——13 万条的会话会把聊天页渲染成空白（实测）。
-    // 滚到顶时加一页；不做减半回收：Compose 的 LazyColumn 本就只组合可见项，
-    // 内存压力来自这个 List 本身，而用户主动翻上去的部分他还想看得到。
-    var windowLimit by remember(conv.convId) { mutableStateOf(INITIAL_WINDOW) }
 
     val messages by remember(owner, conv.convId, windowLimit) {
         client.repo.observeMessages(owner, conv.convId, windowLimit)
@@ -290,6 +320,7 @@ fun ChatHost(
         uploadProgress = uploadProgress,
         localNameOf = { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
         loadLinkPreview = { url -> client.conversationsApi.linkPreview(url) },
+        searchHighlight = search.needle,
     )
 
     Box(Modifier.fillMaxSize()) {
@@ -380,8 +411,22 @@ fun ChatHost(
         // **备注只在这里出现**——分段里的 text 恒为公开昵称，全群共享（IMServer docs/UI.md 隐私红线）。
         localNameOf = { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
         onOpenUser = { uid -> openUser = uid },
-        // 原消息翻不到那么早：如实说，不滚到一个错的位置（滚错比不滚更糟）
-        onJumpMiss = { toast = "原消息不在已加载的范围内" },
+        // 定位（引用块跳转 / 搜索命中）统一走 locator：目标常在渲染窗口之外，
+        // 只滚列表必然落空。跳不了时它自己会如实说一句。
+        locateSeq = locator.target,
+        onLocateConsumed = { locator.consumed() },
+        onJumpToSeq = { seq -> locator.locate(seq) },
+        searchOpen = search.open,
+        searchQuery = search.query,
+        onSearchQueryChange = { search.setQuery(it) },
+        onCloseSearch = { search.close() },
+        searchNavLabel = search.navLabel,
+        searchNotice = search.notice,
+        searchCanPrev = search.canPrev,
+        searchCanNext = search.canNext,
+        onSearchPrev = { search.goto(search.hitIdx - 1) },
+        onSearchNext = { search.goto(search.hitIdx + 1) },
+        searchHighlight = search.needle,
     )
 
     // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——
@@ -542,52 +587,4 @@ fun ChatHost(
         )
     }
     }
-}
-
-/**
- * 把动作列表拼成菜单项，**两档删除收进一个「删除」子菜单**。
- *
- * 对齐 iOS `deleteMenuActionForMessage:`：两档删除是**同一个动作的两种范围**，
- * 摊成两个平级项会让人以为是两件不同的事（而且「为所有人删除」这种长文案会把菜单撑宽）。
- * 只有一档可用时不套子菜单——为一个选项造一层菜单是纯粹的多余点击。
- */
-private fun buildMessageMenu(
-    actions: List<MessageAction>,
-    run: (MessageAction) -> Unit,
-): List<SheetItem> {
-    val deletes = actions.filter {
-        it == MessageAction.DeleteForEveryone || it == MessageAction.HideForMe
-    }
-    val head = actions.filterNot { it in deletes }.map { a ->
-        SheetItem(a.label, a.destructive, icon = messageActionIcon(a)) { run(a) }
-    }
-    val tail = when {
-        deletes.isEmpty() -> emptyList()
-        deletes.size == 1 -> listOf(
-            SheetItem("删除", destructive = true, icon = Lucide.Trash2) { run(deletes.first()) },
-        )
-        else -> listOf(
-            SheetItem(
-                "删除", destructive = true, icon = Lucide.Trash2,
-                submenu = deletes.map { a ->
-                    SheetItem(a.label, destructive = true, icon = messageActionIcon(a)) { run(a) }
-                },
-            ),
-        )
-    }
-    return head + tail
-}
-
-/**
- * 消息菜单项图标。**逐项对齐 iOS `messageActionsForMessage:` 里的 SF Symbol**
- * （doc.on.doc / arrowshape.turn.up.left / arrowshape.turn.up.right /
- * arrow.uturn.backward / trash），用 Lucide 里语义最近的一枚。
- */
-private fun messageActionIcon(a: MessageAction) = when (a) {
-    MessageAction.Copy -> Lucide.Copy
-    MessageAction.Reply -> Lucide.CornerUpLeft
-    MessageAction.Forward -> Lucide.Forward
-    MessageAction.Recall -> Lucide.Undo2
-    MessageAction.DeleteForEveryone -> Lucide.Users
-    MessageAction.HideForMe -> Lucide.User
 }

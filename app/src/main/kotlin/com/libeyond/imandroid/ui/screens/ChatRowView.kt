@@ -30,6 +30,12 @@ internal data class ChatRowStyle(
     val localNameOf: (String) -> String? = { null },
     /** 取链接富预览。**预览重绘时也要传**——不传就是"气泡少了半截"。 */
     val loadLinkPreview: (suspend (String) -> LinkPreview?)? = null,
+    /**
+     * 会话内搜索的命中词（已 trim，空串 = 不高亮）。
+     *
+     * 高亮底色走 `accentSoft`，**不硬编码黄**（SEARCH_DESIGN §13.5，三端同一条）。
+     */
+    val searchHighlight: String = "",
 )
 
 /**
@@ -137,8 +143,11 @@ internal fun ChatRowView(
             quoteSnapshot = quoteSnapshotFor(rows, r.msg),
             // 引用块的真缩略与"能不能跳"都来自**本地反查到的那条原消息**
             quoteThumb = originalOf(rows, r.msg.replyToConvSeq ?: 0L)?.thumb,
+            // 引用块**只要有原消息号就可点**。此前还要求它已经在渲染窗口里，
+            // 于是"翻不到那么早"的原消息连点都点不了——而现在定位这一层会先把窗口撑到
+            // 盖得住那一条（ChatLocator），真的不在本地时它会如实说一句。
             onTapQuote = (r.msg.replyToConvSeq ?: 0L)
-                .takeIf { it > 0 && rowIndexOfSeq(rows, it) >= 0 }
+                .takeIf { it > 0 }
                 ?.let { seq -> { onJumpToSeq(seq) } },
             replyFromName = if (isGroup) {
                 r.msg.replyToFrom?.let { localNameOf(it) ?: it.takeIf { u -> u.isNotBlank() } }
@@ -152,6 +161,7 @@ internal fun ChatRowView(
             showAvatar = showsSenderAvatar(rows, i, myUid, isGroup),
             avatarSeed = r.msg.sender,
             loadLinkPreview = loadLinkPreview,
+            searchHighlight = style.searchHighlight,
         )
         is ChatRow.Pending -> {
             // 媒体/文件待发行的 content 是本地 content:// URI——按文本画就会在屏幕上

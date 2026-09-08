@@ -53,6 +53,8 @@ fun ChatDetailHost(
     conv: ConversationEntity,
     /** 本地好友表，进用户资料页时用来定型关系与备注（避免闪动）。 */
     knownFriends: Map<String, FriendEntry>,
+    /** 「搜索」pill：关掉本页、回聊天页开搜索态（本页盖在聊天页之上，只能这么绕）。 */
+    onSearchInChat: () -> Unit = {},
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -241,9 +243,8 @@ fun ChatDetailHost(
             ),
             onAction = { a ->
                 when (a) {
-                    // 会话内搜索本端还没做（iOS 有：pill 点了进聊天页的搜索态）。
-                    // 如实说，不要摆一个假的搜索框。
-                    DetailAction.Search -> toast = "会话内搜索还没做"
+                    // 与 iOS 同：pill 点了回聊天页进搜索态（SEARCH_DESIGN §4）
+                    DetailAction.Search -> onSearchInChat()
                     DetailAction.Call -> toast = "语音通话即将上线"
                     DetailAction.Video -> toast = "视频通话即将上线"
                     DetailAction.AddFriend -> scope.launch {

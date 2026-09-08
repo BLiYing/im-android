@@ -34,12 +34,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.data.ChatSearch
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.data.LinkDetect
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.SpanStyle
@@ -154,6 +156,31 @@ internal fun SystemNote(
     }
 }
 
+/**
+ * 把命中词底色标出来（会话内搜索，SEARCH_DESIGN §13.5）。
+ *
+ * 底色用 **accentSoft**（accent 的低透明版），**不硬编码黄**——三端同一条：
+ * iOS `+[IMBubbleCell applySearchHighlight:toMutable:]`、im-web `<mark class="search-hit">`。
+ * 位置判定在纯函数 [ChatSearch.matchRanges] 里（有单测），这里只负责画。
+ */
+internal fun highlightedText(
+    text: String,
+    needle: String,
+    background: androidx.compose.ui.graphics.Color,
+): AnnotatedString {
+    val ranges = ChatSearch.matchRanges(text, needle)
+    if (ranges.isEmpty()) return AnnotatedString(text)
+    return buildAnnotatedString {
+        var i = 0
+        for (r in ranges) {
+            if (r.first > i) append(text.substring(i, r.first))
+            withStyle(SpanStyle(background = background)) { append(text.substring(r.first, r.last + 1)) }
+            i = r.last + 1
+        }
+        if (i < text.length) append(text.substring(i))
+    }
+}
+
 /** 名字段的标注 tag 与颜色（iOS `datePillNameText` = #FFD98A）。 */
 private const val SYS_NAME_TAG = "sysName"
 private val SYS_NAME_COLOR = androidx.compose.ui.graphics.Color(0xFFFFD98A)
@@ -222,6 +249,8 @@ internal fun Bubble(
     isGroup: Boolean = false,
     /** 取链接预览。传 null = 不出预览卡（长按菜单里的原位重绘就传 null，别重复请求）。 */
     loadLinkPreview: (suspend (String) -> com.libeyond.imandroid.sdk.api.LinkPreview?)? = null,
+    /** 会话内搜索的命中词（已 trim）。空串 = 不高亮。 */
+    searchHighlight: String = "",
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -366,7 +395,7 @@ internal fun Bubble(
                         msg?.contentType == ContentType.CONTACT -> ContactCardContent(text)
                         msg?.contentType == ContentType.CHAT_RECORD -> ChatRecordCardContent(text)
                         else -> Text(
-                            text = text,
+                            text = highlightedText(text, searchHighlight, c.accentSoft),
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
                         )
@@ -377,7 +406,8 @@ internal fun Bubble(
                     if (flushMedia && !cap.isNullOrBlank()) {
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = cap,
+                            // 图说也参与命中（与后端 G4、im-web 的判据一致），所以也要高亮
+                            text = highlightedText(cap, searchHighlight, c.accentSoft),
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
                             modifier = innerPad.fillMaxWidth(),

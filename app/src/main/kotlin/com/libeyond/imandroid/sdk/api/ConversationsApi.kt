@@ -117,6 +117,36 @@ class ConversationsApi(private val http: HttpClient) {
         )
     }
 
+    /**
+     * 会话内消息检索（G4，PROTOCOL §11）。
+     *
+     * **只在本地有缺口且在线时才走这里**（判据 [com.libeyond.imandroid.data.ChatSearch.pickSource]）：
+     * 本地齐全时问服务端没有任何好处，还慢。
+     *
+     * 服务端按 `conv_seq` **倒序**回，上限 50 条一页；`has_more` 为真表示命中更多，
+     * 端上要把计数补 `+`（本端不翻更多页，与 iOS/Web 同一处欠账）。
+     * 命中口径（text content / caption / file_name 子串、排除撤回删除、尊重入群下界）由服务端保证，
+     * 端上**不要**再判一遍——判据分叉的表现是"搜索结果和聊天页对不上"。
+     */
+    suspend fun searchMessages(
+        convId: String,
+        q: String,
+        from: String = "",
+        cursor: Long = 0,
+        limit: Int = 50,
+    ): ConvSearchPage {
+        val query = buildMap {
+            put("q", q)
+            put("limit", limit.toString())
+            if (from.isNotEmpty()) put("from", from)
+            if (cursor > 0) put("cursor", cursor.toString())
+        }
+        return decode(
+            http.call("GET", "/api/v1/conversations/$convId/messages/search", query = query),
+            ConvSearchPage.serializer(),
+        )
+    }
+
     suspend fun delete(convId: String) {
         http.call("DELETE", "/api/v1/conversations/$convId")
     }
@@ -164,6 +194,31 @@ data class ConvMediaItem(
      * 的 `Thumb`），本端此前没解析，于是详情页宫格每一格都从空底开始加载。
      */
     val thumb: String = "",
+)
+
+/**
+ * 会话内检索结果的一项（后端 `conversation.SearchMessage`）。
+ * 字段是「列表行渲染 + 跳转」所需的最小集：带 `conv_seq` 就够跳到消息本体，不带引用快照/媒体元数据。
+ */
+@Serializable
+data class ConvSearchItem(
+    @SerialName("conv_seq") val convSeq: Long = 0,
+    @SerialName("server_msg_id") val serverMsgId: String = "",
+    val sender: String = "",
+    /** 仅群聊填（空则回退 uid，与 new_msg 同约定）。 */
+    @SerialName("from_nickname") val fromNickname: String = "",
+    @SerialName("content_type") val contentType: String = "",
+    val content: String = "",
+    val caption: String = "",
+    val timestamp: Long = 0,
+)
+
+@Serializable
+data class ConvSearchPage(
+    @SerialName("conv_id") val convId: String = "",
+    val items: List<ConvSearchItem> = emptyList(),
+    @SerialName("next_cursor") val nextCursor: Long = 0,
+    @SerialName("has_more") val hasMore: Boolean = false,
 )
 
 @Serializable

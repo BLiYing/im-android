@@ -1,0 +1,214 @@
+package com.libeyond.imandroid.ui.screens
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.ChevronUp
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.X
+import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.ui.theme.IMTheme
+
+/**
+ * 会话内搜索的**顶部搜索栏**（替换聊天页标题栏，SEARCH_DESIGN §4）。
+ *
+ * 结构照 iOS `IMChatViewController+Search.m` 的 `buildSearchTopBar`：🔍 + 输入框 + 「取消」。
+ * **不做液态玻璃**（Android 上手搓只会得到形似神不似的半透明模糊，`docs/UI_PARITY_IOS.md §4`），
+ * 用与 `IMTopBar` 同一层的纯色 surface，高度也随它，切换时列表不跳。
+ */
+@Composable
+internal fun ChatSearchTopBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    val focus = remember { FocusRequester() }
+    // 进搜索态就把键盘叫出来——多一步「再点一下输入框」是纯粹的浪费。
+    // **等一帧再要焦点**：焦点节点要等这一帧挂上，太早要会抛 IllegalStateException
+    // 而 runCatching 会把它吞掉——表现成"搜索框出来了但键盘不弹"，不报错、只是别扭。
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        // 失败**不静默**：吞掉的话表现只是"搜索框出来了但键盘不弹"，日志里一个字都没有，
+        // 下次排查要从头猜（CONVENTIONS §4.2：忽略错误要写明理由，这里的理由是"不该拦住搜索本身"）。
+        runCatching { focus.requestFocus() }
+            .onFailure { IMLog.tag("IM.Search").w("search_focus_failed", "err" to it.javaClass.simpleName) }
+    }
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(c.surface)
+                .padding(horizontal = d.space3, vertical = d.space3),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = d.inputControl)
+                    .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
+                    .background(c.pageBackground)
+                    .padding(horizontal = d.space3),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Image(
+                    imageVector = Lucide.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    colorFilter = ColorFilter.tint(c.textTertiary),
+                )
+                Spacer(Modifier.width(d.space2))
+                Box(Modifier.weight(1f)) {
+                    if (query.isEmpty()) {
+                        Text("搜索聊天内容", color = c.textTertiary, fontSize = 15.sp)
+                    }
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        singleLine = true,
+                        textStyle = TextStyle(color = c.textPrimary, fontSize = 15.sp),
+                        cursorBrush = SolidColor(c.accent),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        // 搜索是**边打边搜**的（防抖在 ChatSearchController 里），
+                        // 回车只用来收键盘，不重复触发一次查询
+                        keyboardActions = KeyboardActions(onSearch = {}),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                    )
+                }
+                if (query.isNotEmpty()) {
+                    Image(
+                        imageVector = Lucide.X,
+                        contentDescription = "清空",
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable { onQueryChange("") },
+                        colorFilter = ColorFilter.tint(c.textTertiary),
+                    )
+                }
+            }
+            Spacer(Modifier.width(d.space3))
+            Text(
+                text = "取消",
+                color = c.accent,
+                fontSize = 16.sp,
+                modifier = Modifier.clickable(onClick = onCancel),
+            )
+        }
+        Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
+    }
+}
+
+/**
+ * **底部命中导航条**（替换输入栏）：计数 + ▲ 更旧 / ▼ 更新。
+ *
+ * 位置照 iOS（`buildSearchNavBar` + `buildCountPill`）放底部而不是跟着搜索框——
+ * 手指在底部，翻命中是高频动作。无命中时按钮置灰（`UI.md` 要求每个列表都有空态）。
+ *
+ * @param notice 需要如实说的一句话（离线降级 / 搜索失败），空串则不占位。
+ */
+@Composable
+internal fun ChatSearchNavBar(
+    label: String,
+    notice: String,
+    canPrev: Boolean,
+    canNext: Boolean,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    Column {
+        Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
+        if (notice.isNotEmpty()) {
+            Text(
+                text = notice,
+                color = c.textSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(c.surface)
+                    .padding(start = d.space4, end = d.space4, top = 6.dp),
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = d.inputBarHeight)
+                .background(c.surface)
+                .padding(horizontal = d.space4, vertical = d.space2),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(text = label, color = c.textSecondary, fontSize = 14.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                NavArrow(Lucide.ChevronUp, "上一条（更旧）", canPrev, onPrev)
+                Spacer(Modifier.width(d.space2))
+                NavArrow(Lucide.ChevronDown, "下一条（更新）", canNext, onNext)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavArrow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    Box(
+        modifier = Modifier
+            .size(d.inputControl)
+            .clip(CircleShape)
+            .background(c.pageBackground)
+            // 置灰用透明度，不换一套颜色令牌（同 iOS `actionEnabled=NO` 自动降透明）
+            .alpha(if (enabled) 1f else 0.35f)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            imageVector = icon,
+            contentDescription = description,
+            modifier = Modifier.size(20.dp),
+            colorFilter = ColorFilter.tint(c.accent),
+        )
+    }
+}

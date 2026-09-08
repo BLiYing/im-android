@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -151,7 +152,9 @@ fun IMToast(text: String, durationMs: Long = 2000, onDismiss: () -> Unit) {
         onDismiss()
     }
     Box(
-        modifier = Modifier.fillMaxSize().padding(bottom = 96.dp),
+        // **imePadding 不能省**：键盘弹起时这条会整个落在键盘背后，等于没有提示
+        // （2026-09-09 真机撞见：搜索态下点▲跳不动，提示一个字都看不到）。
+        modifier = Modifier.fillMaxSize().imePadding().padding(bottom = 96.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Box(

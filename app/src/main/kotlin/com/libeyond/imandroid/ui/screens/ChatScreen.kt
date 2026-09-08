@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -131,8 +133,28 @@ fun ChatScreen(
     localNameOf: (String) -> String? = { null },
     /** 点系统消息里的名字 → 进那个人的资料页（对齐 iOS `onTapUID`）。 */
     onOpenUser: (String) -> Unit = {},
-    /** 原消息不在已加载窗口内时的提示（由 Host 弹吐司）。 */
-    onJumpMiss: () -> Unit = {},
+    /**
+     * 要定位到的 `conv_seq`（`0` = 没有）。**由 Host 驱动**——目标常在渲染窗口之外，
+     * 得先把窗口撑到覆盖它（`ChatHost.locate`），本页只负责"它出现在 rows 里之后滚过去"。
+     * 滚到了就回调 [onLocateConsumed] 归零。
+     */
+    locateSeq: Long = 0,
+    onLocateConsumed: () -> Unit = {},
+    /** 点引用块 → 请求定位到原消息。判断能不能跳、跳不了说什么都在 Host（它才查得到本地库）。 */
+    onJumpToSeq: (Long) -> Unit = {},
+    // —— 会话内搜索态（SEARCH_DESIGN §4）：顶栏换搜索框、底栏换命中导航条 ——
+    searchOpen: Boolean = false,
+    searchQuery: String = "",
+    onSearchQueryChange: (String) -> Unit = {},
+    onCloseSearch: () -> Unit = {},
+    searchNavLabel: String = "",
+    searchNotice: String = "",
+    searchCanPrev: Boolean = false,
+    searchCanNext: Boolean = false,
+    onSearchPrev: () -> Unit = {},
+    onSearchNext: () -> Unit = {},
+    /** 命中词（已 trim）。空串 = 不高亮。 */
+    searchHighlight: String = "",
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -211,41 +233,52 @@ fun ChatScreen(
             .imePadding(),
     ) {
         // —— 标题栏（全局共用 IMTopBar，规格见 UI_SPEC §4.5）——
-        IMTopBar(
-            title = title,
-            subtitle = subtitle,
-            subtitleAccent = subtitle == "在线",
-            onLeft = onBack,
-            // 标题也保留可点（iOS 就是点标题进详情），但**可见入口是右边那个头像**
-            onTitleClick = onOpenInfo,
-            avatar = TopBarAvatar(
-                label = title,
-                seed = convId,
-                url = avatarUrl,
-                onClick = onOpenInfo,
-            ),
-        )
+        // 搜索态整条换成搜索框（同 iOS：顶栏进 searchMode，不是在标题下面再加一行）
+        if (searchOpen) {
+            ChatSearchTopBar(
+                query = searchQuery,
+                onQueryChange = onSearchQueryChange,
+                onCancel = onCloseSearch,
+            )
+        } else {
+            IMTopBar(
+                title = title,
+                subtitle = subtitle,
+                subtitleAccent = subtitle == "在线",
+                onLeft = onBack,
+                // 标题也保留可点（iOS 就是点标题进详情），但**可见入口是右边那个头像**
+                onTitleClick = onOpenInfo,
+                avatar = TopBarAvatar(
+                    label = title,
+                    seed = convId,
+                    url = avatarUrl,
+                    onClick = onOpenInfo,
+                ),
+            )
+        }
 
-        // —— 「跳到原消息」（点引用块）——
+        // —— 定位到某条消息（引用块跳转 / 搜索命中）——
         // **瞬时滚动不用 animateScrollToItem**：长列表上动画会滚很久，看着像卡住
         //（与 ↓ 悬浮按钮同一条纪律，也与 im-web `jumpToSeq` 同——见那边的坑）。
         // 跳到后短暂高亮那一行，否则用户不知道停在了哪。
-        var jumpTarget by remember(convId) { mutableStateOf(0L) }
+        //
+        // 目标不在 rows 里时**什么都不做、继续等**：Host 已经确认过本地有这条并把
+        // 渲染窗口撑大了，下一帧 rows 长出来这个 effect 会再跑一次。
+        // "跳不了"的判断与提示归 Host——只有它查得到本地库。
         var highlightSeq by remember(convId) { mutableStateOf(0L) }
-        LaunchedEffect(jumpTarget, rows.size) {
-            val seq = jumpTarget
-            if (seq <= 0) return@LaunchedEffect
-            val idx = rowIndexOfSeq(rows, seq)
-            if (idx < 0) {
-                // 不在已加载窗口里：本端还没有"按 conv_seq 往前翻到那一条"的能力，
-                // 如实提示而不是滚到一个错的位置（滚错比不滚更糟）
-                jumpTarget = 0
-                onJumpMiss()
-                return@LaunchedEffect
-            }
+        LaunchedEffect(locateSeq, rows.size) {
+            if (locateSeq <= 0) return@LaunchedEffect
+            val idx = rowIndexOfSeq(rows, locateSeq)
+            if (idx < 0) return@LaunchedEffect
             listState.scrollToItem(idx)
-            jumpTarget = 0
-            highlightSeq = seq
+            centerItem(listState, idx)
+            // 先点亮再归零：归零会换掉本 effect 的 key 把它取消，
+            // 高亮的熄灭因此**不能**写在这里（写这儿就会一直亮着）。
+            highlightSeq = locateSeq
+            onLocateConsumed()
+        }
+        LaunchedEffect(highlightSeq) {
+            if (highlightSeq <= 0) return@LaunchedEffect
             kotlinx.coroutines.delay(1200)
             highlightSeq = 0
         }
@@ -260,6 +293,7 @@ fun ChatScreen(
             uploadProgress = uploadProgress,
             localNameOf = localNameOf,
             loadLinkPreview = loadLinkPreview,
+            searchHighlight = searchHighlight,
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -295,7 +329,7 @@ fun ChatScreen(
                     onOpenMedia = onOpenMedia,
                     onOpenUser = onOpenUser,
                     onRetry = onRetry,
-                    onJumpToSeq = { seq -> jumpTarget = seq },
+                    onJumpToSeq = onJumpToSeq,
                     // 宫格：长按的那一格自己隐形（整行不隐，其余格仍在原位）
                     hiddenTile = if (r0 is ChatRow.Album) menuForSeq else 0L,
                 )
@@ -329,6 +363,20 @@ fun ChatScreen(
                 )
             }
         }
+        }
+
+        // 搜索态：底部换成命中导航条（输入栏与引用条都让位——搜索时发不了消息，
+        // 摆一个能打字的输入框只会让人以为搜的是"要发的内容"）。
+        if (searchOpen) {
+            ChatSearchNavBar(
+                label = searchNavLabel,
+                notice = searchNotice,
+                canPrev = searchCanPrev,
+                canNext = searchCanNext,
+                onPrev = onSearchPrev,
+                onNext = onSearchNext,
+            )
+            return@Column
         }
 
         // —— 引用条（正在引用某条消息）——
@@ -458,6 +506,24 @@ private fun Composer(
             )
         }
     }
+}
+
+/**
+ * 把第 [index] 行滚到视口**中间**。
+ *
+ * `scrollToItem` 是把目标顶到视口**顶端**，而 `CHAT_UX.md §3.1` 的三端契约是**居中**
+ * ——顶端对齐时目标上方的上下文一行都看不到，"跳到了但不知道跳到哪"。
+ * iOS 用 `UITableViewScrollPositionMiddle`，Web 用 `scrollIntoView({block:"center"})`，
+ * Compose 没有对应参数，只能先顶上去再补一段偏移。
+ *
+ * 目标比视口还高时不补（`delta <= 0`），补了反而把它的开头推出屏幕。
+ * 靠边的行由 `scrollBy` 自己夹住，不必特判。
+ */
+private suspend fun centerItem(listState: LazyListState, index: Int) {
+    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val viewport = listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset
+    val delta = (viewport - info.size) / 2f
+    if (delta > 0f) listState.scrollBy(-delta)
 }
 
 /**

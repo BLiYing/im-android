@@ -53,6 +53,16 @@ class MessageRepository(
         conversations.observeList(owner)
 
     /**
+     * 读一行会话的**当前**状态。
+     *
+     * 存在的理由：页面拿到的 `ConversationEntity` 是点进来那一刻的快照，
+     * 而"本地齐不齐"（`syncedConvSeq` vs `lastConvSeq`，见 [ChatSearch.isLocalComplete]）
+     * 要的是此刻的值——同步正跑着的时候两者差得很远。
+     */
+    suspend fun conversation(owner: String, convId: String): ConversationEntity? =
+        conversations.byId(owner, convId)
+
+    /**
      * 观察一个会话的**最近 [limit] 条**消息，返回显示序（旧→新）。
      *
      * DAO 按 DESC 取最新 N 条，这里反转。**不要在 SQL 里用 ASC + LIMIT**——
@@ -62,6 +72,50 @@ class MessageRepository(
         messages.observeWindow(owner, convId, limit).map { it.asReversed() }
 
     suspend fun messageCount(owner: String, convId: String): Int = messages.countIn(owner, convId)
+
+    /**
+     * 会话内搜索（本地库，整个会话）。返回**显示序倒序**（新在前）的命中，最多 [limit] 条。
+     *
+     * DAO 那条 SQL 负责收窄，[ChatSearch.matches] 是权威判定——两层的理由见它的注释。
+     * `keyword` 由调用方 trim；空词回空集（与后端 G4 一致：不报错，便于清空搜索框时复用同一条路）。
+     */
+    suspend fun searchMessages(
+        owner: String,
+        convId: String,
+        keyword: String,
+        limit: Int = ChatSearch.LOCAL_PAGE_LIMIT,
+    ): LocalSearchPage {
+        val needle = keyword.trim()
+        if (needle.isEmpty()) return LocalSearchPage(emptyList(), truncated = false)
+        val like = "%" + ChatSearch.escapeLike(needle) + "%"
+        val lowered = needle.lowercase()
+        val raw = messages.search(owner, convId, like, limit)
+        // **截断与否要看 SQL 取回多少条，不是过滤后剩多少**：只要复核过滤掉一条，
+        // 过滤后的长度就够不到 limit，「还有更多」那个 `+` 会静默消失
+        // ——正是 hitLabel 那条"不能悄悄显示成总共就这些"要防的事。
+        return LocalSearchPage(
+            rows = raw.filter { ChatSearch.matches(it.contentType, it.content, it.caption, it.fileName, lowered) },
+            truncated = raw.size >= limit,
+        )
+    }
+
+    /**
+     * 要把渲染窗口撑到多少条才能包含 `convSeq` 那条消息。
+     *
+     * 回 `0` = **本地根本没有这条**（服务端命中但本地有缺口 / 已被删除），
+     * 调用方据此如实提示，而不是滚到一个错的位置（滚错比不滚更糟）。
+     */
+    suspend fun windowNeededFor(owner: String, convId: String, convSeq: Long): Int {
+        if (convSeq <= 0) return 0
+        val m = messages.byConvSeq(owner, convId, convSeq) ?: return 0
+        return messages.countAtOrAfter(owner, convId, m.timestamp, m.convSeq)
+    }
+
+    /** 本地这个会话齐不齐（[ChatSearch.isLocalComplete] 的取数版本）。 */
+    suspend fun isLocalComplete(owner: String, convId: String): Boolean {
+        val row = conversations.byId(owner, convId)
+        return ChatSearch.isLocalComplete(row?.syncedConvSeq ?: 0L, row?.lastConvSeq ?: 0L)
+    }
 
     fun observePending(owner: String, convId: String): Flow<List<PendingMessageEntity>> =
         pending.observe(owner, convId)
@@ -487,4 +541,15 @@ private fun MessageData.toEntity(owner: String) = MessageEntity(
     sysSegments = sysSegments?.takeIf { it.isNotEmpty() }?.let {
         ProtocolJson.encodeToString(kotlinx.serialization.builtins.ListSerializer(SysSegment.serializer()), it)
     },
+)
+
+/**
+ * 本地一页搜索结果。
+ *
+ * 单独一个类型只为带上 [truncated]：命中被单页上限截断时计数要补 `+`，
+ * 而这件事只有**查询层**知道（UI 拿到的是复核过滤之后的列表，长度反推不出来）。
+ */
+data class LocalSearchPage(
+    val rows: List<MessageEntity>,
+    val truncated: Boolean,
 )
