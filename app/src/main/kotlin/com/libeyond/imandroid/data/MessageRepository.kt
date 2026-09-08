@@ -129,6 +129,33 @@ class MessageRepository(
         return p
     }
 
+    /**
+     * 补齐待发行的媒体元数据（宽高/时长/封面）。
+     *
+     * 为什么需要它：整批媒体的待发行是在**压缩/抽帧之前**就落库的（宫格要在点「发送」
+     * 那一刻就成形），而宽高与时长要等解码才知道。**不回写就是 resend 丢字段**——
+     * [MessageService.resend] 从待发行读这些值，与 forwardFrom / groupId / fileName
+     * 同一个坑（见 AckCarryOver 的注释），这已经是第五次。
+     */
+    suspend fun updatePendingMedia(
+        owner: String,
+        cid: String,
+        mediaW: Int? = null,
+        mediaH: Int? = null,
+        duration: Int? = null,
+        poster: String? = null,
+    ) {
+        val p = pending.byClientId(owner, cid) ?: return
+        pending.put(
+            p.copy(
+                mediaW = mediaW ?: p.mediaW,
+                mediaH = mediaH ?: p.mediaH,
+                duration = duration ?: p.duration,
+                poster = poster ?: p.poster,
+            ),
+        )
+    }
+
     /** 在途未确认的消息——重连后按同一 `client_msg_id` 重发。 */
     suspend fun inFlight(owner: String): List<PendingMessageEntity> = pending.inFlight(owner)
 

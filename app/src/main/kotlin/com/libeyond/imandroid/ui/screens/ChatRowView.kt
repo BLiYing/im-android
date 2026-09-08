@@ -61,32 +61,44 @@ internal fun ChatRowView(
         is ChatRow.DayLabel -> DaySeparator(r.timestamp)
         is ChatRow.UnreadDivider -> UnreadDividerRow()
         is ChatRow.Album -> AlbumBubble(
-            tiles = r.msgs.map {
-                AlbumTile(it.content, it.contentType, it.duration)
+            // **一个宫格里两种格并存**：已确认的正常显示，还在传的那几格压暗底。
+            // 状态由每一格自己带（AlbumMember.sending），不再靠"整行是不是待发行"——
+            // 靠行类型的话，一批图必然经历"散成单张 → 逐个变确认 → 最后凑回宫格"。
+            tiles = r.members.map { m ->
+                when (m) {
+                    is AlbumMember.Sent ->
+                        AlbumTile(m.msg.content, m.msg.contentType, m.msg.duration)
+                    is AlbumMember.Sending ->
+                        AlbumTile(m.msg.content, m.msg.contentType, null, sending = true)
+                }
             },
             // 宫格**逐格**点开（iOS 同）：点第 3 格就该看第 3 张，
-            // 整格共用一个回调会让所有格都打开第一张
-            onTapTile = { idx -> r.msgs.getOrNull(idx)?.let(onOpenMedia) },
-            mine = r.msgs.first().sender == myUid,
-            timestamp = r.msgs.last().timestamp,
+            // 整格共用一个回调会让所有格都打开第一张。
+            // **还在传的那格点不开**——本地 uri 能显示但查看器要服务端地址。
+            onTapTile = { idx ->
+                (r.members.getOrNull(idx) as? AlbumMember.Sent)?.let { onOpenMedia(it.msg) }
+            },
+            // 一组图必然同一个人发的，取首格判断即可；首格若还在传，那就是我发的
+            mine = when (val f = r.members.first()) {
+                is AlbumMember.Sent -> f.msg.sender == myUid
+                is AlbumMember.Sending -> true
+            },
+            timestamp = when (val l = r.members.last()) {
+                is AlbumMember.Sent -> l.msg.timestamp
+                is AlbumMember.Sending -> l.msg.createdAt
+            },
             host = host,
             useTls = useTls,
-            // 长按**哪一格就带哪一条**（此前恒传 first()，撤回/引用会作用到第一张上）
+            // 长按**哪一格就带哪一条**（此前恒传 first()，撤回/引用会作用到第一张上）。
+            // 还在传的那格无从下手（撤回/引用都要 conv_seq），不响应。
             onLongPressTile = { idx, rect ->
-                r.msgs.getOrNull(idx)?.let { onLongPress(it, rect) }
+                (r.members.getOrNull(idx) as? AlbumMember.Sent)?.let { onLongPress(it.msg, rect) }
             },
-            hiddenIndex = r.msgs.indexOfFirst { it.convSeq == hiddenTile && hiddenTile > 0L },
-        )
-        is ChatRow.PendingAlbum -> AlbumBubble(
-            tiles = r.msgs.map {
-                AlbumTile(it.content, it.contentType, null, sending = true)
+            hiddenIndex = if (hiddenTile > 0L) {
+                r.members.indexOfFirst { (it as? AlbumMember.Sent)?.msg?.convSeq == hiddenTile }
+            } else {
+                -1
             },
-            mine = true,
-            timestamp = r.msgs.last().createdAt,
-            host = host,
-            useTls = useTls,
-            // 待发的整组还没 conv_seq，长按菜单无从下手（撤回/引用都要 seq）
-            onLongPressTile = { _, _ -> },
         )
         // 系统消息走居中灰字，不进气泡分支（iOS IMSystemCell / Web .sys-note）。
         // 不用 `when` 卫语句（Kotlin 2.0 仍是实验特性），在分支内早退。

@@ -206,6 +206,38 @@ class MessageService(
      *
      * 上传失败 → 标 Failed（红❗可重试）；成功 → 把本地 uri 换成服务端 url 再发帧。
      */
+    // —— 媒体发送（落待发行 / 上传 / 回写 / 发帧）拆到 MediaSendPipeline.kt ——
+    // 拆的理由是体量门禁（本文件 626 > 600），拆的**边界**是「一条媒体从选中到发出去」
+    // 这条完整链路：它自成一体，且四个入口（图片/视频/重发/失败标记）共享同一套状态机——
+    // 状态机分叉过一次就会出现「视频发失败了但没有红❗」这种查不出来的事。
+    private val media = MediaSendPipeline(
+        repo = repo,
+        upload = upload,
+        uploadProgress = uploadProgress,
+        ownerProvider = ownerProvider,
+        transmit = ::transmit,
+        log = log,
+    )
+
+    /** 见 [MediaSendPipeline.createPendingRow]。 */
+    suspend fun createMediaPending(
+        convId: String,
+        to: String,
+        contentType: String,
+        localPreviewUri: String,
+        fileName: String,
+        fileSize: Long,
+        caption: String? = null,
+        groupId: String? = null,
+    ): String? = media.createPendingRow(
+        convId, to, contentType, localPreviewUri, fileName, fileSize, caption, groupId,
+    )
+
+    /** 见 [MediaSendPipeline.markFailed]。 */
+    suspend fun markMediaFailed(clientMsgId: String, code: Int = 0, message: String = "读取失败") =
+        media.markFailed(clientMsgId, code, message)
+
+    /** 见 [MediaSendPipeline.sendBytes]。 */
     suspend fun sendMedia(
         convId: String,
         to: String,
@@ -215,53 +247,18 @@ class MessageService(
         contentType: String,
         caption: String? = null,
         localPreviewUri: String = "",
-        /** 相册分组：同批 ≥2 张时由调用方生成一个共享 ID，1 张传 null。 */
         groupId: String? = null,
-        /** 像素宽高 / 视频时长 / 视频封面（§4.1）；拿不到传 null，**不要传负数**（服务端拒发）。 */
         mediaW: Int? = null,
         mediaH: Int? = null,
         duration: Int? = null,
         poster: String? = null,
-    ) {
-        val owner = ownerProvider() ?: return
-        val p = repo.createPending(
-            owner = owner, convId = convId, to = to,
-            content = localPreviewUri, contentType = contentType,
-            groupId = groupId,
-            fileName = fileName, fileSize = bytes.size.toLong(), caption = caption,
-            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
-        )
-        val r = try {
-            upload.upload(bytes, fileName, mimeType, asVoice = contentType == ContentType.VOICE)
-        } catch (e: com.libeyond.imandroid.sdk.http.ApiException) {
-            repo.onSendRejected(
-                owner,
-                com.libeyond.imandroid.sdk.protocol.ErrorData(
-                    code = e.code, message = e.message, clientMsgId = p.clientMsgId,
-                ),
-            )
-            log.w("media_upload_failed", "cid" to p.clientMsgId, "code" to e.code)
-            return
-        }
-        repo.updatePendingContent(owner, p.clientMsgId, r.url, r.size)
-        transmit(
-            p.clientMsgId, convId, to, contentType, r.url, null,
-            fileName, r.size, caption, groupId = groupId,
-            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
-        )
-    }
+        pendingId: String? = null,
+    ) = media.sendBytes(
+        convId, to, bytes, fileName, mimeType, contentType, caption, localPreviewUri,
+        groupId, mediaW, mediaH, duration, poster, pendingId,
+    )
 
-    /**
-     * 发一条**流式上传**的媒体消息（视频）。
-     *
-     * 与 [sendMedia] 的唯一区别是上传走分片（`UploadApi.uploadStream`）而不是整包字节：
-     * 服务端视频上限 2GB，整包读进 `ByteArray` 就是当场 OOM。
-     * 其余（先落待发 → 失败标红 → 成功换 URL 再发帧）**必须保持一致**——
-     * 两条发送路径的状态机分叉过一次就会出现「视频发失败了但没有红❗」这种查不出来的事。
-     *
-     * @param openStream 每次返回从头开始的新流
-     * @param totalBytes 必须准确：分片协议按声明大小校验，多一字节服务端直接判超限
-     */
+    /** 见 [MediaSendPipeline.sendStream]。 */
     suspend fun sendMediaStream(
         convId: String,
         to: String,
@@ -277,45 +274,11 @@ class MessageService(
         mediaH: Int? = null,
         duration: Int? = null,
         poster: String? = null,
-    ) {
-        val owner = ownerProvider() ?: return
-        val p = repo.createPending(
-            owner = owner, convId = convId, to = to,
-            content = localPreviewUri, contentType = contentType,
-            groupId = groupId,
-            // 大小在上传前就知道（分片协议要求先声明），先落库好让待发气泡显示得出来
-            fileName = fileName, fileSize = totalBytes, caption = caption,
-            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
-        )
-        // **开传就先置 0%**：第一片是 8MB，传完才有第一次回调。不置的话这段空窗里
-        // 气泡显示的是播放钮，看着像已经发好了——真机实测一段 404MB 的视频，
-        // 这个空窗有好几秒。0% 至少说明「在传」。
-        uploadProgress.report(p.clientMsgId, 0, totalBytes)
-        val r = try {
-            upload.uploadStream(openStream, fileName, mimeType, totalBytes) { sent, total ->
-                uploadProgress.report(p.clientMsgId, sent, total)
-            }
-        } catch (e: com.libeyond.imandroid.sdk.http.ApiException) {
-            repo.onSendRejected(
-                owner,
-                com.libeyond.imandroid.sdk.protocol.ErrorData(
-                    code = e.code, message = e.message, clientMsgId = p.clientMsgId,
-                ),
-            )
-            log.w("media_stream_upload_failed", "cid" to p.clientMsgId, "code" to e.code)
-            return
-        } finally {
-            // 成功 / 失败 / 协程被取消都要摘掉。写在 happy path 上就会留下
-            // 一条永远停在 43% 的进度环——比没有进度条更让人以为程序卡死了。
-            uploadProgress.clear(p.clientMsgId)
-        }
-        repo.updatePendingContent(owner, p.clientMsgId, r.url, r.size)
-        transmit(
-            p.clientMsgId, convId, to, contentType, r.url, null,
-            fileName, r.size, caption, groupId = groupId,
-            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
-        )
-    }
+        pendingId: String? = null,
+    ) = media.sendStream(
+        convId, to, openStream, totalBytes, fileName, mimeType, contentType, caption,
+        localPreviewUri, groupId, mediaW, mediaH, duration, poster, pendingId,
+    )
 
     /** 重发（红❗点击 / 重连后补发）。**沿用同一个 client_msg_id**，服务端幂等去重。 */
     suspend fun resend(clientMsgId: String) {
@@ -535,7 +498,12 @@ class MessageService(
         // 收件人拿到一个**永远打不开的地址**——而且这条错误消息再也改不回来了。
         // 字节已经不在内存里（Uri 的读权限也随进程没了），重发无从谈起，
         // 只能标失败让用户重选一次。
-        val (resendable, stale) = list.partition { !isLocalUri(it.content) }
+        // **正在上传的那几条既不重发也不标失败**——它们的上传协程还在跑，
+        // 标失败会让用户看到红❗，而几秒后它自己又发出去了（见 MediaSendPipeline.uploading）。
+        val inProgress = list.filter { isLocalUri(it.content) && media.isUploading(it.clientMsgId) }
+        val rest = list - inProgress.toSet()
+        if (inProgress.isNotEmpty()) log.i("resend_skipped_uploading", "count" to inProgress.size)
+        val (resendable, stale) = rest.partition { !isLocalUri(it.content) }
         stale.forEach {
             repo.onSendRejected(
                 owner,

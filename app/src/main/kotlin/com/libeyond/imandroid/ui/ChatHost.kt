@@ -485,7 +485,7 @@ fun ChatHost(
                 val idx = rows.indexOfFirst { r ->
                     when (r) {
                         is ChatRow.Confirmed -> r.msg.convSeq == target.convSeq
-                        is ChatRow.Album -> r.msgs.any { it.convSeq == target.convSeq }
+                        is ChatRow.Album -> r.sent.any { it.convSeq == target.convSeq }
                         else -> false
                     }
                 }

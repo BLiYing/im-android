@@ -38,13 +38,41 @@ internal class MediaSendFlow(
         // ≥2 个共享一个 group_id → 两端聚簇成宫格；1 个不带（普通媒体气泡）。
         // 前缀 `alb-` 与 iOS 一致，便于日志里一眼认出。
         val gid = if (items.size > 1) "alb-" + UUID.randomUUID() else null
-        for (m in items) {
+
+        // ① **先把整批待发行一次性落库**，再去压缩/上传。
+        //    此前是「逐个：压缩 → 落行 → 上传 → 发帧」，压一张要几百毫秒到几秒，
+        //    于是待发气泡一张一张往外冒；而宫格要 ≥2 条同组待发行才成形，
+        //    用户点完发送先看到空白、再看到单张，最后才凑成宫格
+        //    （2026-09-08 用户报的「发送时不是九宫格形态」的前半段）。
+        //    落行只写一次本地库，几十毫秒内整组宫格就在屏幕上了。
+        val cids = items.map { m ->
+            client.messages.createMediaPending(
+                convId = conv.convId,
+                to = to,
+                contentType = if (m.isVideo) ContentType.VIDEO else ContentType.IMAGE,
+                // 本地 uri 直接给 Coil 加载——选完立刻有图，不用等上传
+                localPreviewUri = m.uri,
+                fileName = m.displayName,
+                fileSize = m.sizeBytes,
+                groupId = gid,
+            )
+        }
+
+        // ② 再逐个压缩 / 上传 / 发帧，沿用上面那一行的 client_msg_id
+        for ((idx, m) in items.withIndex()) {
             val uri = Uri.parse(m.uri)
-            if (m.isVideo) sendVideo(m, uri, gid, onToast) else sendImage(m, uri, gid, sendOriginal)
+            val cid = cids[idx]
+            if (m.isVideo) sendVideo(m, uri, gid, cid, onToast) else sendImage(m, uri, gid, cid, sendOriginal)
         }
     }
 
-    private suspend fun sendImage(m: PickedMedia, uri: Uri, gid: String?, sendOriginal: Boolean) {
+    private suspend fun sendImage(
+        m: PickedMedia,
+        uri: Uri,
+        gid: String?,
+        pendingId: String?,
+        sendOriginal: Boolean,
+    ) {
         // 压缩失败**回落原图**而不是放弃这一张——压不动的多半是奇怪格式，原样发出去反而能用
         val compressed = if (sendOriginal) {
             null
@@ -55,6 +83,8 @@ internal class MediaSendFlow(
             ?: withContext(Dispatchers.IO) { readAllBytes(uri) }
             ?: run {
                 log.w("pick_read_failed")
+                // 行已经落在屏幕上了，读不出来就得把它标失败——否则那一格永远转圈
+                pendingId?.let { client.messages.markMediaFailed(it) }
                 return
             }
         val (w, h) = MediaCompressor.imageSizeOf(bytes) ?: (0 to 0)
@@ -71,13 +101,21 @@ internal class MediaSendFlow(
             groupId = gid,
             mediaW = w.takeIf { it > 0 },
             mediaH = h.takeIf { it > 0 },
+            pendingId = pendingId,
         )
     }
 
-    private suspend fun sendVideo(m: PickedMedia, uri: Uri, gid: String?, onToast: (String) -> Unit) {
+    private suspend fun sendVideo(
+        m: PickedMedia,
+        uri: Uri,
+        gid: String?,
+        pendingId: String?,
+        onToast: (String) -> Unit,
+    ) {
         if (m.sizeBytes <= 0) {
             // 分片协议按声明大小校验，0 会被挡下——先给用户一句话，别静默什么都不发生
             onToast("这个视频读不出来")
+            pendingId?.let { client.messages.markMediaFailed(it) }
             return
         }
         val info = withContext(Dispatchers.IO) { VideoProbe.info(context, uri, PickerLog) }
@@ -104,6 +142,7 @@ internal class MediaSendFlow(
             mediaH = info?.height?.takeIf { it > 0 },
             duration = info?.durationMs?.takeIf { it > 0 },
             poster = posterUrl,
+            pendingId = pendingId,
         )
     }
 

@@ -95,7 +95,7 @@ class AlbumClusterTest {
         val r = rows(img(1, "g"), img(2, "g"), img(3, "g"))
         assertEquals(1, r.size)
         val a = r[0] as com.libeyond.imandroid.ui.screens.ChatRow.Album
-        assertEquals(3, a.msgs.size)
+        assertEquals(3, a.members.size)
     }
 
     @Test
@@ -131,7 +131,7 @@ class AlbumClusterTest {
     fun `超过 9 张只画前 9 张`() {
         val many = (1L..12L).map { img(it, "g") }.toTypedArray()
         val a = rows(*many)[0] as com.libeyond.imandroid.ui.screens.ChatRow.Album
-        assertEquals(AlbumLayout.MAX, a.msgs.size)
+        assertEquals(AlbumLayout.MAX, a.members.size)
     }
 
     @Test
@@ -160,8 +160,8 @@ class PendingAlbumClusterTest {
     fun `选完立刻成宫格，不等 ack`() {
         val r = rows(pimg("a", "g", 1), pimg("b", "g", 2), pimg("c", "g", 3))
         assertEquals(1, r.size)
-        val a = r[0] as com.libeyond.imandroid.ui.screens.ChatRow.PendingAlbum
-        assertEquals(3, a.msgs.size)
+        val a = r[0] as com.libeyond.imandroid.ui.screens.ChatRow.Album
+        assertEquals(3, a.members.size)
     }
 
     @Test
@@ -174,7 +174,56 @@ class PendingAlbumClusterTest {
     fun `没有 group_id 的多张各自独立`() {
         val r = rows(pimg("a", null, 1), pimg("b", null, 2))
         assertEquals(2, r.size)
-        assertTrue(r.none { it is com.libeyond.imandroid.ui.screens.ChatRow.PendingAlbum })
+        assertTrue(r.none { it is com.libeyond.imandroid.ui.screens.ChatRow.Album })
+    }
+
+    @Test
+    fun `一批图边发边确认时仍是同一个宫格`() {
+        // **这是用户报的那个 bug**：「发送时不是九宫格形态，发送完成才变成九宫格」。
+        // 一批图不会同时 ack——第 1 张确认了、第 2/3 张还在传，是必然经历的中间态。
+        // 聚簇若不跨「已确认 / 待发」，这个中间态就必然散成
+        // 「一张普通图 + 一个两格宫格」，全部 ack 后才凑回三格。
+        val r = com.libeyond.imandroid.ui.screens.buildChatRows(
+            listOf(
+                com.libeyond.imandroid.data.db.MessageEntity(
+                    ownerUid = "me", convId = "c1", convSeq = 1, sender = "me",
+                    contentType = ContentType.IMAGE, content = "/a1.jpg",
+                    groupId = "g", timestamp = 1,
+                ),
+            ),
+            listOf(pimg("b", "g", 2), pimg("c", "g", 3)),
+        ).filterNot { it is com.libeyond.imandroid.ui.screens.ChatRow.DayLabel }
+        assertEquals(1, r.size)
+        val a = r[0] as com.libeyond.imandroid.ui.screens.ChatRow.Album
+        assertEquals(3, a.members.size)
+        // 状态是**逐格**的：第 1 格已确认、后两格还在传
+        assertEquals(
+            listOf(false, true, true),
+            a.members.map { it.sending },
+        )
+        // 长按/撤回/引用只对已确认的那几格成立
+        assertEquals(1, a.sent.size)
+    }
+
+    @Test
+    fun `宫格的 key 在整批 ack 过程中不变`() {
+        // key 若带「格数」或「首格身份」，每来一次 ack 就变一次 →
+        // Compose 把整行丢弃重建，图会闪一下。group_id 才是这一组的身份。
+        val sending = com.libeyond.imandroid.ui.screens.buildChatRows(
+            emptyList(),
+            listOf(pimg("a", "g", 1), pimg("b", "g", 2)),
+        ).first { it is com.libeyond.imandroid.ui.screens.ChatRow.Album }
+        val half = com.libeyond.imandroid.ui.screens.buildChatRows(
+            listOf(
+                com.libeyond.imandroid.data.db.MessageEntity(
+                    ownerUid = "me", convId = "c1", convSeq = 1, sender = "me",
+                    contentType = ContentType.IMAGE, content = "/a1.jpg",
+                    groupId = "g", timestamp = 1,
+                ),
+            ),
+            listOf(pimg("b", "g", 2)),
+        ).first { it is com.libeyond.imandroid.ui.screens.ChatRow.Album }
+        assertEquals(sending.key, half.key)
     }
 
     @Test
@@ -182,6 +231,6 @@ class PendingAlbumClusterTest {
         // 两边各写一份的话，同一组图在发送中和发送后会长得不一样
         assertTrue(AlbumLayout.isAlbumMember(ContentType.IMAGE, "g"))
         val sending = rows(pimg("a", "g", 1), pimg("b", "g", 2))
-        assertTrue(sending[0] is com.libeyond.imandroid.ui.screens.ChatRow.PendingAlbum)
+        assertTrue(sending[0] is com.libeyond.imandroid.ui.screens.ChatRow.Album)
     }
 }
