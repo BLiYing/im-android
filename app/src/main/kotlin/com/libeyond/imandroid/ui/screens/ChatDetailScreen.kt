@@ -146,95 +146,23 @@ internal fun ChatDetailScreen(
                 DetailTabBar(tabs, tab) { onTabChange(it) }
             }
 
-            // —— 页签内容 ——
-            when (tab) {
-                DetailTab.Links -> {
-                    item { Footnote(LINK_TAB_NOTE) }
-                    if (linkMessages.isEmpty()) {
-                        item { Hint(DetailTabs.emptyText(tab)) }
-                    } else {
-                        items(linkMessages, key = { it.first.convSeq }) { (m, url) ->
-                            LinkRow(
-                                m.content, m.timestamp, url,
-                                onLongPress = { r -> onLongPressArchive(m.toArchiveTarget(), r) },
-                            ) { onOpenLink(url) }
-                        }
-                    }
-                }
-                DetailTab.Voice -> {
-                    item { Footnote(VOICE_TAB_NOTE) }
-                    archiveList(archive, loading, hasMore, tab, onLoadMore) { item ->
-                        VoiceRow(item) { r -> onLongPressArchive(item.toArchiveTarget(), r) }
-                    }
-                }
-                DetailTab.Files -> archiveList(archive, loading, hasMore, tab, onLoadMore) { item ->
-                    FileRow(item, isGroup = false, onOpen = onOpenArchive) { r ->
-                        onLongPressArchive(item.toArchiveTarget(), r)
-                    }
-                }
-                DetailTab.Media -> {
-                    if (loading && archive.isEmpty()) {
-                        item { Hint("加载中…") }
-                    } else if (archive.isEmpty()) {
-                        item { Hint(DetailTabs.emptyText(tab)) }
-                    } else {
-                        item {
-                            // 宫格嵌在纵向列表里：**给定高度不能无界**，否则 LazyVerticalGrid
-                            // 在 LazyColumn 里会崩（无限高约束）。按行数算高度。
-                            val rows = (archive.size + 3) / 4
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(4),
-                                modifier = Modifier.fillMaxWidth()
-                                    .height((rows * 92).dp.coerceAtMost(1200.dp)),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
-                            ) {
-                                items(archive, key = { it.convSeq }) { item ->
-                                    // 本页是**单聊**详情，策略走单聊档——显式传，别靠默认值
-                                    ArchiveTile(
-                                        item, host, useTls, isGroup = false, onOpen = onOpenArchive,
-                                        onLongPress = { r -> onLongPressArchive(item.toArchiveTarget(), r) },
-                                    )
-                                }
-                            }
-                        }
-                        if (hasMore) item { LoadMoreRow(onLoadMore) }
-                    }
-                }
-                DetailTab.Members -> Unit   // 单聊没有这一格（DetailTabs.visible 已经不给）
-            }
+            // —— 页签内容（与群资料共用同一段渲染，见 DetailArchive.archiveTab）——
+            archiveTab(
+                tab = tab,
+                archive = archive,
+                linkMessages = linkMessages,
+                loading = loading,
+                hasMore = hasMore,
+                onLoadMore = onLoadMore,
+                onOpenArchive = onOpenArchive,
+                onLongPressArchive = onLongPressArchive,
+                onOpenLink = onOpenLink,
+                host = host,
+                useTls = useTls,
+                isGroup = false,
+            )
             item { Spacer(Modifier.height(24.dp)) }
         }
-    }
-}
-
-/** 文件/语音这类纵向列表页签共用的一段（空态、分页、行渲染交给调用方）。 */
-private fun androidx.compose.foundation.lazy.LazyListScope.archiveList(
-    items: List<ConvMediaItem>,
-    loading: Boolean,
-    hasMore: Boolean,
-    tab: DetailTab,
-    onLoadMore: () -> Unit,
-    row: @Composable (ConvMediaItem) -> Unit,
-) {
-    if (loading && items.isEmpty()) {
-        item { Hint("加载中…") }
-        return
-    }
-    if (items.isEmpty()) {
-        item { Hint(DetailTabs.emptyText(tab)) }
-        return
-    }
-    items(items, key = { it.convSeq }) { row(it) }
-    if (hasMore) item { LoadMoreRow(onLoadMore) }
-}
-
-@Composable
-private fun LoadMoreRow(onLoadMore: () -> Unit) {
-    // 滚到底自动续拉；手点入口保留作失败重试
-    LaunchedEffect(Unit) { onLoadMore() }
-    Box(Modifier.fillMaxWidth().padding(14.dp), contentAlignment = Alignment.Center) {
-        Text("加载更多", color = IMTheme.colors.accent, modifier = Modifier.clickable { onLoadMore() })
     }
 }
 

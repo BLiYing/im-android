@@ -39,9 +39,6 @@ import com.libeyond.imandroid.ui.screens.linkUrlOf
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 
-/** 「链接」页签扫多少条本地消息。与聊天页的渲染窗口同量级，再多也只是扫更旧的已加载记录。 */
-private const val LINK_SCAN_LIMIT = 500
-
 /**
  * 单聊详情接线层（M4.5-3）。
  *
@@ -92,20 +89,9 @@ fun ChatDetailHost(
     var archiveMenuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
 
     var tab by remember(conv.convId) { mutableStateOf(DetailTab.Media) }
-    var archive by remember(conv.convId) { mutableStateOf<List<ConvMediaItem>>(emptyList()) }
-    var cursor by remember(conv.convId) { mutableStateOf(0L) }
-    var hasMore by remember(conv.convId) { mutableStateOf(false) }
-    var loading by remember(conv.convId) { mutableStateOf(false) }
-
-    // 「链接」页签只能扫本地：服务端没有可索引的链接列（media.go 开头写明）。iOS 同样是本地扫。
-    val localMessages by remember(conv.convId, owner) {
-        if (owner.isEmpty()) emptyFlow() else client.repo.observeMessages(owner, conv.convId, LINK_SCAN_LIMIT)
-    }.collectAsState(initial = emptyList<MessageEntity>())
-    val linkMessages = remember(localMessages) {
-        localMessages.mapNotNull { m ->
-            linkUrlOf(m.contentType, m.content, m.convSeq)?.let { m to it }
-        }.sortedByDescending { it.first.convSeq }
-    }
+    // 归档取数与「链接」本地扫都收在这两个 helper 里（群资料那侧共用同一份）
+    val archive = rememberConvArchive(client, conv.convId, tab)
+    val linkMessages = rememberLinkMessages(client, conv.convId)
 
     val page = ChatDetailNav.current(mediaOpen = viewing != null, profileOpen = profile)
     // 返回键一处派发（同 GroupInfoHost；理由见 ChatDetailPage 的注释）
@@ -115,35 +101,6 @@ fun ChatDetailHost(
             ChatDetailPage.Profile -> profile = false
             ChatDetailPage.Detail -> onBack()
         }
-    }
-
-    /** 换页签 = 从头拉；续页 = 带游标追加。**两条路共用一个出口**，免得分页语义分叉。 */
-    fun load(reset: Boolean) {
-        val kind = DetailTabs.apiKind(tab) ?: return   // 链接/成员不走这个接口
-        if (loading) return                            // 在途守卫：滚到底会连续触发
-        loading = true
-        scope.launch {
-            runCatching { client.conversationsApi.media(conv.convId, kind, if (reset) 0L else cursor) }
-                .onSuccess { p ->
-                    archive = if (reset) {
-                        p.items
-                    } else {
-                        val seen = archive.mapTo(HashSet()) { it.convSeq }
-                        archive + p.items.filter { it.convSeq !in seen }
-                    }
-                    cursor = p.nextCursor
-                    hasMore = p.hasMore
-                }
-                .onFailure { IMLog.tag("IM.Detail").w("conv_media_failed", "kind" to kind) }
-            loading = false
-        }
-    }
-
-    LaunchedEffect(conv.convId, tab) {
-        archive = emptyList()
-        cursor = 0
-        hasMore = false
-        load(reset = true)
     }
 
     /** 会话设置是**整体替换**三项：改一项也要把另外两项原样带回，否则会顺手清掉。 */
@@ -202,34 +159,16 @@ fun ChatDetailHost(
             muted = muted,
             tab = tab,
             onTabChange = { tab = it },
-            archive = archive,
+            archive = archive.items,
             linkMessages = linkMessages,
-            loading = loading,
-            hasMore = hasMore,
-            onLoadMore = { if (hasMore) load(reset = false) },
+            loading = archive.loading,
+            hasMore = archive.hasMore,
+            onLoadMore = { archive.loadMore() },
             onOpenArchive = { item ->
-                // **文件不进图片查看器**：那里没有文件分支，一个 PDF 会被当成图片
-                // 交给 ZoomableImage，屏幕上一片空白（2026-09-08 查出来的死路）。
-                if (item.contentType == ContentType.FILE) {
-                    client.downloads.localFile(item.content)?.let { f ->
-                        OpenFile.open(context, f, MediaUrl.displayFileName(item.content, item.fileName))
-                            ?.let { toast = it }
-                    } ?: run { toast = "文件不在本地，请先下载" }
-                } else {
-                    viewing = item
-                }
+                openArchiveItem(client, context, item, onToast = { toast = it }) { viewing = it }
             },
-            // 链接用系统浏览器打开。**不做"定位到聊天"**：本端还没有跳到指定 conv_seq 的能力，
-            // 与其做个跳回去但落在别处的假跳转，不如先给一个真的有用的动作。
             onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
-            onOpenLink = { url ->
-                runCatching {
-                    context.startActivity(
-                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                }.onFailure { toast = "没有能打开这个链接的应用" }
-            },
+            onOpenLink = { url -> openInBrowser(context, url) { toast = it } },
             onTogglePinned = { v -> pinned = v; pushSettings(v, muted) },
             onToggleMuted = { v -> muted = v; pushSettings(pinned, v) },
             // 备注名改在用户资料页里（那里已有输入框与 setRemark 接线），不在这里重复一套
@@ -399,7 +338,7 @@ fun ChatDetailHost(
         target = archiveMenuFor,
         anchor = archiveMenuAnchor,
         onLocateInChat = { seq -> archiveMenuFor = null; onLocateInChat(seq) },
-        onChanged = { load(reset = true) },
+        onChanged = { archive.reload() },
         onToast = { toast = it },
         onDismiss = { archiveMenuFor = null },
     )

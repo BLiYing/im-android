@@ -32,7 +32,13 @@ import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMAvatar
+import androidx.compose.ui.geometry.Rect
+import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailAction
+import com.libeyond.imandroid.data.DetailTab
+import com.libeyond.imandroid.data.DetailTabs
+import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.data.GroupSettings
@@ -51,6 +57,10 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  *
  * **超级群不物化成员表**：`GET /groups/{id}` 对超级群只回我自己，
  * 成员必须走分页接口。故这里的成员区数据由调用方决定从哪来，本组件只管渲染。
+ *
+ * **归档是内联页签，成员也是其中一格**（2026-09-09 改过来的，对齐 iOS
+ * `IMChatDetailViewController`：单聊与群聊共用同一套页签，成员只是群聊多出来的那一格）。
+ * 此前这里是「一长串成员 + 一行『聊天媒体』跳出去」，与单聊那一侧长得完全不一样。
  */
 
 @Composable
@@ -68,8 +78,21 @@ fun GroupInfoScreen(
     onMemberLongPress: (GroupMember) -> Unit,
     /** 进「群管理」二级页（仅群主/管理员看得到这个入口）。 */
     onOpenManage: () -> Unit,
-    /** 进「聊天媒体」归档（与单聊详情同一个页面，所有成员可见）。 */
-    onOpenMedia: () -> Unit,
+    // —— 内联页签（成员 / 媒体 / 文件 / 语音 / 链接）——
+    tab: DetailTab,
+    onTabChange: (DetailTab) -> Unit,
+    /** 当前页签的归档数据（成员/链接页签走各自的来源，这里为空）。 */
+    archive: List<ConvMediaItem>,
+    /** 链接页签：本地已加载的消息，由调用方扫出 URL。 */
+    linkMessages: List<Pair<MessageEntity, String>>,
+    archiveLoading: Boolean,
+    archiveHasMore: Boolean,
+    onLoadMoreArchive: () -> Unit,
+    onOpenArchive: (ConvMediaItem) -> Unit,
+    onLongPressArchive: (ArchiveTarget, Rect) -> Unit,
+    onOpenLink: (String) -> Unit,
+    host: String,
+    useTls: Boolean,
     /** 邀请好友入群。**入口按 [GroupPermissions.canInvite] 显隐**——
      *  开了「仅管理员可邀请」还给普通成员留入口，点进去只会拿到 300212。 */
     onInvite: () -> Unit,
@@ -155,24 +178,14 @@ fun GroupInfoScreen(
                     }
                 }
 
-                // —— 聊天媒体（所有成员可见）——
-                Spacer(Modifier.height(d.cardGap))
-                Column(
-                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { onOpenMedia() }
-                            .padding(horizontal = d.space4, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                // 「聊天媒体」那一行没有了——归档已经是下面的内联页签（对齐 iOS）。
+                // 同一件事留两个入口，其中一个还要跳出去，是本端此前与 iOS 差得最远的一处。
+                if (GroupPermissions.canInvite(info)) {
+                    Spacer(Modifier.height(d.cardGap))
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
                     ) {
-                        Text("聊天媒体", color = c.textPrimary,
-                            style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                        Text("›", color = c.textTertiary)
-                    }
-                    if (GroupPermissions.canInvite(info)) {
-                        Box(Modifier.fillMaxWidth().padding(start = d.space4)
-                            .height(0.5.dp).background(c.separator))
                         Row(
                             Modifier.fillMaxWidth().clickable { onInvite() }
                                 .padding(horizontal = d.space4, vertical = 14.dp),
@@ -214,28 +227,42 @@ fun GroupInfoScreen(
                     }
                 }
 
-                Text(
-                    "成员（${info.memberCount}）",
-                    color = c.textTertiary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(start = d.space4, top = 16.dp, bottom = 6.dp),
-                )
+                Spacer(Modifier.height(d.cardGap))
+                DetailTabBar(DetailTabs.visible(isGroup = true), tab) { onTabChange(it) }
             }
 
-            items(members, key = { it.userId }) { m ->
-                MemberRow(m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) })
-            }
-
-            if (hasMoreMembers) {
-                item {
-                    // 滚到底自动续拉；手点入口保留作失败重试
-                    // （2 万人群要点 400 次「加载更多」是不可接受的）
-                    androidx.compose.runtime.LaunchedEffect(members.size) { onLoadMoreMembers() }
-                    Box(Modifier.fillMaxWidth().padding(14.dp), contentAlignment = Alignment.Center) {
-                        Text("加载更多", color = c.accent,
-                            modifier = Modifier.clickable { onLoadMoreMembers() })
+            // —— 页签内容 ——
+            when (tab) {
+                DetailTab.Members -> {
+                    items(members, key = { it.userId }) { m ->
+                        MemberRow(m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) })
+                    }
+                    if (hasMoreMembers) {
+                        item {
+                            // 滚到底自动续拉；手点入口保留作失败重试
+                            // （2 万人群要点 400 次「加载更多」是不可接受的）
+                            androidx.compose.runtime.LaunchedEffect(members.size) { onLoadMoreMembers() }
+                            Box(Modifier.fillMaxWidth().padding(14.dp), contentAlignment = Alignment.Center) {
+                                Text("加载更多", color = c.accent,
+                                    modifier = Modifier.clickable { onLoadMoreMembers() })
+                            }
+                        }
                     }
                 }
+                else -> archiveTab(
+                    tab = tab,
+                    archive = archive,
+                    linkMessages = linkMessages,
+                    loading = archiveLoading,
+                    hasMore = archiveHasMore,
+                    onLoadMore = onLoadMoreArchive,
+                    onOpenArchive = onOpenArchive,
+                    onLongPressArchive = onLongPressArchive,
+                    onOpenLink = onOpenLink,
+                    host = host,
+                    useTls = useTls,
+                    isGroup = true,
+                )
             }
 
             item {

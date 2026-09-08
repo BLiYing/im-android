@@ -14,7 +14,13 @@ import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.GroupInfoNav
 import com.libeyond.imandroid.data.GroupInfoPage
 import com.libeyond.imandroid.data.PickPurpose
+import androidx.compose.ui.geometry.Rect
+import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailAction
+import com.libeyond.imandroid.data.DetailTab
+import com.libeyond.imandroid.sdk.api.ConvMediaItem
+import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.ui.screens.MediaViewerScreen
 import com.libeyond.imandroid.data.DetailActions
 import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.data.GroupPermissions
@@ -84,7 +90,13 @@ fun GroupInfoHost(
     // 群管理二级页（仅群主/管理员能进）
     var managing by remember(convId) { mutableStateOf(false) }
     // 会话媒体归档（详情页的「聊天媒体」，与单聊那侧同一个组件）
-    var mediaOpen by remember(convId) { mutableStateOf(false) }
+    // 归档已并进内联页签（2026-09-09），只剩「点开一张图/视频」还是独立的一层
+    var tab by remember(convId) { mutableStateOf(DetailTab.Members) }
+    val archive = rememberConvArchive(client, convId, tab)
+    val linkMessages = rememberLinkMessages(client, convId)
+    var viewing by remember(convId) { mutableStateOf<ConvMediaItem?>(null) }
+    var archiveMenuFor by remember(convId) { mutableStateOf<ArchiveTarget?>(null) }
+    var archiveMenuAnchor by remember(convId) { mutableStateOf(Rect.Zero) }
     // 治理三页 + 一个通用选人页
     var bans by remember(convId) { mutableStateOf<List<GroupBan>?>(null) }
     var bansLoading by remember(convId) { mutableStateOf(false) }
@@ -104,7 +116,7 @@ fun GroupInfoHost(
         adminsOpen = adminsOpen,
         joinRequestsOpen = joinReqs != null,
         memberProfileOpen = memberProfile != null,
-        mediaOpen = mediaOpen,
+        mediaOpen = viewing != null,
         managing = managing,
     )
     BackHandler {
@@ -114,7 +126,7 @@ fun GroupInfoHost(
             GroupInfoPage.Admins -> adminsOpen = false
             GroupInfoPage.JoinRequests -> joinReqs = null
             GroupInfoPage.MemberProfile -> memberProfile = null
-            GroupInfoPage.Media -> mediaOpen = false
+            GroupInfoPage.Media -> viewing = null
             GroupInfoPage.Manage -> managing = false
             GroupInfoPage.Detail -> onBack()
         }
@@ -136,6 +148,7 @@ fun GroupInfoHost(
     var manage by remember(convId) { mutableStateOf<GroupManageAction?>(null) }
     var memberMenu by remember(convId) { mutableStateOf<GroupMember?>(null) }
     var toast by remember(convId) { mutableStateOf<String?>(null) }
+    val saveMedia = rememberMediaSaver { toast = it }
     val myUid = client.uid.orEmpty()
 
     /** 调完写接口统一刷一次群资料——服务端是权威，别本地猜新状态。 */
@@ -324,16 +337,19 @@ fun GroupInfoHost(
             },
             onBack = { memberProfile = null },
         )
-    } else if (mediaOpen) {
-        // 与单聊详情用的是同一个 ConvMediaHost —— 归档这件事在群聊和单聊里
-        // 完全一样（同一个接口、同一套分页、同一个查看器），没有分两份的理由
-        ConvMediaHost(
-            client = client,
-            convId = convId,
-            isGroup = true,
-            iAmManager = info?.iAmManager == true,
-            onLocateInChat = onLocateInChat,
-            onBack = { mediaOpen = false },
+    } else if (viewing != null) {
+        val m = viewing!!
+        MediaViewerScreen(
+            contentType = m.contentType,
+            content = m.content,
+            poster = m.poster,
+            localFile = client.downloads.localFile(m.content, m.contentType == ContentType.VIDEO),
+            host = client.host,
+            useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+            onSave = saveMedia,
+            // 归档里**不放转发按钮**：转发在长按菜单里（与单聊那侧一致）
+            onForward = null,
+            onClose = { viewing = null },
         )
     } else if (managing) {
         GroupManageScreen(
@@ -409,7 +425,7 @@ fun GroupInfoHost(
         onOpenMember = { m -> memberProfile = m },
         myUid = client.uid.orEmpty(),
         onOpenManage = { managing = true },
-            onOpenMedia = { mediaOpen = true },
+
             onInvite = {
                 pick = PickPurpose.Invite
                 picked = emptySet()
@@ -440,6 +456,20 @@ fun GroupInfoHost(
                 onLeft()
             }
         },
+            tab = tab,
+            onTabChange = { tab = it },
+            archive = archive.items,
+            linkMessages = linkMessages,
+            archiveLoading = archive.loading,
+            archiveHasMore = archive.hasMore,
+            onLoadMoreArchive = { archive.loadMore() },
+            onOpenArchive = { item ->
+                openArchiveItem(client, context, item, onToast = { toast = it }) { viewing = it }
+            },
+            onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
+            onOpenLink = { url -> openInBrowser(context, url) { toast = it } },
+            host = client.host,
+            useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
             onBack = onBack,
         )
     }
@@ -478,57 +508,15 @@ fun GroupInfoHost(
         },
     )
 
-    // —— 管理项的编辑框（对每一页都生效）——
-    when (manage) {
-        GroupManageAction.EditName -> IMTextPrompt(
-            title = "群名称", initial = g.name, maxLen = 30,
-            onDismiss = { manage = null },
-            onConfirm = { v ->
-                manage = null
-                // 改群资料是**整体替换**：只改名字也要把头像和简介原样带回去，
-                // 否则会把它们清空（PROTOCOL §11 明说整体替换）。
-                runManage("修改群名") { client.groups.updateInfo(convId, v, g.avatarUrl, g.intro) }
-            },
-        )
-        GroupManageAction.EditIntro -> IMTextPrompt(
-            title = "群简介", initial = g.intro, maxLen = 200, multiline = true,
-            onDismiss = { manage = null },
-            onConfirm = { v ->
-                manage = null
-                runManage("修改群简介") { client.groups.updateInfo(convId, g.name, g.avatarUrl, v) }
-            },
-        )
-        GroupManageAction.EditAnnouncement -> IMTextPrompt(
-            title = "群公告", initial = g.announcement, maxLen = 500, multiline = true,
-            hint = "留空即撤下公告。发布会在群里落一条系统消息。",
-            onDismiss = { manage = null },
-            onConfirm = { v ->
-                manage = null
-                runManage(if (v.isBlank()) "撤下公告" else "发布公告") {
-                    client.groups.setAnnouncement(convId, v)
-                }
-            },
-        )
-        GroupManageAction.ToggleMuteAll -> {
-            val on = GroupPermissions.isMuteActive(g.muteUntil)
-            IMConfirmDialog(
-                title = if (on) "解除全员禁言？" else "开启全员禁言？",
-                message = if (on) "解除后所有成员都可以发言。"
-                else "开启后只有群主和管理员可以发言，直到你手动解除。",
-                confirmText = if (on) "解除" else "开启",
-                destructive = !on,
-                onDismiss = { manage = null },
-                onConfirm = {
-                    manage = null
-                    // -1 = 永久（协议口径），0 = 解除
-                    runManage(if (on) "解除全员禁言" else "开启全员禁言") {
-                        client.groups.setMuteAll(convId, if (on) 0L else -1L)
-                    }
-                },
-            )
-        }
-        null -> Unit
-    }
+    // —— 管理项的编辑框（对每一页都生效；实现在 GroupInfoDialogs.kt）——
+    GroupManagePrompts(
+        action = manage,
+        info = g,
+        convId = convId,
+        client = client,
+        onDismiss = { manage = null },
+        runManage = ::runManage,
+    )
 
     // —— 成员长按菜单 ——（判据与拼装在 GroupMemberMenu.kt）
     memberMenu?.let { m ->
@@ -557,6 +545,20 @@ fun GroupInfoHost(
             },
         )
     }
+
+    // 归档长按菜单 + 转发选择页（与单聊详情共用同一份接线）
+    ArchiveActionsHost(
+        client = client,
+        convId = convId,
+        isGroup = true,
+        iAmManager = info?.iAmManager == true,
+        target = archiveMenuFor,
+        anchor = archiveMenuAnchor,
+        onLocateInChat = { seq -> archiveMenuFor = null; onLocateInChat(seq) },
+        onChanged = { archive.reload() },
+        onToast = { toast = it },
+        onDismiss = { archiveMenuFor = null },
+    )
 
     toast?.let { t -> IMToast(t) { toast = null } }
 }

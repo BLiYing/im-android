@@ -27,6 +27,7 @@ object GroupInfoNav {
         bansOpen: Boolean,
         adminsOpen: Boolean,
         memberProfileOpen: Boolean,
+        /** 媒体**查看器**开着（不是归档页——2026-09-09 起归档是详情页里的内联页签，不再是独立一页）。 */
         mediaOpen: Boolean,
         managing: Boolean,
     ): GroupInfoPage = when {
