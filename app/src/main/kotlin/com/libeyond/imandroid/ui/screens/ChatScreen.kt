@@ -131,6 +131,8 @@ fun ChatScreen(
     localNameOf: (String) -> String? = { null },
     /** 点系统消息里的名字 → 进那个人的资料页（对齐 iOS `onTapUID`）。 */
     onOpenUser: (String) -> Unit = {},
+    /** 原消息不在已加载窗口内时的提示（由 Host 弹吐司）。 */
+    onJumpMiss: () -> Unit = {},
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -224,6 +226,30 @@ fun ChatScreen(
             ),
         )
 
+        // —— 「跳到原消息」（点引用块）——
+        // **瞬时滚动不用 animateScrollToItem**：长列表上动画会滚很久，看着像卡住
+        //（与 ↓ 悬浮按钮同一条纪律，也与 im-web `jumpToSeq` 同——见那边的坑）。
+        // 跳到后短暂高亮那一行，否则用户不知道停在了哪。
+        var jumpTarget by remember(convId) { mutableStateOf(0L) }
+        var highlightSeq by remember(convId) { mutableStateOf(0L) }
+        LaunchedEffect(jumpTarget, rows.size) {
+            val seq = jumpTarget
+            if (seq <= 0) return@LaunchedEffect
+            val idx = rowIndexOfSeq(rows, seq)
+            if (idx < 0) {
+                // 不在已加载窗口里：本端还没有"按 conv_seq 往前翻到那一条"的能力，
+                // 如实提示而不是滚到一个错的位置（滚错比不滚更糟）
+                jumpTarget = 0
+                onJumpMiss()
+                return@LaunchedEffect
+            }
+            listState.scrollToItem(idx)
+            jumpTarget = 0
+            highlightSeq = seq
+            kotlinx.coroutines.delay(1200)
+            highlightSeq = 0
+        }
+
         // 列表与长按预览共用同一份渲染参数（见 ChatRowStyle 的注释：分两份写栽过两次）
         val rowStyle = ChatRowStyle(
             myUid = myUid,
@@ -251,7 +277,16 @@ fun ChatScreen(
                 // 整行隐会让旁边几张跟着消失——那不是 iOS 的样子。
                 val hidden = menuForSeq > 0 &&
                     (r0 as? ChatRow.Confirmed)?.msg?.convSeq == menuForSeq
-                Box(Modifier.alpha(if (hidden) 0f else 1f)) {
+                val highlighted = highlightSeq > 0 && when (r0) {
+                    is ChatRow.Confirmed -> r0.msg.convSeq == highlightSeq
+                    is ChatRow.Album -> r0.sent.any { it.convSeq == highlightSeq }
+                    else -> false
+                }
+                Box(
+                    Modifier
+                        .alpha(if (hidden) 0f else 1f)
+                        .background(if (highlighted) c.accentSoft else androidx.compose.ui.graphics.Color.Transparent),
+                ) {
                 ChatRowView(
                     rows = rows,
                     i = i,
@@ -260,6 +295,7 @@ fun ChatScreen(
                     onOpenMedia = onOpenMedia,
                     onOpenUser = onOpenUser,
                     onRetry = onRetry,
+                    onJumpToSeq = { seq -> jumpTarget = seq },
                     // 宫格：长按的那一格自己隐形（整行不隐，其余格仍在原位）
                     hiddenTile = if (r0 is ChatRow.Album) menuForSeq else 0L,
                 )
@@ -431,13 +467,40 @@ private fun Composer(
  *
  * `replyToConvSeq <= 0` 表示这条不是引用，返回 null 让调用方整块不画。
  */
+/**
+ * 被引用消息在**本地**的那一条（宫格成员也算）。找不到 = 翻不到那么早 / 已被删。
+ *
+ * 引用块要的两样东西都从它来：**真缩略图**（快照是冻结的文字，不带 thumb）
+ * 与**跳转目标**。所以这两件事天然是同一块——iOS 也是先反查再决定画什么/能不能点。
+ */
+internal fun originalOf(rows: List<ChatRow>, seq: Long): MessageEntity? {
+    if (seq <= 0) return null
+    for (r in rows) {
+        when (r) {
+            is ChatRow.Confirmed -> if (r.msg.convSeq == seq) return r.msg
+            is ChatRow.Album -> r.sent.firstOrNull { it.convSeq == seq }?.let { return it }
+            else -> Unit
+        }
+    }
+    return null
+}
+
+/** 这一行在列表里的下标（跳转要用）。宫格里的某一格算它所在的那一行。 */
+internal fun rowIndexOfSeq(rows: List<ChatRow>, seq: Long): Int {
+    if (seq <= 0) return -1
+    return rows.indexOfFirst { r ->
+        when (r) {
+            is ChatRow.Confirmed -> r.msg.convSeq == seq
+            is ChatRow.Album -> r.sent.any { it.convSeq == seq }
+            else -> false
+        }
+    }
+}
+
 internal fun quoteSnapshotFor(rows: List<ChatRow>, msg: MessageEntity): String? {
     val seq = msg.replyToConvSeq ?: return null
     if (seq <= 0) return null
     msg.replySnapshot?.takeIf { it.isNotBlank() }?.let { return it }
-    val original = rows.asSequence()
-        .mapNotNull { (it as? ChatRow.Confirmed)?.msg }
-        .firstOrNull { it.convSeq == seq }
-        ?: return "原消息"
+    val original = originalOf(rows, seq) ?: return "原消息"
     return replyPreviewOf(original.contentType, original.content, original.fileName, original.caption)
 }

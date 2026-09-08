@@ -269,6 +269,16 @@ fun ChatHost(
         }
     }
 
+    // 老消息补种缩略：原图已在本地（门控判定 Ready）时自己算一张存起来，
+    // **下次进这个会话就有磨砂占位了**。挂在「消息列表 + 下载状态」上——
+    // 刚下完的那一张正好在这一轮被补上。
+    val downloadStates by client.downloads.states.collectAsState()
+    LaunchedEffect(messages.size, downloadStates.size, owner) {
+        if (owner.isNotEmpty()) {
+            runCatchingCancellable { client.thumbBackfill.run(owner, conv.convId, messages) }
+        }
+    }
+
     // 长按预览用的渲染参数：**必须与传给 ChatScreen 的那份一致**
     // （ChatScreen 自己也用 ChatRowStyle 组一份，字段来源相同）。
     val rowStyle = ChatRowStyle(
@@ -370,6 +380,8 @@ fun ChatHost(
         // **备注只在这里出现**——分段里的 text 恒为公开昵称，全群共享（IMServer docs/UI.md 隐私红线）。
         localNameOf = { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
         onOpenUser = { uid -> openUser = uid },
+        // 原消息翻不到那么早：如实说，不滚到一个错的位置（滚错比不滚更糟）
+        onJumpMiss = { toast = "原消息不在已加载的范围内" },
     )
 
     // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——

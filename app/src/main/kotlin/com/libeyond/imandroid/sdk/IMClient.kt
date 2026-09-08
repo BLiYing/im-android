@@ -16,6 +16,7 @@ import com.libeyond.imandroid.data.DownloadPolicy
 import com.libeyond.imandroid.data.DownloadSettings
 import com.libeyond.imandroid.data.MediaCache
 import com.libeyond.imandroid.data.MediaDownloader
+import com.libeyond.imandroid.data.ThumbBackfill
 import com.libeyond.imandroid.sdk.api.DevicesApi
 import com.libeyond.imandroid.sdk.api.DownloadSettingsApi
 import com.libeyond.imandroid.sdk.api.ProfileApi
@@ -110,6 +111,13 @@ class IMClient(context: Context) {
 
     private val db = IMDatabase.get(context)
     val repo = MessageRepository(db.messages(), db.pending(), db.conversations())
+
+    /**
+     * 老消息补种缩略（原图已在本地时自己算一张）。**只补本机、不上行、不联网**——
+     * 见 [ThumbBackfill] 的注释。
+     */
+    val thumbBackfill = ThumbBackfill(repo, mediaCache)
+
     val presence = PresenceStore()
 
     val tokens = TokenSession(session, auth, probe = { devices.probe() })

@@ -1,8 +1,7 @@
-package com.libeyond.imandroid.ui
+package com.libeyond.imandroid.data
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import com.libeyond.imandroid.data.TinyThumb
 import java.io.ByteArrayOutputStream
 
 /**
@@ -17,6 +16,14 @@ import java.io.ByteArrayOutputStream
  * 视频传封面首帧的字节即可（iOS 也是拿封面生成的）。
  */
 object ThumbEncode {
+
+    /** 从本地文件生成（老消息补种缩略用）。读不出来返回 null。 */
+    fun fromFile(file: java.io.File?): String? {
+        if (file == null || !file.isFile || file.length() <= 0) return null
+        // 只读**头**拿尺寸不必整读；但这里要真解码，故先看大小——几百 MB 的"图片"多半是坏数据
+        if (file.length() > 64L * 1024 * 1024) return null
+        return runCatching { fromImageBytes(file.readBytes()) }.getOrNull()
+    }
 
     fun fromImageBytes(bytes: ByteArray?): String? {
         if (bytes == null || bytes.isEmpty()) return null

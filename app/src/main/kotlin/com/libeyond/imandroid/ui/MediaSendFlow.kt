@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.DisplayName
+import com.libeyond.imandroid.data.ThumbEncode
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.IMClient

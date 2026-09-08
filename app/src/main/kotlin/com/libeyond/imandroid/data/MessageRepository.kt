@@ -160,6 +160,20 @@ class MessageRepository(
         )
     }
 
+    /**
+     * 给一条**已确认**的消息补上极小缩略（老消息补种）。
+     *
+     * 为什么需要：`thumb` 是随消息走的，本端接这个字段之前收发的、以及三端历史消息
+     * 都没有——协议里明写**服务端不做回溯**。但客户端可以：原图在本地已经有了之后，
+     * 自己算一张缩略存起来，**下次进这个会话就有磨砂占位了**。
+     * 只补本机，不上行（那条消息在服务端的字节不该被后来的客户端改写）。
+     */
+    suspend fun setThumb(owner: String, convId: String, convSeq: Long, thumb: String) {
+        val m = messages.byConvSeq(owner, convId, convSeq) ?: return
+        if (!m.thumb.isNullOrBlank()) return
+        messages.upsert(m.copy(thumb = thumb))
+    }
+
     /** 在途未确认的消息——重连后按同一 `client_msg_id` 重发。 */
     suspend fun inFlight(owner: String): List<PendingMessageEntity> = pending.inFlight(owner)
 

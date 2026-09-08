@@ -47,6 +47,8 @@ internal fun ChatRowView(
     onOpenMedia: (MessageEntity) -> Unit = {},
     onOpenUser: (String) -> Unit = {},
     onRetry: (String) -> Unit = {},
+    /** 点引用块跳到原消息（按 conv_seq）。 */
+    onJumpToSeq: (Long) -> Unit = {},
     hiddenTile: Long = 0L,
 ) {
     val myUid = style.myUid
@@ -133,6 +135,11 @@ internal fun ChatRowView(
             // 快照三档：服务端冻结的 > 本地那条原消息现算 > 「原消息」。
             // 第二档是必需的——ack 回不来冻结快照，自己发的引用消息在自己这侧没有它。
             quoteSnapshot = quoteSnapshotFor(rows, r.msg),
+            // 引用块的真缩略与"能不能跳"都来自**本地反查到的那条原消息**
+            quoteThumb = originalOf(rows, r.msg.replyToConvSeq ?: 0L)?.thumb,
+            onTapQuote = (r.msg.replyToConvSeq ?: 0L)
+                .takeIf { it > 0 && rowIndexOfSeq(rows, it) >= 0 }
+                ?.let { seq -> { onJumpToSeq(seq) } },
             replyFromName = if (isGroup) {
                 r.msg.replyToFrom?.let { localNameOf(it) ?: it.takeIf { u -> u.isNotBlank() } }
             } else {
