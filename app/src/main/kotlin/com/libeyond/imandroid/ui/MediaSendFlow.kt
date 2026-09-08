@@ -88,6 +88,11 @@ internal class MediaSendFlow(
                 return
             }
         val (w, h) = MediaCompressor.imageSizeOf(bytes) ?: (0 to 0)
+        // 极小模糊缩略（M4-7）：**由真正要发出去的那份字节生成**，不是原始文件——
+        // 压缩会改尺寸/朝向，拿原图算出来的占位与收端最终看到的图对不上。
+        // 算完立刻回写待发行：ack 不回带 thumb，不回写的话自己这一侧没有占位。
+        val thumb = withContext(Dispatchers.IO) { ThumbEncode.fromImageBytes(bytes) }
+        pendingId?.let { client.messages.attachMediaThumb(it, thumb) }
         client.messages.sendMedia(
             convId = conv.convId,
             to = to,
@@ -101,6 +106,7 @@ internal class MediaSendFlow(
             groupId = gid,
             mediaW = w.takeIf { it > 0 },
             mediaH = h.takeIf { it > 0 },
+            thumb = thumb,
             pendingId = pendingId,
         )
     }
@@ -121,12 +127,16 @@ internal class MediaSendFlow(
         val info = withContext(Dispatchers.IO) { VideoProbe.info(context, uri, PickerLog) }
         // 封面：抽首帧 → 单独上传 → URL 放 poster。
         // **失败不阻断发送**——没封面的视频对端仍能点开，整条发不出去就是彻底没了。
-        val posterUrl = withContext(Dispatchers.IO) { VideoProbe.poster(context, uri, log = PickerLog) }
-            ?.let { bytes ->
-                runCatchingCancellable {
-                    client.upload.upload(bytes, "poster.jpg", "image/jpeg").url
-                }.getOrNull()
-            }
+        val posterBytes = withContext(Dispatchers.IO) { VideoProbe.poster(context, uri, log = PickerLog) }
+        val posterUrl = posterBytes?.let { bytes ->
+            runCatchingCancellable {
+                client.upload.upload(bytes, "poster.jpg", "image/jpeg").url
+            }.getOrNull()
+        }
+        // 视频的缩略取**封面首帧**（iOS 同）——视频本身解不出 20px 缩略，
+        // 而封面正好是收端未下载时该看到的那一帧
+        val thumb = withContext(Dispatchers.IO) { ThumbEncode.fromImageBytes(posterBytes) }
+        pendingId?.let { client.messages.attachMediaThumb(it, thumb) }
         client.messages.sendMediaStream(
             convId = conv.convId,
             to = to,
@@ -142,6 +152,7 @@ internal class MediaSendFlow(
             mediaH = info?.height?.takeIf { it > 0 },
             duration = info?.durationMs?.takeIf { it > 0 },
             poster = posterUrl,
+            thumb = thumb,
             pendingId = pendingId,
         )
     }

@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.libeyond.imandroid.data.AlbumLayout
+import com.libeyond.imandroid.ui.rememberFrostedPainter
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -76,6 +77,8 @@ internal data class AlbumTile(
      * 转圈会一直转下去——用户以为还在传，实际上永远不会好。
      */
     val failed: Boolean = false,
+    /** 极小模糊缩略（M4-7）——原图到位前的磨砂占位。 */
+    val thumb: String? = null,
 )
 
 @OptIn(ExperimentalFoundationApi::class)

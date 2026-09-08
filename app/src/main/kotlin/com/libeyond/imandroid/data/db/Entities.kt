@@ -47,6 +47,12 @@ data class MessageEntity(
      * 没有它就是一片黑底加个播放钮。
      */
     val poster: String? = null,
+    /**
+     * 极小模糊缩略（M4-7，~20px JPEG data URI）——原图到位前的磨砂占位。
+     * **必须落库**：不落的话重进会话就没有占位，每张图都从空底开始加载
+     * （与 sysSegments 同一类：内嵌在消息里、只随那一条走的字段）。
+     */
+    val thumb: String? = null,
     val waveform: String? = null,
     val replyToConvSeq: Long? = null,
     val replySnapshot: String? = null,
@@ -108,6 +114,8 @@ data class PendingMessageEntity(
     val mediaH: Int? = null,
     val duration: Int? = null,
     val poster: String? = null,
+    /** 极小模糊缩略（M4-7）。ack 不回带，故待发行里必须留一份（见 [AckCarryOver]）。 */
+    val thumb: String? = null,
     /** [SendState] 的 name。 */
     val state: String = "Sending",
     val createdAt: Long = 0,

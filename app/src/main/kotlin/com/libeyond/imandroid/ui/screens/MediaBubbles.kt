@@ -34,6 +34,7 @@ import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.Waveform
 import androidx.compose.runtime.remember
+import com.libeyond.imandroid.ui.rememberFrostedPainter
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.FileTypeIcon
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -76,11 +77,16 @@ private fun ImageContent(
     val ratio = if ((msg.mediaW ?: 0) > 0 && (msg.mediaH ?: 0) > 0) {
         (msg.mediaW!!.toFloat() / msg.mediaH!!.toFloat()).coerceIn(0.5f, 2f)
     } else 1f
+    // 磨砂占位（M4-7）：原图到位之前显示消息里内嵌的 ~20px 缩略放大 + 模糊，
+    // 而不是一块空底。没有 thumb（老消息 / 对端没带）就回退中性底——**不为占位联网**。
+    val frosted = rememberFrostedPainter(msg.thumb)
     Column {
         AsyncImage(
             model = url,
             contentDescription = "图片",
             contentScale = ContentScale.Crop,
+            placeholder = frosted,
+            error = frosted,
             modifier = Modifier
                 .widthIn(max = maxWidth)
                 .fillMaxWidth()
@@ -117,10 +123,22 @@ private fun VideoContent(
             // 封面：**解不了 HEVC 的端只能靠这张图**，没有它就是一片黑底加个播放钮。
             // poster 为空时不画 AsyncImage —— 传空串给 Coil 会触发一次必然失败的加载。
             val poster = msg.poster
+            val frosted = rememberFrostedPainter(msg.thumb)
             if (!poster.isNullOrBlank()) {
                 AsyncImage(
                     model = MediaUrl.absolute(poster, host, useTls),
                     contentDescription = "视频封面",
+                    contentScale = ContentScale.Crop,
+                    // 封面还在下载 / 下不动时，先给内嵌缩略的磨砂版（M4-7）
+                    placeholder = frosted,
+                    error = frosted,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else if (frosted != null) {
+                // 连封面 URL 都没有（老视频 / 抽帧失败）：磨砂占位总比纯黑底强
+                androidx.compose.foundation.Image(
+                    painter = frosted,
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )

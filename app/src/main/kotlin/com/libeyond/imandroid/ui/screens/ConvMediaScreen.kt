@@ -41,6 +41,7 @@ import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.sdk.api.MediaKind
 import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.ui.rememberFrostedPainter
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.FileTypeIcon
@@ -151,11 +152,15 @@ internal fun MediaTile(item: ConvMediaItem, host: String, useTls: Boolean, onOpe
     Box(
         Modifier.aspectRatio(1f).background(c.subtleFill).clickable { onOpen(item) },
     ) {
+        // 磨砂占位（M4-7）：一屏四列十几格全从空底开始加载最难看，这一格最该有它
+        val frosted = rememberFrostedPainter(item.thumb)
         AsyncImage(
             // 视频用 poster：直接把视频 URL 交给 Coil 会去下整段再抽帧
             model = MediaUrl.absolute(if (isVideo) item.poster else item.content, host, useTls),
             contentDescription = if (isVideo) "视频" else "图片",
             contentScale = ContentScale.Crop,
+            placeholder = frosted,
+            error = frosted,
             modifier = Modifier.fillMaxSize(),
         )
         if (isVideo) {

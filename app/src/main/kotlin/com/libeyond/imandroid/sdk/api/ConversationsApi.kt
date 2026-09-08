@@ -159,6 +159,11 @@ data class ConvMediaItem(
     @SerialName("media_h") val mediaH: Int = 0,
     val duration: Int = 0,
     @SerialName("group_id") val groupId: String = "",
+    /**
+     * 极小模糊缩略（M4-7）——**服务端这个接口一直在下发**（`internal/conversation/media.go`
+     * 的 `Thumb`），本端此前没解析，于是详情页宫格每一格都从空底开始加载。
+     */
+    val thumb: String = "",
 )
 
 @Serializable

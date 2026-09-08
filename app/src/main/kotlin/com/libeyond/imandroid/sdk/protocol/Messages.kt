@@ -69,6 +69,12 @@ data class SendMsgData(
      * 不是锦上添花：解不了 HEVC 的浏览器只能靠这张封面显示 iPhone 拍的视频。
      */
     val poster: String? = null,
+    /**
+     * 极小模糊缩略（M4-7，~20px 低质 JPEG 的 data URI）——收端在原图到位前放大 + 模糊当占位。
+     * 生成与长度上限见 [com.libeyond.imandroid.data.TinyThumb]；**服务端上限 4096 rune 且会截断**，
+     * 所以宁可不带也别带超长的（截断的 base64 解出来是一团噪声，比没有占位更糟）。
+     */
+    val thumb: String? = null,
 )
 
 /** ack 下行负载（PROTOCOL §4.2）——对 send_msg 的确认。 */
@@ -117,6 +123,12 @@ data class MessageData(
      * 因为本端此前根本发不了视频、也就很少收到）。
      */
     val poster: String? = null,
+    /**
+     * 极小模糊缩略（M4-7，~20px 低质 JPEG 的 data URI）——收端在原图到位前放大 + 模糊当占位。
+     * 生成与长度上限见 [com.libeyond.imandroid.data.TinyThumb]；**服务端上限 4096 rune 且会截断**，
+     * 所以宁可不带也别带超长的（截断的 base64 解出来是一团噪声，比没有占位更糟）。
+     */
+    val thumb: String? = null,
     val waveform: String? = null,
     /** 引用三件套（§4.3 M4-2）。 */
     @SerialName("reply_to_conv_seq") val replyToConvSeq: Long? = null,

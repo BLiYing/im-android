@@ -29,7 +29,7 @@ internal object AckCarryOver {
      */
     val CARRIED = setOf(
         "contentType", "content", "caption", "fileName", "fileSize", "replyToConvSeq",
-        "forwardFrom", "groupId", "mediaW", "mediaH", "duration", "poster",
+        "forwardFrom", "groupId", "mediaW", "mediaH", "duration", "poster", "thumb",
     )
 
     /** 把待发行里的字段补进 ack 生成的行。[cached] 为 null（罕见）时原样返回。 */
@@ -48,6 +48,7 @@ internal object AckCarryOver {
             mediaH = cached.mediaH,
             duration = cached.duration,
             poster = cached.poster,
+            thumb = cached.thumb,
         )
     }
 }

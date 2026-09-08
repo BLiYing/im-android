@@ -103,6 +103,7 @@ class MessageRepository(
         mediaH: Int? = null,
         duration: Int? = null,
         poster: String? = null,
+        thumb: String? = null,
     ): PendingMessageEntity {
         val p = PendingMessageEntity(
             ownerUid = owner,
@@ -121,6 +122,7 @@ class MessageRepository(
             mediaH = mediaH,
             duration = duration,
             poster = poster,
+            thumb = thumb,
             state = SendState.Sending.name,
             createdAt = System.currentTimeMillis(),
         )
@@ -144,6 +146,7 @@ class MessageRepository(
         mediaH: Int? = null,
         duration: Int? = null,
         poster: String? = null,
+        thumb: String? = null,
     ) {
         val p = pending.byClientId(owner, cid) ?: return
         pending.put(
@@ -152,6 +155,7 @@ class MessageRepository(
                 mediaH = mediaH ?: p.mediaH,
                 duration = duration ?: p.duration,
                 poster = poster ?: p.poster,
+                thumb = thumb ?: p.thumb,
             ),
         )
     }
@@ -454,6 +458,7 @@ private fun MessageData.toEntity(owner: String) = MessageEntity(
     mediaH = mediaH,
     duration = duration,
     poster = poster,
+    thumb = thumb,
     waveform = waveform,
     replyToConvSeq = replyToConvSeq,
     replySnapshot = replySnapshot,

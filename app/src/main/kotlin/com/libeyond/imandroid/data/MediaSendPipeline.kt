@@ -24,7 +24,7 @@ internal class MediaSendPipeline(
         clientMsgId: String, convId: String, to: String, contentType: String,
         content: String, replyToConvSeq: Long?, fileName: String?, fileSize: Long?,
         caption: String?, forwardFrom: String?, groupId: String?,
-        mediaW: Int?, mediaH: Int?, duration: Int?, poster: String?,
+        mediaW: Int?, mediaH: Int?, duration: Int?, poster: String?, thumb: String?,
     ) -> Unit,
     private val log: IMLog.Tagged,
 ) {
@@ -76,6 +76,19 @@ internal class MediaSendPipeline(
     }
 
     /**
+     * 回写极小缩略（[com.libeyond.imandroid.data.TinyThumb]）。
+     *
+     * 与宽高/时长同理：待发行是压缩前就落的，thumb 要解码才算得出来。
+     * **落进待发行**而不是只当发帧参数——ack 不回带它，不落的话自己发的图在
+     * 自己这一侧没有磨砂占位，对端却有。
+     */
+    suspend fun attachThumb(clientMsgId: String, thumb: String?) {
+        if (thumb == null) return
+        val owner = ownerProvider() ?: return
+        repo.updatePendingMedia(owner, clientMsgId, thumb = thumb)
+    }
+
+    /**
      * 把一条已落库的待发行标成失败（红❗可重试）。
      *
      * 用在「行已经落在屏幕上了，但还没走到上传就出错」那一段——读不出字节、
@@ -108,20 +121,22 @@ internal class MediaSendPipeline(
         mediaH: Int? = null,
         duration: Int? = null,
         poster: String? = null,
-        /** 已由 [createMediaPending] 落好的行；传 null 则在这里现落一条。 */
+        /** 极小模糊缩略（[com.libeyond.imandroid.data.TinyThumb]），随消息带给收端做占位。 */
+        thumb: String? = null,
+        /** 已由 [createPendingRow] 落好的行；传 null 则在这里现落一条。 */
         pendingId: String? = null,
     ) {
         val owner = ownerProvider() ?: return
         val cid = pendingId?.also {
             // 行是发送前就落的，元数据此刻才算出来——**必须回写**，否则 resend 丢字段
-            repo.updatePendingMedia(owner, it, mediaW, mediaH, duration, poster)
+            repo.updatePendingMedia(owner, it, mediaW, mediaH, duration, poster, thumb)
             repo.updatePendingContent(owner, it, localPreviewUri, bytes.size.toLong())
         } ?: repo.createPending(
             owner = owner, convId = convId, to = to,
             content = localPreviewUri, contentType = contentType,
             groupId = groupId,
             fileName = fileName, fileSize = bytes.size.toLong(), caption = caption,
-            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
+            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster, thumb = thumb,
         ).clientMsgId
         uploading += cid
         val r = try {
@@ -142,7 +157,7 @@ internal class MediaSendPipeline(
         transmit(
             cid, convId, to, contentType, r.url, null,
             fileName, r.size, caption, null, groupId,
-            mediaW, mediaH, duration, poster,
+            mediaW, mediaH, duration, poster, thumb,
         )
     }
 
@@ -172,19 +187,21 @@ internal class MediaSendPipeline(
         mediaH: Int? = null,
         duration: Int? = null,
         poster: String? = null,
-        /** 已由 [createMediaPending] 落好的行；传 null 则在这里现落一条。 */
+        /** 极小模糊缩略（[com.libeyond.imandroid.data.TinyThumb]），随消息带给收端做占位。 */
+        thumb: String? = null,
+        /** 已由 [createPendingRow] 落好的行；传 null 则在这里现落一条。 */
         pendingId: String? = null,
     ) {
         val owner = ownerProvider() ?: return
         val cid = pendingId?.also {
-            repo.updatePendingMedia(owner, it, mediaW, mediaH, duration, poster)
+            repo.updatePendingMedia(owner, it, mediaW, mediaH, duration, poster, thumb)
         } ?: repo.createPending(
             owner = owner, convId = convId, to = to,
             content = localPreviewUri, contentType = contentType,
             groupId = groupId,
             // 大小在上传前就知道（分片协议要求先声明），先落库好让待发气泡显示得出来
             fileName = fileName, fileSize = totalBytes, caption = caption,
-            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster,
+            mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster, thumb = thumb,
         ).clientMsgId
         // **开传就先置 0%**：第一片是 8MB，传完才有第一次回调。不置的话这段空窗里
         // 气泡显示的是播放钮，看着像已经发好了——真机实测一段 404MB 的视频，
@@ -214,7 +231,7 @@ internal class MediaSendPipeline(
         transmit(
             cid, convId, to, contentType, r.url, null,
             fileName, r.size, caption, null, groupId,
-            mediaW, mediaH, duration, poster,
+            mediaW, mediaH, duration, poster, thumb,
         )
     }
 }

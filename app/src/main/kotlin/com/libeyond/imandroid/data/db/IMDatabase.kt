@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -77,6 +77,20 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+        /**
+         * v6 → v7：消息与待发行各加 `thumb`（极小模糊缩略，M4-7）。
+         *
+         * 老行为 NULL —— 本端接这个字段之前收发的消息都没有，占位回退中性底。
+         * **两张表都要加**：ack 不回带 thumb，待发行里没有的话自己发的图在
+         * 自己这一侧就没有占位（"只在发送者一侧坏"那一族，见 AckCarryOver）。
+         */
+        internal val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE message ADD COLUMN thumb TEXT")
+                db.execSQL("ALTER TABLE pending_message ADD COLUMN thumb TEXT")
+            }
+        }
+
         /** v2 → v3：消息加 `groupId`（相册宫格，M4+）。老行为 NULL = 不属于任何相册。 */
         internal val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -92,7 +106,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             )
                 // 刻意**不加** fallbackToDestructiveMigration：那会在版本号一变时
                 // 直接删库重建，用户的本地消息全没。加列要写真的 Migration。
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build().also { instance = it }
         }
     }

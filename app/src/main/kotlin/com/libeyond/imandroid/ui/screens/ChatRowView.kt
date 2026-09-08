@@ -66,14 +66,16 @@ internal fun ChatRowView(
             // 靠行类型的话，一批图必然经历"散成单张 → 逐个变确认 → 最后凑回宫格"。
             tiles = r.members.map { m ->
                 when (m) {
-                    is AlbumMember.Sent ->
-                        AlbumTile(m.msg.content, m.msg.contentType, m.msg.duration)
+                    is AlbumMember.Sent -> AlbumTile(
+                        m.msg.content, m.msg.contentType, m.msg.duration, thumb = m.msg.thumb,
+                    )
                     is AlbumMember.Sending -> AlbumTile(
                         m.msg.content, m.msg.contentType, null,
                         sending = m.msg.state == SendState.Sending.name,
                         // 分片上传的百分比（视频/大文件）；图片整包上传时为 null → 转圈
                         progress = uploadProgress[m.msg.clientMsgId],
                         failed = m.msg.state == SendState.Failed.name,
+                        thumb = m.msg.thumb,
                     )
                 }
             },

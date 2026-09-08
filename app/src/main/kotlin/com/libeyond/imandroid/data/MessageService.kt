@@ -233,6 +233,10 @@ class MessageService(
         convId, to, contentType, localPreviewUri, fileName, fileSize, caption, groupId,
     )
 
+    /** 见 [MediaSendPipeline.attachThumb]。 */
+    suspend fun attachMediaThumb(clientMsgId: String, thumb: String?) =
+        media.attachThumb(clientMsgId, thumb)
+
     /** 见 [MediaSendPipeline.markFailed]。 */
     suspend fun markMediaFailed(clientMsgId: String, code: Int = 0, message: String = "读取失败") =
         media.markFailed(clientMsgId, code, message)
@@ -252,10 +256,11 @@ class MessageService(
         mediaH: Int? = null,
         duration: Int? = null,
         poster: String? = null,
+        thumb: String? = null,
         pendingId: String? = null,
     ) = media.sendBytes(
         convId, to, bytes, fileName, mimeType, contentType, caption, localPreviewUri,
-        groupId, mediaW, mediaH, duration, poster, pendingId,
+        groupId, mediaW, mediaH, duration, poster, thumb, pendingId,
     )
 
     /** 见 [MediaSendPipeline.sendStream]。 */
@@ -274,10 +279,11 @@ class MessageService(
         mediaH: Int? = null,
         duration: Int? = null,
         poster: String? = null,
+        thumb: String? = null,
         pendingId: String? = null,
     ) = media.sendStream(
         convId, to, openStream, totalBytes, fileName, mimeType, contentType, caption,
-        localPreviewUri, groupId, mediaW, mediaH, duration, poster, pendingId,
+        localPreviewUri, groupId, mediaW, mediaH, duration, poster, thumb, pendingId,
     )
 
     /** 重发（红❗点击 / 重连后补发）。**沿用同一个 client_msg_id**，服务端幂等去重。 */
@@ -287,7 +293,7 @@ class MessageService(
         transmit(
             p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
             p.fileName, p.fileSize, p.caption, p.forwardFrom, p.groupId,
-            p.mediaW, p.mediaH, p.duration, p.poster,
+            p.mediaW, p.mediaH, p.duration, p.poster, p.thumb,
         )
     }
 
@@ -307,6 +313,7 @@ class MessageService(
         mediaH: Int? = null,
         duration: Int? = null,
         poster: String? = null,
+        thumb: String? = null,
     ) {
         val payload = ProtocolJson.encodeToJsonElement(
             SendMsgData.serializer(),
@@ -326,6 +333,7 @@ class MessageService(
                 mediaH = mediaH,
                 duration = duration,
                 poster = poster,
+                thumb = thumb,
             ),
         )
         val sent = socket.send(FrameType.SEND_MSG, payload)
