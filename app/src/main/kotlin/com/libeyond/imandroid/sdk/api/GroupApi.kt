@@ -48,6 +48,13 @@ data class GroupInfo(
     @SerialName("conv_id") val convId: String = "",
     val name: String = "",
     val owner: String = "",
+    /**
+     * 群主的公开资料。**只有 `GET /groups`（群列表）会下发这两个字段**，
+     * 单群详情不带——群列表的副标题是「群主 X」，而 `owner` 是 10 位随机内部 ID，
+     * 直接渲染就是内部 ID 露到界面上（ACCOUNT_IDENTITY_REDESIGN §7.5 明令禁止）。
+     */
+    @SerialName("owner_nickname") val ownerNickname: String = "",
+    @SerialName("owner_username") val ownerUsername: String = "",
     @SerialName("avatar_url") val avatarUrl: String = "",
     @SerialName("created_at") val createdAt: Long = 0,
     @SerialName("my_role") val myRole: String = "",
@@ -180,6 +187,14 @@ class GroupApi(private val http: HttpClient) {
             }),
             GroupInfo.serializer(),
         )
+
+    /**
+     * 解散群（**仅群主**）。服务端向全体广播 dissolve，各端据此移除会话。
+     * 与 [leave] 是两件事：退群只影响我自己，解散是把群本身删掉，不可撤销。
+     */
+    suspend fun dissolve(convId: String) {
+        http.call("DELETE", "/api/v1/groups/$convId")
+    }
 
     /** 退群（群主须先转让）。 */
     suspend fun leave(convId: String) {

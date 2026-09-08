@@ -336,6 +336,25 @@ class MessageRepository(
         log.i("msg_hidden_applied", "convId" to convId, "seq" to convSeq)
     }
 
+    /**
+     * 清空一条会话在**本机**的消息（详情页「清空聊天记录」）。
+     *
+     * **只删本地，不动服务端**——与 iOS `clearMessagesForConv:` 同一口径
+     * （群聊那句提示就写着"仅清空本机记录，不影响其他成员"）。服务端没有对应接口，
+     * 也不该有：那会变成"替所有人删历史"。
+     *
+     * **同步游标 `syncedConvSeq` 原样保留**：清空后不该再把刚删掉的那些拉回来。
+     * 会话行留着（列表里仍能看到这个人），只把预览清成空。
+     */
+    suspend fun clearConversation(owner: String, convId: String) {
+        messages.clearConv(owner, convId)
+        pending.clearConv(owner, convId)
+        conversations.byId(owner, convId)?.let {
+            conversations.upsert(it.copy(lastContent = "", lastContentType = "text", lastTimestamp = 0))
+        }
+        log.i("conv_history_cleared", "convId" to convId)
+    }
+
     suspend fun clearAccount(owner: String) {
         messages.clearAccount(owner)
         pending.clearAccount(owner)

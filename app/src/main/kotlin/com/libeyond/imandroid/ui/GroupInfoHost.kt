@@ -1,6 +1,9 @@
 package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -11,6 +14,9 @@ import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.GroupInfoNav
 import com.libeyond.imandroid.data.GroupInfoPage
 import com.libeyond.imandroid.data.PickPurpose
+import com.libeyond.imandroid.data.DetailAction
+import com.libeyond.imandroid.data.DetailActions
+import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.data.GroupSettings
 import com.libeyond.imandroid.data.MemberProfile
@@ -27,6 +33,7 @@ import com.libeyond.imandroid.sdk.api.GroupBan
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.sdk.api.JoinRequest
 import com.libeyond.imandroid.data.db.ConversationEntity
+import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.screens.GroupAdminListScreen
 import com.libeyond.imandroid.ui.screens.GroupBanListScreen
@@ -35,7 +42,9 @@ import com.libeyond.imandroid.ui.screens.PickListScreen
 import com.libeyond.imandroid.ui.screens.PickRow
 import com.libeyond.imandroid.ui.screens.GroupManageScreen
 import com.libeyond.imandroid.ui.screens.JoinRequestsScreen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 群资料接线层。
@@ -55,6 +64,7 @@ fun GroupInfoHost(
     onLeft: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var info by remember(convId) { mutableStateOf<GroupInfo?>(null) }
     var members by remember(convId) { mutableStateOf<List<GroupMember>>(emptyList()) }
     var cursor by remember(convId) { mutableStateOf("") }
@@ -79,6 +89,8 @@ fun GroupInfoHost(
     var picked by remember(convId) { mutableStateOf<Set<String>>(emptySet()) }
     var friends by remember(convId) { mutableStateOf<List<FriendEntry>>(emptyList()) }
     var confirmTransfer by remember(convId) { mutableStateOf<GroupMember?>(null) }
+    // 头部操作排「更多」里那几件要二次确认的事（清空/退群/解散）
+    var confirmMore by remember(convId) { mutableStateOf<DetailMoreAction?>(null) }
 
     // 返回键**一处派发**，不再靠每个子页面自己记得接（一天漏了三次，见 GroupInfoPage 的注释）。
     // 枚举加一页，这个 when 就编译不过——漏不掉。
@@ -134,6 +146,30 @@ fun GroupInfoHost(
             }
             if (r.isSuccess) toast = "${label}成功"
             runCatching { client.groups.info(convId) }.onSuccess { info = it }
+        }
+    }
+
+    // 换群头像：选图 → 压成 JPEG → POST /avatar → PUT /groups/{id}（**整体替换**：
+    // 名字与简介必须原样带回，否则会被清空，见 PROTOCOL §11）。
+    // 与「我的资料」那侧的差别是**这里立刻提交**：群管理页没有「保存」按钮，
+    // 每一项都是即时生效的，头像若只更新预览就成了唯一一个"改了但没生效"的项。
+    val pickGroupAvatar = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        val g0 = info
+        if (uri == null || g0 == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            toast = "上传中…"
+            val bytes = withContext(Dispatchers.IO) { AvatarPrepare.fromUri(context, uri) }
+            if (bytes == null) { toast = "图片处理失败，换一张试试"; return@launch }
+            val up = runCatching { client.upload.uploadAvatar(bytes) }
+            val url = up.getOrNull()?.url
+            if (url == null) {
+                toast = "头像上传失败"
+                IMLog.tag("IM.Group").w("group_avatar_upload_failed")
+                return@launch
+            }
+            runManage("修改群头像") { client.groups.updateInfo(convId, g0.name, url, g0.intro) }
         }
     }
 
@@ -329,6 +365,12 @@ fun GroupInfoHost(
             },
             onOpenAdmins = { adminsOpen = true },
             onTransferOwner = { pick = PickPurpose.Transfer },
+            // 与「群名称/群简介」同一份判据——权限分叉了就会出现"相机圈亮着，点了报 300204"
+            onPickAvatar = if (GroupPermissions.canEditInfo(g)) {
+                { pickGroupAvatar.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+            } else {
+                null
+            },
             onBack = { managing = false },
         )
     } else {
@@ -370,6 +412,19 @@ fun GroupInfoHost(
                         .onFailure { toast = "好友列表加载失败" }
                 }
             },
+        actions = DetailActions.pillsFor(
+            isGroup = true, isSystemPeer = false, peerIsFriend = false, showsMessagePill = false,
+        ),
+        moreItems = DetailActions.moreFor(
+            isGroup = true, isSystemPeer = false,
+            iAmOwner = g.myRole == GroupMember.ROLE_OWNER,
+            peerBlocked = false, peerIsFriend = false,
+        ),
+        onAction = { a ->
+            // 群这一侧 pills 只有「搜索 / 更多」，更多由 onMore 走
+            if (a == DetailAction.Search) toast = "会话内搜索还没做"
+        },
+        onMore = { m -> confirmMore = m },
         onMemberLongPress = { m -> memberMenu = m },
         onLeave = {
             scope.launch {
@@ -382,6 +437,39 @@ fun GroupInfoHost(
         )
     }
     }
+
+    // —— 头部「更多」的二次确认（对每一页都生效；文案在 GroupInfoDialogs.kt）——
+    GroupMoreConfirmDialog(
+        action = confirmMore,
+        groupName = g.name,
+        onDismiss = { confirmMore = null },
+        onClearHistory = {
+            confirmMore = null
+            scope.launch {
+                // **只删本机**（同 iOS）：服务端没有"替所有人删历史"的接口
+                client.repo.clearConversation(client.uid.orEmpty(), convId)
+                toast = "聊天记录已清空"
+            }
+        },
+        onLeave = {
+            confirmMore = null
+            scope.launch {
+                runCatching { client.groups.leave(convId) }
+                    .onFailure { toast = it.userMessage("退出失败"); return@launch }
+                client.messages.refreshConversations()
+                onLeft()
+            }
+        },
+        onDissolve = {
+            confirmMore = null
+            scope.launch {
+                runCatching { client.groups.dissolve(convId) }
+                    .onFailure { toast = it.userMessage("解散失败"); return@launch }
+                client.messages.refreshConversations()
+                onLeft()
+            }
+        },
+    )
 
     // —— 管理项的编辑框（对每一页都生效）——
     when (manage) {

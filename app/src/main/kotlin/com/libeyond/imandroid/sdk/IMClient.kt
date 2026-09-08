@@ -124,6 +124,22 @@ class IMClient(context: Context) {
         )
     }
 
+    /**
+     * 群会话的占位行（通讯录「群聊」列表里点一个**没聊过**的群时用）。
+     *
+     * 与 [conversationStubFor] 同一用途：让聊天页先有一行可渲染的会话，
+     * 真正的行由首次同步覆盖。群的 conv_id 由服务端给（不像单聊能本地推），所以这里必须传进来。
+     */
+    fun groupConversationStubFor(convId: String, title: String, avatarUrl: String): ConversationEntity =
+        ConversationEntity(
+            ownerUid = session.uid.orEmpty(),
+            convId = convId,
+            isGroup = true,
+            peerUid = "",
+            title = title,
+            avatarUrl = avatarUrl,
+        )
+
     /** 服务端否定了这条会话（被踢 / 被封）。UI 订阅它回登录页。 */
     val sessionEnded: SharedFlow<com.libeyond.imandroid.sdk.ws.SessionEndReason> get() = socket.sessionEnded
 

@@ -76,6 +76,9 @@ interface MessageDao {
     @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId AND convSeq = :seq")
     suspend fun delete(owner: String, convId: String, seq: Long)
 
+    @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId")
+    suspend fun clearConv(owner: String, convId: String)
+
     @Query("DELETE FROM message WHERE ownerUid = :owner")
     suspend fun clearAccount(owner: String)
 }
@@ -101,6 +104,9 @@ interface PendingMessageDao {
     /** ack 到达后从待发表移除（真身已落进 message 表）。 */
     @Query("DELETE FROM pending_message WHERE ownerUid = :owner AND clientMsgId = :cid")
     suspend fun remove(owner: String, cid: String)
+
+    @Query("DELETE FROM pending_message WHERE ownerUid = :owner AND convId = :convId")
+    suspend fun clearConv(owner: String, convId: String)
 
     @Query("DELETE FROM pending_message WHERE ownerUid = :owner")
     suspend fun clearAccount(owner: String)

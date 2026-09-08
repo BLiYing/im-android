@@ -23,12 +23,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Headphones
+import com.composables.icons.lucide.Megaphone
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.UserPlus
 import com.composables.icons.lucide.Users
@@ -39,8 +42,14 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 /**
  * 通讯录（M2.5）。
  *
- * 结构对齐 iOS/Web：「新的朋友」独立入口行（带待确认数）+ 好友列表。
+ * 结构对齐 iOS `IMContactsViewController`：**四条顶部入口** + 好友列表。
  * **不再把待确认段内联在好友列表上方**——2026-09-05 三端统一移除了那种排法。
+ *
+ * 入口顺序与图标底色逐条照抄 iOS 的 `entries` / `entryColors`
+ * （群聊-绿 / 新的朋友-青 / 公众号-橙 / 服务号-蓝）：本端 2026-09-08 之前只有两条，
+ * 且第二条是「发起群聊」——那是**动作**不是入口，iOS 把建群放在群列表页的右上角 `+`。
+ * 公众号/服务号两端都还没做，但**入口先在**（点了给"开发中"），
+ * 否则两端的通讯录首屏一眼就不是同一个 App。
  */
 @Composable
 fun ContactsScreen(
@@ -48,7 +57,9 @@ fun ContactsScreen(
     pendingCount: Int,
     onOpenNewFriends: () -> Unit,
     onOpenSearch: () -> Unit,
-    onCreateGroup: () -> Unit,
+    onOpenGroups: () -> Unit,
+    /** 尚未实现的入口（公众号/服务号）——由 Host 弹「开发中」。 */
+    onComingSoon: (String) -> Unit,
     onOpenFriend: (FriendEntry) -> Unit,
 ) {
     val c = IMTheme.colors
@@ -75,18 +86,10 @@ fun ContactsScreen(
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             item {
-                EntryRow(
-                    icon = { Image(Lucide.UserPlus, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onAccent)) },
-                    title = "新的朋友",
-                    badge = pendingCount,
-                    onClick = onOpenNewFriends,
-                )
-                EntryRow(
-                    icon = { Image(Lucide.Users, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onAccent)) },
-                    title = "发起群聊",
-                    badge = 0,
-                    onClick = onCreateGroup,
-                )
+                EntryRow(Lucide.Users, ENTRY_GROUPS, "群聊", 0, onOpenGroups)
+                EntryRow(Lucide.UserPlus, ENTRY_NEW_FRIENDS, "新的朋友", pendingCount, onOpenNewFriends)
+                EntryRow(Lucide.Megaphone, ENTRY_OFFICIAL, "公众号", 0) { onComingSoon("公众号") }
+                EntryRow(Lucide.Headphones, ENTRY_SERVICE, "服务号", 0) { onComingSoon("服务号") }
                 SectionLabel("好友")
             }
             if (friends.isEmpty()) {
@@ -115,9 +118,17 @@ private fun SectionLabel(text: String) {
     )
 }
 
+// 入口图标底色，逐条对齐 iOS `entryColors`（systemGreen / systemTeal / systemOrange / systemBlue）。
+// **不跟主题主色走**：这四条是靠颜色区分的，全刷成 accent 就退回"四个一样的绿圆圈"。
+private val ENTRY_GROUPS = Color(0xFF34C759)
+private val ENTRY_NEW_FRIENDS = Color(0xFF30B0C7)
+private val ENTRY_OFFICIAL = Color(0xFFFF9500)
+private val ENTRY_SERVICE = Color(0xFF007AFF)
+
 @Composable
 private fun EntryRow(
-    icon: @Composable () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconBg: Color,
     title: String,
     badge: Int,
     onClick: () -> Unit,
@@ -130,9 +141,11 @@ private fun EntryRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier.size(40.dp).clip(CircleShape).background(c.accent),
+            modifier = Modifier.size(40.dp).clip(CircleShape).background(iconBg),
             contentAlignment = Alignment.Center,
-        ) { icon() }
+        ) {
+            Image(icon, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(Color.White))
+        }
         Spacer(Modifier.width(d.space3))
         Text(title, color = c.textPrimary, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))

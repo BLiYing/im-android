@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -16,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -67,6 +73,18 @@ fun MessageContextMenu(
 
     val anchorTop: Dp = with(density) { anchor.top.toDp() }
     val anchorBottom: Dp = with(density) { anchor.bottom.toDp() }
+    val anchorLeft: Dp = with(density) { anchor.left.toDp() }
+    val anchorWidth: Dp = with(density) { anchor.width.toDp() }
+
+    // **抬起动画**：iOS 的 UIContextMenu 会把预览弹起来一点点，那一下正是"浮起"的观感来源。
+    // 本端此前只是把原位那份换成一份一模一样的重绘 —— 对**自己发的消息**（无头像列、
+    // 预览与原位逐像素重合）看上去就是"什么都没发生"，用户报的「发送端长按没有浮起效果」
+    // 就是这个。对方消息当时反而"看着浮起来了"——那其实是预览漏了头像列、画偏了 36dp。
+    // 两个毛病一个成因：预览没有自己的抬起表达。
+    val lift = remember { Animatable(0.94f) }
+    LaunchedEffect(Unit) {
+        lift.animateTo(1.02f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow))
+    }
 
     // 菜单高度按项数估算（每项 48 + 上下 8）——只用来判断"下方放不放得下"，
     // 估偏一点不影响正确性：放不下就翻上方，翻上方也放不下就贴顶。
@@ -100,11 +118,15 @@ fun MessageContextMenu(
         if (preview != null) {
             Box(
                 modifier = Modifier
-                    // anchor 是**整行**的矩形（全宽），所以只按 top 定位、宽度铺满，
-                    // 行内的左右对齐由 Bubble 自己做——与真气泡逐像素同一套算法。
-                    .padding(top = anchorTop)
-                    .fillMaxWidth()
-                    .padding(horizontal = d.chatAvatarLeading),
+                    // **按 anchor 的左上角与宽度定位**，不再假定"anchor 一定是整行"：
+                    // 长按九宫格里一格时 anchor 就是那一格，浮起的也只该是那一格。
+                    .padding(start = anchorLeft, top = anchorTop)
+                    .width(anchorWidth)
+                    .graphicsLayer {
+                        scaleX = lift.value
+                        scaleY = lift.value
+                    }
+                    .shadow(if (lift.value > 1f) 12.dp else 0.dp, RoundedCornerShape(d.radiusCard)),
                 // **不吞点击**：这一层是整行全宽的，吞了就等于「气泡旁边的空白区点了没反应」——
                 // 2026-09-08 用户报的正是这个。iOS 点预览本身也是关菜单，所以让点击穿到背景最省事。
             ) { preview() }

@@ -2,6 +2,8 @@ package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,9 +44,18 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  */
 @Composable
 internal fun DetailTabBar(tabs: List<DetailTab>, current: DetailTab, onSelect: (DetailTab) -> Unit) {
+    val c = IMTheme.colors
+    // **底轨 + 药丸**（对齐 iOS `IMLiquidSegmentedControl`：track 玻璃、pill 浮在上面）。
+    // 起初这里只有一排裸按钮、选中态是 12% 绿底 + 绿字：深色模式下几乎看不出选了哪个
+    // （2026-09-08 用户报的「选中态颜色太暗」）。iOS 的做法是**选中与未选中同为主文字色，
+    // 只靠字重与药丸底色区分**——照抄这一条，别再用低透明度主色去表达"选中"。
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = IMTheme.dimens.space4, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxWidth().padding(horizontal = IMTheme.dimens.space4, vertical = 10.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(c.subtleFill)
+            .horizontalScroll(rememberScrollState())
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         tabs.forEach { t -> MediaSeg(DetailTabs.title(t), t == current) { onSelect(t) } }
     }

@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.AlignLeft
 import com.composables.icons.lucide.Ban
+import com.composables.icons.lucide.Camera
 import com.composables.icons.lucide.Crown
 import com.composables.icons.lucide.History
 import com.composables.icons.lucide.Lucide
@@ -75,6 +76,8 @@ internal fun GroupManageScreen(
     onOpenBans: () -> Unit,
     onOpenAdmins: () -> Unit,
     onTransferOwner: () -> Unit,
+    /** 换群头像。`null` = 我没有改群资料的权限（不显相机圈，也不显那行提示）。 */
+    onPickAvatar: (() -> Unit)?,
     onBack: () -> Unit,
 ) {
     val c = IMTheme.colors
@@ -84,12 +87,39 @@ internal fun GroupManageScreen(
         IMTopBar(title = "群管理", subtitle = info.name, onLeft = onBack)
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            // —— 群头像头部（对齐 iOS 的 IMGroupAvatarHeader）——
-            Box(
+            // —— 群头像头部（对齐 iOS 的 IMGroupAvatarHeader：头像 + 相机圈 + 「设置新头像」）——
+            // 头像**可点即可换**（同 iOS）。本端 2026-09-08 之前这里只是一张不能点的图，
+            // 于是「群名称/群简介/群公告」都能改、唯独头像没有任何入口。
+            Column(
                 Modifier.fillMaxWidth().background(c.pageBackground).padding(vertical = 20.dp),
-                contentAlignment = Alignment.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                IMAvatar(info.name, seed = info.convId, avatarUrl = info.avatarUrl, size = 80.dp)
+                Box(
+                    Modifier.let { if (onPickAvatar != null) it.clickable(onClick = onPickAvatar) else it },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    IMAvatar(info.name, seed = info.convId, avatarUrl = info.avatarUrl, size = 80.dp)
+                    if (onPickAvatar != null) {
+                        // 相机徽标压在右下角：没有它，一张圆头像看不出来是可点的
+                        Box(
+                            Modifier.align(Alignment.BottomEnd).size(26.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(c.accent),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Image(
+                                Lucide.Camera, "更换群头像", Modifier.size(14.dp),
+                                colorFilter = ColorFilter.tint(c.onAccent),
+                            )
+                        }
+                    }
+                }
+                if (onPickAvatar != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("设置新头像", color = c.accent,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.clickable(onClick = onPickAvatar))
+                }
             }
 
             // —— 资料（无分区标题，同 iOS）——

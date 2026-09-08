@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.File
@@ -74,9 +75,13 @@ internal fun ConvMediaScreen(
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         IMTopBar(title = "聊天媒体", onLeft = onBack)
 
-        Row(Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = 10.dp)) {
+        // 底轨 + 药丸，与详情页内联页签同一套（DetailTabBar）——两处长得不一样才是 bug
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = 10.dp)
+                .clip(RoundedCornerShape(18.dp)).background(c.subtleFill).padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             MediaSeg("图片与视频", kind == MediaKind.MEDIA) { onKindChange(MediaKind.MEDIA) }
-            Spacer(Modifier.width(d.space3))
             MediaSeg("文件", kind == MediaKind.FILE) { onKindChange(MediaKind.FILE) }
         }
 
@@ -105,13 +110,21 @@ internal fun ConvMediaScreen(
 @Composable
 internal fun MediaSeg(label: String, on: Boolean, onClick: () -> Unit) {
     val c = IMTheme.colors
+    // **选中/未选中同为主文字色，只以字重 + 药丸底色区分**（逐条对齐 iOS
+    // `IMLiquidSegmentedControl.applyFonts`：semibold / medium，都是 label 色）。
+    // 别再用「12% 主色底 + 主色字」表示选中——那在深色模式下几乎看不出来。
     Box(
-        Modifier.clip(RoundedCornerShape(16.dp))
-            .background(if (on) c.accentSoft else c.cardBackground)
+        Modifier.clip(RoundedCornerShape(14.dp))
+            .background(if (on) c.surfaceElevated else androidx.compose.ui.graphics.Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 6.dp),
     ) {
-        Text(label, color = if (on) c.accent else c.textSecondary, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            label,
+            color = c.textPrimary,
+            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
 

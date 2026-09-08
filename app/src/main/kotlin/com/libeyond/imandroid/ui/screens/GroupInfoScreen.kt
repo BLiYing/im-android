@@ -32,8 +32,11 @@ import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.data.DetailAction
+import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.data.GroupSettings
+import com.libeyond.imandroid.ui.components.DetailActionBar
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -70,6 +73,11 @@ fun GroupInfoScreen(
     /** 邀请好友入群。**入口按 [GroupPermissions.canInvite] 显隐**——
      *  开了「仅管理员可邀请」还给普通成员留入口，点进去只会拿到 300212。 */
     onInvite: () -> Unit,
+    /** 头部操作排（搜索 / 更多）。由 [com.libeyond.imandroid.data.DetailActions] 算可见项。 */
+    actions: List<DetailAction>,
+    moreItems: List<DetailMoreAction>,
+    onAction: (DetailAction) -> Unit,
+    onMore: (DetailMoreAction) -> Unit,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -102,6 +110,10 @@ fun GroupInfoScreen(
                         }
                     }
                 }
+
+                // —— 操作排（对齐 iOS 头部的 pills：群聊是「搜索 / 更多」）——
+                Spacer(Modifier.height(d.cardGap))
+                DetailActionBar(actions, moreItems, onAction, onMore)
 
                 // —— 大群说明行 ——
                 // **恒显**：既没公告也没简介的大群恰恰最需要这句解释。

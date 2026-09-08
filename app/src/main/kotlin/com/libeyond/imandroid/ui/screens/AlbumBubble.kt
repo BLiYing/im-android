@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
@@ -70,9 +71,18 @@ internal fun AlbumBubble(
     timestamp: Long,
     host: String,
     useTls: Boolean,
-    onLongPress: (Rect) -> Unit,
+    /**
+     * 长按第 n 格，带上**这一格自己**在窗口里的矩形。
+     *
+     * **逐格，不是整格一个回调**（iOS 的 `UITargetedPreview` 也是浮起单格）：
+     * 传整个宫格的矩形时，浮起来的是一整块九宫格而不是手指按住的那一张，
+     * 与"按住哪张浮哪张"的直觉对不上。
+     */
+    onLongPressTile: (Int, Rect) -> Unit,
     /** 点开第 n 格（**逐格**，不是整格一个回调）。 */
     onTapTile: (Int) -> Unit = {},
+    /** 要隐形的那一格（长按时它由浮层接管，原位留空避免"重叠感"）。-1 = 都不隐。 */
+    hiddenIndex: Int = -1,
 ) {
     val c = IMTheme.colors
     var rect by remember { mutableStateOf(Rect.Zero) }
@@ -109,7 +119,8 @@ internal fun AlbumBubble(
                                 AlbumTileView(
                                     m, tile, host, useTls,
                                     onTap = { onTapTile(at) },
-                                    onLongPress = { onLongPress(rect) },
+                                    onLongPress = { r -> onLongPressTile(at, r) },
+                                    hidden = at == hiddenIndex,
                                 )
                             }
                         }
@@ -143,12 +154,17 @@ private fun AlbumTileView(
     host: String,
     useTls: Boolean,
     onTap: () -> Unit = {},
-    onLongPress: () -> Unit = {},
+    onLongPress: (Rect) -> Unit = {},
+    hidden: Boolean = false,
 ) {
     val c = IMTheme.colors
+    // 每一格记住**自己**的矩形：长按浮起的是这一格，不是整个宫格
+    var tileRect by remember { mutableStateOf(Rect.Zero) }
     Box(
         modifier = Modifier.size(size).background(c.subtleFill)
-            .combinedClickable(onClick = onTap, onLongClick = onLongPress),
+            .onGloballyPositioned { tileRect = it.boundsInWindow() }
+            .alpha(if (hidden) 0f else 1f)
+            .combinedClickable(onClick = onTap, onLongClick = { onLongPress(tileRect) }),
     ) {
         AsyncImage(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，

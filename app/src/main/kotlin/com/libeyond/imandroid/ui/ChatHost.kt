@@ -1,6 +1,16 @@
 package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.ui.screens.ChatRowStyle
+import com.libeyond.imandroid.ui.screens.ChatRowView
+import com.libeyond.imandroid.ui.theme.IMTheme
 import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.sdk.logging.IMLog
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -259,6 +269,19 @@ fun ChatHost(
         }
     }
 
+    // 长按预览用的渲染参数：**必须与传给 ChatScreen 的那份一致**
+    // （ChatScreen 自己也用 ChatRowStyle 组一份，字段来源相同）。
+    val rowStyle = ChatRowStyle(
+        myUid = owner,
+        isGroup = conv.isGroup,
+        host = client.host,
+        useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+        peerReadSeq = if (conv.isGroup) 0 else conv.peerReadSeq,
+        uploadProgress = uploadProgress,
+        localNameOf = { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
+        loadLinkPreview = { url -> client.conversationsApi.linkPreview(url) },
+    )
+
     Box(Modifier.fillMaxSize()) {
     ChatScreen(
         convId = conv.convId,
@@ -457,32 +480,30 @@ fun ChatHost(
             // 起初这里一律画 Bubble，长按宫格里的一格会重绘成一张大图，
             // 与原位那一行完全对不上（2026-09-08 真机撞见）。
             preview = {
-                val row = rows.firstOrNull { r ->
+                // **与列表本身共用同一段渲染**（ChatRowView）：预览与原位由两份代码画时，
+                // 本端连栽两次——宫格被画成一张大图、带链接的文本少了富预览卡。
+                val idx = rows.indexOfFirst { r ->
                     when (r) {
                         is ChatRow.Confirmed -> r.msg.convSeq == target.convSeq
                         is ChatRow.Album -> r.msgs.any { it.convSeq == target.convSeq }
                         else -> false
                     }
                 }
-                when (row) {
-                    is ChatRow.Album -> AlbumBubble(
-                        tiles = row.msgs.map { AlbumTile(it.content, it.contentType, it.duration) },
-                        mine = row.msgs.first().sender == owner,
-                        timestamp = row.msgs.last().timestamp,
-                        host = client.host,
-                        useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
-                        // 菜单开着时再长按/点开自己没有意义
-                        onLongPress = {},
+                val row = rows.getOrNull(idx)
+                if (row is ChatRow.Album) {
+                    // 宫格浮起的是**手指按住的那一格**（同 iOS）：anchor 就是那一格的矩形，
+                    // 这里按它铺满即可（格子是正方形）。
+                    AsyncImage(
+                        model = MediaUrl.absolute(
+                            target.content, client.host, com.libeyond.imandroid.BuildConfig.USE_TLS,
+                        ),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                            .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius)),
                     )
-                    else -> Bubble(
-                        text = target.content,
-                        msg = target,
-                        mine = target.sender == owner,
-                        timestamp = target.timestamp,
-                        senderName = null,
-                        host = client.host,
-                        useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
-                    )
+                } else if (idx >= 0) {
+                    ChatRowView(rows = rows, i = idx, style = rowStyle)
                 }
             },
             items = buildMessageMenu(actions) { a ->

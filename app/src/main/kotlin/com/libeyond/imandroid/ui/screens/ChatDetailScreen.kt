@@ -27,12 +27,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.libeyond.imandroid.data.DetailAction
+import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.data.DetailTab
 import com.libeyond.imandroid.data.DetailTabs
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.DetailActionBar
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -72,8 +75,11 @@ internal fun ChatDetailScreen(
     onToggleMuted: (Boolean) -> Unit,
     onSetRemark: () -> Unit,
     onOpenProfile: () -> Unit,
-    onSearchHistory: () -> Unit,
-    onClearHistory: () -> Unit,
+    /** 头部操作排（消息/呼叫/视频/搜索/更多，或非好友时只有「加好友」）。 */
+    actions: List<DetailAction>,
+    moreItems: List<DetailMoreAction>,
+    onAction: (DetailAction) -> Unit,
+    onMore: (DetailMoreAction) -> Unit,
     host: String,
     useTls: Boolean,
     onBack: () -> Unit,
@@ -104,6 +110,10 @@ internal fun ChatDetailScreen(
                     }
                 }
 
+                // —— 操作排（对齐 iOS 头部的 pills）——
+                Spacer(Modifier.height(d.cardGap))
+                DetailActionBar(actions, moreItems, onAction, onMore)
+
                 // —— 信息（对齐 iOS 的 IMDetailSectionInfo：备注名 + 用户名）——
                 Spacer(Modifier.height(d.cardGap))
                 Card {
@@ -122,10 +132,9 @@ internal fun ChatDetailScreen(
                     SwitchRow("置顶聊天", pinned, onTogglePinned)
                     Divider()
                     SwitchRow("消息免打扰", muted, onToggleMuted)
-                    Divider()
-                    Row2("查找聊天记录", onClick = onSearchHistory)
-                    Divider()
-                    Row2("清空聊天记录", danger = true, onClick = onClearHistory)
+                    // 「查找聊天记录 / 清空聊天记录」**不在这张卡上**：iOS 把它们放在头部
+                    // 操作排的「搜索」与「更多 → 清空聊天记录」里。摆两处等于同一件事有两个入口，
+                    // 而其中一个还写着"还没做"。
                 }
 
                 Spacer(Modifier.height(d.cardGap))

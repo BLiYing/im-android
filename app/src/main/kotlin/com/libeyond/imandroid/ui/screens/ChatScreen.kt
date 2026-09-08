@@ -224,6 +224,18 @@ fun ChatScreen(
             ),
         )
 
+        // 列表与长按预览共用同一份渲染参数（见 ChatRowStyle 的注释：分两份写栽过两次）
+        val rowStyle = ChatRowStyle(
+            myUid = myUid,
+            isGroup = isGroup,
+            host = host,
+            useTls = useTls,
+            peerReadSeq = peerReadSeq,
+            uploadProgress = uploadProgress,
+            localNameOf = localNameOf,
+            loadLinkPreview = loadLinkPreview,
+        )
+
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(
             state = listState,
@@ -234,119 +246,23 @@ fun ChatScreen(
         ) {
             items(rows.size, key = { rows[it].key }) { i ->
                 val r0 = rows[i]
-                // 菜单开着的那一行整行隐形（保留占位，列表不跳）
-                val hidden = menuForSeq > 0 && when (r0) {
-                    is ChatRow.Confirmed -> r0.msg.convSeq == menuForSeq
-                    is ChatRow.Album -> r0.msgs.any { it.convSeq == menuForSeq }
-                    else -> false
-                }
+                // 菜单开着的那一行整行隐形（保留占位，列表不跳）。
+                // **宫格例外**：只隐被长按的那一格（浮起来的也只有那一格），
+                // 整行隐会让旁边几张跟着消失——那不是 iOS 的样子。
+                val hidden = menuForSeq > 0 &&
+                    (r0 as? ChatRow.Confirmed)?.msg?.convSeq == menuForSeq
                 Box(Modifier.alpha(if (hidden) 0f else 1f)) {
-                when (val r = rows[i]) {
-                    is ChatRow.DayLabel -> DaySeparator(r.timestamp)
-                    is ChatRow.UnreadDivider -> UnreadDividerRow()
-                    is ChatRow.Album -> AlbumBubble(
-                        tiles = r.msgs.map {
-                            AlbumTile(it.content, it.contentType, it.duration)
-                        },
-                        // 宫格**逐格**点开（iOS 同）：点第 3 格就该看第 3 张，
-                        // 整格共用一个回调会让所有格都打开第一张
-                        onTapTile = { idx -> r.msgs.getOrNull(idx)?.let(onOpenMedia) },
-                        mine = r.msgs.first().sender == myUid,
-                        timestamp = r.msgs.last().timestamp,
-                        host = host,
-                        useTls = useTls,
-                        onLongPress = { rect -> onLongPress(r.msgs.first(), rect) },
-                    )
-                    is ChatRow.PendingAlbum -> AlbumBubble(
-                        tiles = r.msgs.map {
-                            AlbumTile(it.content, it.contentType, null, sending = true)
-                        },
-                        mine = true,
-                        timestamp = r.msgs.last().createdAt,
-                        host = host,
-                        useTls = useTls,
-                        // 待发的整组还没 conv_seq，长按菜单无从下手（撤回/引用都要 seq）
-                        onLongPress = {},
-                    )
-                    // 系统消息走居中灰字，不进气泡分支（iOS IMSystemCell / Web .sys-note）。
-                    // 不用 `when` 卫语句（Kotlin 2.0 仍是实验特性），在分支内早退。
-                    is ChatRow.Confirmed -> if (r.msg.contentType == ContentType.SYSTEM) {
-                        SystemNote(
-                            text = r.msg.content,
-                            sysSegments = r.msg.sysSegments,
-                            localName = localNameOf,
-                            onTapUid = onOpenUser,
-                        )
-                    } else Bubble(
-                        text = r.msg.content,
-                        msg = r.msg,
-                        onLongPress = { rect -> onLongPress(r.msg, rect) },
-                        onOpenMedia = onOpenMedia,
-                        host = host,
-                        useTls = useTls,
-                        mine = r.msg.sender == myUid,
-                        timestamp = r.msg.timestamp,
-                        senderName = if (r.msg.sender != myUid) r.msg.fromNickname else null,
-                        // 群聊两行式引用条（对齐 iOS）：被引用者昵称独占一行。
-                        // 单聊传 null——只有两个人，写谁的名字都是废话。
-                        // 快照三档：服务端冻结的 > 本地那条原消息现算 > 「原消息」。
-                        // 第二档是必需的——ack 回不来冻结快照，自己发的引用消息在自己这侧没有它。
-                        quoteSnapshot = quoteSnapshotFor(rows, r.msg),
-                        replyFromName = if (isGroup) {
-                            r.msg.replyToFrom?.let { localNameOf(it) ?: it.takeIf { u -> u.isNotBlank() } }
-                        } else {
-                            null
-                        },
-                        // 已读双勾：我发的、且对端读位点已越过它
-                        read = r.msg.sender == myUid && peerReadSeq >= r.msg.convSeq,
-                        delivered = r.msg.sender == myUid,
-                        reserveAvatarColumn = isGroup && r.msg.sender != myUid,
-                        showAvatar = showsSenderAvatar(rows, i, myUid, isGroup),
-                        avatarSeed = r.msg.sender,
-                        loadLinkPreview = loadLinkPreview,
-                    )
-                    is ChatRow.Pending -> {
-                        // 媒体/文件待发行的 content 是本地 content:// URI——按文本画就会在屏幕上
-                        // 出现一条写着 `content://media/...` 的绿气泡（真机撞见过）
-                        val isImage = r.msg.contentType == ContentType.IMAGE
-                        val isVideo = r.msg.contentType == ContentType.VIDEO
-                        val isFile = r.msg.contentType == ContentType.FILE
-                        val pct = uploadProgress[r.msg.clientMsgId]
-                        if (isImage || isVideo) {
-                            PendingMediaBubble(
-                                localUri = r.msg.content,
-                                isVideo = isVideo,
-                                timestamp = r.msg.createdAt,
-                                sending = r.msg.state == SendState.Sending.name,
-                                failed = r.msg.state == SendState.Failed.name,
-                                progress = pct,
-                                onRetry = { onRetry(r.msg.clientMsgId) },
-                            )
-                        } else if (isFile) {
-                            PendingFileBubble(
-                                // 待发行还没有服务端地址，名字只能来自本地 meta
-                                fileName = r.msg.fileName.orEmpty()
-                                    .ifBlank { MediaUrl.displayFileName(r.msg.content) },
-                                fileSize = r.msg.fileSize,
-                                timestamp = r.msg.createdAt,
-                                sending = r.msg.state == SendState.Sending.name,
-                                failed = r.msg.state == SendState.Failed.name,
-                                progress = pct,
-                                onRetry = { onRetry(r.msg.clientMsgId) },
-                            )
-                        } else {
-                            Bubble(
-                                text = r.msg.content,
-                                mine = true,
-                                timestamp = r.msg.createdAt,
-                                senderName = null,
-                                sending = r.msg.state == SendState.Sending.name,
-                                failed = r.msg.state == SendState.Failed.name,
-                                onRetry = { onRetry(r.msg.clientMsgId) },
-                            )
-                        }
-                    }
-                }
+                ChatRowView(
+                    rows = rows,
+                    i = i,
+                    style = rowStyle,
+                    onLongPress = onLongPress,
+                    onOpenMedia = onOpenMedia,
+                    onOpenUser = onOpenUser,
+                    onRetry = onRetry,
+                    // 宫格：长按的那一格自己隐形（整行不隐，其余格仍在原位）
+                    hiddenTile = if (r0 is ChatRow.Album) menuForSeq else 0L,
+                )
                 }
             }
         }

@@ -115,6 +115,23 @@ class ContactApi(private val http: HttpClient) {
         http.call("DELETE", "/api/v1/friends/$userId")
     }
 
+    /**
+     * 举报（`POST /api/v1/reports`）。
+     *
+     * @param targetType `user`（举报这个人）/ `message`（举报某条消息）——两个入口互补，
+     *   资料页那个是**针对人本身**的，聊天页长按那个是针对一条消息的，别合并掉
+     *   （iOS 2026-09-06 合并消息侧两项时差点把人侧整个丢了）。
+     * @param reason 可空；服务端不强制。
+     */
+    suspend fun report(targetType: String, targetId: String, convId: String = "", reason: String = "") {
+        http.call("POST", "/api/v1/reports", buildJsonObject {
+            put("target_type", targetType)
+            put("target_id", targetId)
+            put("conv_id", convId)
+            put("reason", reason)
+        })
+    }
+
     /** 设备注名。空串=清除。须已是好友，否则 200103。 */
     suspend fun setRemark(userId: String, remark: String) {
         http.call("POST", "/api/v1/friends/remark", buildJsonObject {

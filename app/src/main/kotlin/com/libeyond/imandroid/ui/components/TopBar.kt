@@ -68,6 +68,8 @@ fun IMTopBar(
     actionEnabled: Boolean = true,
     onAction: (() -> Unit)? = null,
     avatar: TopBarAvatar? = null,
+    /** 右侧自定义槽（如群列表的 `+`）。**优先级最低**——头像与文字动作都比它更常用。 */
+    right: (@Composable () -> Unit)? = null,
     onTitleClick: (() -> Unit)? = null,
     showDivider: Boolean = true,
 ) {
@@ -139,6 +141,7 @@ fun IMTopBar(
                     maxLines = 1,
                     modifier = Modifier.clickable(enabled = actionEnabled, onClick = onAction),
                 )
+                right != null -> right()
             }
         }
     }
