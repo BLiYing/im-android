@@ -8,6 +8,8 @@ enum class MessageAction(val label: String, val destructive: Boolean = false) {
     Copy("复制"),
     Reply("引用"),
     Forward("转发"),
+    /** 进入多选态（判据在 [ChatSelection]）。 */
+    MultiSelect("多选"),
     Recall("撤回", destructive = true),
     /** 为所有人删除。 */
     DeleteForEveryone("为所有人删除", destructive = true),
@@ -57,6 +59,11 @@ object MessageActions {
         // 转发 / 多选：条件与 Forward.canForward 同源——**别在这里重写一遍判据**，
         // 两处判据分叉会让菜单里有「转发」但点了没反应（或反过来）。
         if (Forward.canForward(msg)) out += MessageAction.Forward
+
+        // 多选：判据比转发**宽一档**（走 ChatSelection.selectable），因为进多选后还能勾上
+        // 空内容/已删除那些"能勾但转不出去"的条目——它们由发送前的复核滤掉并如实提示。
+        // 从一条转不出去的消息进多选是合理的（用户可能想批量删它们）。
+        if (ChatSelection.selectable(msg)) out += MessageAction.MultiSelect
 
         // 撤回：仅本人，且在时间窗内。服务端超窗回 300008
         if (mine && now - msg.timestamp <= RECALL_WINDOW_MS) out += MessageAction.Recall

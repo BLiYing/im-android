@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -91,6 +91,25 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /**
+         * v7 → v8：消息与待发行各加 `mentionSpans`（@提及片段，M4-8 / PROTOCOL §4.1）。
+         *
+         * 老行为 NULL —— 本端接这个字段之前收发的消息都没有，渲染回落"按本群昵称表扫文本"
+         * 的老路（普通群里够用；超级群不下发成员表，那里就是不高亮，与协议里写的降级一致）。
+         *
+         * **两张表都要加**：ack 不回带片段，待发行里没有的话**自己发的 @ 在自己这一侧
+         * 不高亮**、对端却一切正常——这一族"只在发送者一侧坏"的坑，本仓已经踩到第六次。
+         */
+        internal val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE message ADD COLUMN mentionSpans TEXT")
+                db.execSQL("ALTER TABLE pending_message ADD COLUMN mentionSpans TEXT")
+                // mentions 只在待发行上：正式消息行不需要（收端要的是片段），
+                // 而重发要原样重发谁被 @ 了——重名成员没法从片段反推
+                db.execSQL("ALTER TABLE pending_message ADD COLUMN mentions TEXT")
+            }
+        }
+
         /** v2 → v3：消息加 `groupId`（相册宫格，M4+）。老行为 NULL = 不属于任何相册。 */
         internal val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -106,7 +125,10 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             )
                 // 刻意**不加** fallbackToDestructiveMigration：那会在版本号一变时
                 // 直接删库重建，用户的本地消息全没。加列要写真的 Migration。
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(
+                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+                )
                 .build().also { instance = it }
         }
     }

@@ -51,7 +51,7 @@ class MessageRepository(
     private val pending: PendingMessageDao,
     internal val conversations: ConversationDao,
 ) {
-    private val log = IMLog.tag("IM.Msg")
+    internal val log = IMLog.tag("IM.Msg")
 
     // ————————————————— 读 —————————————————
 
@@ -120,6 +120,10 @@ class MessageRepository(
         duration: Int? = null,
         poster: String? = null,
         thumb: String? = null,
+        /** @提及片段的 JSON（见 [PendingMessageEntity.mentionSpans]）。 */
+        mentionSpans: String? = null,
+        /** 被 @ 的 uid 列表 JSON（见 [PendingMessageEntity.mentions]，重名成员反推不出来）。 */
+        mentions: String? = null,
     ): PendingMessageEntity {
         val p = PendingMessageEntity(
             ownerUid = owner,
@@ -139,6 +143,8 @@ class MessageRepository(
             duration = duration,
             poster = poster,
             thumb = thumb,
+            mentionSpans = mentionSpans,
+            mentions = mentions,
             state = SendState.Sending.name,
             createdAt = System.currentTimeMillis(),
         )
@@ -310,46 +316,6 @@ class MessageRepository(
                 true
             }
         }
-
-    /**
-     * 收敛历史遗留的 `msg_op` 事件行。
-     *
-     * 本端在 2026-09-09 之前没有 [IncomingRule] 那道口径，把事件行当普通消息落了库——
-     * 症状是聊天页里冒出裸 JSON 气泡，**病根是那几次撤回/编辑/置顶/删除从来没被应用**。
-     * 改了入库口径只能管住以后的，已经躺在库里的那些得在这里补课：
-     * **先应用效果、再删行**，顺序反了就等于把那几次操作永久丢掉。
-     *
-     * 每次连上都跑一次：第一次之后库里就没有这种行了，之后是一次走索引的空查询。
-     * 回本次清掉的行数（0 = 干净）。
-     *
-     * ⚠️ **删的必须是"刚刚应用过的那几条"，不能是"这个账号下所有 msg_op 行"**：
-     * 取数带 [limit]，一次 `DELETE ... WHERE contentType='msg_op'` 会把这一批之外
-     * 还没应用的行一起抹掉——那正是上面那句"顺序反了就等于把那几次操作永久丢掉"的
-     * 另一种走法（11 万条的大群里 500 这个上限一次就够不着）。所以按批走，逐条删。
-     */
-    suspend fun convergeLegacyMsgOpRows(owner: String, limit: Int = 500): Int {
-        var applied = 0
-        var deleted = 0
-        while (true) {
-            val rows = messages.legacyMsgOpRows(owner, limit)
-            if (rows.isEmpty()) break
-            val before = deleted
-            for (r in rows) {
-                runCatching { ProtocolJson.decodeFromString(MsgOpData.serializer(), r.content) }
-                    .onSuccess { applyMsgOp(owner, it) }
-                    .onFailure { log.w("legacy_msg_op_undecodable", "convId" to r.convId, "seq" to r.convSeq) }
-                // 应用完立刻删这一条：中途被取消/崩溃时，剩下的行下次还会被重新取到并应用。
-                messages.delete(owner, r.convId, r.convSeq)
-                deleted++
-                applied++
-            }
-            // 一批下来一条都没删掉说明删不动（理论上不该发生），别在这里空转
-            if (deleted == before) break
-        }
-        // 也记一笔：不然"跑没跑过"无从判断（这一步一辈子只跑一次，没日志就查不了）
-        log.i("legacy_msg_op_converged", "applied" to applied, "deleted" to deleted)
-        return deleted
-    }
 
     /** 推进同步游标。**只接受 [SyncCursorRule] 算出的值。** */
     suspend fun advanceCursor(owner: String, convId: String, covered: Long, firstFailedSeq: Long?) {
@@ -583,6 +549,8 @@ private fun MessageData.toEntity(owner: String) = MessageEntity(
     sysSegments = sysSegments?.takeIf { it.isNotEmpty() }?.let {
         ProtocolJson.encodeToString(kotlinx.serialization.builtins.ListSerializer(SysSegment.serializer()), it)
     },
+    // @提及片段落库：不落的话重进会话后 @ 不再高亮、也点不动（同上一条的坑）
+    mentionSpans = Mention.encodeSpans(mentionSpans.orEmpty()),
 )
 
 /**

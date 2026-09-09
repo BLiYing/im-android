@@ -35,3 +35,7 @@ google-services.json
 
 # Kotlin 2.0 构建工具生成目录
 .kotlin/
+
+# Claude Code 的 worktree 建在仓内。不排除的话它在主 checkout 里是一堆未跟踪文件，
+# 并行会话一个 `git add -A` 就会把整份 worktree 提交进去。
+.claude/worktrees/

@@ -397,6 +397,102 @@ Android 上没有等价物——`android.icu.text.Transliterator` 要 API 29 而
 iOS 那侧是唯一没有确认的——im-web 的删除好友（资料卡「更多」）是有二次确认的，
 本端的资料页删好友也一直有。三处里两处有确认，缺的那一处更像是 iOS 的疏漏而不是刻意。
 
+### 4.6 群 @提及（M4-8，2026-09-09）
+
+iOS：`Modules/Chat/IMChatViewController+Mention.m` + `IMMentionPickerViewController`（内联形态）
++ `IMChatMessageLogic.m` 的三个纯函数 + `IMBubbleCell.attributedContent:...spans:`。
+Web：`src/mention.ts` + `Composer.tsx` + `components/messageText.tsx`。
+协议见 `IMServer/docs/PROTOCOL.md` §4.1。
+
+| 判据 | iOS | Android | 判定 |
+|---|---|---|---|
+| 偏移单位是 **UTF-16 码元**（对应 TG `messageEntityMentionName`） | `NSString` 索引 | Kotlin `String` 索引，同源零换算 | ✅ |
+| 片段**覆盖整个 token（含前导 `@`）**，`text[offset]` 必是 `@` | 有 | 同 | ✅ |
+| token 边界：后面紧跟空白或结尾；**长名优先** | `IMChatTextContainsMentionToken` | 同（`Mention.containsToken`） | ✅ |
+| **有片段走片段、没有才回落按昵称扫文本** | `attributedContent:...spans:` | 同（`chatBodyText`） | ✅ |
+| 片段与本地文本对不上 → **逐段丢弃**，一段不剩才降级 | `IMChatValidMentionSpans` | 同（`Mention.validSpans`） | ✅ |
+| 发送时按**文本现状**复核收件人（删掉 token 就不再 @ 他） | `resolvedMentionsInText:` | 同（`MentionComposer.resolve`） | ✅ |
+| 同名两人**都**收到提醒，而片段只链其中一个 | 有 | 同（并且**待发行单独存 `mentions`**，不从片段反推——反推会让重连补发后重名那位悄悄收不到） | ✅ |
+| 「所有人」在片段里**覆盖**同名成员（空 uid 只在 `mention_all` 时合法） | 有 | 同 | ✅ |
+| `@所有人` **仅群主/管理员**出入口（越权 300204） | 有 | 同（`Mention.canMentionAll` + `GroupInfo.myRole`） | ✅ |
+| `@所有人` 只高亮**不可点** | uid 为空不挂点击 | 同 | ✅ |
+| 面板：输入栏**上方内联**，不弹 sheet、**不抢键盘** | child VC 贴 replyBar.top | 同（`Composer` 的 `above` 槽） | ✅ |
+| 面板候选**走服务端 `?q=` 分页**，不在本地成员表里过滤 | 有 | 同——超级群不下发成员表，本地过滤在那里恒空 | ✅ |
+| 点气泡里的 `@某人` → 进他的资料页 | TextKit 反查 | `LinkAnnotation.Clickable`（**不是** `ClickableText`：那个吃掉 tap，气泡长按菜单会跟着失灵，真机验过长按仍在） | 🟢 手段不同 |
+| 半角 `@` 与全角 `＠` 都触发；回填一律半角 | 有 | 同 | ✅ |
+| 「@我的消息」聚合（`GET …/mentions`） | **没有** | 没有 | ⬜ 三端都欠 |
+
+**真机验过**（模拟器 / 群「1001创建测试群」）：打 `@` 弹面板且键盘不收 → 键入 `3472` 实时过滤到一人
+→ 选中回填 `@用户3472 ` 并关面板 → 发出后服务端库里
+`mentions=["1010147977"]`、`mention_spans=[{"offset":0,"length":7,...}]`（`@用户3472` 正好 7 个
+UTF-16 码元，且未被服务端的安全校验丢弃）→ 气泡里 `@用户3472` 蓝色、`kaihui` 常规色
+→ 点它进了对方资料页 → **长按同一个气泡菜单照常弹出**。
+修完下面那 6 条后又验了两条：**整条正文就是一段提及**（`@用户4836`，服务端 `conv_seq 64`）
+现在高亮且点得动；群主打 `bob@gmail.com` 面板不再冒出来。
+
+**`/code-review` 打回 6 条，全修了**（另外顺带补了一条 iOS 有而本端漏的）：
+
+| # | 问题 | 修法 |
+|---|---|---|
+| 1 | **整条正文就是一段提及时不高亮也点不动**：快速通道写的是 `segs.size <= 1`，而 `@小明`（选完人直接发）也只有一段。真机那次验的是「@用户3472 kaihui」，两段，正好绕过了这个洞 | 判据改成「既没有提及、也没有命中」才走快速通道 |
+| 2 | **谁收到提醒与片段会给出不同答案**：`resolveMentions` 逐个候选独立跑 `containsToken`，片段那边却长名优先。群里有「Li」和「Li Ming」时，`@Li Ming 开会` 会给 Li 发一条**穿透免打扰的错误强提醒** | 两者共用同一个按位置扫描的内核 `scanHits`；命中的名字再映射回**所有**同名 uid（「同名两人都收到」那条不变式不受影响） |
+| 3 | **面板卡住**：`showsMentionAllRow` 少了「过滤词为空」这一档，群主打 `bob@gmail.com` 时成员搜不到、却因为有权限而恒真，240dp 的面板盖住消息列表 | 对齐 iOS 的 `showsMentionAllRow`（**有权限 且 过滤词为空**） |
+| 4 | **每个字符一次 `GET …/members?q=`**：`@zhangsan` 打完发 9 次，而这条路正是为超级群准备的 | 去抖 300ms（与 iOS `searchRemoteMembers` 同值） |
+| 5 | **「正在输入」回归**：`input` 从 `String` 改成 `TextFieldValue` 后，光标移动也会走 `onInputChange`，对端看到一次凭空的「正在输入…」 | 只在正文真的变了时才上报 |
+| 6 | **双 `@`**：`GroupMember.displayName` 没昵称时回落成 `@username`，直接拼成 `@@bob`；更糟的是候选表存 `@bob`、文本里是 `@bob`，`containsToken` 找 `@@bob` 找不到，**这条提及会静默丢失** | 新增 `Mention.tokenLabel` 归一化一次，候选表与文本用同一个标签 |
+| +1 | **候选里有我自己**（reviewer 没提，读 iOS 时发现的）：iOS 两处入口都剔了 `![m.userID isEqualToString:me]` | 同样剔除 |
+
+**其中 2、6 是三端共有的**——iOS 的 `resolvedMentionsInText:` 同样逐个候选判定、
+`pickMentionInsert:` 同样直接拼 `displayName`，im-web 的 `resolveMentions` 亦然。
+本端改对了，**iOS/Web 是欠账**：这两条属于「谁收到强提醒」这一类不变式，
+三端给出不同答案时用户看到的是"有人莫名被 @ 了"或"@ 了却没人收到"，
+按 `SYMMETRY.md` 该拉齐（要一致的是不变式，不是代码形状）。
+
+**没验**：普通成员看不到「@所有人」那一行（要第二个账号；判据有单测且取自服务端 `my_role`）；
+超级群里老消息不高亮那条降级——库里 `conv_seq 57` 那条 `@用户4807 上的方式分` 正好是
+**有 `mentions` 无 `mention_spans`** 的老数据，可以拿它验回落那条路。
+
+### 4.7 消息多选（M4-3 的另一半，2026-09-09）
+
+iOS：`Modules/Chat/IMChatSelectionState.{h,m}` + `IMChatViewController+Selection.m`。
+Web：`src/messageContent.ts`（`selectableInMultiSelect` / `SELECT_MAX` / 批量举报谓词）+ `src/selection.ts`。
+
+| 判据 | iOS | Android | 判定 |
+|---|---|---|---|
+| **勾选态按 `conv_seq` 记，不按行号/表格状态** | `selectedModels`（key=conv_seq） | 同（`Map<Long, MessageEntity>`） | ✅ |
+| **连消息实体一起存**（勾过的会被窗口裁出内存） | 存 model 不只存 seq | 同 | ✅ |
+| 可勾判据：`convSeq>0 && 未撤回 && 非系统消息` | `isSelectableMessage:` | 同（`ChatSelection.selectable`） | ✅ |
+| 一次上限 100，**一道闸管住转发/收藏/举报** | `kIMSelectionMaxCount` | 同（`Forward.MAX_SELECTION`，两处同源有单测钉住） | ✅ |
+| 超限**吐司说明**，不静默吞掉点击 | `allowSelectingMore:` | 同（`toggle` 回 null → 调用方吐司） | ✅ |
+| 取消勾选**永远允许**（选满了也能改） | 有 | 同 | ✅ |
+| 导出按 `conv_seq` **升序**（会话时序） | `IMChatSelectedMessages()` 纯函数 | 同（`ChatSelection.ordered`） | ✅ |
+| 进多选**默认勾上触发的那条** | `enterSelectionWithMessage:` | 同 | ✅ |
+| 标题「已选择 N 条」/「选择消息」 | 有 | 同（`ChatSelection.titleOf`） | ✅ |
+| 0 选中时动作钮**置灰禁用**（不弹「请先选择」） | 有 | 同 | ✅ |
+| 多选期间**隐藏输入栏**、底部换动作栏 | 有 | 同（`Composer` 整个不画） | ✅ |
+| 不可勾的行**不画勾选圈** | `canEditRowAtIndexPath` 回 NO | 同（画等宽占位保持左缘对齐） | ✅ |
+| 转发前滤掉转不出去的，**少发几条要如实说** | 先数一次再发 | 同（`forwardPick` 回提示） | ✅ |
+| 返回键分层：多选 → 搜索 → 离开会话 | 导航栏「取消」 | 同 + 返回键（Android 特有） | 🟢 本端多一条 |
+| 动作栏格数 | 转发 / 收藏 / 删除 / 举报 **4 格** | **2 格**（转发 / 删除） | 🟡 收藏与消息举报本端还没做，**不画只会弹「还没做」的死按钮** |
+| 批量删除 | 只给「仅为我删除」 | 同（走 REST `/messages/hide`，带二次确认） | ✅ |
+| 批量举报（同一发送者才可点） | 有 | **没有** | ⬜ 依赖消息侧举报（`CLIENT_PARITY` AG 补那行） |
+| 合并转发（多条 → 一张卡片） | 有 | **没有**（只能渲染别人发来的卡片） | ⬜ 见 M4-6 那行 |
+| 相册宫格逐格勾选 | 有（整组全选 + 逐格） | **没有**——宫格整体不参与多选 | ⬜ 欠账 |
+
+**iOS 那条用线上 bug 换来的教训，本端从一开始就照抄了**（`IMChatSelectionState.h` 的类注释）：
+勾选态原先记在 `UITableView` 的行选中里，向上翻页时 `reloadData` 清空选中、`prepend` 又让行下标
+整体平移，于是「勾两条 → 上滚拉历史 → 再勾一条，前两条静默消失」。本端列表同样是窗口化的
+（尾窗 200 / 锚点窗前后各 100），所以判据层的函数**签名里拿不到窗口、行号或任何列表状态**
+——拿不到就没法退回去按行号记。
+
+**⚠️ 未真机验证**：本轮只跑到单测与编译（511 例绿、体量闸过）。真机那一段没做完——
+模拟器在宿主负载 25 时反复 ANR，最后连 uiautomator 的 accessibility 桥都返回 `null root node`。
+按本仓规矩（滚动/翻页/动画必须真机看），**这一块在真机验过之前不算完**，要验的至少有：
+长按进多选、勾选圈只出现在可勾的行、上翻拉历史后勾选不丢（那正是 iOS 踩过的那条）、
+超限吐司、批量转发与批量删除、返回键分层。
+
+---
+
 ---
 
 ## 5. 为什么会漂这么远（2026-09-08 复盘）

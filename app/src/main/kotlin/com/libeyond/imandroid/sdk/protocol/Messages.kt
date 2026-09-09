@@ -53,6 +53,18 @@ data class SendMsgData(
     /** 相册分组（§4.3 M4+）：同批多图共享，服务端只透传 + 限长 64。 */
     @SerialName("group_id") val groupId: String? = null,
     /**
+     * @提及（§4.1，**仅群聊**，单聊携带会被服务端忽略）。三个字段一起走：
+     * [mentions] 谁收到强提醒、[mentionAll] 是否 @所有人（仅群主/管理员，越权 300204）、
+     * [mentionSpans] 每个 token 的位置（收端据此高亮，不必反查群成员表）。
+     *
+     * 服务端会按**当时群成员集**过滤 [mentions] 并封顶 64；[mentionSpans] 里 `user_id`
+     * 不在过滤后的 mentions 里就**静默丢弃该片段**（安全边界：否则客户端能把正文里
+     * 任意一段染成「@张三」并点进他的资料页）。
+     */
+    val mentions: List<String>? = null,
+    @SerialName("mention_all") val mentionAll: Boolean? = null,
+    @SerialName("mention_spans") val mentionSpans: List<MentionSpan>? = null,
+    /**
      * 转发溯源（§4.3 M4-3）：**发送时冻结的"转发自"显示名**，限长 40。
      *
      * 两条纪律，任一条破了都是线上事故：
@@ -105,6 +117,24 @@ data class AckData(
 data class SysSegment(
     val uid: String = "",
     val text: String = "",
+)
+
+/**
+ * 消息文本里的一段 **@ 提及**（PROTOCOL §4.1，对应 Telegram 的 `messageEntityMentionName`）。
+ *
+ * `uid` 为空串 = `@所有人`（**只高亮不可点**）。片段**覆盖整个 token（含前导 `@`）**，
+ * 即 `text[offset]` 必然是 `@`；参照系是 `content_type=text` 看 `content`、其余看 `caption`。
+ *
+ * ⚠️ **`offset`/`length` 的单位是 UTF-16 码元**，与 iOS 的 `NSString`、JS 的 `String` 同源。
+ * Kotlin 的 `String` 索引天生就是 UTF-16，零换算——**别改成码点**：`🎉@小明` 里 `@` 的
+ * UTF-16 偏移是 2、码点偏移是 1、UTF-8 字节偏移是 4，一出现 emoji 就与另外两端和
+ * 服务端校验全部对不上。判据与切段逻辑在 `data/Mention.kt`。
+ */
+@Serializable
+data class MentionSpan(
+    val offset: Int = 0,
+    val length: Int = 0,
+    @SerialName("user_id") val uid: String = "",
 )
 
 @Serializable
@@ -162,6 +192,15 @@ data class MessageData(
      * **必须落本地库**：不落的话刷新/重进会话后分段丢失，同一条消息退回"显真实昵称、不可点"。
      */
     @SerialName("sys_segments") val sysSegments: List<SysSegment>? = null,
+    /**
+     * @提及片段（§4.1，仅群聊）。**必须落本地库**——不落的话重进会话后 @ 就不再高亮、
+     * 点不动，与 [sysSegments] 同一个坑。
+     *
+     * 老消息 / 老客户端不带这个字段 → 收端回落"按本群昵称表扫文本"的老路
+     * （见 `data/Mention.kt` 的 `segmentByNames`）。**编辑过的消息服务端会清空本字段**，
+     * 因为偏移是相对原文的，留着会把新正文中间一段染成提及。
+     */
+    @SerialName("mention_spans") val mentionSpans: List<MentionSpan>? = null,
 )
 
 /** receipt 上下行负载（PROTOCOL §5）。 */

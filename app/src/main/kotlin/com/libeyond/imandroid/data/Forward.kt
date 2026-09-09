@@ -28,7 +28,10 @@ object Forward {
     /** 一次最多选几个转发目标会话。与 iOS/Web 同为 9。 */
     const val MAX_TARGETS = 9
 
-    /** 一次多选最多几条消息。三端同为 100（与举报、收藏共用这个上限）。 */
+    /**
+     * 一次多选最多几条消息。三端同为 100（与举报、收藏共用这个上限）。
+     * 勾选的判据与写入口在 [ChatSelection]——**按 conv_seq 记且连消息一起存**，理由见那里。
+     */
     const val MAX_SELECTION = 100
 
     /**
@@ -47,13 +50,6 @@ object Forward {
             else -> msg.sender                                       // ③ 末级兜底
         }
         return raw.take(MAX_LEN)
-    }
-
-    /** 多选加一条消息：到上限就拒（返回 null），由调用方吐司。 */
-    fun toggleCapped(selected: Set<Long>, seq: Long, max: Int = MAX_SELECTION): Set<Long>? {
-        if (seq in selected) return selected - seq
-        if (selected.size >= max) return null
-        return selected + seq
     }
 
     /** 多选一个转发目标会话：到上限就拒（返回 null）。**取消选择永远允许**——

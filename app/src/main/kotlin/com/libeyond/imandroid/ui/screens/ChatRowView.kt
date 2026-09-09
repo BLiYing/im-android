@@ -36,6 +36,12 @@ internal data class ChatRowStyle(
      * 高亮底色走 `accentSoft`，**不硬编码黄**（SEARCH_DESIGN §13.5，三端同一条）。
      */
     val searchHighlight: String = "",
+    /**
+     * 本群成员显示名，**只给没有 `mention_spans` 的老消息兜底**（按昵称扫文本）。
+     * 超级群不下发成员表 → 空表 → 老消息里的 @ 不高亮，与协议里写的降级一致。
+     * 新消息一律走片段那条路，与这份表无关。
+     */
+    val mentionNames: List<String> = emptyList(),
 )
 
 /**
@@ -129,6 +135,9 @@ internal fun ChatRowView(
         } else Bubble(
             text = r.msg.content,
             msg = r.msg,
+            mentionNames = style.mentionNames,
+            // 点 @某人 与点系统消息里的名字是同一个去处：他的资料页
+            onTapMention = onOpenUser,
             onLongPress = { rect -> onLongPress(r.msg, rect) },
             onOpenMedia = onOpenMedia,
             host = host,
@@ -196,6 +205,10 @@ internal fun ChatRowView(
                 Bubble(
                     text = r.msg.content,
                     mine = true,
+                    // 待发气泡的片段只能从待发行取（此时还没有正式消息行）
+                    mentionSpansJson = r.msg.mentionSpans,
+                    mentionNames = style.mentionNames,
+                    onTapMention = onOpenUser,
                     timestamp = r.msg.createdAt,
                     senderName = null,
                     sending = r.msg.state == SendState.Sending.name,

@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import com.libeyond.imandroid.data.sendMsgOp
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,7 @@ import coil.compose.AsyncImage
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.CornerUpLeft
 import com.composables.icons.lucide.Forward
+import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquare
 import com.composables.icons.lucide.Trash2
@@ -109,6 +111,7 @@ internal fun messageActionIcon(a: MessageAction) = when (a) {
     MessageAction.Copy -> Lucide.Copy
     MessageAction.Reply -> Lucide.CornerUpLeft
     MessageAction.Forward -> Lucide.Forward
+    MessageAction.MultiSelect -> Lucide.ListChecks
     MessageAction.Recall -> Lucide.Undo2
     MessageAction.DeleteForEveryone -> Lucide.Users
     MessageAction.HideForMe -> Lucide.User
@@ -144,6 +147,8 @@ internal fun ChatMessageMenu(
     iAmManager: Boolean,
     onReply: (MessageEntity) -> Unit,
     onForward: (MessageEntity) -> Unit,
+    /** 进多选态，并默认勾上这一条。 */
+    onMultiSelect: (MessageEntity) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val owner = client.uid.orEmpty()
@@ -185,6 +190,8 @@ internal fun ChatMessageMenu(
                 MessageAction.Copy -> clipboard.setText(AnnotatedString(target.content))
                 MessageAction.Reply -> onReply(target)
                 MessageAction.Forward -> onForward(target)
+                // 进多选态：**默认把触发的那条勾上**（同 iOS enterSelectionWithMessage:）
+                MessageAction.MultiSelect -> onMultiSelect(target)
                 MessageAction.Recall ->
                     client.messages.sendMsgOp(conv.convId, MsgOp.RECALL, target.convSeq)
                 MessageAction.DeleteForEveryone ->

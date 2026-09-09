@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.sdk
 
+import com.libeyond.imandroid.data.convergeLegacyMsgOpRows
 import android.content.Context
 import com.libeyond.imandroid.BuildConfig
 import com.libeyond.imandroid.sdk.api.AuthApi
