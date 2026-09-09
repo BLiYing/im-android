@@ -120,6 +120,10 @@ class MessageRepository(
         duration: Int? = null,
         poster: String? = null,
         thumb: String? = null,
+        /** @提及片段的 JSON（见 [PendingMessageEntity.mentionSpans]）。 */
+        mentionSpans: String? = null,
+        /** 被 @ 的 uid 列表 JSON（见 [PendingMessageEntity.mentions]，重名成员反推不出来）。 */
+        mentions: String? = null,
     ): PendingMessageEntity {
         val p = PendingMessageEntity(
             ownerUid = owner,
@@ -139,6 +143,8 @@ class MessageRepository(
             duration = duration,
             poster = poster,
             thumb = thumb,
+            mentionSpans = mentionSpans,
+            mentions = mentions,
             state = SendState.Sending.name,
             createdAt = System.currentTimeMillis(),
         )
@@ -571,6 +577,8 @@ private fun MessageData.toEntity(owner: String) = MessageEntity(
     sysSegments = sysSegments?.takeIf { it.isNotEmpty() }?.let {
         ProtocolJson.encodeToString(kotlinx.serialization.builtins.ListSerializer(SysSegment.serializer()), it)
     },
+    // @提及片段落库：不落的话重进会话后 @ 不再高亮、也点不动（同上一条的坑）
+    mentionSpans = Mention.encodeSpans(mentionSpans.orEmpty()),
 )
 
 /**

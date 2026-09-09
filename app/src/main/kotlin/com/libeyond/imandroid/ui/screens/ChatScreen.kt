@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -123,9 +124,11 @@ fun ChatScreen(
     host: String,
     useTls: Boolean,
     rows: List<ChatRow>,
-    input: String,
-    onInputChange: (String) -> Unit,
+    input: TextFieldValue,
+    onInputChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
+    /** 输入栏上方的内联层（@成员面板）。由 Host 注入——screen 不持有 IMClient。 */
+    composerAbove: (@androidx.compose.runtime.Composable () -> Unit)? = null,
     onBack: () -> Unit,
     onRetry: (String) -> Unit,
     /** 分片上传进度：clientMsgId → 百分比。没有条目 = 不在分片上传中。 */
@@ -166,6 +169,8 @@ fun ChatScreen(
     onSearchNext: () -> Unit = {},
     /** 命中词（已 trim）。空串 = 不高亮。 */
     searchHighlight: String = "",
+    /** 本群成员显示名——只给没有 mention_spans 的老消息兜底（见 [ChatRowStyle.mentionNames]）。 */
+    mentionNames: List<String> = emptyList(),
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -314,6 +319,7 @@ fun ChatScreen(
             localNameOf = localNameOf,
             loadLinkPreview = loadLinkPreview,
             searchHighlight = searchHighlight,
+            mentionNames = mentionNames,
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -441,8 +447,9 @@ fun ChatScreen(
             input = input,
             onInputChange = {
                 onInputChange(it)
-                if (it.isNotEmpty()) onTyping()
+                if (it.text.isNotEmpty()) onTyping()
             },
+            above = composerAbove,
             onSend = onSend,
             onPlus = {
                 attachOpen = !attachOpen

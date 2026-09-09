@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.sdk.protocol.MentionSpan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

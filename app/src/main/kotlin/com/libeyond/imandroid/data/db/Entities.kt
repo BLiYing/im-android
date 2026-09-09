@@ -70,7 +70,14 @@ data class MessageEntity(
      * 分段丢失，同一条系统消息会退回"显真实昵称、不可点"，与刚收到时不一致。
      * 存 JSON 而不是拆表——它只被渲染层解析一次，没有查询需求。
      */
-    val sysSegments: String? = null
+    val sysSegments: String? = null,
+    /**
+     * @提及片段的 JSON（PROTOCOL §4.1）。空/NULL = 没有片段，渲染回落按昵称扫文本的老路。
+     *
+     * 与 [sysSegments] 同一类：内嵌在消息里、只随那一条走。**必须落库**——
+     * 不落的话重进会话后 @ 就不再高亮也点不动。编解码见 `data/Mention.kt`。
+     */
+    val mentionSpans: String? = null
 )
 
 /** 发送态。 */
@@ -116,6 +123,22 @@ data class PendingMessageEntity(
     val poster: String? = null,
     /** 极小模糊缩略（M4-7）。ack 不回带，故待发行里必须留一份（见 [AckCarryOver]）。 */
     val thumb: String? = null,
+    /**
+     * @提及片段的 JSON。**待发行也要存一份**：ack 只回带 seq/时间戳，不回带这个字段，
+     * 落地成正式行时是从待发行取的（见 [com.libeyond.imandroid.data.AckCarryOver]）。
+     * 不存的结果是**自己发的 @ 在自己这一侧不高亮**、对端一切正常——
+     * 与 forwardFrom / groupId / 媒体元数据 / thumb 同一个坑，这已经是第六次。
+     * 重发（resend）同样从这里读。
+     */
+    val mentionSpans: String? = null,
+    /**
+     * 被 @ 的 uid 列表（JSON）。**不能从片段反推**：群里两个人重名时，片段只有一段、
+     * 只链得到其中一个 uid，而两个人都该收到强提醒（见 `MentionTest` 那条用例）。
+     * 反推等于"重连补发之后，重名的那位悄悄收不到提醒了"。
+     *
+     * `mention_all` 反过来**可以**从片段推（有一段 uid 为空即是），不另存一列。
+     */
+    val mentions: String? = null,
     /** [SendState] 的 name。 */
     val state: String = "Sending",
     val createdAt: Long = 0,

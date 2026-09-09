@@ -397,6 +397,40 @@ Android 上没有等价物——`android.icu.text.Transliterator` 要 API 29 而
 iOS 那侧是唯一没有确认的——im-web 的删除好友（资料卡「更多」）是有二次确认的，
 本端的资料页删好友也一直有。三处里两处有确认，缺的那一处更像是 iOS 的疏漏而不是刻意。
 
+### 4.6 群 @提及（M4-8，2026-09-09）
+
+iOS：`Modules/Chat/IMChatViewController+Mention.m` + `IMMentionPickerViewController`（内联形态）
++ `IMChatMessageLogic.m` 的三个纯函数 + `IMBubbleCell.attributedContent:...spans:`。
+Web：`src/mention.ts` + `Composer.tsx` + `components/messageText.tsx`。
+协议见 `IMServer/docs/PROTOCOL.md` §4.1。
+
+| 判据 | iOS | Android | 判定 |
+|---|---|---|---|
+| 偏移单位是 **UTF-16 码元**（对应 TG `messageEntityMentionName`） | `NSString` 索引 | Kotlin `String` 索引，同源零换算 | ✅ |
+| 片段**覆盖整个 token（含前导 `@`）**，`text[offset]` 必是 `@` | 有 | 同 | ✅ |
+| token 边界：后面紧跟空白或结尾；**长名优先** | `IMChatTextContainsMentionToken` | 同（`Mention.containsToken`） | ✅ |
+| **有片段走片段、没有才回落按昵称扫文本** | `attributedContent:...spans:` | 同（`chatBodyText`） | ✅ |
+| 片段与本地文本对不上 → **逐段丢弃**，一段不剩才降级 | `IMChatValidMentionSpans` | 同（`Mention.validSpans`） | ✅ |
+| 发送时按**文本现状**复核收件人（删掉 token 就不再 @ 他） | `resolvedMentionsInText:` | 同（`MentionComposer.resolve`） | ✅ |
+| 同名两人**都**收到提醒，而片段只链其中一个 | 有 | 同（并且**待发行单独存 `mentions`**，不从片段反推——反推会让重连补发后重名那位悄悄收不到） | ✅ |
+| 「所有人」在片段里**覆盖**同名成员（空 uid 只在 `mention_all` 时合法） | 有 | 同 | ✅ |
+| `@所有人` **仅群主/管理员**出入口（越权 300204） | 有 | 同（`Mention.canMentionAll` + `GroupInfo.myRole`） | ✅ |
+| `@所有人` 只高亮**不可点** | uid 为空不挂点击 | 同 | ✅ |
+| 面板：输入栏**上方内联**，不弹 sheet、**不抢键盘** | child VC 贴 replyBar.top | 同（`Composer` 的 `above` 槽） | ✅ |
+| 面板候选**走服务端 `?q=` 分页**，不在本地成员表里过滤 | 有 | 同——超级群不下发成员表，本地过滤在那里恒空 | ✅ |
+| 点气泡里的 `@某人` → 进他的资料页 | TextKit 反查 | `LinkAnnotation.Clickable`（**不是** `ClickableText`：那个吃掉 tap，气泡长按菜单会跟着失灵，真机验过长按仍在） | 🟢 手段不同 |
+| 半角 `@` 与全角 `＠` 都触发；回填一律半角 | 有 | 同 | ✅ |
+| 「@我的消息」聚合（`GET …/mentions`） | **没有** | 没有 | ⬜ 三端都欠 |
+
+**真机验过**（模拟器 / 群「1001创建测试群」）：打 `@` 弹面板且键盘不收 → 键入 `3472` 实时过滤到一人
+→ 选中回填 `@用户3472 ` 并关面板 → 发出后服务端库里
+`mentions=["1010147977"]`、`mention_spans=[{"offset":0,"length":7,...}]`（`@用户3472` 正好 7 个
+UTF-16 码元，且未被服务端的安全校验丢弃）→ 气泡里 `@用户3472` 蓝色、`kaihui` 常规色
+→ 点它进了对方资料页 → **长按同一个气泡菜单照常弹出**。
+
+**没验**：普通成员看不到「@所有人」那一行（要第二个账号；判据有单测且取自服务端 `my_role`）；
+超级群里老消息不高亮那条降级（要一条没有 `mention_spans` 的老消息）。
+
 ---
 
 ## 5. 为什么会漂这么远（2026-09-08 复盘）

@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
@@ -34,8 +36,29 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 
 @Composable
 internal fun Composer(
-    input: String,
-    onInputChange: (String) -> Unit,
+    /**
+     * 输入框的**值 + 光标**。用 [TextFieldValue] 而不是裸 String 是 @提及要求的：
+     * 「正在输入的 @查询词」是"光标前最近一个 @ 到光标之间"，没有光标就算不出来
+     * （iOS 从 `selectedTextRange` 取、Web 从 `selectionStart` 取，本端同源）。
+     */
+    input: TextFieldValue,
+    onInputChange: (TextFieldValue) -> Unit,
+    onSend: () -> Unit,
+    onPlus: () -> Unit,
+    onInputFocus: () -> Unit,
+    /** 输入栏**上方**的内联层（@成员面板）。没有就不画。 */
+    above: (@Composable () -> Unit)? = null,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        above?.invoke()
+        ComposerBar(input, onInputChange, onSend, onPlus, onInputFocus)
+    }
+}
+
+@Composable
+private fun ComposerBar(
+    input: TextFieldValue,
+    onInputChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
     onPlus: () -> Unit,
     onInputFocus: () -> Unit,
@@ -77,7 +100,7 @@ internal fun Composer(
                 .background(c.pageBackground)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            if (input.isEmpty()) {
+            if (input.text.isEmpty()) {
                 Text("发送消息…", color = c.textTertiary, fontSize = 15.sp)
             }
             BasicTextField(
@@ -93,8 +116,8 @@ internal fun Composer(
             modifier = Modifier
                 .size(d.inputControl)
                 .clip(CircleShape)
-                .background(if (input.isNotBlank()) c.accent else c.neutralControl)
-                .clickable(enabled = input.isNotBlank()) { onSend() },
+                .background(if (input.text.isNotBlank()) c.accent else c.neutralControl)
+                .clickable(enabled = input.text.isNotBlank()) { onSend() },
             contentAlignment = Alignment.Center,
         ) {
             Image(

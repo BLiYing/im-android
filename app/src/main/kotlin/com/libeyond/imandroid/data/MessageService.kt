@@ -6,6 +6,7 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.sdk.protocol.MentionSpan
 import com.libeyond.imandroid.sdk.protocol.ErrorData
 import com.libeyond.imandroid.sdk.protocol.FrameType
 import com.libeyond.imandroid.sdk.protocol.ConvUpdateData
@@ -40,7 +41,7 @@ import kotlinx.serialization.json.JsonElement
  */
 class MessageService(
     private val scope: CoroutineScope,
-    private val socket: IMSocketManager,
+    internal val socket: IMSocketManager,
     private val repo: MessageRepository,
     val presence: PresenceStore,
     private val conversationsApi: ConversationsApi,
@@ -53,7 +54,7 @@ class MessageService(
     /** 「按锚点开窗」的一问一答（MESSAGE_WINDOW_DESIGN §3.2），实现在 [WindowRequester]。 */
     internal val windows = WindowRequester(socket, scope)
 
-    private val log = IMLog.tag("IM.Msg")
+    internal val log = IMLog.tag("IM.Msg")
 
     /**
      * 分片上传进度（clientMsgId → 百分比），UI 直接 collect。
@@ -171,11 +172,33 @@ class MessageService(
 
     // ————————————————— 发送 —————————————————
 
-    /** 发一条文本。先落库再发帧，杀进程也不会凭空消失。 */
-    suspend fun sendText(convId: String, to: String, text: String, replyToConvSeq: Long? = null) {
+    /**
+     * 发一条文本。先落库再发帧，杀进程也不会凭空消失。
+     *
+     * [mentions] / [mentionAll] / [mentionSpans] 是群 @提及（PROTOCOL §4.1，**仅群聊**；
+     * 单聊带上会被服务端忽略）。三者由输入栏在**发送那一刻**按文本复核算出
+     * （`data/Mention.kt` 的 resolveMentions / resolveMentionAll / resolveSpans），
+     * 不是记着"用户点过谁"就发谁——用户手动删掉 token 就该自动不再 @ 他。
+     */
+    suspend fun sendText(
+        convId: String,
+        to: String,
+        text: String,
+        replyToConvSeq: Long? = null,
+        mentions: List<String> = emptyList(),
+        mentionAll: Boolean = false,
+        mentionSpans: List<MentionSpan> = emptyList(),
+    ) {
         val owner = ownerProvider() ?: return
-        val p = repo.createPending(owner, convId, to, text, ContentType.TEXT, replyToConvSeq)
-        transmit(p.clientMsgId, convId, to, ContentType.TEXT, text, replyToConvSeq)
+        val p = repo.createPending(
+            owner, convId, to, text, ContentType.TEXT, replyToConvSeq,
+            mentionSpans = Mention.encodeSpans(mentionSpans),
+            mentions = Mention.encodeMentions(mentions),
+        )
+        transmit(
+            p.clientMsgId, convId, to, ContentType.TEXT, text, replyToConvSeq,
+            mentions = mentions, mentionAll = mentionAll, mentionSpans = mentionSpans,
+        )
     }
 
     /**
@@ -314,6 +337,11 @@ class MessageService(
             p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
             p.fileName, p.fileSize, p.caption, p.forwardFrom, p.groupId,
             p.mediaW, p.mediaH, p.duration, p.poster, p.thumb,
+            // @提及三件套按落库的片段**重新推导**，不另存 mentions/mentionAll：
+            // 片段里已经含了每个 token 指向谁，空 uid 就是 @所有人——两份状态早晚会不一致
+            mentions = Mention.parseMentions(p.mentions),
+            mentionAll = Mention.mentionAllFromSpans(p.mentionSpans),
+            mentionSpans = Mention.parseSpans(p.mentionSpans),
         )
     }
 
@@ -334,6 +362,9 @@ class MessageService(
         duration: Int? = null,
         poster: String? = null,
         thumb: String? = null,
+        mentions: List<String> = emptyList(),
+        mentionAll: Boolean = false,
+        mentionSpans: List<MentionSpan> = emptyList(),
     ) {
         val payload = ProtocolJson.encodeToJsonElement(
             SendMsgData.serializer(),
@@ -354,6 +385,10 @@ class MessageService(
                 duration = duration,
                 poster = poster,
                 thumb = thumb,
+                // 空表不传 null 之外的东西：服务端按 omitempty 读，传 [] 与不传等价但白占字节
+                mentions = mentions.takeIf { it.isNotEmpty() },
+                mentionAll = true.takeIf { mentionAll },
+                mentionSpans = mentionSpans.takeIf { it.isNotEmpty() },
             ),
         )
         val sent = socket.send(FrameType.SEND_MSG, payload)
@@ -362,75 +397,6 @@ class MessageService(
             // 标失败会让用户看到红❗然后连接一恢复消息又自己发出去了，很怪。
             log.i("msg_send_deferred_offline", "cid" to clientMsgId)
         }
-    }
-
-    /**
-     * 上报「正在输入」。上行只带 conv_id，服务端中继时附 from。
-     * 节流由调用方负责——每次按键都发是错的。
-     */
-    fun sendTyping(convId: String) {
-        socket.send(
-            FrameType.TYPING,
-            ProtocolJson.encodeToJsonElement(TypingData.serializer(), TypingData(convId = convId)),
-        )
-    }
-
-    /**
-     * 上报当前要显示在线态的 uid 全集（**全量替换语义**）。
-     *
-     * 服务端对每次 watch（含集合不变的重发）都回快照，故进入界面与重连后都要发一次，
-     * 别因为集合没变就跳过——那正是「返回聊天页在线态不刷新」的成因。
-     */
-    fun sendWatch(set: Set<String>, force: Boolean = false) {
-        if (!presence.updateWatch(set, force)) return
-        socket.send(
-            FrameType.WATCH,
-            ProtocolJson.encodeToJsonElement(
-                WatchData.serializer(), WatchData(presence.currentWatchSet()),
-            ),
-        )
-    }
-
-    /**
-     * 发一条消息操作（§6.7）。`client_msg_id` 是幂等键，重发命中不重复应用。
-     *
-     * **不做本地乐观更新**：撤回/删除有服务端权限与时间窗判定（超窗回 300008、
-     * 无权 300006），先在本地删掉再被服务端拒绝，就得把消息变回来——
-     * 那比等一下服务端广播回来难看得多。服务端会把 msg_op 广播给**含发起方在内**的
-     * 全体成员设备，本端照常从帧里收敛。
-     */
-    fun sendMsgOp(
-        convId: String,
-        op: String,
-        targetConvSeq: Long,
-        content: String? = null,
-        pinned: Boolean? = null,
-    ) {
-        socket.send(
-            FrameType.MSG_OP,
-            ProtocolJson.encodeToJsonElement(
-                MsgOpData.serializer(),
-                MsgOpData(
-                    op = op,
-                    convId = convId,
-                    targetConvSeq = targetConvSeq,
-                    clientMsgId = java.util.UUID.randomUUID().toString(),
-                    content = content,
-                    pinned = pinned,
-                ),
-            ),
-        )
-        log.i("msg_op_sent", "op" to op, "convId" to convId, "target" to targetConvSeq)
-    }
-
-    fun sendReceipt(convId: String, status: String, upTo: Long) {
-        socket.send(
-            FrameType.RECEIPT,
-            ProtocolJson.encodeToJsonElement(
-                ReceiptData.serializer(),
-                ReceiptData(convId = convId, status = status, upToConvSeq = upTo),
-            ),
-        )
     }
 
     /** 每个会话上一次真正上报过的已读位点，用于抑制重复回执。 */
@@ -555,7 +521,11 @@ class MessageService(
         resendable.forEach {
             transmit(
                 it.clientMsgId, it.convId, it.to, it.contentType, it.content, it.replyToConvSeq,
-                it.fileName, it.fileSize, it.caption,
+                it.fileName, it.fileSize, it.caption, it.forwardFrom, it.groupId,
+                it.mediaW, it.mediaH, it.duration, it.poster, it.thumb,
+                mentions = Mention.parseMentions(it.mentions),
+                mentionAll = Mention.mentionAllFromSpans(it.mentionSpans),
+                mentionSpans = Mention.parseSpans(it.mentionSpans),
             )
         }
     }

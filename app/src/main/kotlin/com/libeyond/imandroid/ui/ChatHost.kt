@@ -1,5 +1,9 @@
 package com.libeyond.imandroid.ui
 
+import com.libeyond.imandroid.ui.screens.MentionPanel
+import com.libeyond.imandroid.sdk.api.GroupMember
+import com.libeyond.imandroid.data.sendTyping
+import com.libeyond.imandroid.data.sendWatch
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +18,7 @@ import com.libeyond.imandroid.ui.screens.ChatRowStyle
 import com.libeyond.imandroid.ui.screens.ChatRowView
 import com.libeyond.imandroid.ui.theme.IMTheme
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.TextFieldValue
 import com.libeyond.imandroid.sdk.logging.IMLog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -92,7 +97,8 @@ fun ChatHost(
     val context = LocalContext.current
 
     val owner = client.uid.orEmpty()
-    var input by remember(conv.convId) { mutableStateOf("") }
+    // 值 + 光标：@提及要靠光标算「正在输入的 @查询词」，裸 String 算不出来
+    var input by remember(conv.convId) { mutableStateOf(TextFieldValue("")) }
 
     // —— 转发（M4-3）——
     // 待转发的消息列表（null = 没在转发）。选完目标会话后逐条发出。
@@ -286,12 +292,26 @@ fun ChatHost(
     // 即便这里判错也不会越权，最坏是多显/少显一个菜单项——所以不必为它阻塞首屏，
     // 拉不到就按 false 走。
     var iAmManager by remember(conv.convId) { mutableStateOf(false) }
+    /** 我在本群的角色。**@所有人 只对群主/管理员出入口**（越权服务端回 300204）。 */
+    var myRole by remember(conv.convId) { mutableStateOf<String?>(null) }
+    /** 本群成员显示名——**只给没有 mention_spans 的老消息兜底**，超级群拿不到就空表。 */
+    var mentionNames by remember(conv.convId) { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(conv.convId) {
         if (conv.isGroup) {
-            runCatching { client.groups.info(conv.convId) }
-                .onSuccess { iAmManager = it.iAmManager }
+            runCatchingCancellable { client.groups.info(conv.convId) }
+                .onSuccess {
+                    iAmManager = it.iAmManager
+                    myRole = it.myRole
+                    // 超级群这里只回我自己（服务端刻意不下发 2 万人的成员表），
+                    // 于是老消息的 @ 在超级群里不高亮——协议里写明的降级，别在这补救
+                    mentionNames = it.members.map(GroupMember::displayName)
+                }
         }
     }
+
+    // 群 @提及态（M4-8）。**声明在 myRole 之后**——面板要用它决定画不画「@所有人」。
+    // 单聊 isGroup=false，面板恒不出现。
+    val mention = rememberMentionComposer(client, conv.convId, conv.isGroup, myRole)
 
     // 老消息补种缩略：原图已在本地（门控判定 Ready）时自己算一张存起来，
     // **下次进这个会话就有磨砂占位了**。挂在「消息列表 + 下载状态」上——
@@ -314,6 +334,7 @@ fun ChatHost(
         uploadProgress = uploadProgress,
         localNameOf = { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
         loadLinkPreview = { url -> client.conversationsApi.linkPreview(url) },
+        mentionNames = mentionNames,
         searchHighlight = search.needle,
     )
 
@@ -330,7 +351,19 @@ fun ChatHost(
         isGroup = conv.isGroup,
         peerReadSeq = if (conv.isGroup) 0 else conv.peerReadSeq,
         input = input,
-        onInputChange = { input = it },
+        onInputChange = {
+            input = it
+            mention.onInputChanged(it, conv.isGroup)
+        },
+        composerAbove = if (!mention.panelOpen) null else {
+            {
+                MentionPanel(
+                    members = mention.members,
+                    canMentionAll = mention.canMentionAll,
+                    onPick = { name, uid -> input = mention.pick(input, name, uid) },
+                )
+            }
+        },
         onTyping = {
             val now = System.currentTimeMillis()
             if (now - lastTypingSent >= TYPING_THROTTLE_MS) {
@@ -339,10 +372,13 @@ fun ChatHost(
             }
         },
         onSend = {
-            val text = input.trim()
+            val text = input.text.trim()
             if (text.isNotEmpty()) {
                 val quoted = replyTo
-                input = ""
+                // 按**文本现状**复核 @ 收件人：点过但又把 token 删掉的人不该收到强提醒
+                val at = mention.resolve(text)
+                input = TextFieldValue("")
+                mention.clear()
                 replyTo = null
                 // **自己发消息必须回到最新**：停在历史时发出去的那条在锚点窗里看不见，
                 // 用户会以为没发出去（im-web 2026-09-05 修过同一条，收口在"出箱回显唯一入口"上）
@@ -353,6 +389,9 @@ fun ChatHost(
                         to = if (conv.isGroup) conv.convId else conv.peerUid,
                         text = text,
                         replyToConvSeq = quoted?.convSeq,
+                        mentions = at.mentions,
+                        mentionAll = at.mentionAll,
+                        mentionSpans = at.spans,
                     )
                 }
             }
@@ -434,6 +473,7 @@ fun ChatHost(
         searchCanNext = search.canNext,
         onSearchPrev = { search.goto(search.hitIdx - 1) },
         onSearchNext = { search.goto(search.hitIdx + 1) },
+        mentionNames = mentionNames,
         searchHighlight = search.needle,
     )
 

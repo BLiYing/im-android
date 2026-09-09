@@ -1,9 +1,9 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.sdk.protocol.MentionSpan
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 
 /**
  * 群 @提及的纯逻辑（M4-8，仅群聊）——输入框 token 的识别/回填/还原 + 收端按片段切段。
@@ -250,20 +250,29 @@ object Mention {
     fun encodeSpans(spans: List<MentionSpan>): String? =
         if (spans.isEmpty()) null
         else ProtocolJson.encodeToString(ListSerializer(MentionSpan.serializer()), spans)
+
+    /** 被 @ 的 uid 列表落库（待发行用，重发时原样重发）。 */
+    fun encodeMentions(uids: List<String>): String? =
+        if (uids.isEmpty()) null
+        else ProtocolJson.encodeToString(ListSerializer(String.serializer()), uids)
+
+    /** 解析落库的 uid 列表；坏数据 → 空表。 */
+    fun parseMentions(json: String?): List<String> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            ProtocolJson.decodeFromString(ListSerializer(String.serializer()), json)
+        }.getOrElse { emptyList() }
+    }
+
+    /**
+     * 从落库的片段判断这条是不是 `@所有人`：**有一段 uid 为空即是**。
+     *
+     * 这一项可以反推（片段与 `mention_all` 是同一件事的两种记法），
+     * 而被 @ 的 uid 列表**不行**——重名成员只占一段片段，见 [PendingMessageEntity] 的注释。
+     */
+    fun mentionAllFromSpans(json: String?): Boolean = parseSpans(json).any { it.uid.isEmpty() }
 }
 
-/**
- * 一段 `@` 提及：从哪开始、多长、指向谁。
- *
- * `uid` 为空串 = `@所有人`（**只高亮不可点**）。`offset`/`length` 的单位是 **UTF-16 码元**，
- * 且片段**覆盖整个 token（含前导 `@`）**，即 `text[offset]` 必然是 `@`。
- */
-@Serializable
-data class MentionSpan(
-    val offset: Int = 0,
-    val length: Int = 0,
-    @SerialName("user_id") val uid: String = "",
-)
 
 /** 切段结果：`mention=true` 的段要高亮；`uid` 非空才可点（`@所有人` 为 null）。 */
 data class MentionSegment(val text: String, val mention: Boolean, val uid: String? = null)

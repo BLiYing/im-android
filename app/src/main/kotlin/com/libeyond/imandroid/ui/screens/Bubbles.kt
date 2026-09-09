@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.data.ChatSearch
+import com.libeyond.imandroid.data.Mention
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -247,6 +248,19 @@ internal fun Bubble(
     avatarSeed: String = "",
     /** 群聊——自动下载策略的单聊/群聊分档要用。 */
     isGroup: Boolean = false,
+    /**
+     * 本群成员显示名，**只给没有 `mention_spans` 的老消息兜底**（按昵称扫文本）。
+     * 超级群拿不到成员表就传空表：那时老消息里的 @ 不高亮，与协议里写的降级一致。
+     */
+    mentionNames: List<String> = emptyList(),
+    /**
+     * @提及片段的 JSON。默认取 [msg] 上的；**待发气泡要显式传**——那时还没有
+     * [MessageEntity]，只有待发行，不传的话自己刚发出去的 @ 在 ack 落地前不高亮
+     * （普通群里昵称老路会兜住，超级群没有成员表就真的不高亮了）。
+     */
+    mentionSpansJson: String? = null,
+    /** 点气泡里的 `@某人` → 进他的资料页。null = 不可点（`@所有人` 无论如何都不可点）。 */
+    onTapMention: ((String) -> Unit)? = null,
     /** 取链接预览。传 null = 不出预览卡（长按菜单里的原位重绘就传 null，别重复请求）。 */
     loadLinkPreview: (suspend (String) -> com.libeyond.imandroid.sdk.api.LinkPreview?)? = null,
     /** 会话内搜索的命中词（已 trim）。空串 = 不高亮。 */
@@ -395,7 +409,18 @@ internal fun Bubble(
                         msg?.contentType == ContentType.CONTACT -> ContactCardContent(text)
                         msg?.contentType == ContentType.CHAT_RECORD -> ChatRecordCardContent(text)
                         else -> Text(
-                            text = highlightedText(text, searchHighlight, c.accentSoft),
+                            // @提及高亮与搜索命中底色是同一次遍历铺的两层（见 chatBodyText）
+                            text = chatBodyText(
+                                text = text,
+                                spans = remember(mentionSpansJson, msg?.mentionSpans) {
+                                    Mention.parseSpans(mentionSpansJson ?: msg?.mentionSpans)
+                                },
+                                memberNames = mentionNames,
+                                searchNeedle = searchHighlight,
+                                highlightBackground = c.accentSoft,
+                                mentionColor = c.link,
+                                onTapMention = onTapMention,
+                            ),
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
                         )
@@ -406,8 +431,19 @@ internal fun Bubble(
                     if (flushMedia && !cap.isNullOrBlank()) {
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            // 图说也参与命中（与后端 G4、im-web 的判据一致），所以也要高亮
-                            text = highlightedText(cap, searchHighlight, c.accentSoft),
+                            // 图说也参与命中（与后端 G4、im-web 的判据一致），所以也要高亮；
+                            // @ 片段的参照系在非 text 消息上**就是 caption**（PROTOCOL §4.1）
+                            text = chatBodyText(
+                                text = cap,
+                                spans = remember(mentionSpansJson, msg?.mentionSpans) {
+                                    Mention.parseSpans(mentionSpansJson ?: msg?.mentionSpans)
+                                },
+                                memberNames = mentionNames,
+                                searchNeedle = searchHighlight,
+                                highlightBackground = c.accentSoft,
+                                mentionColor = c.link,
+                                onTapMention = onTapMention,
+                            ),
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
                             modifier = innerPad.fillMaxWidth(),
