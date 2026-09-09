@@ -70,6 +70,16 @@ data class IMColors(
     val shadowStrong: Color,
     val subtleFill: Color,
     val neutralControl: Color,
+    /**
+     * 左滑动作格的**中性底**（「拉黑」）。
+     *
+     * 刻意**不复用** [neutralControl]：那是禁用态按钮的半透明填充（浅色 α≈18%），
+     * 当动作格底色用时白字压上去对比度只有 1.2:1，浅色模式下基本看不见
+     * （2026-09-09 `/code-review` 抓出）。对齐 iOS 的 `UIColor.systemGrayColor` —— **不透明**。
+     */
+    val swipeNeutral: Color,
+    /** 左滑动作格的**正向底**（「解除拉黑」）。对齐 iOS 的 `UIColor.systemGreenColor`。 */
+    val swipePositive: Color,
     val avatarRing: Color,
 
     /** 是否深色取值——只用于必须分叉的少数场合（如选图标资源），别拿它到处写 if。 */
@@ -120,6 +130,8 @@ val LightIMColors = IMColors(
     shadowStrong = Color(0x47000000),
     subtleFill = Color(0x0D1D2129),
     neutralControl = Color(0x2E7F7F7F),
+    swipeNeutral = Color(0xFF8E8E93),
+    swipePositive = Color(0xFF34C759),
     avatarRing = Color(0x381D2129),
 
     isDark = false,
@@ -169,6 +181,8 @@ val DarkIMColors = IMColors(
     shadowStrong = Color(0x47000000),
     subtleFill = Color(0x12FFFFFF),
     neutralControl = Color(0x4D7F7F7F),
+    swipeNeutral = Color(0xFF8E8E93),
+    swipePositive = Color(0xFF30D158),
     avatarRing = Color(0x52FFFFFF),
 
     isDark = true,

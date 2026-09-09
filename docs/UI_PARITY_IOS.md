@@ -317,10 +317,85 @@ iOS：`Modules/Contacts/IMContactsViewController.m` 的 `entries` + `entryColors
 | 入口图标底色 | 逐条不同（靠颜色区分） | 同（**不跟主题主色走**，全刷 accent 就退回"四个一样的绿圈"） | ✅ |
 | 建群入口 | 在群列表页右上角 `+` | 同 | ✅ |
 | 点好友行 | 进**资料页**（`openPeerDetail:`） | 已改（此前直接进聊天，违反三端统一的微信式口径） | ✅ |
-| 好友按拼音 A–Z 分组 + 右侧索引尺 | 有（`IMContactSectionIndex`，含多音姓氏表） | **没有**（平铺一段「好友」） | 🔴 欠账 |
-| 好友行左滑：删除 / 拉黑 | 有 | 没有 | 🔴 欠账 |
+| 好友按拼音 A–Z 分组 + 右侧索引尺 | 有（`IMContactSectionIndex`，含多音姓氏表） | 已补（2026-09-09，见 §4.5.1；真机核对过分组/跳组/2000 人滑动） | 🟡 部分（首字母来源不同） |
+| 好友行左滑：删除 / 拉黑 | 有 | 已补（2026-09-09，见 §4.5.1；真机核对过左滑/拉黑/解除/删除确认） | ✅ |
 | 群列表副标题 | 「我是群主」/「群主 X」 | 同（**不是人数**——`GET /groups` 的 `Summary` 根本不下发 `member_count`） | ✅ |
 | 公众号 / 服务号 | 占位吐司 | 同 | ✅ |
+
+### 4.5.1 好友分组 / 索引尺 / 左滑（2026-09-09）
+
+iOS：`Modules/Contacts/IMContactSectionIndex.{h,m}`（纯数据类，通讯录与选好友页共用分桶层）
++ `IMContactsViewController` 的 `sectionIndexTitlesForTableView:` 与
+`trailingSwipeActionsConfigurationForRowAtIndexPath:`。**动手前抄下来的结构清单**：
+
+| 判据 | iOS | Android | 判定 |
+|---|---|---|---|
+| 分组键 = 显示名（备注优先）首字的拼音首字母 | 有 | 同 | ✅ |
+| **多音姓氏覆盖表**（曾Z 仇Q 单S 解X 查Z 区O 乐Y 翟Z 覃Q 秘B） | 10 条，命中即覆盖拼音结果 | **逐条照抄这 10 条** | ✅ |
+| 归 `#` 的三种情况：名字空 / 转拼音为空 / 首字母不在 A–Z | 有（数字、emoji、俄日文都进 `#`） | 同 | ✅ |
+| 组间排序：A–Z 升序，`#` **恒排最后** | 有 | 同 | ✅ |
+| 组内排序：全串拼音升序，**保留音节间空格**（空格 ASCII 低 → 姓在前：li < lin < liu）；拼音相同再按显示名不区分大小写 | 有 | 同 | ✅ |
+| **空组不显示**（只建出现过的桶，不预置 26 个字母） | 有 | 同 | ✅ |
+| 无好友时索引尺整条隐藏 | `titles` 空则 `sectionIndexTitles` 回 nil | 同 | ✅ |
+| 顶部四个入口**不参与**索引尺 | 靠 `+1` 偏移绕过 | 索引尺只映射字母组 | ✅ |
+| 索引尺控件 | 系统 `sectionIndexTitles`（无触感反馈） | **自绘**（Compose 没有对应控件）：右侧字母条，按下/拖动即跳组 | 🟢 手段不同 |
+| 左滑动作与顺序：`[删除, 拉黑/解除拉黑]` | trailing only；删除 destructive 红；拉黑随 `blocked` 切标题与颜色（解除拉黑=绿 / 拉黑=灰） | 同 | ✅ |
+| 顶部入口区不可左滑 | `isFriendSection:` 总闸 | 入口不在可滑的行里 | ✅ |
+| 拉黑不解绑，被拉黑好友仍在列表、副标题带「已拉黑」 | 有 | 同 | ✅ |
+| **删除好友的二次确认** | **没有**（左滑「删除」直接发请求） | **有** | 🟢 本端更好 |
+
+**首字母为什么不是同一套实现**：iOS 用系统的 `CFStringTransform(kCFStringTransformMandarinLatin)`。
+Android 上没有等价物——`android.icu.text.Transliterator` 要 API 29 而本仓 `minSdk 26`，
+而且它在单测的桌面 JVM 上根本不存在，写了等于**判据没法测**。本端改用
+`java.text.Collator(Locale.CHINA)` 与 26 个边界字比较取首字母：JVM 与 Android 上它都走
+拼音序排序，得到的是同一条不变式（**按拼音首字母分组**），不是同一段实现。
+**因此单测钉的是规则**（覆盖表、`#` 的三种情况、组间/组内排序、空组不显示），
+"某个汉字属于哪个字母"这一步靠真机核对——`SYMMETRY.md` 那条：要一致的是不变式，不是代码形状。
+
+**真机上抓到的三条**（2026-09-09，模拟器 `im_test` / user1001 / 2014 个好友，桌面单测一条都测不出来）：
+
+1. **组头的 LazyColumn key 被写成了字面量**——`item(key = "h-${'$'}{g.key}")` 里 `$` 被转义，
+   所有组头共用同一个 key，画到**第二组当场崩**（`Key ... was already used`）。
+   单测测不到：它是 LazyColumn 测量期才抛的。现在写成 `"h-" + g.key`。
+2. **「阿强」既不在 A 组也不在任何组，直接掉进 `#`**。桌面 JVM 上「阿」≥ 边界字「啊」，
+   Android 的 ICU 上却**相反**，比到头一个边界都没命中。判据补成「排在第一个边界字之前的汉字仍归 A」
+   （拼音序里 a 是最小的声母；collator 不认识的生僻字实测排在**最后**，不会被误收进 A）。
+   这一档在桌面 JVM 上**走不到**（扫遍 U+4E00–U+9FFF 没有汉字排在「啊」之前），
+   所以比较被抽成参数注入（`ContactSection.initialByBoundaries`），否则断言永远绿。
+3. **分组在 2000 人量级上会卡到 ANR**。原来把 `Collator` 的排序键写在 comparator 里，
+   于是**每次比较都重建一个 CollationKey**：2014 人 ≈ 4 万多次。
+   改成先算完键再排（decorate-sort-undecorate）+ 首字母按**首字**缓存，
+   桌面 JVM 实测 98ms → 14ms、取首字母 38ms → 0.9ms。
+
+**`/code-review` 又打回一轮，修了 8 条**（这一轮它仍是最大的发现渠道）：
+
+| # | 问题 | 修法 |
+|---|---|---|
+| 1 | 好友行的**分割线跑到了行首**：`FriendRow` 顶层发的是 `Row` + `Box(分割线)` 两个兄弟，原先是 LazyColumn item 的直接子节点（沿主轴依次摆），包进 `SwipeActionRow` 的 `Box` 后**互相重叠** | 内容容器 `Box` → `Column` |
+| 2 | **「拉黑」那格白字看不见**：借用了 `neutralControl`（禁用态填充，浅色 α≈18%），白字压上去对比度约 1.2:1；iOS 那侧是**不透明**的 `systemGray` | 新增语义令牌 `swipeNeutral` / `swipePositive`（对齐 systemGray / systemGreen） |
+| 3 | 滑开的行**仍可点**，点了进资料页而不是收起；且**多行可同时敞开** | 「当前敞着哪一行」上提到 `ContactsScreen`，`SwipeActionRow` 改成受控。②**由调用方在 onClick 里判**——内容自带的 `clickable` 是子节点，Main 传递自下而上，父层拦不住；改 Initial 能拦但会把拖动一并吃掉（真机验过拦指针那版**照样进了资料页**） |
+| 4 | `Collator` 单例非线程安全，而 `sectionCache` 用 `ConcurrentHashMap`，护栏与实际约束互相矛盾 | KDoc 写明「只在单线程调用」+ 说明 CHM 只是图 `getOrPut` 省锁 |
+| 5 | 三处新增的裸 `runCatching` 会吞 `CancellationException` | 换 `runCatchingCancellable`（本仓已备好） |
+| 6 | `reload()` 是空 `catch`（注释说"只记日志"，一行日志都没有），而它是拉黑/解除/删除后刷新 UI 的**唯一路径**——弱网下动作成功、reload 静默失败，用户看到吐司却看不到变化 | 补 `IMLog.w("contacts_reload_failed")` |
+| 7 | 索引尺的 `+1` 偏移是判据里唯一没被单测钉住的一条，也是最会漂的（以后在字母组前多插一个 item 就整体错位，且编译绿、单测绿，只有真机点 B 跳到 A 的最后一行） | 抽成纯函数 `ContactSection.groupStartIndices` + 单测（含 `leadingItems=2` 的反例） |
+| 8 | 重音拉丁（`Émile`）掉进 `#`——iOS 的 `pinyinForName:` 起手就 `kCFStringTransformStripDiacritics`；`isHan` 也只认基本区 | 先剥重音再判拉丁；`isHan` 补上扩展 A 与兼容汉字 |
+
+**顺带删掉一段死代码**：组内排序原本还有一档 `.thenBy(CASE_INSENSITIVE_ORDER)`（照抄 iOS）。
+变异验证发现删掉它**没有任何测试变红**——查证后确认它**永远走不到**：iOS 那侧的排序键是一串
+小写拼音，"bob"/"Bob" 会撞成同一个键；本端的 `CollationKey` 是 TERTIARY 强度，本来就区分大小写
+（实测 `key(bob) != key(Bob)`），而真撞上时 `CASE_INSENSITIVE_ORDER` 恰好也回 0。
+**这正是「照抄代码形状而不是不变式」的样子**——删了，测试改成钉实际次序（变异验证过会红）。
+
+**已知差异 / 欠账**（不是 bug，但别当成 ✅）：
+- **CJK 扩展 B 及以后**（代理对）仍归 `#`：`sectionKeyOf` 取的 `firstOrNull()` 只是高代理项。
+- **选好友页没跟**：iOS 的 `IMContactSectionIndex.h` 明写「通讯录页与选好友页共用」，
+  本端 `CreateGroupScreen` 仍是平铺。新抽的 `ContactSection` 是数据层，复用零成本，欠的是接。
+- **分组仍在组合期主线程算**：优化后桌面 JVM 14ms、真机 2013 人滑动实测不掉帧，
+  故没有挪去后台线程（挪了要先解掉上面那条 `Collator` 线程安全，且首帧会闪一下空列表）。
+
+**删除好友为什么加二次确认**：删好友不可撤销，而左滑 + 点一下只有两个手势。
+iOS 那侧是唯一没有确认的——im-web 的删除好友（资料卡「更多」）是有二次确认的，
+本端的资料页删好友也一直有。三处里两处有确认，缺的那一处更像是 iOS 的疏漏而不是刻意。
 
 ---
 

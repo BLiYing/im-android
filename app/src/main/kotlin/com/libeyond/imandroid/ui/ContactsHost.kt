@@ -15,6 +15,9 @@ import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.ApiException
+import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.data.FriendAction
+import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.screens.ContactsScreen
 import com.libeyond.imandroid.ui.screens.CreateGroupScreen
@@ -54,6 +57,14 @@ fun ContactsHost(client: IMClient, onOpenChat: (ConversationEntity) -> Unit) {
     // 点好友先进**资料页**，不直接进聊天（三端统一的微信式口径）
     var profileOf by remember { mutableStateOf<FriendEntry?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
+    /**
+     * 左滑「删除」待确认的那位好友（null = 没有）。
+     *
+     * **iOS 那侧左滑删除没有二次确认**——本端刻意加上：删好友不可撤销，而左滑 + 点一下只有两个手势。
+     * im-web 的删除好友与本端资料页的删除好友都有确认，三处里两处有，缺的那处更像疏漏
+     * （`docs/UI_PARITY_IOS.md` §4.5.1）。
+     */
+    var confirmRemove by remember { mutableStateOf<FriendEntry?>(null) }
     LaunchedEffect(Unit) {
         runCatching { maxMembers = client.conversationsApi.serverConfig().maxGroupMembers }
     }
@@ -62,7 +73,12 @@ fun ContactsHost(client: IMClient, onOpenChat: (ConversationEntity) -> Unit) {
         try {
             friends = client.contacts.friends()
         } catch (e: ApiException) {
-            // 拉不到好友列表不该白屏——保留上一次的列表，只记日志
+            // 拉不到好友列表不该白屏——保留上一次的列表。**但必须留痕**：
+            // 这里原本是个空 catch（注释说"只记日志"，一行日志都没有），而 `reload()` 是
+            // 拉黑/解除/删除之后刷新 UI 的唯一路径——弱网下动作成功、reload 静默失败，
+            // 用户看到的是「已拉黑」的吐司 + 一行没变的列表，会以为没生效再点一次
+            // （2026-09-09 `/code-review` 抓出）
+            IMLog.tag("IM.Contacts").w("contacts_reload_failed", "code" to e.code)
         }
     }
 
@@ -82,13 +98,29 @@ fun ContactsHost(client: IMClient, onOpenChat: (ConversationEntity) -> Unit) {
         BackHandler { page = ContactsPage.List }
     }
 
-    toast?.let { t -> IMToast(t) { toast = null } }
-
     when (page) {
         ContactsPage.List -> ContactsScreen(
             friends = accepted,
             pendingCount = pending.size,
             onOpenNewFriends = { page = ContactsPage.NewFriends },
+            onFriendAction = { f, a ->
+                when (a) {
+                    // 破坏性 + 不可撤销 → 先确认
+                    FriendAction.Delete -> confirmRemove = f
+                    FriendAction.Block -> scope.launch {
+                        runCatchingCancellable { client.contacts.block(f.userId) }
+                            .onSuccess { toast = "已拉黑" }
+                            .onFailure { toast = it.userMessage("拉黑失败") }
+                        reload()
+                    }
+                    FriendAction.Unblock -> scope.launch {
+                        runCatchingCancellable { client.contacts.unblock(f.userId) }
+                            .onSuccess { toast = "已解除拉黑" }
+                            .onFailure { toast = it.userMessage("操作失败") }
+                        reload()
+                    }
+                }
+            },
             onOpenSearch = { page = ContactsPage.Search; searched = false; results = emptyList() },
             onOpenGroups = {
                 page = ContactsPage.Groups
@@ -212,4 +244,29 @@ fun ContactsHost(client: IMClient, onOpenChat: (ConversationEntity) -> Unit) {
             onBack = { page = ContactsPage.List },
         )
     }
+
+    // 删除好友的二次确认（理由见 confirmRemove 的注释）
+    confirmRemove?.let { f ->
+        IMConfirmDialog(
+            title = "删除好友",
+            message = "删除后你与「${f.displayName}」将不再是好友，聊天记录保留。此操作不可撤销。",
+            confirmText = "删除",
+            destructive = true,
+            onDismiss = { confirmRemove = null },
+            onConfirm = {
+                confirmRemove = null
+                scope.launch {
+                    runCatchingCancellable { client.contacts.remove(f.userId) }
+                        .onSuccess { toast = "已删除好友" }
+                        .onFailure { toast = it.userMessage("删除失败") }
+                    reload()
+                }
+            },
+        )
+    }
+
+    // toast 放最后：它是一层 fillMaxSize 的浮层，**画在页面之前会被页面整个盖住**。
+    // 本文件原先就画在 `when (page)` 之前——也就是说这一页的吐司一直是看不见的（既有 bug，
+    // 2026-09-09 顺手修）。同一条纪律在 ChatHost / ChatDetailHost / GroupInfoHost 里都写着。
+    toast?.let { t -> IMToast(t) { toast = null } }
 }

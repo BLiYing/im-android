@@ -15,6 +15,16 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import com.libeyond.imandroid.data.ContactSection
+import com.libeyond.imandroid.data.FriendAction
+import com.libeyond.imandroid.data.FriendActions
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +71,8 @@ fun ContactsScreen(
     /** 尚未实现的入口（公众号/服务号）——由 Host 弹「开发中」。 */
     onComingSoon: (String) -> Unit,
     onOpenFriend: (FriendEntry) -> Unit,
+    /** 左滑动作（删除 / 拉黑 / 解除拉黑）。由 Host 执行并负责二次确认。 */
+    onFriendAction: (FriendEntry, FriendAction) -> Unit = { _, _ -> },
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -84,24 +96,76 @@ fun ContactsScreen(
             )
         }
 
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            item {
-                EntryRow(Lucide.Users, ENTRY_GROUPS, "群聊", 0, onOpenGroups)
-                EntryRow(Lucide.UserPlus, ENTRY_NEW_FRIENDS, "新的朋友", pendingCount, onOpenNewFriends)
-                EntryRow(Lucide.Megaphone, ENTRY_OFFICIAL, "公众号", 0) { onComingSoon("公众号") }
-                EntryRow(Lucide.Headphones, ENTRY_SERVICE, "服务号", 0) { onComingSoon("服务号") }
-                SectionLabel("好友")
-            }
-            if (friends.isEmpty()) {
+        // 按拼音首字母分组（判据在 ContactSection，与 iOS IMContactSectionIndex 同一套规则）
+        val groups = remember(friends) { ContactSection.group(friends) { it.displayName } }
+        val titles = remember(groups) { ContactSection.titlesOf(groups) }
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+
+        // 每个字母组的**首项在列表中的下标**（索引尺跳组要用）。判据抽在 ContactSection 里有单测：
+        // 顶部入口占 1 项，所以字母组从 1 开始——iOS 那侧同样是 `+1` 偏移绕过入口区。
+        val groupStarts = remember(groups) {
+            ContactSection.groupStartIndices(groups.map { it.items.size }, leadingItems = ENTRY_ITEMS)
+        }
+        // 当前敞着的那一行（null = 没有）。**上提到这里**是因为 iOS 的两条行为都要全局视角：
+        // 滑开第二行时第一行自动收起、敞着的行点内容只收起不进详情。
+        var openedId by remember { mutableStateOf<String?>(null) }
+
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                // 四个入口**共占一个 LazyColumn item**——ENTRY_ITEMS 记的就是这个 1，
+                // 索引尺的偏移全靠它。以后在字母组之前再插 item，这里和 groupStartIndices 一起改
                 item {
-                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        Text("还没有好友，点右上角搜索添加", color = c.textTertiary,
-                            style = MaterialTheme.typography.bodyMedium)
+                    EntryRow(Lucide.Users, ENTRY_GROUPS, "群聊", 0, onOpenGroups)
+                    EntryRow(Lucide.UserPlus, ENTRY_NEW_FRIENDS, "新的朋友", pendingCount, onOpenNewFriends)
+                    EntryRow(Lucide.Megaphone, ENTRY_OFFICIAL, "公众号", 0) { onComingSoon("公众号") }
+                    EntryRow(Lucide.Headphones, ENTRY_SERVICE, "服务号", 0) { onComingSoon("服务号") }
+                }
+                if (friends.isEmpty()) {
+                    item {
+                        SectionLabel("好友")
+                        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                            Text("还没有好友，点右上角搜索添加", color = c.textTertiary,
+                                style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
                 }
-            } else {
-                items(friends, key = { it.userId }) { f -> FriendRow(f, onClick = { onOpenFriend(f) }) }
+                groups.forEach { g ->
+                    // 组头 key 用**拼接**：模板串里的 $ 一旦被转义写成字面量，所有组头就共用同一个 key，
+                    // 第二个组头当场崩（2026-09-09 真机实测：`Key ... was already used`）。
+                    // 单测测不到——它是 LazyColumn 测量期才抛的，只有真机跑到第二组才炸
+                    item(key = "h-" + g.key) { SectionLabel(g.key) }
+                    items(g.items, key = { it.userId }) { f ->
+                        SwipeActionRow(
+                            actions = FriendActions.availableFor(f.blocked).map { a ->
+                                SwipeAction(
+                                    label = a.label,
+                                    // 颜色逐条对齐 iOS `block.backgroundColor = blocked ? systemGreen : systemGray`，
+                                    // 删除走 destructive 红。**三个都得是不透明色**——半透明的中性填充
+                                    // 压白字只有 1.2:1 对比度，浅色模式下整格看不见
+                                    background = when (a) {
+                                        FriendAction.Delete -> c.danger
+                                        FriendAction.Unblock -> c.swipePositive
+                                        FriendAction.Block -> c.swipeNeutral
+                                    },
+                                    onClick = { onFriendAction(f, a) },
+                                )
+                            },
+                            opened = openedId == f.userId,
+                            onOpenedChange = { open -> openedId = if (open) f.userId else null },
+                            // 敞着的行点内容只**收起**，不进资料页（同 iOS 的 UITableView）
+                        ) { FriendRow(f, onClick = { if (openedId == f.userId) openedId = null else onOpenFriend(f) }) }
+                    }
+                }
             }
+            // 索引尺：没有好友时 titles 为空，组件自己整条不画（同 iOS 回 nil）
+            ContactIndexBar(
+                titles = titles,
+                onPick = { i ->
+                    groupStarts.getOrNull(i)?.let { scope.launch { listState.scrollToItem(it) } }
+                },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
         }
     }
 }
@@ -120,6 +184,9 @@ private fun SectionLabel(text: String) {
 
 // 入口图标底色，逐条对齐 iOS `entryColors`（systemGreen / systemTeal / systemOrange / systemBlue）。
 // **不跟主题主色走**：这四条是靠颜色区分的，全刷成 accent 就退回"四个一样的绿圆圈"。
+/** 四个顶部入口**共占一个** LazyColumn item。索引尺的组下标偏移量就是它。 */
+private const val ENTRY_ITEMS = 1
+
 private val ENTRY_GROUPS = Color(0xFF34C759)
 private val ENTRY_NEW_FRIENDS = Color(0xFF30B0C7)
 private val ENTRY_OFFICIAL = Color(0xFFFF9500)
