@@ -63,6 +63,8 @@ fun IMTopBar(
     subtitleAccent: Boolean = false,
     leftIcon: ImageVector? = null,
     leftDescription: String = "返回",
+    /** 左侧改用**文字**而不是图标（多选态的「取消」）。空 = 仍画 [leftIcon] 或默认返回箭头。 */
+    leftLabel: String = "",
     onLeft: (() -> Unit)? = null,
     actionText: String = "",
     actionEnabled: Boolean = true,
@@ -83,7 +85,14 @@ fun IMTopBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(d.topBarSide), contentAlignment = Alignment.CenterStart) {
-            if (onLeft != null) {
+            if (onLeft != null && leftLabel.isNotEmpty()) {
+                Text(
+                    text = leftLabel,
+                    color = c.accent,
+                    fontSize = 16.sp,
+                    modifier = Modifier.clickable(onClick = onLeft),
+                )
+            } else if (onLeft != null) {
                 Image(
                     imageVector = leftIcon ?: Lucide.ArrowLeft,
                     contentDescription = leftDescription,

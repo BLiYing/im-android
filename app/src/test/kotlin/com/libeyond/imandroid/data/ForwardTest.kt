@@ -81,12 +81,11 @@ class ForwardTest {
     // ——— 上限 ———
 
     @Test
-    fun `消息多选上限 100，超了返回 null 让调用方吐司`() {
-        val full = (1L..100L).toSet()
+    fun `消息多选上限 100 与 ChatSelection 同源`() {
+        // 勾选的写入口搬到了 ChatSelection.toggle（按 conv_seq 记且连消息一起存，
+        // 理由见那里）；这里只钉住"两处不许各写一个 100"
         assertEquals(100, Forward.MAX_SELECTION)
-        assertNull("满了再加要拒", Forward.toggleCapped(full, 101L))
-        // **取消永远允许**：满了连取消都拒的话，用户被卡死在"选满了又改不了"
-        assertEquals(99, Forward.toggleCapped(full, 50L)?.size)
+        assertEquals(Forward.MAX_SELECTION, ChatSelection.MAX)
     }
 
     @Test

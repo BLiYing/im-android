@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.data.ChatSelection
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -171,6 +172,15 @@ fun ChatScreen(
     searchHighlight: String = "",
     /** 本群成员显示名——只给没有 mention_spans 的老消息兜底（见 [ChatRowStyle.mentionNames]）。 */
     mentionNames: List<String> = emptyList(),
+    /**
+     * 多选态：`conv_seq → 消息`；**null = 不在多选态**。
+     * 判据与写入口在 `data/ChatSelection.kt`（按 conv_seq 记且连消息一起存，理由见那里）。
+     */
+    selection: Map<Long, MessageEntity>? = null,
+    onToggleSelect: (MessageEntity) -> Unit = {},
+    onCancelSelection: () -> Unit = {},
+    onForwardSelected: () -> Unit = {},
+    onDeleteSelected: () -> Unit = {},
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -265,6 +275,14 @@ fun ChatScreen(
                 onQueryChange = onSearchQueryChange,
                 onCancel = onCloseSearch,
             )
+        } else if (selection != null) {
+            // 多选态的标题栏：左「取消」+ 中「已选择 N 条」。**不画头像/详情入口**——
+            // 多选期间点进详情页会把勾选态丢掉，那是纯粹的误触来源（同 iOS 换掉整条导航栏）
+            IMTopBar(
+                title = ChatSelection.titleOf(selection.size),
+                onLeft = onCancelSelection,
+                leftLabel = "取消",
+            )
         } else {
             IMTopBar(
                 title = title,
@@ -342,11 +360,32 @@ fun ChatScreen(
                     is ChatRow.Album -> r0.sent.any { it.convSeq == highlightSeq }
                     else -> false
                 }
-                Box(
+                // 多选态：可勾的行左侧画圈、整行改成"点一下勾选"。
+                // 不可勾的行（系统提示/撤回墓碑/未确认本地件）**不画圈也不响应**，
+                // 与 iOS `canEditRowAtIndexPath` 对 NO 的行不画圈同口径。
+                val selMsg = (r0 as? ChatRow.Confirmed)?.msg?.takeIf { ChatSelection.selectable(it) }
+                val selecting = selection != null
+                Row(
                     Modifier
                         .alpha(if (hidden) 0f else 1f)
-                        .background(if (highlighted) c.accentSoft else androidx.compose.ui.graphics.Color.Transparent),
+                        .background(if (highlighted) c.accentSoft else androidx.compose.ui.graphics.Color.Transparent)
+                        .then(
+                            if (selecting && selMsg != null) {
+                                Modifier.clickable { onToggleSelect(selMsg) }
+                            } else {
+                                Modifier
+                            },
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                if (selecting) {
+                    if (selMsg != null) {
+                        SelectionCheck(selected = selection.containsKey(selMsg.convSeq))
+                    } else {
+                        Spacer(Modifier.width(22.dp)) // 占位，让可勾与不可勾的行左缘对齐
+                    }
+                    SelectionGutterSpacer()
+                }
                 ChatRowView(
                     rows = rows,
                     i = i,
@@ -437,6 +476,16 @@ fun ChatScreen(
                 Spacer(Modifier.width(8.dp))
                 Text("✕", color = c.textTertiary, modifier = Modifier.clickable { onCancelReply() })
             }
+        }
+
+        // 多选态：底部换成动作栏，输入栏整个不画（同 iOS：多选期间隐藏输入栏显示工具栏）
+        if (selection != null) {
+            SelectionBar(
+                count = selection.size,
+                onForward = onForwardSelected,
+                onDelete = onDeleteSelected,
+            )
+            return@Column
         }
 
         // ➕ 面板与键盘**互斥**（微信/iOS 同款）：展开面板要收键盘，

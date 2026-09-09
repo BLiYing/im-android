@@ -452,6 +452,47 @@ UTF-16 码元，且未被服务端的安全校验丢弃）→ 气泡里 `@用户
 超级群里老消息不高亮那条降级——库里 `conv_seq 57` 那条 `@用户4807 上的方式分` 正好是
 **有 `mentions` 无 `mention_spans`** 的老数据，可以拿它验回落那条路。
 
+### 4.7 消息多选（M4-3 的另一半，2026-09-09）
+
+iOS：`Modules/Chat/IMChatSelectionState.{h,m}` + `IMChatViewController+Selection.m`。
+Web：`src/messageContent.ts`（`selectableInMultiSelect` / `SELECT_MAX` / 批量举报谓词）+ `src/selection.ts`。
+
+| 判据 | iOS | Android | 判定 |
+|---|---|---|---|
+| **勾选态按 `conv_seq` 记，不按行号/表格状态** | `selectedModels`（key=conv_seq） | 同（`Map<Long, MessageEntity>`） | ✅ |
+| **连消息实体一起存**（勾过的会被窗口裁出内存） | 存 model 不只存 seq | 同 | ✅ |
+| 可勾判据：`convSeq>0 && 未撤回 && 非系统消息` | `isSelectableMessage:` | 同（`ChatSelection.selectable`） | ✅ |
+| 一次上限 100，**一道闸管住转发/收藏/举报** | `kIMSelectionMaxCount` | 同（`Forward.MAX_SELECTION`，两处同源有单测钉住） | ✅ |
+| 超限**吐司说明**，不静默吞掉点击 | `allowSelectingMore:` | 同（`toggle` 回 null → 调用方吐司） | ✅ |
+| 取消勾选**永远允许**（选满了也能改） | 有 | 同 | ✅ |
+| 导出按 `conv_seq` **升序**（会话时序） | `IMChatSelectedMessages()` 纯函数 | 同（`ChatSelection.ordered`） | ✅ |
+| 进多选**默认勾上触发的那条** | `enterSelectionWithMessage:` | 同 | ✅ |
+| 标题「已选择 N 条」/「选择消息」 | 有 | 同（`ChatSelection.titleOf`） | ✅ |
+| 0 选中时动作钮**置灰禁用**（不弹「请先选择」） | 有 | 同 | ✅ |
+| 多选期间**隐藏输入栏**、底部换动作栏 | 有 | 同（`Composer` 整个不画） | ✅ |
+| 不可勾的行**不画勾选圈** | `canEditRowAtIndexPath` 回 NO | 同（画等宽占位保持左缘对齐） | ✅ |
+| 转发前滤掉转不出去的，**少发几条要如实说** | 先数一次再发 | 同（`forwardPick` 回提示） | ✅ |
+| 返回键分层：多选 → 搜索 → 离开会话 | 导航栏「取消」 | 同 + 返回键（Android 特有） | 🟢 本端多一条 |
+| 动作栏格数 | 转发 / 收藏 / 删除 / 举报 **4 格** | **2 格**（转发 / 删除） | 🟡 收藏与消息举报本端还没做，**不画只会弹「还没做」的死按钮** |
+| 批量删除 | 只给「仅为我删除」 | 同（走 REST `/messages/hide`，带二次确认） | ✅ |
+| 批量举报（同一发送者才可点） | 有 | **没有** | ⬜ 依赖消息侧举报（`CLIENT_PARITY` AG 补那行） |
+| 合并转发（多条 → 一张卡片） | 有 | **没有**（只能渲染别人发来的卡片） | ⬜ 见 M4-6 那行 |
+| 相册宫格逐格勾选 | 有（整组全选 + 逐格） | **没有**——宫格整体不参与多选 | ⬜ 欠账 |
+
+**iOS 那条用线上 bug 换来的教训，本端从一开始就照抄了**（`IMChatSelectionState.h` 的类注释）：
+勾选态原先记在 `UITableView` 的行选中里，向上翻页时 `reloadData` 清空选中、`prepend` 又让行下标
+整体平移，于是「勾两条 → 上滚拉历史 → 再勾一条，前两条静默消失」。本端列表同样是窗口化的
+（尾窗 200 / 锚点窗前后各 100），所以判据层的函数**签名里拿不到窗口、行号或任何列表状态**
+——拿不到就没法退回去按行号记。
+
+**⚠️ 未真机验证**：本轮只跑到单测与编译（511 例绿、体量闸过）。真机那一段没做完——
+模拟器在宿主负载 25 时反复 ANR，最后连 uiautomator 的 accessibility 桥都返回 `null root node`。
+按本仓规矩（滚动/翻页/动画必须真机看），**这一块在真机验过之前不算完**，要验的至少有：
+长按进多选、勾选圈只出现在可勾的行、上翻拉历史后勾选不丢（那正是 iOS 踩过的那条）、
+超限吐司、批量转发与批量删除、返回键分层。
+
+---
+
 ---
 
 ## 5. 为什么会漂这么远（2026-09-08 复盘）

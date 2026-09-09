@@ -100,6 +100,9 @@ fun ChatHost(
     // 值 + 光标：@提及要靠光标算「正在输入的 @查询词」，裸 String 算不出来
     var input by remember(conv.convId) { mutableStateOf(TextFieldValue("")) }
 
+    /** 多选态（M4-3）。判据在 `data/ChatSelection.kt`，状态在 [ChatSelectionController]。 */
+    val sel = rememberChatSelection(conv.convId)
+
     // —— 转发（M4-3）——
     // 待转发的消息列表（null = 没在转发）。选完目标会话后逐条发出。
     var forwarding by remember(conv.convId) { mutableStateOf<List<MessageEntity>?>(null) }
@@ -174,10 +177,14 @@ fun ChatHost(
             ChatOverlays.Layer.MediaPicker -> picking = false
             ChatOverlays.Layer.Forward -> forwarding = null
             ChatOverlays.Layer.ContextMenu -> menuFor = null
-            // 没有覆盖层时：搜索态先退回普通聊天页，再按一次才离开会话
-            //（微信/Telegram 同）。不拦的话「进会话 → 按返回 → App 没了」，
-            // 这是 Android 用户最直觉的一个动作。
-            null -> if (search.open) search.close() else onBack()
+            // 没有覆盖层时：**多选态 → 搜索态 → 离开会话**，一层一层退。
+            // 多选排在最前：它盖掉了输入栏与标题栏，用户按返回想退的必然是它
+            //（不拦的话「进会话 → 按返回 → App 没了」，这是 Android 用户最直觉的一个动作）。
+            null -> when {
+                sel.active -> sel.cancel()
+                search.open -> search.close()
+                else -> onBack()
+            }
         }
     }
     val mediaSend = remember(conv.convId) { MediaSendFlow(context, client, conv) }
@@ -473,9 +480,20 @@ fun ChatHost(
         searchCanNext = search.canNext,
         onSearchPrev = { search.goto(search.hitIdx - 1) },
         onSearchNext = { search.goto(search.hitIdx + 1) },
+        selection = sel.selected,
+        onToggleSelect = { m -> sel.toggle(m)?.let { toast = it } },
+        onCancelSelection = { sel.cancel() },
+        onForwardSelected = {
+            val r = sel.forwardPick()
+            r.notice?.let { toast = it }
+            if (r.msgs.isNotEmpty()) { forwarding = r.msgs; sel.cancel() }
+        },
+        onDeleteSelected = { sel.confirmDelete = true },
         mentionNames = mentionNames,
         searchHighlight = search.needle,
     )
+
+    BatchDeleteConfirm(sel, client, conv.convId) { toast = it }
 
     // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——
     viewing?.let { m ->
@@ -573,6 +591,8 @@ fun ChatHost(
             iAmManager = iAmManager,
             onReply = { replyTo = it },
             onForward = { forwarding = listOf(it) },
+            // 进多选默认勾上触发的那条（同 iOS enterSelectionWithMessage:）
+            onMultiSelect = { m -> sel.enter(m) },
             onDismiss = { menuFor = null },
         )
     }
