@@ -7,6 +7,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.libeyond.imandroid.data.searchMessages
+import com.libeyond.imandroid.data.isLocalComplete
 import com.libeyond.imandroid.data.ChatSearch
 import com.libeyond.imandroid.data.QuerySource
 import com.libeyond.imandroid.data.SearchHit

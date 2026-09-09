@@ -91,7 +91,13 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     // 进主界面就拉一次会话列表——WS 的 onConnected 也会拉，但那条路只在
     // 「本次冷启动真的新建了连接」时触发；会话已存活时进来不会有 onConnected。
     LaunchedEffect(owner) {
-        if (owner.isNotEmpty()) client.messages.refreshConversations()
+        if (owner.isNotEmpty()) {
+            // **账号就绪**才跑的一次性数据订正。放这儿不放 onConnected：WS 常常先连上、
+            // 会话才恢复，那时 owner 还是空的、那个回调整个早退（2026-09-09 实测
+            // `ws_connected {uid=-}`）。它自己带一次性标记，重复调用是廉价空转。
+            client.convergeLegacyDataOnce()
+            client.messages.refreshConversations()
+        }
     }
 
     // —— 二级页：聊天 / 群资料（占满全屏，不显 Tab 栏）——

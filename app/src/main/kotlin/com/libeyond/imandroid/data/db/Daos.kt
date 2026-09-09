@@ -143,6 +143,16 @@ interface MessageDao {
     """)
     suspend fun pointsAtOrAfter(owner: String, convId: String, ts: Long, seq: Long, limit: Int): List<SeqPoint>
 
+    /**
+     * 历史遗留的 `msg_op` 事件行（本端在 2026-09-09 之前把它们当普通消息落了库）。
+     * 供启动时一次性收敛：**先应用它们的效果，再删掉**（见 `MessageRepository.convergeLegacyMsgOpRows`）。
+     */
+    @Query("SELECT * FROM message WHERE ownerUid = :owner AND contentType = 'msg_op' ORDER BY convSeq ASC LIMIT :limit")
+    suspend fun legacyMsgOpRows(owner: String, limit: Int): List<MessageEntity>
+
+    @Query("DELETE FROM message WHERE ownerUid = :owner AND contentType = 'msg_op'")
+    suspend fun deleteLegacyMsgOpRows(owner: String): Int
+
     @Query("SELECT MAX(convSeq) FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun maxConvSeq(owner: String, convId: String): Long?
 

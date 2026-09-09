@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
+import com.libeyond.imandroid.data.extendWindowOlder
+import com.libeyond.imandroid.data.observeWindow
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.ui.screens.ChatRowStyle
 import com.libeyond.imandroid.ui.screens.ChatRowView

@@ -134,6 +134,31 @@
 > **没验**：`window_req` 那条路径本身——两台设备的本地库都是齐的，`windowAround` 恒有结果，
 > 走不到问服务端那一支。
 
+> **`msg_op` 离线收敛 ✅ 2026-09-09（真机撞见的既有 bug，比看上去贵）**
+>
+> 上一轮在 11 万条的大群里撞见聊天页冒出一条 `{"op":"delete","conv_id":…}` 的裸 JSON 气泡。
+> **裸 JSON 只是症状**：真正的病是本端**从不应用 `msg_op` 事件行**——也就是
+> 离线期间别人做的撤回 / 编辑 / 置顶 / 为所有人删除，重连后本端一律不生效。
+> 那条事件行存在的全部意义（PROTOCOL §6.7「离线收敛」）就是给错过实时帧的端补课，
+> 本端却把它当成了一条聊天消息落库并渲染。
+>
+> 对端 im-web 在 `sdk/imSdk.ts` 的 `processIncoming` 开头就有这两个分支，本端一直没有——
+> 典型的「一条路改对了、对称兄弟没跟」。判据抽成 `IncomingRule` 三态（5 例单测，两处变异验红）：
+> `msg_op` 事件行 → 应用效果、不落库；`deleted_at > 0` → 物理移除；其余照常。
+> **顺序不能反**：事件行自己也可能带 `deleted_at`，反过来判会把「删除事件」当成「被删的消息」
+> 扔掉，那次删除就永远不被应用。
+>
+> 改口径只管得住以后的，已经躺在库里的那些要补课：`convergeLegacyMsgOpRows`
+> **先应用效果、再删行**（反了等于把那几次操作永久丢掉）。
+>
+> **两个自己踩的坑**：① 一开始挂在 `onConnected` 上——WS 常常先连上、会话才恢复，
+> 那时 `ownerProvider()` 还是空的，整个回调早退（实测 `ws_connected {uid=-}`）；
+> 改挂到「账号就绪」（`MainScreen` 的 `LaunchedEffect(owner)` → `IMClient.convergeLegacyDataOnce`）。
+> ② 那条按 `contentType` 的查询**没有索引**，每次启动扫 20 多万行，首屏卡了约 90 秒
+>（两次 `Long db operation`）；改成 SharedPreferences 一次性标记。
+>
+> 461 例 / 70 类绿。模拟器实测：收敛跑过一次并落日志、大群尾部的裸 JSON 气泡消失。
+
 > 更早的已完成块已移入 [current_task.archive.md](current_task.archive.md)（只读归档）。
 
 ## 下一步
@@ -215,11 +240,10 @@
   （本地 500 / 服务端 50），更多时靠计数补 `+` 如实告知，**翻更多页三端都没做**。
 - **`window_req` 那条分支没实测**：本地库齐全时走不到它（`windowAround` 恒有结果）。
   要验得先造一个"本地有缺口"的会话（清库后只同步一半）。
-- **`msg_op` 事件行会被当成普通文本渲染**（真机撞见：聊天页里出现一条
-  `{"op":"delete","conv_id":...}` 的绿气泡）。**这是既有 bug，不是本轮引入的**——
-  服务端 sync 会下发 `content_type=msg_op` 的事件行（那张表里就有 6 条），
-  而 `buildChatRows` 没有把它排掉。服务端自己的 `visibleContentFilter` 是排掉它的，
-  端上这一处口径没跟上。修它要动 `buildChatRows` 的过滤，独立一档。
+- **一次性数据订正靠 SharedPreferences 标记**（`SessionStore.msgOpConverged`）：
+  历史遗留 `msg_op` 行的收敛要按 `contentType` 扫全表，而 `message` 表上没有这一列的索引。
+  20 多万行的库上每次启动扫一遍会让首屏卡住（实测约 90 秒，两次 `Long db operation`）。
+  **以后再加这种一次性订正，一律配一次性标记，别为它加只用一次的索引。**
 - **`GroupInfoHost.kt` 已 599 行**（上限 600）：下一个动它的人先拆再加。
 - **「我」页 11 个入口里只接通了 3 个**（设备 / 资料 / 二维码），其余 8 个点了是「还没做」提示。
   主题/字号/壁纸等外观偏好的令牌层在（`IMAppearance`），但没有持久化也没有界面。

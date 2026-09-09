@@ -41,9 +41,15 @@ import java.util.UUID
  * 后来加的「红❗点击重发」自然也覆盖不到它们。本端从第一版就全部落库。
  */
 class MessageRepository(
-    private val messages: MessageDao,
+    /**
+     * DAO 是 `internal` 而不是 `private`：**只为让同包的查询扩展够得着**
+     * （`MessageWindowQueries.kt`——窗口与搜索那一组读查询，从这里搬出去只是为了控体量，
+     * 调用点仍写成 `repo.windowAround(...)`）。**除那个文件外别在包内直接碰它们**，
+     * 写侧一律走本类的方法：入库边界上挂着 [IncomingRule] 那套口径，绕过去就没人执行了。
+     */
+    internal val messages: MessageDao,
     private val pending: PendingMessageDao,
-    private val conversations: ConversationDao,
+    internal val conversations: ConversationDao,
 ) {
     private val log = IMLog.tag("IM.Msg")
 
@@ -71,82 +77,7 @@ class MessageRepository(
     fun observeMessages(owner: String, convId: String, limit: Int): Flow<List<MessageEntity>> =
         messages.observeWindow(owner, convId, limit).map { it.asReversed() }
 
-    /**
-     * 观察一个**渲染窗口**（[ChatWindow]）。尾窗 = 最近 N 条（新消息会进来），
-     * 锚点窗 = 一段闭区间（新消息不进来，用户正在看历史）。
-     */
-    fun observeWindow(owner: String, convId: String, window: ChatWindow): Flow<List<MessageEntity>> =
-        when (window) {
-            is ChatWindow.Tail -> observeMessages(owner, convId, window.limit)
-            is ChatWindow.Anchored ->
-                messages.observeRange(owner, convId, window.loTs, window.loSeq, window.hiTs, window.hiSeq)
-        }
-
-    /**
-     * 围绕 `convSeq` 那条消息开一个锚点窗（本地库）。回 `null` = **本地没有这一条**，
-     * 调用方据此决定是问服务端（`window_req`）还是如实说它不在了。
-     */
-    suspend fun windowAround(
-        owner: String,
-        convId: String,
-        convSeq: Long,
-        half: Int = ChatWindows.ANCHOR_HALF,
-    ): ChatWindow.Anchored? {
-        val m = messages.byConvSeq(owner, convId, convSeq) ?: return null
-        return ChatWindows.boundsOf(
-            before = messages.pointsBefore(owner, convId, m.timestamp, m.convSeq, half),
-            atOrAfter = messages.pointsAtOrAfter(owner, convId, m.timestamp, m.convSeq, half),
-        )
-    }
-
-    /**
-     * 把锚点窗的**下界**再往前挪一页（向上翻页）。没有更早的了就原样返回——
-     * 调用方据此知道"到头了"，不必再问。
-     */
-    suspend fun extendWindowOlder(
-        owner: String,
-        convId: String,
-        window: ChatWindow.Anchored,
-        page: Int = ChatWindows.ANCHOR_PAGE,
-    ): ChatWindow.Anchored {
-        val older = messages.pointsBefore(owner, convId, window.loTs, window.loSeq, page)
-        val lo = older.lastOrNull() ?: return window
-        return window.copy(loTs = lo.timestamp, loSeq = lo.convSeq)
-    }
-
     suspend fun messageCount(owner: String, convId: String): Int = messages.countIn(owner, convId)
-
-    /**
-     * 会话内搜索（本地库，整个会话）。返回**显示序倒序**（新在前）的命中，最多 [limit] 条。
-     *
-     * DAO 那条 SQL 负责收窄，[ChatSearch.matches] 是权威判定——两层的理由见它的注释。
-     * `keyword` 由调用方 trim；空词回空集（与后端 G4 一致：不报错，便于清空搜索框时复用同一条路）。
-     */
-    suspend fun searchMessages(
-        owner: String,
-        convId: String,
-        keyword: String,
-        limit: Int = ChatSearch.LOCAL_PAGE_LIMIT,
-    ): LocalSearchPage {
-        val needle = keyword.trim()
-        if (needle.isEmpty()) return LocalSearchPage(emptyList(), truncated = false)
-        val like = "%" + ChatSearch.escapeLike(needle) + "%"
-        val lowered = needle.lowercase()
-        val raw = messages.search(owner, convId, like, limit)
-        // **截断与否要看 SQL 取回多少条，不是过滤后剩多少**：只要复核过滤掉一条，
-        // 过滤后的长度就够不到 limit，「还有更多」那个 `+` 会静默消失
-        // ——正是 hitLabel 那条"不能悄悄显示成总共就这些"要防的事。
-        return LocalSearchPage(
-            rows = raw.filter { ChatSearch.matches(it.contentType, it.content, it.caption, it.fileName, lowered) },
-            truncated = raw.size >= limit,
-        )
-    }
-
-    /** 本地这个会话齐不齐（[ChatSearch.isLocalComplete] 的取数版本）。 */
-    suspend fun isLocalComplete(owner: String, convId: String): Boolean {
-        val row = conversations.byId(owner, convId)
-        return ChatSearch.isLocalComplete(row?.syncedConvSeq ?: 0L, row?.lastConvSeq ?: 0L)
-    }
 
     fun observePending(owner: String, convId: String): Flow<List<PendingMessageEntity>> =
         pending.observe(owner, convId)
@@ -313,22 +244,34 @@ class MessageRepository(
      * 幂等：主键 `(owner, convId, convSeq)` upsert，重复补拉自动收敛。
      */
     suspend fun onIncoming(owner: String, m: MessageData, bumpUnread: Boolean) {
+        if (routeNonMessage(owner, m)) return
         val row = m.toEntity(owner)
         messages.upsert(row)
         bumpConversation(owner, m.convId, row, incUnread = bumpUnread && m.from != owner)
     }
 
-    /** 批量落库（sync_resp）。返回首个失败的 conv_seq；全部成功返回 null。 */
+    /**
+     * 批量落库（sync_resp）。返回首个失败的 conv_seq；全部成功返回 null。
+     *
+     * **`msg_op` 事件行与已删墓碑在这里就被摘走**（[IncomingRule]），不进 `message` 表。
+     * 这不影响游标：游标推进只认服务端给的 `covered_conv_seq`（[SyncCursorRule]），
+     * 与本端存了几条无关——那些序号确实"问过了"，只是它们不成为消息。
+     */
     suspend fun onIncomingBatch(owner: String, list: List<MessageData>): Long? {
         if (list.isEmpty()) return null
+        val plain = mutableListOf<MessageData>()
+        for (m in list) {
+            if (!routeNonMessage(owner, m)) plain += m
+        }
+        if (plain.isEmpty()) return null
         return try {
-            messages.upsert(list.map { it.toEntity(owner) })
+            messages.upsert(plain.map { it.toEntity(owner) })
             null
         } catch (e: Exception) {
-            log.w("msg_batch_write_failed", "count" to list.size, "err" to e.javaClass.simpleName)
+            log.w("msg_batch_write_failed", "count" to plain.size, "err" to e.javaClass.simpleName)
             // 逐条重试，定位首个失败点——游标只能推进到它之前（SyncCursorRule）
             var firstFailed: Long? = null
-            for (m in list.sortedBy { it.convSeq }) {
+            for (m in plain.sortedBy { it.convSeq }) {
                 try {
                     messages.upsert(m.toEntity(owner))
                 } catch (_: Exception) {
@@ -338,6 +281,62 @@ class MessageRepository(
             }
             firstFailed
         }
+    }
+
+    /**
+     * 不是「一条聊天消息」的那两类，在**入库边界**就处理掉（PROTOCOL §6.7 离线收敛）。
+     * 回 `true` = 已处理，调用方不要再落库。判据在 [IncomingRule]，对端是 im-web 的
+     * `processIncoming` 开头那两个分支。
+     */
+    private suspend fun routeNonMessage(owner: String, m: MessageData): Boolean =
+        when (IncomingRule.kindOf(m.contentType, m.deletedAt)) {
+            IncomingKind.Message -> false
+            IncomingKind.ApplyMsgOp -> {
+                // `content` 是自描述 JSON（= msg_op 上行负载）。**非法负载忽略不崩**：
+                // 老/新版本之间字段可能对不上，为一条事件行崩掉整页同步是不划算的。
+                runCatching {
+                    ProtocolJson.decodeFromString(MsgOpData.serializer(), m.content)
+                }.onSuccess { applyMsgOp(owner, it) }
+                    .onFailure {
+                        log.w("msg_op_row_undecodable", "convId" to m.convId, "seq" to m.convSeq)
+                    }
+                true
+            }
+            IncomingKind.RemoveDeleted -> {
+                // 「为所有人删除」的目标行：物理移除、不显墓碑（区别于 recall）。
+                // 这条是**兜底**——正常情况下那条 msg_op 事件行会做同样的事；
+                // 但只拿到目标行、漏了事件行时（直加载/整页同步），没有它就会误显已删内容。
+                messages.delete(owner, m.convId, m.convSeq)
+                true
+            }
+        }
+
+    /**
+     * 收敛历史遗留的 `msg_op` 事件行。
+     *
+     * 本端在 2026-09-09 之前没有 [IncomingRule] 那道口径，把事件行当普通消息落了库——
+     * 症状是聊天页里冒出裸 JSON 气泡，**病根是那几次撤回/编辑/置顶/删除从来没被应用**。
+     * 改了入库口径只能管住以后的，已经躺在库里的那些得在这里补课：
+     * **先应用效果、再删行**，顺序反了就等于把那几次操作永久丢掉。
+     *
+     * 每次连上都跑一次：第一次之后库里就没有这种行了，之后是一次走索引的空查询。
+     * 回本次清掉的行数（0 = 干净）。
+     */
+    suspend fun convergeLegacyMsgOpRows(owner: String, limit: Int = 500): Int {
+        val rows = messages.legacyMsgOpRows(owner, limit)
+        if (rows.isEmpty()) {
+            // 也记一笔：不然"跑没跑过"无从判断（这一步一辈子只跑一次，没日志就查不了）
+            log.i("legacy_msg_op_converged", "applied" to 0, "deleted" to 0)
+            return 0
+        }
+        for (r in rows) {
+            runCatching { ProtocolJson.decodeFromString(MsgOpData.serializer(), r.content) }
+                .onSuccess { applyMsgOp(owner, it) }
+                .onFailure { log.w("legacy_msg_op_undecodable", "convId" to r.convId, "seq" to r.convSeq) }
+        }
+        val gone = messages.deleteLegacyMsgOpRows(owner)
+        log.i("legacy_msg_op_converged", "applied" to rows.size, "deleted" to gone)
+        return gone
     }
 
     /** 推进同步游标。**只接受 [SyncCursorRule] 算出的值。** */

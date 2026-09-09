@@ -13,6 +13,14 @@ object ContentType {
     const val SYSTEM = "system"
     const val CHAT_RECORD = "chat_record"
     const val CONTACT = "contact"
+
+    /**
+     * `msg_op` **事件行**（PROTOCOL §6.7）。不是聊天内容，是协议管道：
+     * `content` 是自描述 JSON（= `msg_op` 上行负载），供离线端据此收敛撤回/编辑/置顶/删除。
+     * **不入库为消息、不渲染、不计未读、不作会话列表预览**——判据在
+     * [com.libeyond.imandroid.data.IncomingRule]。
+     */
+    const val MSG_OP = "msg_op"
 }
 
 /** send_msg 上行负载（PROTOCOL §4.1）。 */

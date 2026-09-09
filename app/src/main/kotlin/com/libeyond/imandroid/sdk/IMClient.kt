@@ -46,6 +46,24 @@ class IMClient(context: Context) {
     val scope = CoroutineScope(SupervisorJob())
 
     private val session = SessionStore(context)
+
+    /**
+     * 账号就绪后跑一次的数据订正：把历史遗留的 `msg_op` 事件行补应用并删掉
+     * （2026-09-09 之前本端把它们当普通消息落了库，见 `IncomingRule`）。
+     *
+     * **靠 [SessionStore.msgOpConverged] 保证一辈子只跑一次**：那次收敛要按 `contentType`
+     * 扫全表而这一列没有索引，20 多万行的库上每次启动扫一遍会让首屏卡住（实测约 90 秒）。
+     */
+    suspend fun convergeLegacyDataOnce() {
+        val uid = this.uid ?: return
+        if (session.msgOpConverged(uid)) return
+        runCatching { repo.convergeLegacyMsgOpRows(uid) }
+            .onSuccess { session.markMsgOpConverged(uid) }
+            .onFailure {
+                // 失败**不标记**：下次启动再试。这一步失败不该拦住登录后的任何事，只记一笔。
+                IMLog.tag("IM.Msg").w("legacy_converge_failed", "err" to it.javaClass.simpleName)
+            }
+    }
     private val device = DeviceIdentity(context)
 
     private val http = HttpClient(

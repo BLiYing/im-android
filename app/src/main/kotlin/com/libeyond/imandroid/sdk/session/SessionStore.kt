@@ -69,6 +69,20 @@ class SessionStore(context: Context) {
         prefs.edit().remove(KEY_TOKEN).remove(KEY_REFRESH).remove(KEY_UID).remove(KEY_USERNAME).apply()
     }
 
+    /**
+     * 「历史遗留 `msg_op` 事件行已收敛过」的一次性标记（按账号）。
+     *
+     * **必须是一次性的**：那次收敛按 `contentType` 扫全表，而 `message` 表上没有这一列的索引
+     * ——20 多万行的库上每次启动扫一遍会让首屏卡住（2026-09-09 模拟器实测：两次
+     * `Long db operation`，从启动到会话列表可用约 90 秒）。一次性的数据订正就该配一次性标记，
+     * 而不是为它加一条只用一次的索引。
+     */
+    fun msgOpConverged(uid: String): Boolean = prefs.getBoolean(KEY_MSGOP_CONVERGED + uid, false)
+
+    fun markMsgOpConverged(uid: String) {
+        prefs.edit().putBoolean(KEY_MSGOP_CONVERGED + uid, true).apply()
+    }
+
     private companion object {
         const val PREFS = "im_session"
         const val KEY_TOKEN = "token"
@@ -76,5 +90,6 @@ class SessionStore(context: Context) {
         const val KEY_UID = "uid"
         const val KEY_USERNAME = "username"
         const val KEY_HOST = "host"
+        const val KEY_MSGOP_CONVERGED = "msgop_converged_"
     }
 }
