@@ -377,7 +377,15 @@ fun ChatScreen(
                         onJumpToLatest()
                         pendingScrollToBottom = true
                         // 本来就在尾窗里（只是离底远）时不会有新数据到达，直接滚
-                        scope.launch { listState.scrollToItem((rows.size - 1).coerceAtLeast(0)) }
+                        scope.launch {
+                            listState.scrollToItem((rows.size - 1).coerceAtLeast(0))
+                            // **待办要有保质期**：已经在尾窗时换窗不产生新的 rows，
+                            // 上面那个 LaunchedEffect(rows.size) 永远不跑，待办就一直挂着；
+                            // 等用户滚上去读历史时来了一条新消息，它会被当成"刚点过 ↓"
+                            // 一把甩到底（还绕过了 shouldAutoScroll 那道判断）。
+                            kotlinx.coroutines.delay(1_000)
+                            pendingScrollToBottom = false
+                        }
                     },
                 contentAlignment = Alignment.Center,
             ) {

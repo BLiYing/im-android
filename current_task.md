@@ -7,6 +7,24 @@
 
 ## 当前焦点
 
+> **`/code-review --fix` 打回四条 ✅ 2026-09-09**（在 IMServer 会话里跑的那一轮，顺带扫到本仓
+> 未推送的 6 个 commit）。一条严重：
+> **遗留 `msg_op` 事件行的一次性收敛「取 500 条、却删全部」**——`legacyMsgOpRows(limit=500)`
+> 只取一批并应用，紧接着 `DELETE ... WHERE contentType='msg_op'` 把这批之外**从未被应用**的
+> 行一起抹掉。11 万条的大群里 500 这个上限一次够不着，那些撤回/编辑/置顶/删除就**永久丢失**，
+> 而日志 `deleted` 还虚高。改成按批循环、**逐条应用完立刻删**（中途崩了下次还能重新取到），
+> 并把 `deleteLegacyMsgOpRows` 这个整删的 DAO 方法**删掉**、在原处注明为什么不能有它。
+>
+> 另三条：① 点 ↓ 的 `pendingScrollToBottom` 会永久挂着（本来就在尾窗时 `rows.size` 不变，
+> 消费它的 `LaunchedEffect` 不跑），之后一条新消息到达会被当成"刚点过 ↓"一把甩到底、
+> 还绕过 `shouldAutoScroll`——**先按"待办加保质期"处理（滚完 1 秒清掉），是止血不是根治**，
+> 根治该让换窗与滚动请求各自带一次性 token；② `WindowRequester` 的「先订阅再发帧」实际没做到
+> （`scope.launch` 只是排队，scope 没指定 dispatcher），`replay=0` 的 SharedFlow 对无订阅者那一发
+> 直接丢弃 → 定位等满 8 秒误报「需要联网加载」，改为发帧前等 `subscriptionCount > 0`；
+> ③ `requestSync` 的 KDoc 挂错函数、还引用了不存在的 `windowResults`。
+>
+> `./scripts/test.sh` 全绿（476 例 / 71 个测试类）。**四处均未上真机验证。**
+
 > **通讯录 A–Z 索引尺 + 好友行左滑（`docs/UI_PARITY_IOS.md` ③，两条 🔴）✅ 2026-09-09**
 >
 > 好友列表原来是一条平铺的名单，2000 人只能一路滑。现在按显示名（备注优先）的拼音首字母

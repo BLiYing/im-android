@@ -474,12 +474,7 @@ class MessageService(
         }
     }
 
-    /**
-     * 请求一窗（`window_req`）。**本地没有那一条时才用**——本地有就直接开本地窗，
-     * 没有理由为一个已经在库里的锚点去问服务端（MESSAGE_WINDOW_DESIGN §4）。
-     *
-     * 结果从 [windowResults] 出来（帧上没有请求关联 id，按 conv_id 认领）。
-     */
+    /** 按各会话的本地游标发一次 `sync_req`（增量补拉）。开窗取数走 [windows]，不是这一路。 */
     private suspend fun requestSync(owner: String) {
         val cursors = repo.syncCursors(owner).map { (convId, seq) -> SyncCursorItem(convId, seq) }
         if (cursors.isEmpty()) return

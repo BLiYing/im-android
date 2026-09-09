@@ -59,6 +59,11 @@ internal class WindowRequester(
     ): WindowRespData? {
         val waiter = CompletableDeferred<WindowRespData>()
         val job = scope.launch { waiter.complete(results.first { it.convId == convId }) }
+        // **等订阅真的挂上再发帧**：`scope.launch` 只是排了个队，而这个 scope 没指定
+        // dispatcher（= Dispatchers.Default，多线程），收帧那侧 `deliver` 也是一次 launch。
+        // 不等的话应答可能在订阅之前就 emit 出去，而 replay=0 的 SharedFlow 对没有订阅者的
+        // 那一发是**直接丢弃**——表现是等满 8 秒然后误报「需要联网加载」。
+        results.subscriptionCount.first { it > 0 }
         if (!request(convId, anchor, before, after)) {
             job.cancel()
             return null // 没连上就别让调用方干等

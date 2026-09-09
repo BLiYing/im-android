@@ -321,22 +321,34 @@ class MessageRepository(
      *
      * 每次连上都跑一次：第一次之后库里就没有这种行了，之后是一次走索引的空查询。
      * 回本次清掉的行数（0 = 干净）。
+     *
+     * ⚠️ **删的必须是"刚刚应用过的那几条"，不能是"这个账号下所有 msg_op 行"**：
+     * 取数带 [limit]，一次 `DELETE ... WHERE contentType='msg_op'` 会把这一批之外
+     * 还没应用的行一起抹掉——那正是上面那句"顺序反了就等于把那几次操作永久丢掉"的
+     * 另一种走法（11 万条的大群里 500 这个上限一次就够不着）。所以按批走，逐条删。
      */
     suspend fun convergeLegacyMsgOpRows(owner: String, limit: Int = 500): Int {
-        val rows = messages.legacyMsgOpRows(owner, limit)
-        if (rows.isEmpty()) {
-            // 也记一笔：不然"跑没跑过"无从判断（这一步一辈子只跑一次，没日志就查不了）
-            log.i("legacy_msg_op_converged", "applied" to 0, "deleted" to 0)
-            return 0
+        var applied = 0
+        var deleted = 0
+        while (true) {
+            val rows = messages.legacyMsgOpRows(owner, limit)
+            if (rows.isEmpty()) break
+            val before = deleted
+            for (r in rows) {
+                runCatching { ProtocolJson.decodeFromString(MsgOpData.serializer(), r.content) }
+                    .onSuccess { applyMsgOp(owner, it) }
+                    .onFailure { log.w("legacy_msg_op_undecodable", "convId" to r.convId, "seq" to r.convSeq) }
+                // 应用完立刻删这一条：中途被取消/崩溃时，剩下的行下次还会被重新取到并应用。
+                messages.delete(owner, r.convId, r.convSeq)
+                deleted++
+                applied++
+            }
+            // 一批下来一条都没删掉说明删不动（理论上不该发生），别在这里空转
+            if (deleted == before) break
         }
-        for (r in rows) {
-            runCatching { ProtocolJson.decodeFromString(MsgOpData.serializer(), r.content) }
-                .onSuccess { applyMsgOp(owner, it) }
-                .onFailure { log.w("legacy_msg_op_undecodable", "convId" to r.convId, "seq" to r.convSeq) }
-        }
-        val gone = messages.deleteLegacyMsgOpRows(owner)
-        log.i("legacy_msg_op_converged", "applied" to rows.size, "deleted" to gone)
-        return gone
+        // 也记一笔：不然"跑没跑过"无从判断（这一步一辈子只跑一次，没日志就查不了）
+        log.i("legacy_msg_op_converged", "applied" to applied, "deleted" to deleted)
+        return deleted
     }
 
     /** 推进同步游标。**只接受 [SyncCursorRule] 算出的值。** */
