@@ -446,8 +446,12 @@ fun ChatScreen(
         Composer(
             input = input,
             onInputChange = {
+                // **只在正文真的变了时**上报「正在输入」。改成 TextFieldValue 之后，
+                // 光标移动（点一下中间改错别字）也会走这个回调——那时对端会看到一次
+                // 凭空的「正在输入…」（2026-09-09 `/code-review` 抓出的回归）。
+                val typed = it.text != input.text
                 onInputChange(it)
-                if (it.text.isNotEmpty()) onTyping()
+                if (typed && it.text.isNotEmpty()) onTyping()
             },
             above = composerAbove,
             onSend = onSend,

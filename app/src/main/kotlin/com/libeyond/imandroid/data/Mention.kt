@@ -105,11 +105,22 @@ object Mention {
      * 便于测试与跨端日志比对——所以 [candidates] 要传有序 Map。
      */
     fun resolveMentions(text: String, candidates: Map<String, String>): List<String> {
-        if (text.isEmpty()) return emptyList()
+        if (text.isEmpty() || candidates.isEmpty()) return emptyList()
+        // **与 resolveSpans 走同一次按位置的扫描**（长名优先），再把命中的名字映射回**所有**同名 uid。
+        //
+        // 不能逐个候选独立跑 containsToken：名字互为前缀、且短名后面正好是空格时两边会打架。
+        // 群里有「Li」和「Li Ming」，用户先点了 Li 又删掉、再点 Li Ming，文本是 `@Li Ming 开会`——
+        // 逐个判定会认为「@Li」后面跟着空格、token 完整，于是给 Li 发一条**穿透免打扰**的强提醒，
+        // 而他根本没被提到；spans 那边（长名优先）只会给出一段指向 Li Ming。
+        // 两个口径在同一条消息上给出不同答案，正是 SYMMETRY 说的"不变式没对齐"。
+        // （2026-09-09 `/code-review` 抓出；iOS/Web 目前仍是逐个判定，见 UI_PARITY_IOS §4.6 的欠账。）
+        val names = LinkedHashSet<String>()
+        for ((uid, name) in candidates) if (uid.isNotEmpty() && name.isNotEmpty()) names.add(name)
+        val hit = scanHits(text, names).map { it.second }.toSet()
         val out = LinkedHashSet<String>()
         for ((uid, name) in candidates) {
-            if (uid.isEmpty() || name.isEmpty()) continue
-            if (containsToken(text, name)) out.add(uid)
+            // 同名多人：命中一个名字就是命中**所有**同名的人，两个都该收到提醒
+            if (uid.isNotEmpty() && name in hit) out.add(uid)
         }
         return out.toList()
     }
@@ -145,11 +156,23 @@ object Mention {
      * 按 token 边界扫描文本里的 `@名字`。边界规则与 [containsToken] 完全一致。
      * **只认半角 `@`**——回填的 token 一律是半角（见 [applyToken]）。
      */
-    internal fun scanTokens(text: String, nameToUid: Map<String, String>): List<MentionSpan> {
-        if (text.isEmpty() || nameToUid.isEmpty()) return emptyList()
-        // 长名优先：`@小美丽` 必须先于 `@小美` 命中，否则前缀会把长名切碎
-        val names = nameToUid.keys.filter { it.isNotEmpty() }.sortedByDescending { it.length }
-        val out = ArrayList<MentionSpan>()
+    internal fun scanTokens(text: String, nameToUid: Map<String, String>): List<MentionSpan> =
+        scanHits(text, nameToUid.keys).map { (offset, name) ->
+            MentionSpan(offset = offset, length = name.length + 1, uid = nameToUid[name] ?: "")
+        }
+
+    /**
+     * 按 token 边界扫出文本里所有 `@名字` 的**位置与名字**。
+     *
+     * [resolveMentions]（谁收到提醒）与 [scanTokens]（片段）共用这一个内核——两者一旦各扫各的，
+     * 就会在"名字互为前缀"上给出不同答案（见 [resolveMentions] 的注释）。
+     * **只认半角 `@`**；长名优先，否则前缀会把长名切碎。
+     */
+    private fun scanHits(text: String, allNames: Collection<String>): List<Pair<Int, String>> {
+        if (text.isEmpty()) return emptyList()
+        val names = allNames.filter { it.isNotEmpty() }.sortedByDescending { it.length }
+        if (names.isEmpty()) return emptyList()
+        val out = ArrayList<Pair<Int, String>>()
         var i = 0
         while (i < text.length) {
             if (text[i] == '@') {
@@ -160,7 +183,7 @@ object Mention {
                         (end >= text.length || isBlank(text[end]))
                 }
                 if (hit != null) {
-                    out.add(MentionSpan(offset = i, length = hit.length + 1, uid = nameToUid[hit] ?: ""))
+                    out.add(i to hit)
                     i += hit.length + 1
                     continue
                 }
@@ -231,6 +254,16 @@ object Mention {
         // 复用同一套扫描：老路只要"哪几段是提及"，uid 一律为空（老路本就点不动）
         return segmentBySpans(text, scanTokens(text, nameToUid))
     }
+
+    /**
+     * 插进文本时用的**标签**：去掉显示名自带的前导 `@`。
+     *
+     * [GroupMember.displayName] 在没有昵称时会回落成 `@username`，直接拼就成了 `@@bob`。
+     * 必须**在同一处**归一化：候选表里存的标签要与文本里的 token 一字不差，
+     * 否则 `containsToken` 找 `@@bob` 而文本里是 `@bob`，这条提及会**静默丢失**。
+     * （2026-09-09 `/code-review` 抓出；iOS/Web 目前也直接拼 displayName，同样会出 `@@`。）
+     */
+    fun tokenLabel(displayName: String): String = displayName.removePrefix("@")
 
     /** 我能否 `@所有人`：仅群主/管理员。服务端另有校验（越权 300204），这里只决定面板画不画那一行。 */
     fun canMentionAll(role: String?): Boolean = role == "owner" || role == "admin"

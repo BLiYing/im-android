@@ -45,7 +45,11 @@ internal fun chatBodyText(
         if (valid.isNotEmpty()) Mention.segmentBySpans(text, valid)
         else Mention.segmentByNames(text, memberNames)
     val hits = ChatSearch.matchRanges(text, searchNeedle)
-    if (segs.size <= 1 && hits.isEmpty()) return AnnotatedString(text)
+    // 只有"既没有提及、也没有命中"才走快速通道。
+    // 原来写的是 `segs.size <= 1`——而**整条正文就是一段提及**时（选完人直接发，
+    // 正文恰好是 `@小明`）也只有一段，于是那条消息不高亮也点不动。
+    // 真机那次验的是「@用户3472 kaihui」，两段，正好绕过了这个洞（2026-09-09 `/code-review` 抓出）。
+    if (hits.isEmpty() && segs.none { it.mention }) return AnnotatedString(text)
 
     val mentionStyle = SpanStyle(color = mentionColor, fontWeight = FontWeight.Medium)
     return buildAnnotatedString {

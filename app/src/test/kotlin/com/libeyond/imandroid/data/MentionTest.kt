@@ -120,6 +120,33 @@ class MentionTest {
     }
 
     @Test
+    fun `谁收到提醒与片段必须给出同一个答案——名字互为前缀且短名后是空格时`() {
+        // 群里有「Li」和「Li Ming」。用户先点了 Li 又删掉、再点 Li Ming，文本是 `@Li Ming 开会`。
+        // 逐个候选独立判定会认为「@Li」后面跟着空格、token 完整 → 给 Li 发一条**穿透免打扰**
+        // 的强提醒，而他根本没被提到；片段那边（长名优先）只会给出一段指向 Li Ming。
+        // 两个口径在同一条消息上给出不同答案（2026-09-09 `/code-review` 抓出）。
+        val cands = linkedMapOf("u1" to "Li", "u2" to "Li Ming")
+        val text = "@Li Ming 开会"
+        assertEquals(listOf("u2"), Mention.resolveMentions(text, cands))
+        assertEquals(
+            listOf(MentionSpan(0, 8, "u2")),
+            Mention.resolveSpans(text, cands, mentionAll = false),
+        )
+    }
+
+    @Test
+    fun `插进文本的标签去掉显示名自带的前导 @`() {
+        // GroupMember.displayName 在没有昵称时回落成 "@username"，直接拼就成了 @@bob。
+        // 归一化必须只做一次、且候选表与文本用同一个标签——否则 containsToken 找 @@bob
+        // 而文本里是 @bob，这条提及会**静默丢失**（2026-09-09 `/code-review` 抓出）。
+        assertEquals("bob", Mention.tokenLabel("@bob"))
+        assertEquals("小明", Mention.tokenLabel("小明"))
+        val r = Mention.applyToken("@", 1, Mention.tokenLabel("@bob"))
+        assertEquals("@bob ", r.text)
+        assertEquals(listOf("u1"), Mention.resolveMentions(r.text, linkedMapOf("u1" to "bob")))
+    }
+
+    @Test
     fun `@所有人 要标记在且文本里还留着 token`() {
         assertTrue(Mention.resolveMentionAll("@所有人 开会", pending = true))
         assertFalse(Mention.resolveMentionAll("开会", pending = true))

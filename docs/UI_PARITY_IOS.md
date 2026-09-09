@@ -427,9 +427,30 @@ Web：`src/mention.ts` + `Composer.tsx` + `components/messageText.tsx`。
 `mentions=["1010147977"]`、`mention_spans=[{"offset":0,"length":7,...}]`（`@用户3472` 正好 7 个
 UTF-16 码元，且未被服务端的安全校验丢弃）→ 气泡里 `@用户3472` 蓝色、`kaihui` 常规色
 → 点它进了对方资料页 → **长按同一个气泡菜单照常弹出**。
+修完下面那 6 条后又验了两条：**整条正文就是一段提及**（`@用户4836`，服务端 `conv_seq 64`）
+现在高亮且点得动；群主打 `bob@gmail.com` 面板不再冒出来。
+
+**`/code-review` 打回 6 条，全修了**（另外顺带补了一条 iOS 有而本端漏的）：
+
+| # | 问题 | 修法 |
+|---|---|---|
+| 1 | **整条正文就是一段提及时不高亮也点不动**：快速通道写的是 `segs.size <= 1`，而 `@小明`（选完人直接发）也只有一段。真机那次验的是「@用户3472 kaihui」，两段，正好绕过了这个洞 | 判据改成「既没有提及、也没有命中」才走快速通道 |
+| 2 | **谁收到提醒与片段会给出不同答案**：`resolveMentions` 逐个候选独立跑 `containsToken`，片段那边却长名优先。群里有「Li」和「Li Ming」时，`@Li Ming 开会` 会给 Li 发一条**穿透免打扰的错误强提醒** | 两者共用同一个按位置扫描的内核 `scanHits`；命中的名字再映射回**所有**同名 uid（「同名两人都收到」那条不变式不受影响） |
+| 3 | **面板卡住**：`showsMentionAllRow` 少了「过滤词为空」这一档，群主打 `bob@gmail.com` 时成员搜不到、却因为有权限而恒真，240dp 的面板盖住消息列表 | 对齐 iOS 的 `showsMentionAllRow`（**有权限 且 过滤词为空**） |
+| 4 | **每个字符一次 `GET …/members?q=`**：`@zhangsan` 打完发 9 次，而这条路正是为超级群准备的 | 去抖 300ms（与 iOS `searchRemoteMembers` 同值） |
+| 5 | **「正在输入」回归**：`input` 从 `String` 改成 `TextFieldValue` 后，光标移动也会走 `onInputChange`，对端看到一次凭空的「正在输入…」 | 只在正文真的变了时才上报 |
+| 6 | **双 `@`**：`GroupMember.displayName` 没昵称时回落成 `@username`，直接拼成 `@@bob`；更糟的是候选表存 `@bob`、文本里是 `@bob`，`containsToken` 找 `@@bob` 找不到，**这条提及会静默丢失** | 新增 `Mention.tokenLabel` 归一化一次，候选表与文本用同一个标签 |
+| +1 | **候选里有我自己**（reviewer 没提，读 iOS 时发现的）：iOS 两处入口都剔了 `![m.userID isEqualToString:me]` | 同样剔除 |
+
+**其中 2、6 是三端共有的**——iOS 的 `resolvedMentionsInText:` 同样逐个候选判定、
+`pickMentionInsert:` 同样直接拼 `displayName`，im-web 的 `resolveMentions` 亦然。
+本端改对了，**iOS/Web 是欠账**：这两条属于「谁收到强提醒」这一类不变式，
+三端给出不同答案时用户看到的是"有人莫名被 @ 了"或"@ 了却没人收到"，
+按 `SYMMETRY.md` 该拉齐（要一致的是不变式，不是代码形状）。
 
 **没验**：普通成员看不到「@所有人」那一行（要第二个账号；判据有单测且取自服务端 `my_role`）；
-超级群里老消息不高亮那条降级（要一条没有 `mention_spans` 的老消息）。
+超级群里老消息不高亮那条降级——库里 `conv_seq 57` 那条 `@用户4807 上的方式分` 正好是
+**有 `mentions` 无 `mention_spans`** 的老数据，可以拿它验回落那条路。
 
 ---
 

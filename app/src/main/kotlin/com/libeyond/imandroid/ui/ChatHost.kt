@@ -359,7 +359,7 @@ fun ChatHost(
             {
                 MentionPanel(
                     members = mention.members,
-                    canMentionAll = mention.canMentionAll,
+                    canMentionAll = mention.showsMentionAllRow,
                     onPick = { name, uid -> input = mention.pick(input, name, uid) },
                 )
             }

@@ -43,17 +43,33 @@ internal class MentionComposer {
     /** 我能不能 @所有人（仅群主/管理员，服务端另有 300204 校验）。 */
     var canMentionAll by mutableStateOf(false)
 
-    val panelOpen: Boolean get() = query != null && (members.isNotEmpty() || canMentionAll)
+    /**
+     * 面板里画不画「@所有人」那一行：**有权限 且 还没开始搜人**（同 iOS `showsMentionAllRow`）。
+     *
+     * 少了"过滤词为空"这一档，群主打 `bob@gmail.com` 时 `activeQuery` 会回 `"gmail.com"`
+     * （`@` 后没有空白），成员搜不到、却因为有权限而恒真——一块 240dp 的面板盖住消息列表，
+     * 只能靠打个空格或退格删回 `@` 之前才消得掉（2026-09-09 `/code-review` 抓出）。
+     */
+    val showsMentionAllRow: Boolean get() = canMentionAll && query?.isBlank() == true
+
+    val panelOpen: Boolean get() = query != null && (members.isNotEmpty() || showsMentionAllRow)
 
     /** 输入变化时重算 @输入态。非群聊恒关。 */
     fun onInputChanged(value: TextFieldValue, isGroup: Boolean) {
         query = if (isGroup) Mention.activeQuery(value.text, value.selection.end) else null
     }
 
-    /** 选中一位成员 / 「@所有人」：回填 token，记入候选，关面板。 */
+    /**
+     * 选中一位成员 / 「@所有人」：回填 token，记入候选，关面板。
+     *
+     * **标签在这里归一化一次**（[Mention.tokenLabel] 去掉显示名自带的前导 `@`），
+     * 且候选表与文本里的 token 用的是同一个标签——两处不一致的话，发送时 `containsToken`
+     * 找不到这个 token，这条提及会**静默丢失**。
+     */
     fun pick(value: TextFieldValue, displayName: String, uid: String?): TextFieldValue {
-        val r = Mention.applyToken(value.text, value.selection.end, displayName)
-        if (uid.isNullOrEmpty()) allPending = true else candidates[uid] = displayName
+        val label = Mention.tokenLabel(displayName)
+        val r = Mention.applyToken(value.text, value.selection.end, label)
+        if (uid.isNullOrEmpty()) allPending = true else candidates[uid] = label
         query = null
         return TextFieldValue(r.text, androidx.compose.ui.text.TextRange(r.caret))
     }
@@ -107,14 +123,21 @@ internal fun rememberMentionComposer(
     val state = remember(convId) { MentionComposer() }
     state.canMentionAll = isGroup && Mention.canMentionAll(myRole)
 
+    val myUid = client.uid.orEmpty()
     LaunchedEffect(convId, state.query, isGroup) {
         val q = state.query
         if (!isGroup || q == null) {
             state.members = emptyList()
             return@LaunchedEffect
         }
+        // 去抖 300ms（与 iOS `searchRemoteMembers` 同值）：effect 的 key 里有 query，
+        // 下一个字符一到这一轮就被取消，delay 还没走完就不会发请求。
+        // 不去抖的话「@zhangsan」9 个字符 = 9 次 `GET …/members?q=`，而这条路正是为超级群准备的。
+        kotlinx.coroutines.delay(MENTION_DEBOUNCE_MS)
         runCatchingCancellable { client.groups.members(convId, q = q, limit = MENTION_PAGE) }
-            .onSuccess { state.members = it.items }
+            // 剔除自己：@自己无意义，服务端也会把发送者从 mentions 里过滤掉（PROTOCOL §4.1）。
+            // iOS 那侧同样在两处入口都剔了（`![m.userID isEqualToString:me]`）。
+            .onSuccess { page -> state.members = page.items.filter { it.userId != myUid } }
             .onFailure {
                 // 拉不到就给空列表——面板要么显 @所有人 一行、要么整个不出现，
                 // 不能把上一次的候选留在那儿（那会让人 @ 到一个不在这个群里的人）
@@ -127,3 +150,6 @@ internal fun rememberMentionComposer(
 
 /** 面板一次显示多少人。iOS 那侧的内联卡也是"够高时约 5 行、可滚"，这里取一页 20 够滚。 */
 private const val MENTION_PAGE = 20
+
+/** 拉候选前的去抖。与 iOS `searchRemoteMembers` 的 0.3s 同值。 */
+private const val MENTION_DEBOUNCE_MS = 300L
