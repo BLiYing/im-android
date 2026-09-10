@@ -1,8 +1,10 @@
 package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.ui.screens.AlbumMember
 import com.libeyond.imandroid.ui.screens.ChatRow
 import com.libeyond.imandroid.ui.screens.showsSenderAvatar
+import com.libeyond.imandroid.ui.screens.showsSenderName
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -63,6 +65,36 @@ class SenderAvatarTest {
         val withDay = listOf(msg(1, "alice"), ChatRow.DayLabel(0L), msg(2, "alice"))
         assertTrue("分隔行前必为段末", showsSenderAvatar(withDay, 0, "me", isGroup = true))
         assertTrue(showsSenderAvatar(withDay, 2, "me", isGroup = true))
+    }
+
+    private fun album(seq: Long, sender: String) = ChatRow.Album(
+        listOf(
+            AlbumMember.Sent(
+                MessageEntity(ownerUid = "me", convId = "g1", convSeq = seq, sender = sender, content = "x", contentType = "image"),
+            ),
+        ),
+    )
+
+    /**
+     * 宫格行此前不进判据：接收端九宫格既不占头像列也不显名，左缘比同一段的文字气泡少一截，
+     * 看不出是谁发的（2026-09-10 用户报的第 2 条）。
+     */
+    @Test
+    fun `对方发的一组图与文字同段——段末挂头像、段首显名`() {
+        val r = listOf(msg(1, "alice"), album(2, "alice"))
+        assertFalse(showsSenderAvatar(r, 0, "me", isGroup = true))
+        assertTrue("宫格是段末，该挂", showsSenderAvatar(r, 1, "me", isGroup = true))
+        assertFalse("同段第二条不再显名", showsSenderName(r, 1, "me", isGroup = true))
+
+        val solo = listOf(msg(1, "bob"), album(2, "alice"))
+        assertTrue("换人成段，宫格自己就是段首", showsSenderName(solo, 1, "me", isGroup = true))
+        assertTrue(showsSenderAvatar(solo, 1, "me", isGroup = true))
+    }
+
+    @Test
+    fun `自己发的一组图不挂头像、单聊的一组图也不挂`() {
+        assertFalse(showsSenderAvatar(listOf(album(1, "me")), 0, "me", isGroup = true))
+        assertFalse(showsSenderAvatar(listOf(album(1, "alice")), 0, "me", isGroup = false))
     }
 
     @Test

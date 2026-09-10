@@ -112,4 +112,31 @@ class ChatScrollTest {
         assertEquals(ChatScroll.TapAction.ClosePanelOnly, ChatScroll.tapActionOf(panelOpen = true))
         assertEquals(ChatScroll.TapAction.DismissKeyboard, ChatScroll.tapActionOf(panelOpen = false))
     }
+
+    // —— 跳到某条后居中 ——
+
+    /**
+     * 2026-09-10 用户报的第 1 条：键盘收起时点回复条不跳。目标就在屏幕下半截，
+     * `scrollToItem` 被列表尾部夹住、没到顶端；旧写法照「在顶端」往回滚半屏，把它推出了屏幕。
+     */
+    @Test
+    fun `目标在屏幕下半截时往上补，不能往回滚`() {
+        assertEquals(150, ChatScroll.centerDeltaPx(itemOffset = 900, itemSize = 100, viewportStart = 0, viewportEnd = 1600))
+    }
+
+    @Test
+    fun `目标真在顶端时往回滚到中间`() {
+        assertEquals(-450, ChatScroll.centerDeltaPx(itemOffset = 0, itemSize = 100, viewportStart = 0, viewportEnd = 1000))
+    }
+
+    @Test
+    fun `比视口还高的行对齐它的顶`() {
+        assertEquals(200, ChatScroll.centerDeltaPx(itemOffset = 200, itemSize = 1500, viewportStart = 0, viewportEnd = 1000))
+    }
+
+    /** 上内边距让视口起点为负：中线要按起止两端算，不能拿视口高度的一半。 */
+    @Test
+    fun `视口起点带内边距时按两端求中线`() {
+        assertEquals(0, ChatScroll.centerDeltaPx(itemOffset = 450, itemSize = 100, viewportStart = -100, viewportEnd = 1100))
+    }
 }

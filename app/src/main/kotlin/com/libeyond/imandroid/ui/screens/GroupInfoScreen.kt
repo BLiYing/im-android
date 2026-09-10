@@ -47,8 +47,8 @@ import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
- * 群聊详情页。**只负责"看"**：群头像/名称/人数、公告与简介、成员列表、退群，
- * 外加一个通往「群管理」的入口行。
+ * 群聊详情页。**只负责"看"**：群头像/名称/人数、公告与简介、成员列表，
+ * 外加一个通往「群管理」的入口行。退群/解散只在头部「更多」里。
  *
  * **管理项不摊在这一页上**（2026-09-08 拆分）：此前开关组、群名编辑、待审申请全挤在这里，
  * 一页上十几个可点的东西，其中一半普通成员根本看不见——页面在两种身份下长得完全不同。
@@ -70,7 +70,6 @@ fun GroupInfoScreen(
     hasMoreMembers: Boolean,
     onLoadMoreMembers: () -> Unit,
     onOpenMember: (GroupMember) -> Unit,
-    onLeave: () -> Unit,
     onBack: () -> Unit,
     /** 我的 uid——权限判定要用（不能踢自己、不能给自己设管理员）。 */
     myUid: String,
@@ -265,25 +264,9 @@ fun GroupInfoScreen(
                 )
             }
 
-            item {
-                Spacer(Modifier.height(24.dp))
-                Box(
-                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
-                        .clickable(enabled = GroupPermissions.canLeave(info)) { onLeave() }
-                        .padding(vertical = 14.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    // 群主退群会被服务端拒——**在这里就说清楚要先转让**，
-                    // 而不是让用户点一下拿个错误码。
-                    if (GroupPermissions.canLeave(info)) {
-                        Text("退出群聊", color = c.danger)
-                    } else {
-                        Text("群主需先转让群聊才能退出", color = c.textTertiary)
-                    }
-                }
-                Spacer(Modifier.height(24.dp))
-            }
+            // 底部不再放「退出群聊」卡：头部「更多」里已有退出/解散（带二次确认，同 iOS），
+            // 两个入口并存只会让人以为是两件不同的事
+            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 }

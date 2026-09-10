@@ -82,8 +82,22 @@ internal fun ChatRowView(
     when (val r = rows[i]) {
         is ChatRow.DayLabel -> DaySeparator(r.timestamp)
         is ChatRow.UnreadDivider -> UnreadDividerRow()
-        is ChatRow.Album -> AlbumBubble(
+        is ChatRow.Album -> {
+            // 一组图必然同一个人发的，取首格判断即可；首格若还在传，那就是我发的
+            val firstSent = (r.members.first() as? AlbumMember.Sent)?.msg
+            val albumMine = firstSent == null || firstSent.sender == myUid
+            val albumShowName = showsSenderName(rows, i, myUid, isGroup)
+            AlbumBubble(
             isGroup = isGroup,
+            // 发送者头与头像列：与下面 Confirmed 分支同一套口径（名字源 / 首条显名 / 段末挂头像）
+            senderName = firstSent?.takeIf { !albumMine }
+                ?.let { localNameOf(it.sender) ?: style.memberNameOf(it.sender) ?: it.fromNickname },
+            showSenderName = albumShowName,
+            senderBadge = firstSent?.takeIf { albumShowName }
+                ?.let { SenderRun.badgeOf(style.roleOf(it.sender), it.fromRole) },
+            reserveAvatarColumn = isGroup && !albumMine,
+            showAvatar = showsSenderAvatar(rows, i, myUid, isGroup),
+            avatarSeed = firstSent?.sender.orEmpty(),
             // **一个宫格里两种格并存**：已确认的正常显示，还在传的那几格压暗底。
             // 状态由每一格自己带（AlbumMember.sending），不再靠"整行是不是待发行"——
             // 靠行类型的话，一批图必然经历"散成单张 → 逐个变确认 → 最后凑回宫格"。
@@ -109,11 +123,7 @@ internal fun ChatRowView(
             onTapTile = { idx ->
                 (r.members.getOrNull(idx) as? AlbumMember.Sent)?.let { onOpenMedia(it.msg) }
             },
-            // 一组图必然同一个人发的，取首格判断即可；首格若还在传，那就是我发的
-            mine = when (val f = r.members.first()) {
-                is AlbumMember.Sent -> f.msg.sender == myUid
-                is AlbumMember.Sending -> true
-            },
+            mine = albumMine,
             timestamp = when (val l = r.members.last()) {
                 is AlbumMember.Sent -> l.msg.timestamp
                 is AlbumMember.Sending -> l.msg.createdAt
@@ -130,7 +140,8 @@ internal fun ChatRowView(
             } else {
                 -1
             },
-        )
+            )
+        }
         // 系统消息走居中灰字，不进气泡分支（iOS IMSystemCell / Web .sys-note）。
         // 不用 `when` 卫语句（Kotlin 2.0 仍是实验特性），在分支内早退。
         is ChatRow.Confirmed -> if (r.msg.contentType == ContentType.SYSTEM) {
@@ -180,13 +191,16 @@ internal fun ChatRowView(
                 ?.let { seq -> { onJumpToSeq(seq) } },
             // **绝不退到 uid**：此前本地没备注时原样显示 10 位内部 ID（`localNameOf(it) ?: it`）
             replyFromName = if (isGroup) {
-                val from = m.replyToFrom
+                val original = originalOf(rows, m.replyToConvSeq ?: 0L)
+                // **ack 不回带 reply_to_from**（与冻结快照同一族）：自己发的引用消息在自己这侧
+                // 这个字段恒空，名字行整个不画——所以退到本地那条原消息的发送者现算
+                val from = m.replyToFrom ?: original?.sender
                 ReplyNames.quoteFrom(
                     uid = from,
                     myUid = myUid,
                     localName = from?.let(localNameOf),
                     memberName = from?.let(style.memberNameOf),
-                    originalNickname = originalOf(rows, m.replyToConvSeq ?: 0L)?.fromNickname,
+                    originalNickname = original?.fromNickname,
                 )
             } else {
                 null

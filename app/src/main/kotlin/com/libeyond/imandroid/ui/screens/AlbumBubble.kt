@@ -35,8 +35,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.libeyond.imandroid.data.AlbumLayout
+import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.ui.rememberFrostedPainter
-import com.libeyond.imandroid.ui.components.DownloadBadge
+import com.libeyond.imandroid.ui.components.AlbumTileGate
+import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.rememberGate
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
@@ -107,8 +109,17 @@ internal fun AlbumBubble(
     onTapTile: (Int) -> Unit = {},
     /** 要隐形的那一格（长按时它由浮层接管，原位留空避免"重叠感"）。-1 = 都不隐。 */
     hiddenIndex: Int = -1,
+    // —— 发送者头与头像列：口径与 [Bubble] 同一套（见那边同名参数的注释）——
+    senderName: String? = null,
+    showSenderName: Boolean = false,
+    senderBadge: SenderRun.Badge? = null,
+    /** 群里对方发的一组图要占头像列——不占的话宫格左缘比同一段的文字气泡少一截。 */
+    reserveAvatarColumn: Boolean = false,
+    showAvatar: Boolean = false,
+    avatarSeed: String = "",
 ) {
     val c = IMTheme.colors
+    val d = IMTheme.dimens
     var rect by remember { mutableStateOf(Rect.Zero) }
     val pattern = remember(tiles.size) { AlbumLayout.rowPattern(tiles.size) }
 
@@ -118,6 +129,24 @@ internal fun AlbumBubble(
             .onGloballyPositioned { rect = it.boundsInWindow() },
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
+        if (reserveAvatarColumn) {
+            // 底对齐、不另加左边距（列表横向内边距已是 chatAvatarLeading），与 Bubble 同
+            Box(modifier = Modifier.size(d.chatAvatar).align(Alignment.Bottom)) {
+                if (showAvatar) {
+                    IMAvatar(
+                        displayName = senderName.orEmpty().ifBlank { avatarSeed },
+                        seed = avatarSeed,
+                        avatarUrl = "",
+                        size = d.chatAvatar,
+                    )
+                }
+            }
+            Spacer(Modifier.width(d.chatAvatarGap))
+        }
+        Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+        if (showSenderName && !senderName.isNullOrBlank()) {
+            SenderHeader(senderName, senderBadge)
+        }
         Box(
             modifier = Modifier
                 .width(AlbumLayout.WIDTH.dp)
@@ -167,6 +196,7 @@ internal fun AlbumBubble(
                 )
             }
         }
+        }
     }
 }
 
@@ -185,19 +215,23 @@ private fun AlbumTileView(
     val c = IMTheme.colors
     // 每一格记住**自己**的矩形：长按浮起的是这一格，不是整个宫格
     var tileRect by remember { mutableStateOf(Rect.Zero) }
+    // 待发那格（本地 content:// uri）不进门控——它还没上传，本来就在本地。
+    // **已确认的那几格必须走门控**：不走的话 Coil 见到远端地址照样把原件拉下来，
+    // 门控就成了纯装饰（2026-09-08 这一处的编辑静默没生效过一次，
+    // 表现正是"文件气泡有门控徽标、宫格却在偷偷下原图"）。
+    val sending = m.sending || m.failed
+    val gate = if (sending) null else rememberGate(m.url, m.contentType, m.sizeBytes, isGroup)
     Box(
         modifier = Modifier.size(size).background(c.subtleFill)
             .onGloballyPositioned { tileRect = it.boundsInWindow() }
             .alpha(if (hidden) 0f else 1f)
-            .combinedClickable(onClick = onTap, onLongClick = { onLongPress(tileRect) }),
+            .combinedClickable(
+                // 没下下来的格子点一下是下载（开始 / 暂停 / 重试，失效不做事），**不打开**（iOS `IMAlbumCell` 同）
+                onClick = { if (gate != null && !gate.ready) gate.onTap() else onTap() },
+                onLongClick = { onLongPress(tileRect) },
+            ),
     ) {
         val frosted = rememberFrostedPainter(m.thumb)
-        // 待发那格（本地 content:// uri）不进门控——它还没上传，本来就在本地。
-        // **已确认的那几格必须走门控**：不走的话 Coil 见到远端地址照样把原件拉下来，
-        // 门控就成了纯装饰（2026-09-08 这一处的编辑静默没生效过一次，
-        // 表现正是"文件气泡有门控徽标、宫格却在偷偷下原图"）。
-        val sending = m.sending || m.failed
-        val gate = if (sending) null else rememberGate(m.url, m.contentType, m.sizeBytes, isGroup)
         AsyncImage(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，
             // 所以选完立刻有图，不用等上传完
@@ -210,12 +244,8 @@ private fun AlbumTileView(
             fallback = frosted,
             modifier = Modifier.size(size),
         )
-        // 门控徽标：小格子用 compact（44dp 的环在 79dp 的格子里占掉大半格）
-        if (gate != null && !gate.ready) {
-            Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-                DownloadBadge(gate.state, m.sizeBytes, gate.onTap, compact = size < 100.dp)
-            }
-        }
+        // 门控层：压暗 + 裸字形 + 36dp 环 + 左上角一项角标（iOS `IMAlbumTileView`），就绪不画
+        if (gate != null) AlbumTileGate(gate.state, m.sizeBytes)
         if (m.sending || m.failed) {
             // 还在发 / 发失败：压一层暗底，让人看出这一格没完成
             Box(Modifier.size(size).background(c.overlay))
@@ -247,8 +277,9 @@ private fun AlbumTileView(
                 }
             }
         }
-        // 视频格左上角显时长（服务端给了才显，**不为拿它去下载视频**）
-        if (m.contentType == ContentType.VIDEO && (m.durationMs ?: 0) > 0) {
+        // 视频格左上角显时长（服务端给了才显，**不为拿它去下载视频**）。
+        // 没下下来时左上角让给门控角标——格子窄，容不下两项，时长等就绪再回来（iOS 同）
+        if (m.contentType == ContentType.VIDEO && (m.durationMs ?: 0) > 0 && (gate == null || gate.ready)) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)

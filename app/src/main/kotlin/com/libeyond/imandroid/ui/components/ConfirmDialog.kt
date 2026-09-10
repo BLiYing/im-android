@@ -64,6 +64,8 @@ fun IMTextPrompt(
     onDismiss: () -> Unit,
     multiline: Boolean = false,
     hint: String = "",
+    /** 确认钮文案。举报这类「提交出去就收不回」的动作写清动词，别只写「确定」。 */
+    confirmText: String = "确定",
 ) {
     val c = IMTheme.colors
     var value by remember { mutableStateOf(initial) }
@@ -90,7 +92,7 @@ fun IMTextPrompt(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(value.trim()) }) { Text("确定", color = c.accent) }
+            TextButton(onClick = { onConfirm(value.trim()) }) { Text(confirmText, color = c.accent) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消", color = c.textSecondary) }

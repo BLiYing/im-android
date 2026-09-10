@@ -29,20 +29,23 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Mic
+import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
-import com.libeyond.imandroid.data.fileHint
+import com.libeyond.imandroid.data.DownloadLabels
+import com.libeyond.imandroid.data.DownloadPhase
 import com.libeyond.imandroid.data.MediaDisplaySize
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.Waveform
 import androidx.compose.runtime.remember
 import com.libeyond.imandroid.ui.rememberFrostedPainter
-import com.libeyond.imandroid.ui.components.DownloadBadge
+import com.libeyond.imandroid.ui.components.FileGateSlot
+import com.libeyond.imandroid.ui.components.GateInfo
+import com.libeyond.imandroid.ui.components.MediaGateOverlay
 import com.libeyond.imandroid.ui.components.MiddleEllipsisText
 import com.libeyond.imandroid.ui.components.passThroughTap
 import com.libeyond.imandroid.ui.components.rememberGate
 import com.libeyond.imandroid.ui.components.TimeFormat
-import com.libeyond.imandroid.ui.components.FileTypeIcon
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -61,6 +64,13 @@ fun MediaContent(
     isGroup: Boolean = false,
     /** 文件行的宽度 = 气泡内容区宽。定宽才有地方把长文件名截中间。 */
     fileRowWidth: Dp = 240.dp,
+    /**
+     * 点开图片/视频查看器。null = 这块图不接点击（长按菜单里的原位重绘）。
+     *
+     * **图/视频整块自己接点击**，不再交给气泡：就绪才打开，没下下来点哪儿都是「开始 / 暂停 / 重试」。
+     * 此前只有中间那枚徽标会下载，点徽标旁边的空白落到气泡上，直接把没下载的视频打开了（2026-09-10 用户报 #8）。
+     */
+    onOpenMedia: ((MessageEntity) -> Unit)? = null,
 ) {
     // **图说整体化**：有 caption 时媒体只圆上角，和下方文字连成一整块（iOS `_captionBG`）；
     // 没有 caption 时四角都圆——此时媒体本身就是整个气泡。
@@ -71,8 +81,8 @@ fun MediaContent(
         RoundedCornerShape(topStart = r, topEnd = r, bottomStart = 0.dp, bottomEnd = 0.dp)
     }
     when (msg.contentType) {
-        "image" -> ImageContent(msg, shape, isGroup)
-        "video" -> VideoContent(msg, shape, host, useTls, isGroup)
+        "image" -> ImageContent(msg, shape, isGroup, onOpenMedia)
+        "video" -> VideoContent(msg, shape, host, useTls, isGroup, onOpenMedia)
         "voice" -> VoiceContent(msg.duration?.toLong(), msg.waveform)
         else -> FileContent(msg, isGroup, fileRowWidth)
     }
@@ -91,11 +101,21 @@ internal fun rememberMediaDisplaySize(msg: MessageEntity): DpSize {
     }
 }
 
+/**
+ * 图/视频整块的轻点：就绪 → 打开；没就绪 → 门控动作（开始 / 暂停 / 重试）；失效 → 不接（iOS 失效层点击穿透）。
+ * 用 passThroughTap：只吃抬起，气泡上的长按菜单照常弹。
+ */
+private fun Modifier.mediaTap(gate: GateInfo, msg: MessageEntity, onOpenMedia: ((MessageEntity) -> Unit)?): Modifier =
+    passThroughTap(enabled = onOpenMedia != null && gate.state.phase != DownloadPhase.Expired) {
+        if (gate.ready) onOpenMedia?.invoke(msg) else gate.onTap()
+    }
+
 @Composable
 private fun ImageContent(
     msg: MessageEntity,
     shape: androidx.compose.ui.graphics.Shape,
     isGroup: Boolean,
+    onOpenMedia: ((MessageEntity) -> Unit)?,
 ) {
     val c = IMTheme.colors
     // 磨砂占位（M4-7）：原图到位之前显示消息里内嵌的 ~20px 缩略放大 + 模糊，
@@ -109,7 +129,8 @@ private fun ImageContent(
         modifier = Modifier
             .size(rememberMediaDisplaySize(msg))
             .clip(shape)
-            .background(c.subtleFill),
+            .background(c.subtleFill)
+            .mediaTap(gate, msg, onOpenMedia),
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
@@ -121,7 +142,7 @@ private fun ImageContent(
             fallback = frosted,
             modifier = Modifier.fillMaxSize(),
         )
-        DownloadBadge(gate.state, msg.fileSize ?: 0L, gate.onTap)
+        MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText = null, expiredCaption = "图片已失效")
     }
 }
 
@@ -132,10 +153,16 @@ private fun VideoContent(
     host: String,
     useTls: Boolean,
     isGroup: Boolean,
+    onOpenMedia: ((MessageEntity) -> Unit)?,
 ) {
     val c = IMTheme.colors
+    // 门控作用在**视频本体**上，封面照常加载——封面就几十 KB，
+    // 它是"信封"的一部分；把封面也门控掉的话，未下载的视频只剩一团磨砂，
+    // 用户连要不要下都判断不了。
+    val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
     Box(
-        modifier = Modifier.size(rememberMediaDisplaySize(msg)).clip(shape).background(c.subtleFill),
+        modifier = Modifier.size(rememberMediaDisplaySize(msg)).clip(shape).background(c.subtleFill)
+            .mediaTap(gate, msg, onOpenMedia),
         contentAlignment = Alignment.Center,
     ) {
         // 封面：**解不了 HEVC 的端只能靠这张图**，没有它就是一片黑底加个播放钮。
@@ -161,35 +188,30 @@ private fun VideoContent(
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        // 门控作用在**视频本体**上，封面照常加载——封面就几十 KB，
-        // 它是"信封"的一部分；把封面也门控掉的话，未下载的视频只剩一团磨砂，
-        // 用户连要不要下都判断不了。
-        val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
-        if (gate.ready) {
-            Box(
-                modifier = Modifier.size(44.dp).clip(CircleShape).background(c.overlay),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(Lucide.Play, "播放", Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onMedia))
-            }
-        } else {
-            DownloadBadge(gate.state, msg.fileSize ?: 0L, gate.onTap)
+        val durationText = msg.duration?.takeIf { it > 0 }?.let { MediaUrl.formatDuration(it) }
+        if (!gate.ready) {
+            // 没下下来：时长并进左上角那块胶囊（「大小 · 时长」），不另画一块（iOS `renderGatedDownloadUI`）
+            MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText, expiredCaption = "视频已失效")
+            return@Box
+        }
+        Box(
+            modifier = Modifier.size(44.dp).clip(CircleShape).background(c.overlay),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(Lucide.Play, "播放", Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onMedia))
         }
         // 时长角标：服务端给了才显，**不为拿它去下载视频**。
         // 位置是**左上角**——协议 §4.1 明写「据 duration 在视频封面左上角显 mm:ss」，
         // 三端同一份口径。画在右下角会和时间胶囊叠在一起（2026-09-07 真机实测撞见）。
         // 形状与右下角的时间胶囊同一套（高 18、圆角 9），等宽数字不随秒数跳宽（iOS `_durationBadge`）
-        if (msg.duration != null && msg.duration > 0) {
+        if (durationText != null) {
             Box(
                 modifier = Modifier.align(Alignment.TopStart).padding(6.dp).height(18.dp)
                     .clip(RoundedCornerShape(9.dp)).background(c.overlay)
                     .padding(horizontal = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    MediaUrl.formatDuration(msg.duration),
-                    color = c.onMedia, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-                )
+                Text(durationText, color = c.onMedia, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             }
         }
     }
@@ -245,7 +267,7 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp) {
     Row(
         modifier = Modifier.width(rowWidth).padding(vertical = 2.dp)
             // **就绪就能点开**（对齐 iOS：文件行/气泡在 ready 态点一下就是打开它）；
-            // 没就绪时点一下等于点 ↓。此前这条气泡完全不可点——下下来了也没办法看。
+            // 没就绪时点一下等于点 ↓（失效时门控动作为空，点了不做事）。
             // 用 passThroughTap 不用 clickable：后者吃掉 down，长按文件行弹不出菜单（#13）
             .passThroughTap {
                 if (gate.ready) {
@@ -263,26 +285,26 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp) {
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 按扩展名给图（对齐 iOS `IMFileTypeIconForName`）——一个通用文件图标下，
-        // 一眼分不出这是表格还是压缩包。
-        // **未就绪时图标上压门控徽标**：文件气泡没有"图"可以磨砂，
-        // 状态只能挂在这枚图标上（iOS `IMBubbleCell` 的 `_fileIconWrap` 同理）。
-        Box(contentAlignment = Alignment.Center) {
-            FileTypeIcon(name, size = 44.dp)
-            DownloadBadge(gate.state, sizeBytes = 0, onTap = gate.onTap, compact = true)
-        }
+        // 图标位：就绪才是按扩展名的类型图标（对齐 iOS `IMFileTypeIconForName`）；
+        // 没下下来时这一格画下载状态——此前类型图标上再压一枚徽标，看着像已经能打开（#8）
+        FileGateSlot(gate.state, msg.fileSize ?: 0L, name)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             // 名字用强调色、跟随聊天字号、**放不下截中间**（iOS `NSLineBreakByTruncatingMiddle`）：
             // 截尾会把扩展名切掉，「季度报表-最终版-改…」看不出是表格还是文档
             MiddleEllipsisText(name, color = c.accent, fontSize = appearance.chatFontSize, maxLines = 2)
-            // 大小直接用服务端给的字节数格式化，**不重新下载文件去算**
-            val size = MediaUrl.formatSize(msg.fileSize ?: 0)
-            // 未下载时把状态写在大小旁边——徽标只是个 ↓，说不清"是没下还是下失败了"
-            val hint = gate.state.phase.fileHint()
-            if (size.isNotEmpty() || hint.isNotEmpty()) {
+            // 大小直接用服务端给的字节数格式化，**不重新下载文件去算**；状态文案照 iOS（见 DownloadLabels）
+            val line = DownloadLabels.fileStatusLine(gate.state, msg.fileSize ?: 0L)
+            if (line.isNotEmpty()) {
                 Spacer(Modifier.height(3.dp))
-                Text(size + hint, color = c.textSecondary, fontSize = 12.sp)
+                val tint = if (DownloadLabels.fileStatusIsDanger(gate.state.phase)) c.danger else c.textSecondary
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (gate.state.phase == DownloadPhase.Paused) {
+                        Image(Lucide.Pause, null, Modifier.size(10.dp), colorFilter = ColorFilter.tint(tint))
+                        Spacer(Modifier.width(3.dp))
+                    }
+                    Text(line, color = tint, fontSize = 12.sp)
+                }
             }
         }
     }

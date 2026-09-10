@@ -10,6 +10,7 @@ import com.libeyond.imandroid.data.PresenceStore
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.IMDatabase
 import com.libeyond.imandroid.sdk.api.ContactApi
+import com.libeyond.imandroid.sdk.api.FavoriteApi
 import com.libeyond.imandroid.sdk.api.GroupApi
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.api.ConversationsApi
@@ -78,6 +79,8 @@ class IMClient(context: Context) {
     val devices = DevicesApi(http)
     val conversationsApi = ConversationsApi(http)
     val contacts = ContactApi(http)
+    /** 收藏（M4-4）。目前只有多选底栏在用，列表页未做。 */
+    val favorites = FavoriteApi(http)
     val groups = GroupApi(http)
     val profile = ProfileApi(http)
     val qr = QrApi(http)

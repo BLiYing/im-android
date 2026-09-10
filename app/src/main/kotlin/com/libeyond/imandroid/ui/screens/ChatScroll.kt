@@ -50,6 +50,14 @@ internal class ChatScrollMarks {
 
     /** 上一次看到的出箱身份；null = 基线未建。见 [ChatScroll.hasNewOutgoing]。 */
     var outgoing: Set<String>? = null
+
+    /**
+     * 在这个时刻之前刚跳到过某条消息（引用块 / 回复条 / 搜索命中）。
+     *
+     * 跳转会换锚点窗、行数跟着变，这段时间里**跟底与翻页补偿都要让路**——
+     * 否则刚居中的目标被「行变多了、跟到底」或「按新增条数补偿」一把甩走。
+     */
+    var locatingUntil = 0L
 }
 
 /** 列表底边还差多少像素到内容底；最后一行不可见时 null。坐标口径见 [ChatScroll.distanceToBottomPx]。 */
@@ -168,14 +176,13 @@ internal fun Modifier.chatListTaps(
  * `scrollToItem` 是把目标顶到视口**顶端**，而 `CHAT_UX.md §3.1` 的三端契约是**居中**
  * ——顶端对齐时目标上方的上下文一行都看不到，"跳到了但不知道跳到哪"。
  * iOS 用 `UITableViewScrollPositionMiddle`，Web 用 `scrollIntoView({block:"center"})`，
- * Compose 没有对应参数，只能先顶上去再补一段偏移。
- *
- * 目标比视口还高时不补（`delta <= 0`），补了反而把它的开头推出屏幕。
+ * Compose 没有对应参数，只能先把它弄进视口、再按它**实际所在的位置**补一段偏移
+ * ——补多少见 [ChatScroll.centerDeltaPx]（旧写法假设它已在顶端，列表尾部会被夹住，补反了）。
  * 靠边的行由 `scrollBy` 自己夹住，不必特判。
  */
 internal suspend fun centerItem(listState: LazyListState, index: Int) {
-    val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
-    val viewport = listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset
-    val delta = (viewport - info.size) / 2f
-    if (delta > 0f) listState.scrollBy(-delta)
+    val layout = listState.layoutInfo
+    val info = layout.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val delta = ChatScroll.centerDeltaPx(info.offset, info.size, layout.viewportStartOffset, layout.viewportEndOffset)
+    if (delta != 0) listState.scrollBy(delta.toFloat())
 }

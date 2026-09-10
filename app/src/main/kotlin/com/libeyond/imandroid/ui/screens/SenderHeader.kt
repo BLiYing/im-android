@@ -85,13 +85,21 @@ internal fun showsSenderAvatar(rows: List<ChatRow>, index: Int, myUid: String, i
     return !SenderRun.sameRun(next, cur)
 }
 
-/** 群里对方发的普通消息才有发送者头；其余（单聊 / 自己 / 系统 / 发送者缺失）返回 null。 */
+/**
+ * 群里对方发的普通消息**与一组图**才有发送者头；其余（单聊 / 自己 / 系统 / 发送者缺失）返回 null。
+ *
+ * 宫格行此前不在这里：接收端的九宫格既不占头像列也不画名字，左缘比别的气泡少 36dp，
+ * 发送者是谁一眼看不出来（iOS `IMAlbumCell` 继承 `IMMessageCell` 的 gutter，天然有）。
+ */
 private fun othersGroupItem(rows: List<ChatRow>, index: Int, myUid: String, isGroup: Boolean): SenderRun.Item? {
     if (!isGroup) return null
-    val cur = rows.getOrNull(index) as? ChatRow.Confirmed ?: return null
-    val m = cur.msg
-    if (m.sender.isBlank() || m.sender == myUid || m.contentType == ContentType.SYSTEM) return null
-    return runItemOf(cur, myUid)
+    val item = when (val cur = rows.getOrNull(index)) {
+        is ChatRow.Confirmed -> if (cur.msg.contentType == ContentType.SYSTEM) null else runItemOf(cur, myUid)
+        is ChatRow.Album -> runItemOf(cur, myUid)
+        else -> null
+    } ?: return null
+    if (item.sender.isBlank() || item.sender == myUid) return null
+    return item
 }
 
 /**

@@ -187,9 +187,9 @@ internal fun Bubble(
                     .then(
                         if (onLongPress != null && !recalled) {
                             Modifier.combinedClickable(
-                                // 图片/视频点开进查看器、合并转发卡点开详情页；其余类型点击**不做事**——
-                                // 文本气泡点一下就跳走是很怪的交互（iOS/Web 同样只有这几类可点）
-                                onClick = { msg?.let { onTapBubble(it, onOpenMedia, onOpenRecord) } },
+                                // 合并转发卡点开详情页；其余类型点击**不做事**——文本气泡点一下就跳走是很怪的交互。
+                                // 图/视频由媒体块自己接（得先看下没下下来，见 MediaContent 的 onOpenMedia）
+                                onClick = { msg?.let { onTapBubble(it, onOpenRecord) } },
                                 onLongClick = { onLongPress(bubbleRect) },
                             )
                         } else Modifier
@@ -206,9 +206,11 @@ internal fun Bubble(
                 // 图/视频按原图像素定尺寸（iOS `IMMediaDisplaySize`）。贴边气泡**整列就是图那么宽**：
                 // 列宽一旦被引用块/图说的 fillMaxWidth 撑到气泡最大宽，图就离气泡左边空出一截（#16）
                 val mediaSize = if (flushMedia) rememberMediaDisplaySize(msg!!) else null
+                // 内容一律**左对齐**，只有时间行靠右（iOS `IMBubbleCell` 同）：
+                // 此前整列 End，引用块比正文宽时，我发的短正文被推到气泡右侧
                 Column(
                     modifier = if (mediaSize != null) Modifier.width(mediaSize.width) else Modifier,
-                    horizontalAlignment = Alignment.End,
+                    horizontalAlignment = Alignment.Start,
                 ) {
                     // 引用条：被引用消息的降级快照（发送时冻结，原消息删了仍可展示）。
                     // **判据是 replyToConvSeq > 0 而不是"有没有快照"**（同 iOS `IMBubbleCell`）：
@@ -241,6 +243,8 @@ internal fun Bubble(
                                 msg!!, host, useTls, isGroup = isGroup,
                                 // 文件行占满气泡内容区（iOS 文件气泡定宽），名字才有地方中间截断
                                 fileRowWidth = bubbleMax - d.bubblePaddingH * 2,
+                                // 图/视频整块自己接点击（就绪才打开）；可点的口径与下面长按一致
+                                onOpenMedia = if (onLongPress != null) onOpenMedia else null,
                             )
                             // 时间胶囊**浮在媒体右下角**，不在下方另起一行——
                             // iOS `IMImageCell` 的 `_metaWrap` 就恒定钉在 thumb 右下（不论有无图说）。
@@ -307,7 +311,7 @@ internal fun Bubble(
                     // 图/视频的时间**恒在图上的胶囊里**，有图说也不在图说下面再画一行（iOS 同）
                     if (flushMedia) return@Column
                     Spacer(Modifier.height(2.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = TimeFormat.bubbleTime(timestamp),
                             color = if (mine) c.metaTime else c.textTertiary,
@@ -333,17 +337,15 @@ internal fun Bubble(
     } // BoxWithConstraints（量本行可用宽 → 气泡最大宽按比例）
 }
 
-/** 轻点气泡本体。文件行、引用块、下载徽标各自处理自己的轻点（passThroughTap 会先消费掉抬起）。 */
-private fun onTapBubble(
-    m: MessageEntity,
-    onOpenMedia: ((MessageEntity) -> Unit)?,
-    onOpenRecord: ((String) -> Unit)?,
-) {
-    when (m.contentType) {
-        ContentType.IMAGE, ContentType.VIDEO -> onOpenMedia?.invoke(m)
-        // 坏数据不开（iOS `IMLooksLikeChatRecordJSON` 同一道守卫）：否则推出一页空白的「聊天记录」
-        ContentType.CHAT_RECORD -> if (CardContent.looksLikeRecord(m.content)) onOpenRecord?.invoke(m.content)
-    }
+/**
+ * 轻点气泡本体。文件行、引用块、图/视频块各自处理自己的轻点（passThroughTap 会先消费掉抬起）。
+ *
+ * **图/视频不在这里开**：这里不知道它下没下下来。此前在这里无条件打开，
+ * 于是点未下载视频的徽标旁边空白就把它打开了（2026-09-10 用户报 #8）。
+ */
+private fun onTapBubble(m: MessageEntity, onOpenRecord: ((String) -> Unit)?) {
+    // 坏数据不开（iOS `IMLooksLikeChatRecordJSON` 同一道守卫）：否则推出一页空白的「聊天记录」
+    if (m.contentType == ContentType.CHAT_RECORD && CardContent.looksLikeRecord(m.content)) onOpenRecord?.invoke(m.content)
 }
 
 /**

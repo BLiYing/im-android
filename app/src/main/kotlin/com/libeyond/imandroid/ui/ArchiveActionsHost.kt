@@ -14,6 +14,7 @@ import com.libeyond.imandroid.data.ArchiveAction
 import com.libeyond.imandroid.data.ArchiveActions
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DownloadPhase
+import com.libeyond.imandroid.data.SelectionActions
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -106,7 +107,14 @@ internal fun ArchiveActionsHost(
         preview = null,
         items = buildArchiveMenu(actions) { a ->
             when (a) {
-                ArchiveAction.Forward -> forwarding = target
+                // 失效媒体拦下不转，与聊天页 `SelectionActionsController.forwardOne` 同一判据（iOS 一处拦三入口）
+                ArchiveAction.Forward -> {
+                    val msg = target.toMessageEntity(owner, convId)
+                    val gone = SelectionActions.isExpiredMedia(msg) { url, isVideo ->
+                        client.downloads.stateOf(url, isVideo).phase == DownloadPhase.Expired
+                    }
+                    if (gone) onToast(SelectionActions.expiredForwardText(msg.contentType)) else forwarding = target
+                }
                 ArchiveAction.LocateInChat -> onLocateInChat(target.convSeq)
                 ArchiveAction.CancelDownload ->
                     client.downloads.pause(target.content, target.contentType == ContentType.VIDEO)

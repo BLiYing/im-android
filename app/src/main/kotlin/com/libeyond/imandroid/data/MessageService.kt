@@ -222,19 +222,22 @@ class MessageService(
      *
      * 媒体消息**直接复用原 URL**，不重新上传：服务端存的是同一份文件，
      * 再传一遍既慢又白占空间（iOS/Web 同口径）。
+     *
+     * @param groupId 相册整体转发时的**新**分组 ID（见 `SelectionActions.regroupAlbums`）；
+     *   不能沿用原 ID——原相册里没选的那几张不在新会话里，收端会按原 ID 等一组永远凑不齐的图。
      */
-    suspend fun forward(msg: MessageEntity, toConvId: String, to: String, origin: String) {
+    suspend fun forward(msg: MessageEntity, toConvId: String, to: String, origin: String, groupId: String? = null) {
         val owner = ownerProvider() ?: return
         val p = repo.createPending(
             owner = owner, convId = toConvId, to = to,
             content = msg.content, contentType = msg.contentType,
-            forwardFrom = origin,
+            forwardFrom = origin, groupId = groupId,
         )
         transmit(
             p.clientMsgId, toConvId, to, msg.contentType, msg.content,
             replyToConvSeq = null,   // 引用不跟着转发走：被引用的那条不在新会话里
             fileName = msg.fileName, fileSize = msg.fileSize, caption = msg.caption,
-            forwardFrom = origin,
+            forwardFrom = origin, groupId = groupId,
         )
         log.i("msg_forwarded", "from" to msg.convId, "to" to toConvId, "seq" to msg.convSeq)
     }

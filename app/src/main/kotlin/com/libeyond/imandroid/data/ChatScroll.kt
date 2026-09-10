@@ -74,6 +74,21 @@ object ChatScroll {
     fun hasNewOutgoing(previous: Set<String>?, current: Set<String>): Boolean =
         previous != null && current.any { it !in previous }
 
+    /**
+     * 把一行滚到视口正中还要再滚多少像素（正 = 内容往上走）。坐标口径同 `LazyListLayoutInfo`。
+     *
+     * **按这一行此刻的真实偏移算，不假设它已经被顶到视口顶端**：`scrollToItem` 在列表尾部会被夹住，
+     * 目标本来就在屏幕下半截时根本到不了顶端。旧写法照「在顶端」再往回滚半屏，
+     * 于是把目标推出了屏幕下沿——键盘收起时视口大、最近几条全在屏内，一撞一个准；
+     * 键盘弹起时视口小、目标多半在屏外，真被顶到了顶端，看着就是好的（2026-09-10 用户报的第 1 条）。
+     *
+     * 比视口还高的行对齐它的**顶**：居中会把它的开头推出屏幕。
+     */
+    fun centerDeltaPx(itemOffset: Int, itemSize: Int, viewportStart: Int, viewportEnd: Int): Int {
+        if (itemSize >= viewportEnd - viewportStart) return itemOffset - viewportStart
+        return itemOffset + itemSize / 2 - (viewportStart + viewportEnd) / 2
+    }
+
     /** 一次按下算不算「轻点」：没滑出 touchSlop，且没按到长按的时长。 */
     fun isTap(movedBeyondSlop: Boolean, pressedMs: Long, longPressTimeoutMs: Long): Boolean =
         !movedBeyondSlop && pressedMs < longPressTimeoutMs

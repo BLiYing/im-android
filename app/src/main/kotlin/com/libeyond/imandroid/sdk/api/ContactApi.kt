@@ -4,7 +4,9 @@ import com.libeyond.imandroid.sdk.http.HttpClient
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 /** 用户名片（对齐 `internal/profile.Card`）。 */
 @Serializable
@@ -128,6 +130,24 @@ class ContactApi(private val http: HttpClient) {
             put("target_type", targetType)
             put("target_id", targetId)
             put("conv_id", convId)
+            put("reason", reason)
+        })
+    }
+
+    /**
+     * 多选批量举报**同一个人的若干条消息**：一次一张工单（`target_type=message` + `target_seqs`）。
+     *
+     * 带了 `target_seqs` 服务端就不看 `target_id`，但字段仍要非空，填第一条的 seq（iOS/Web 同）。
+     * 能不能举报（全是同一个人、没有我自己的、都已确认）由调用方先判——见 `SelectionActions.reportableSender`；
+     * 服务端单张上限 100 条，与多选上限同数。
+     */
+    suspend fun reportMessages(convId: String, seqs: List<Long>, reason: String = "") {
+        require(seqs.isNotEmpty()) { "reportMessages needs at least one seq" }
+        http.call("POST", "/api/v1/reports", buildJsonObject {
+            put("target_type", "message")
+            put("target_id", seqs.first().toString())
+            put("conv_id", convId)
+            putJsonArray("target_seqs") { seqs.forEach { add(it) } }
             put("reason", reason)
         })
     }

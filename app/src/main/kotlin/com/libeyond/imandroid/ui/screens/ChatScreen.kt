@@ -194,6 +194,10 @@ fun ChatScreen(
     onToggleSelect: (MessageEntity) -> Unit = {},
     onCancelSelection: () -> Unit = {},
     onForwardSelected: () -> Unit = {},
+    /** 举报钮：可举报时点它 [onReportSelected]，灰着被点 [onReportBlocked]（说清为什么不能举报）。 */
+    onReportSelected: () -> Unit = {},
+    onReportBlocked: () -> Unit = {},
+    onFavoriteSelected: () -> Unit = {},
     onDeleteSelected: () -> Unit = {},
     /**
      * 行数据两路（已确认 / 待发）都从库里读到了——**空会话也算读到**。
@@ -258,10 +262,13 @@ fun ChatScreen(
         if (ChatScroll.hasNewOutgoing(marks.outgoing, outgoingKeys)) {
             onOutgoingEcho() // 停在历史时 Host 换回尾窗；新那一窗到了本 effect 再跑一次，仍在保质期内
             marks.stickUntil = SystemClock.uptimeMillis() + ChatScroll.STICK_BOTTOM_ARM_MS
+            marks.locatingUntil = 0L // 自己发了东西就该回到最新，刚才那次跳转作废
         }
         marks.outgoing = outgoingKeys
         val grew = rows.size > marks.rowsSize
         marks.rowsSize = rows.size
+        // 刚跳到某条：换锚点窗让行数变了，这时跟底会把刚居中的目标甩走
+        if (SystemClock.uptimeMillis() < marks.locatingUntil) return@LaunchedEffect
         if (SystemClock.uptimeMillis() < marks.stickUntil && !listDragged) {
             stickToBottom(listState)
             return@LaunchedEffect
@@ -287,6 +294,11 @@ fun ChatScreen(
 
     LaunchedEffect(rows.size, listState.firstVisibleItemIndex) {
         if (!marks.didEntry || rows.isEmpty()) return@LaunchedEffect
+        // 刚跳到某条：这时行数变是换锚点窗换的，不是上一页回来了——按新增条数补偿会把目标推走
+        if (SystemClock.uptimeMillis() < marks.locatingUntil) {
+            pendingOlder = false
+            return@LaunchedEffect
+        }
 
         // 上一页加载回来了 → 把视口按同一条消息补偿回去
         if (pendingOlder && rows.size > rowsBeforeLoad) {
@@ -368,10 +380,14 @@ fun ChatScreen(
         // 渲染窗口撑大了，下一帧 rows 长出来这个 effect 会再跑一次。
         // "跳不了"的判断与提示归 Host——只有它查得到本地库。
         var highlightSeq by remember(convId) { mutableStateOf(0L) }
-        LaunchedEffect(locateSeq, rows.size) {
+        // key 用 rows 本身而非 rows.size：换到一个**条数相同**的锚点窗时 size 不变，目标进来了也不会再跑
+        LaunchedEffect(locateSeq, rows) {
             if (locateSeq <= 0) return@LaunchedEffect
             val idx = rowIndexOfSeq(rows, locateSeq)
             if (idx < 0) return@LaunchedEffect
+            // 跳转压过「刚点过 ↓」的贴底待办，并让跟底 / 翻页补偿让路一小段
+            marks.stickUntil = 0L
+            marks.locatingUntil = SystemClock.uptimeMillis() + ChatScroll.STICK_BOTTOM_ARM_MS
             listState.scrollToItem(idx)
             centerItem(listState, idx)
             // 先点亮再归零：归零会换掉本 effect 的 key 把它取消，
@@ -537,8 +553,12 @@ fun ChatScreen(
         // 多选态：底部换成动作栏，输入栏整个不画（同 iOS：多选期间隐藏输入栏显示工具栏）
         if (selection != null) {
             SelectionBar(
-                count = selection.size,
+                selected = selection,
+                myUid = myUid,
                 onForward = onForwardSelected,
+                onReport = onReportSelected,
+                onReportBlocked = onReportBlocked,
+                onFavorite = onFavoriteSelected,
                 onDelete = onDeleteSelected,
             )
             return@Column

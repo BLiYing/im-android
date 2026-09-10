@@ -449,13 +449,6 @@ fun GroupInfoHost(
         },
         onMore = { m -> confirmMore = m },
         onMemberLongPress = { m -> memberMenu = m },
-        onLeave = {
-            scope.launch {
-                runCatching { client.groups.leave(convId) }
-                client.messages.refreshConversations()
-                onLeft()
-            }
-        },
             tab = tab,
             onTabChange = { tab = it },
             archive = archive.items,

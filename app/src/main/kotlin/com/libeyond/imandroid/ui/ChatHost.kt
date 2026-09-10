@@ -4,23 +4,13 @@ import com.libeyond.imandroid.ui.screens.MentionPanel
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.data.sendTyping
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
 import com.libeyond.imandroid.data.extendWindowOlder
 import com.libeyond.imandroid.data.observeWindow
-import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.ui.screens.ChatRowStyle
-import com.libeyond.imandroid.ui.screens.ChatRowView
-import com.libeyond.imandroid.ui.theme.IMTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
-import com.libeyond.imandroid.sdk.logging.IMLog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.libeyond.imandroid.data.AttachItems
@@ -30,8 +20,6 @@ import com.libeyond.imandroid.ui.screens.FriendPickerScreen
 import com.libeyond.imandroid.ui.screens.MediaViewerScreen
 import com.libeyond.mediapicker.MediaPickerHost
 import com.libeyond.mediapicker.PickedMedia
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -44,28 +32,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import com.libeyond.imandroid.data.MessageAction
-import com.libeyond.imandroid.data.AlbumLayout
-import com.libeyond.imandroid.data.MessageActions
 import com.libeyond.imandroid.ui.components.IMToast
-import com.libeyond.imandroid.ui.screens.Bubble
-import com.libeyond.imandroid.ui.components.MessageContextMenu
 import androidx.compose.ui.geometry.Rect
-import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
 import com.libeyond.imandroid.data.ChatWindow
 import com.libeyond.imandroid.data.ChatWindows
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.db.MessageEntity
-import com.libeyond.imandroid.sdk.protocol.MsgOp
-import com.libeyond.imandroid.ui.components.ActionSheet
-import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.ws.ConnState
-import com.libeyond.imandroid.ui.screens.AlbumBubble
-import com.libeyond.imandroid.ui.screens.AlbumTile
-import com.libeyond.imandroid.ui.screens.ChatRow
 import com.libeyond.imandroid.ui.screens.ChatScreen
 import com.libeyond.imandroid.ui.screens.buildChatRows
 import kotlinx.coroutines.launch
@@ -104,8 +79,8 @@ fun ChatHost(
     val sel = rememberChatSelection(conv.convId)
 
     // —— 转发（M4-3）——
-    // 待转发的消息列表（null = 没在转发）。选完目标会话后逐条发出。
-    var forwarding by remember(conv.convId) { mutableStateOf<List<MessageEntity>?>(null) }
+    // 待转发的任务（null = 没在转发）：逐条 or 合并，见 ChatSelectionActions.kt 的 ForwardJob
+    var forwarding by remember(conv.convId) { mutableStateOf<ForwardJob?>(null) }
     /** 选图中（覆盖在聊天页之上的自建相册页；无权限时它自己会降级到系统选择器）。 */
     // toast 要声明在下面那些 launcher 回调之前——回调里会赋值
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
@@ -127,6 +102,14 @@ fun ChatHost(
         runCatching { client.contacts.friends() }.onSuccess { l -> friendsByUid = l.associateBy { it.userId } }
     }
     var menuFor by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
+    /** 成员表（群资料里拉）：名字、角色、头像，uid 为键。超级群只有我自己。 */
+    var memberNames by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var memberAvatars by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    // 多选底栏的转发/举报/收藏（M4-3/M4-4）。要在 BackHandler 之前：返回键先关「逐条/合并」选择单
+    val selActions = rememberSelectionActions(
+        client, conv, sel, SelectionPeople(friendsByUid, memberNames, memberAvatars),
+        onToast = { toast = it }, onOpenForward = { forwarding = it },
+    )
 
     // 渲染窗口（MESSAGE_WINDOW_DESIGN §4）。两态：贴最新的尾窗 / 钉在某段历史的锚点窗。
     // **不能无界**——13 万条的会话整窗构造对象会把聊天页渲染成空白（2026-09-07 实测）。
@@ -187,6 +170,7 @@ fun ChatHost(
             // 多选排在最前：它盖掉了输入栏与标题栏，用户按返回想退的必然是它
             //（不拦的话「进会话 → 按返回 → App 没了」，这是 Android 用户最直觉的一个动作）。
             null -> when {
+                selActions.askingMode -> selActions.askingMode = false
                 sel.active -> sel.cancel()
                 search.open -> search.close()
                 else -> onBack()
@@ -272,7 +256,6 @@ fun ChatHost(
     var mentionNames by remember(conv.convId) { mutableStateOf<List<String>>(emptyList()) }
     /** 成员角色与显示名（uid 为键）：发送者徽标、名字、引用块与回复条的名字用。超级群只有我自己。 */
     var memberRoles by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var memberNames by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     LaunchedEffect(conv.convId) {
         if (conv.isGroup) {
             runCatchingCancellable { client.groups.info(conv.convId) }
@@ -284,6 +267,7 @@ fun ChatHost(
                     mentionNames = it.members.map(GroupMember::displayName)
                     memberRoles = it.members.associate { m -> m.userId to m.role }
                     memberNames = it.members.associate { m -> m.userId to m.displayName }
+                    memberAvatars = it.members.associate { m -> m.userId to m.avatarUrl }
                 }
         }
     }
@@ -406,7 +390,7 @@ fun ChatHost(
                 }
                 // 与 iOS 一致：整个功能三端都没做
                 AttachItems.Kind.AudioVideo -> toast = "音视频通话还没做"
-                // 本端没有收藏能力（无 API、无页面）
+                // 能收藏（多选底栏），但还没有收藏列表页，无从挑一条发出去
                 AttachItems.Kind.Favorite -> toast = "收藏还没做"
             }
         },
@@ -457,11 +441,10 @@ fun ChatHost(
         selection = sel.selected,
         onToggleSelect = { m -> sel.toggle(m)?.let { toast = it } },
         onCancelSelection = { sel.cancel() },
-        onForwardSelected = {
-            val r = sel.forwardPick()
-            r.notice?.let { toast = it }
-            if (r.msgs.isNotEmpty()) { forwarding = r.msgs; sel.cancel() }
-        },
+        onForwardSelected = { selActions.forward() },
+        onReportSelected = { selActions.report() },
+        onReportBlocked = { selActions.reportBlocked() },
+        onFavoriteSelected = { selActions.favorite() },
         onDeleteSelected = { sel.confirmDelete = true },
         mentionNames = mentionNames,
         roleOf = { uid -> memberRoles[uid] },
@@ -500,7 +483,7 @@ fun ChatHost(
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
             onSave = saveMedia,
             // 先关查看器再开转发选择页：两层叠着关掉上面一层会露出黑底大图
-            onForward = { viewing = null; forwarding = listOf(m) },
+            onForward = { viewing = null; selActions.forwardOne(m) },
             onClose = { viewing = null },
         )
     }
@@ -553,20 +536,11 @@ fun ChatHost(
     // —— 转发目标选择页（覆盖在聊天页之上）——
     val fwd = forwarding
     if (fwd != null) {
-        val convs by client.repo.observeConversations(owner).collectAsState(initial = emptyList())
-        ForwardPickerScreen(
-            conversations = convs,
-            count = fwd.size,
-            onCancel = { forwarding = null },
-            onToast = { toast = it },
-            // 串行发送与 forwardFrom 口径收在 forwardMessages 里（详情页归档转发共用同一份）
-            onConfirm = { targets ->
-                forwarding = null
-                scope.launch { toast = forwardMessages(client, fwd, targets) }
-            },
-        )
+        ForwardPickerLayer(client, fwd, sel, scope, onClose = { forwarding = null }, onToast = { toast = it })
         return
     }
+
+    SelectionActionLayers(selActions)
 
     toast?.let { t ->
         IMToast(t) { toast = null }
@@ -583,7 +557,7 @@ fun ChatHost(
             conv = conv,
             iAmManager = iAmManager,
             onReply = { replyTo = it },
-            onForward = { forwarding = listOf(it) },
+            onForward = { selActions.forwardOne(it) },
             // 进多选默认勾上触发的那条（同 iOS enterSelectionWithMessage:）
             onMultiSelect = { m -> sel.enter(m) },
             onDismiss = { menuFor = null },
