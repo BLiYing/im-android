@@ -202,3 +202,54 @@ private sealed interface Item {
         override fun asAlbumMember(): AlbumMember = AlbumMember.Sending(msg)
     }
 }
+
+// —— 以下从 ChatScreen.kt 平移（2026-09-10，那份文件到 595/600 行）：按 seq 反查行的纯函数 ——
+
+/**
+ * 一条消息的引用快照该显示什么。
+ *
+ * 三档，优先级从高到低：
+ * ① 服务端**发送时冻结**的 `reply_snapshot`（原消息后续被删/撤回仍可展示）；
+ * ② 本地那条原消息**现算**——`ack` 只回 5 个字段，冻结快照回不来，
+ *    所以自己发的引用消息在自己这一侧只有这一档可用；
+ * ③ 都没有 → 「原消息」（同 iOS `IMBubbleCell` 的兜底文案）。
+ *
+ * `replyToConvSeq <= 0` 表示这条不是引用，返回 null 让调用方整块不画。
+ */
+/**
+ * 被引用消息在**本地**的那一条（宫格成员也算）。找不到 = 翻不到那么早 / 已被删。
+ *
+ * 引用块要的两样东西都从它来：**真缩略图**（快照是冻结的文字，不带 thumb）
+ * 与**跳转目标**。所以这两件事天然是同一块——iOS 也是先反查再决定画什么/能不能点。
+ */
+internal fun originalOf(rows: List<ChatRow>, seq: Long): MessageEntity? {
+    if (seq <= 0) return null
+    for (r in rows) {
+        when (r) {
+            is ChatRow.Confirmed -> if (r.msg.convSeq == seq) return r.msg
+            is ChatRow.Album -> r.sent.firstOrNull { it.convSeq == seq }?.let { return it }
+            else -> Unit
+        }
+    }
+    return null
+}
+
+/** 这一行在列表里的下标（跳转要用）。宫格里的某一格算它所在的那一行。 */
+internal fun rowIndexOfSeq(rows: List<ChatRow>, seq: Long): Int {
+    if (seq <= 0) return -1
+    return rows.indexOfFirst { r ->
+        when (r) {
+            is ChatRow.Confirmed -> r.msg.convSeq == seq
+            is ChatRow.Album -> r.sent.any { it.convSeq == seq }
+            else -> false
+        }
+    }
+}
+
+internal fun quoteSnapshotFor(rows: List<ChatRow>, msg: MessageEntity): String? {
+    val seq = msg.replyToConvSeq ?: return null
+    if (seq <= 0) return null
+    msg.replySnapshot?.takeIf { it.isNotBlank() }?.let { return it }
+    val original = originalOf(rows, seq) ?: return "原消息"
+    return replyPreviewOf(original.contentType, original.content, original.fileName, original.caption)
+}
