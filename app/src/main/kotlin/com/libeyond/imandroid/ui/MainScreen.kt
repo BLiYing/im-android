@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -26,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Bell
@@ -107,46 +109,38 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
      * 为什么要绕这一道、为什么两件事合成一个类型，见 [ChatArm]。
      */
     var chatArm by remember { mutableStateOf(ChatArm()) }
-    val infoConv = infoForConv
-    if (infoConv != null) {
-        if (infoConv.isGroup) {
-            GroupInfoHost(
-                client = client,
-                convId = infoConv.convId,
-                knownFriends = knownFriends,
-                // 成员资料页里点「发消息」：关掉群资料、直接进与该成员的单聊
-                onOpenChat = { stub -> infoForConv = null; openConv = stub },
-                onSearchInChat = { infoForConv = null; chatArm = ChatArm(openSearch = true) },
-                onLocateInChat = { seq -> infoForConv = null; chatArm = ChatArm(locateSeq = seq) },
-                onBack = { infoForConv = null },
-                onLeft = { infoForConv = null; openConv = null },
-            )
-        } else {
-            // **单聊进的是「聊天信息」不是「用户资料」**：后者回答"这个人是谁"，
-            // 前者回答"这段对话怎么设置"（置顶/免打扰/发过哪些媒体）。
-            // 用户资料页现在是它 push 出去的一页，与 iOS `IMChatDetailViewController` 同构。
-            ChatDetailHost(
-                client = client,
-                conv = infoConv,
-                knownFriends = knownFriends,
-                onSearchInChat = { infoForConv = null; chatArm = ChatArm(openSearch = true) },
-                onLocateInChat = { seq -> infoForConv = null; chatArm = ChatArm(locateSeq = seq) },
-                onBack = { infoForConv = null },
-            )
-        }
-        return
-    }
-
     val conv = openConv
-    if (conv != null) {
-        ChatHost(
-            client = client,
-            conv = conv,
-            onBack = { openConv = null },
-            onOpenInfo = { infoForConv = conv },
-            arm = chatArm,
-            onArmConsumed = { chatArm = ChatArm() },
-        )
+    val infoConv = infoForConv
+    if (conv != null || infoConv != null) {
+        // 详情页**盖在**聊天页之上，聊天页不出组合（iOS push 之后底下那个 VC 还活着，同构）。
+        // 此前是二选一的 `return`：进详情就把 ChatHost 整个移出组合，回来时列表状态从头建、
+        // 按首屏规则重新定位——停在历史里点进详情，回来被甩回首条未读或底部（设计稿 #10）。
+        Box(Modifier.fillMaxSize()) {
+            if (conv != null) {
+                // 换会话（群资料里点成员「发消息」）要整页重建：列表位置、输入框、覆盖层都是按会话的
+                key(conv.convId) {
+                    ChatHost(
+                        client = client,
+                        conv = conv,
+                        onBack = { openConv = null },
+                        onOpenInfo = { infoForConv = conv },
+                        arm = chatArm,
+                        onArmConsumed = { chatArm = ChatArm() },
+                        covered = infoConv != null,
+                    )
+                }
+            }
+            if (infoConv != null) {
+                Box(Modifier.fillMaxSize().blockPointerInput()) {
+                    InfoPage(client, infoConv, knownFriends,
+                        onOpenChat = { stub -> infoForConv = null; openConv = stub },
+                        onArm = { arm -> infoForConv = null; chatArm = arm },
+                        onBack = { infoForConv = null },
+                        onLeft = { infoForConv = null; openConv = null },
+                    )
+                }
+            }
+        }
         return
     }
 
@@ -206,6 +200,57 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
             onDismiss = { menuFor = null },
         )
     }
+    }
+}
+
+/**
+ * 会话详情页：群聊进群资料，单聊进「聊天信息」。
+ *
+ * **单聊进的是「聊天信息」不是「用户资料」**：后者回答"这个人是谁"，
+ * 前者回答"这段对话怎么设置"（置顶/免打扰/发过哪些媒体）。
+ * 用户资料页现在是它 push 出去的一页，与 iOS `IMChatDetailViewController` 同构。
+ */
+@Composable
+private fun InfoPage(
+    client: IMClient,
+    conv: ConversationEntity,
+    knownFriends: Map<String, FriendEntry>,
+    onOpenChat: (ConversationEntity) -> Unit,
+    onArm: (ChatArm) -> Unit,
+    onBack: () -> Unit,
+    onLeft: () -> Unit,
+) {
+    if (conv.isGroup) {
+        GroupInfoHost(
+            client = client,
+            convId = conv.convId,
+            knownFriends = knownFriends,
+            // 成员资料页里点「发消息」：关掉群资料、直接进与该成员的单聊
+            onOpenChat = onOpenChat,
+            onSearchInChat = { onArm(ChatArm(openSearch = true)) },
+            onLocateInChat = { seq -> onArm(ChatArm(locateSeq = seq)) },
+            onBack = onBack,
+            onLeft = onLeft,
+        )
+    } else {
+        ChatDetailHost(
+            client = client,
+            conv = conv,
+            knownFriends = knownFriends,
+            onSearchInChat = { onArm(ChatArm(openSearch = true)) },
+            onLocateInChat = { seq -> onArm(ChatArm(locateSeq = seq)) },
+            onBack = onBack,
+        )
+    }
+}
+
+/**
+ * 吞掉落在这一层的全部触摸。覆盖页底下的聊天页还在组合里，Compose 的命中测试会把
+ * 上层没接住的触摸（详情页的留白处）继续交给下层兄弟——不拦的话，点详情页空白会点到看不见的气泡上。
+ */
+private fun Modifier.blockPointerInput(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent().changes.forEach { it.consume() }
     }
 }
 

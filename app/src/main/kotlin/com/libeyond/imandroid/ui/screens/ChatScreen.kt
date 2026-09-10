@@ -21,6 +21,15 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import android.os.SystemClock
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.platform.LocalFocusManager
+import com.libeyond.imandroid.data.ChatScroll
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -70,7 +79,7 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 /** 距顶多少行以内就去加载更早的一页。 */
 private const val LOAD_OLDER_THRESHOLD = 3
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     convId: String,
@@ -180,35 +189,79 @@ fun ChatScreen(
     onCancelSelection: () -> Unit = {},
     onForwardSelected: () -> Unit = {},
     onDeleteSelected: () -> Unit = {},
+    /**
+     * 行数据两路（已确认 / 待发）都从库里读到了——**空会话也算读到**。
+     * 首屏定位要等它：先到一路就定位，另一路到了行序就变了，落点跟着错。
+     */
+    rowsReady: Boolean = true,
+    /** 出箱里新冒出一条（自己刚发的）。Host 在窗口停在历史时换回尾窗，贴底归本页。 */
+    onOutgoingEcho: () -> Unit = {},
+    /**
+     * 被会话详情 / 群资料盖住了。那两页盖在本页之上、本页**不出组合**（返回保位靠这个，见 MainScreen），
+     * 所以盖住期间要自己收住副作用：不报已读（用户看的不是这一页）、交出输入焦点（否则键盘盖到详情页上）。
+     */
+    covered: Boolean = false,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val listState = rememberLazyListState()
+    val marks = remember(convId) { ChatScrollMarks() }
+    val focusManager = LocalFocusManager.current
+    val listDragged by listState.interactionSource.collectIsDraggedAsState()
+
+    // ➕ 面板与键盘**互斥**（微信/iOS 同款）：展开面板要收键盘，弹键盘要收面板——
+    // 两个都占着底部空间，同时在场就会把消息列表挤没。
+    // 「弹键盘收面板」认键盘本身、不认输入框的点击：点在文本框正中时外层那个 clickable 收不到。
+    var attachOpen by remember(convId) { mutableStateOf(false) }
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible) { if (imeVisible) attachOpen = false }
+    // 多选 / 搜索态不画面板，但 attachOpen 若还挂着，chatListTaps 会把每一下都当「只收面板」吃掉——行勾选点了没反应
+    LaunchedEffect(selection != null, searchOpen) { if (selection != null || searchOpen) attachOpen = false }
+    LaunchedEffect(covered) { if (covered) focusManager.clearFocus() }
+
+    // 键盘 / 引用条 / 面板改了视口高度：变化前贴着底就重新贴（iOS keyboardWillChange）
+    KeepBottomOnResize(listState)
 
     // —— 首屏定位（CHAT_UX §3）：有未读锚到首条未读，无未读贴底 ——
-    // 只跑一次（key 用 convId），**不能与下面的自动贴底合并**：
-    // 合并会让「停在首条未读」被贴底当场覆盖掉。
-    var didEntryScroll by remember(convId) { mutableStateOf(false) }
-    LaunchedEffect(convId, rows.size) {
-        if (!didEntryScroll && rows.isNotEmpty()) {
-            didEntryScroll = true
-            val idx = ChatEntry.entryScrollIndex(rows.map { it.seqOrZero() }, readSeq, unread)
-            listState.scrollToItem(idx)   // 瞬时滚动，不用 animate——首屏动画会被用户看成"跳了一下"
-        }
+    // **在组合期下达**（requestScrollToItem），列表第一次测量就落在目标上。此前是 effect 里
+    // scrollToItem：先按第 0 行画出一帧再跳过去，进会话肉眼可见地闪一下（设计稿 #2）。
+    // 只做一次（iOS didInitialPosition），**不能与下面的自动贴底合并**：合并会让「停在首条未读」被贴底当场覆盖掉。
+    val entryReady = rowsReady && rows.isNotEmpty()
+    if (entryReady && !marks.didEntry) {
+        val idx = ChatEntry.entryScrollIndex(rows.map { it.seqOrZero() }, readSeq, unread)
+        marks.didEntry = true
+        marks.entryAtBottom = idx == rows.lastIndex
+        marks.rowsSize = rows.size
+        marks.outgoing = outgoingKeysOf(rows) // 进来时就躺在出箱里的（失败待重发）不算"刚发的"
+        listState.requestScrollToItem(idx)
+    }
+    // 贴底那一支还欠一次收敛：对齐的是最后一行的**顶**，最后一行比屏高（长文/竖图）时停在它开头
+    LaunchedEffect(entryReady) {
+        if (!entryReady || !marks.entryAtBottom) return@LaunchedEffect
+        marks.entryAtBottom = false
+        withFrameNanos { } // 等第一次测量
+        stickToBottom(listState)
     }
 
-    // 「回到最新」按下之后的待办：等换窗后的那一批 rows 到了再贴底。
-    // **不能在点击回调里直接滚**——那时 rows 还是旧那一窗（换窗是异步的）。
-    var pendingScrollToBottom by remember(convId) { mutableStateOf(false) }
-
-    // —— 新内容到达时贴底：只在用户本来就贴着底时（或刚点过「回到最新」）——
-    LaunchedEffect(rows.size) {
-        if (!didEntryScroll || rows.isEmpty()) return@LaunchedEffect
-        if (pendingScrollToBottom) {
-            pendingScrollToBottom = false
-            listState.scrollToItem(rows.size - 1) // 瞬时，不用 animate（跨窗那一跳距离没有意义）
+    // —— 行变了之后的贴底 ——
+    // ① 刚点过 ↓ / 刚发出一条（保质期内）→ 精确贴底；② 行数变多且用户本来就贴着底 → 跟到底。
+    val outgoingKeys = remember(rows) { outgoingKeysOf(rows) }
+    LaunchedEffect(rows.size, outgoingKeys) {
+        if (!marks.didEntry || rows.isEmpty()) return@LaunchedEffect
+        // 自己发的 = 出箱里新冒出一条。口径收在出箱回显这一个入口（CHAT_UX §9），不在每条发送路径上各挂一次
+        if (ChatScroll.hasNewOutgoing(marks.outgoing, outgoingKeys)) {
+            onOutgoingEcho() // 停在历史时 Host 换回尾窗；新那一窗到了本 effect 再跑一次，仍在保质期内
+            marks.stickUntil = SystemClock.uptimeMillis() + ChatScroll.STICK_BOTTOM_ARM_MS
+        }
+        marks.outgoing = outgoingKeys
+        val grew = rows.size > marks.rowsSize
+        marks.rowsSize = rows.size
+        if (SystemClock.uptimeMillis() < marks.stickUntil && !listDragged) {
+            stickToBottom(listState)
             return@LaunchedEffect
         }
+        // 只在**变多**时跟：ack 把待发换成已确认、行数不变，那时 animateScrollToItem 会把比屏高的最后一行滚回开头
+        if (!grew) return@LaunchedEffect
         val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
         if (ChatEntry.shouldAutoScroll(last, rows.size)) {
             listState.animateScrollToItem(rows.size - 1)
@@ -227,7 +280,7 @@ fun ChatScreen(
     var rowsBeforeLoad by remember(convId) { mutableStateOf(0) }
 
     LaunchedEffect(rows.size, listState.firstVisibleItemIndex) {
-        if (!didEntryScroll || rows.isEmpty()) return@LaunchedEffect
+        if (!marks.didEntry || rows.isEmpty()) return@LaunchedEffect
 
         // 上一页加载回来了 → 把视口按同一条消息补偿回去
         if (pendingOlder && rows.size > rowsBeforeLoad) {
@@ -251,8 +304,9 @@ fun ChatScreen(
     // **注意**：程序化滚到底之后紧跟"可见即读"上报，等于替用户把消息读完
     // （十万条未读进一次会话清零就是这么来的，CHAT_UX §3）。
     // 故只在**首屏定位完成后**才上报，且只报真正可见的行。
-    LaunchedEffect(rows.size, listState.layoutInfo.visibleItemsInfo.size) {
-        if (!didEntryScroll) return@LaunchedEffect
+    // 被详情页盖住期间也不报（用户看的不是这一页）；露出来时 covered 一变，这里补报一次。
+    LaunchedEffect(rows.size, listState.layoutInfo.visibleItemsInfo.size, covered) {
+        if (!marks.didEntry || covered) return@LaunchedEffect
         val maxSeq = listState.layoutInfo.visibleItemsInfo
             .mapNotNull { (rows.getOrNull(it.index) as? ChatRow.Confirmed)?.msg?.convSeq }
             .maxOrNull() ?: return@LaunchedEffect
@@ -344,8 +398,17 @@ fun ChatScreen(
             state = listState,
             // 横向内边距**就是** UI_SPEC §3 的「头像距 cell 左 12」——不要换成别的数，
             // 群头像列靠它凑出 iOS 的 12+30+6=48（Bubbles.kt 那侧不再重复加）。
-            modifier = Modifier.fillMaxSize().padding(horizontal = d.chatAvatarLeading),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .chatListTaps(
+                    panelOpen = attachOpen,
+                    onClosePanel = { attachOpen = false },
+                    onDismissKeyboard = { focusManager.clearFocus() },
+                )
+                .padding(horizontal = d.chatAvatarLeading),
+            // 行距 5、最后一条距输入栏 3：iOS 的间距全长在 cell 里（顶 2 底 3），换成列表的说法就是这三个数
+            contentPadding = PaddingValues(top = d.chatListPaddingTop, bottom = d.chatListPaddingBottom),
+            verticalArrangement = Arrangement.spacedBy(d.chatRowGap),
         ) {
             items(rows.size, key = { rows[it].key }) { i ->
                 val r0 = rows[i]
@@ -414,22 +477,15 @@ fun ChatScreen(
                     .clip(CircleShape)
                     .background(c.surfaceElevated)
                     .clickable {
-                        // 先请宿主换回尾窗（历史窗里没有"最新那条"可滚）。
-                        // **贴底不能在这里做**：换窗是异步的，此刻 rows 还是旧那一窗，
-                        // 滚过去只会落在旧窗的末尾（真机撞见：从会话开头点↓，落在半空中）。
-                        // 记一个待办，等新的一窗到了再贴底。
+                        // 先请宿主换回尾窗（历史窗里没有"最新那条"可滚）。换窗是异步的，此刻 rows 还是
+                        // 旧那一窗（真机撞见：从会话开头点↓，落在半空中），所以记一个**带保质期**的贴底，
+                        // 新的一窗在保质期内到了，上面那个 effect 会再贴一次。
+                        // **保质期不能省**：已经在尾窗时换窗不产生新的 rows，不失效的待办会一直挂着，
+                        // 等用户滚上去读历史时来一条新消息，被当成"刚点过 ↓"一把甩到底。
                         onJumpToLatest()
-                        pendingScrollToBottom = true
-                        // 本来就在尾窗里（只是离底远）时不会有新数据到达，直接滚
-                        scope.launch {
-                            listState.scrollToItem((rows.size - 1).coerceAtLeast(0))
-                            // **待办要有保质期**：已经在尾窗时换窗不产生新的 rows，
-                            // 上面那个 LaunchedEffect(rows.size) 永远不跑，待办就一直挂着；
-                            // 等用户滚上去读历史时来了一条新消息，它会被当成"刚点过 ↓"
-                            // 一把甩到底（还绕过了 shouldAutoScroll 那道判断）。
-                            kotlinx.coroutines.delay(1_000)
-                            pendingScrollToBottom = false
-                        }
+                        marks.stickUntil = SystemClock.uptimeMillis() + ChatScroll.STICK_BOTTOM_ARM_MS
+                        // 本来就在尾窗里（只是离底远）时不会有新数据到达，直接贴
+                        scope.launch { stickToBottom(listState) }
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -495,9 +551,7 @@ fun ChatScreen(
             return@Column
         }
 
-        // ➕ 面板与键盘**互斥**（微信/iOS 同款）：展开面板要收键盘，
-        // 点输入框要收面板——两个都占着底部空间，同时在场就会把消息列表挤没。
-        var attachOpen by remember(convId) { mutableStateOf(false) }
+        // ➕ 面板与键盘互斥，面板开关态声明在顶上（列表的轻点也要读它）
         val keyboard = LocalSoftwareKeyboardController.current
         Composer(
             input = input,

@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import com.libeyond.imandroid.data.extendWindowOlder
@@ -87,6 +89,8 @@ fun ChatHost(
      */
     arm: ChatArm = ChatArm(),
     onArmConsumed: () -> Unit = {},
+    /** 被会话详情 / 群资料盖住了（本页仍在组合里，返回时列表原位不动，见 MainScreen）。 */
+    covered: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -157,7 +161,8 @@ fun ChatHost(
     // 系统返回键：**先关最上面那层覆盖层，全关完了才回会话列表**。
     // 不分层的话「打开大图 → 按返回 → 连会话都退了」，用户还得重新滚回刚才的位置。
     // 层序在 ChatOverlays.Layer（= 渲染顺序），有测试钉着。
-    BackHandler {
+    // 被详情页盖住时让位：返回键归盖在上面那一页（它的 BackHandler 注册得更晚本就优先，这里再关一道保险）
+    BackHandler(enabled = !covered) {
         val open = buildSet {
             if (viewing != null) add(ChatOverlays.Layer.Viewer)
             if (openUser != null) add(ChatOverlays.Layer.UserProfile)
@@ -220,13 +225,17 @@ fun ChatHost(
     /** 长按菜单锚点：被长按气泡在窗口坐标系里的矩形，菜单按它定位（对齐 iOS UIContextMenu）。 */
     var menuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
 
-    val messages by remember(owner, conv.convId, window) {
+    // initial = null：区分「还没读到」与「读到了、就是空的」——首屏定位要等两路都到（ChatScreen.rowsReady）。
+    // 换窗时不会退回 null：collectAsState 的值不随换掉的 flow 重置，新一窗到之前保留旧那一窗。
+    val loadedMessages by remember(owner, conv.convId, window) {
         client.repo.observeWindow(owner, conv.convId, window)
-    }.collectAsState(initial = emptyList())
-
-    val pending by remember(owner, conv.convId) {
+    }.collectAsState(initial = null)
+    val loadedPending by remember(owner, conv.convId) {
         client.repo.observePending(owner, conv.convId)
-    }.collectAsState(initial = emptyList())
+    }.collectAsState(initial = null)
+    val messages = loadedMessages.orEmpty()
+    val pending = loadedPending.orEmpty()
+    val rowsReady = loadedMessages != null && loadedPending != null
 
     // **进会话那一刻的快照，之后不再跟随**。
     //
@@ -298,7 +307,9 @@ fun ChatHost(
         searchHighlight = search.needle,
     )
 
-    Box(Modifier.fillMaxSize()) {
+    // 被盖住时不画、不进无障碍树：它还在组合里（为了返回保位），但读屏不该念出一页看不见的聊天。
+    // **只包 ChatScreen**：吐司等浮层若也在这个 Box 里，会跟着隐形、计时却照走——提示就丢了
+    Box(Modifier.fillMaxSize().then(if (covered) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier)) {
     ChatScreen(
         convId = conv.convId,
         title = conv.title.ifBlank { conv.convId },
@@ -340,9 +351,7 @@ fun ChatHost(
                 input = TextFieldValue("")
                 mention.clear()
                 replyTo = null
-                // **自己发消息必须回到最新**：停在历史时发出去的那条在锚点窗里看不见，
-                // 用户会以为没发出去（im-web 2026-09-05 修过同一条，收口在"出箱回显唯一入口"上）
-                window = ChatWindow.Tail(ChatWindows.TAIL_LIMIT)
+                // 回到最新不在这里做，收口在 onOutgoingEcho（发图/文件/名片/转发也要回来）
                 scope.launch {
                     client.messages.sendText(
                         convId = conv.convId,
@@ -444,7 +453,14 @@ fun ChatHost(
         onDeleteSelected = { sel.confirmDelete = true },
         mentionNames = mentionNames,
         searchHighlight = search.needle,
+        rowsReady = rowsReady,
+        // **自己发消息必须回到最新**：停在历史时发出去的那条在锚点窗里看不见，用户会以为没发出去。
+        // 收口在「出箱回显」这一个入口（im-web 2026-09-05 同一条）——此前只挂在发文本上，
+        // 发图/文件/名片停在历史时都不回来。已在尾窗就不动，免得把翻出来的更早几页收回去（iOS 同）。
+        onOutgoingEcho = { if (window !is ChatWindow.Tail) window = ChatWindow.Tail(ChatWindows.TAIL_LIMIT) },
+        covered = covered,
     )
+    }
 
     BatchDeleteConfirm(sel, client, conv.convId) { toast = it }
 
@@ -548,6 +564,5 @@ fun ChatHost(
             onMultiSelect = { m -> sel.enter(m) },
             onDismiss = { menuFor = null },
         )
-    }
     }
 }

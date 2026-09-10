@@ -94,6 +94,21 @@ fun ChatRow.seqOrZero(): Long = when (this) {
 }
 
 /**
+ * 出箱里的行身份（clientMsgId）：待发的单条 + 宫格里**还在发**的格。
+ * 新冒出一个 = 出箱回显了一条自己刚发的，判据见 [com.libeyond.imandroid.data.ChatScroll.hasNewOutgoing]。
+ * 宫格要逐格看：一批图的第 2..N 张落进同一个宫格行，行数与行 key 都不变。
+ */
+fun outgoingKeysOf(rows: List<ChatRow>): Set<String> = buildSet {
+    for (r in rows) {
+        when (r) {
+            is ChatRow.Pending -> add(r.msg.clientMsgId)
+            is ChatRow.Album -> r.members.forEach { if (it is AlbumMember.Sending) add(it.msg.clientMsgId) }
+            else -> Unit
+        }
+    }
+}
+
+/**
  * 把已确认 + 待发两路合成一条显示流。**纯函数**，便于单测。
  *
  * 排序口径见 [MessageOrder]（三端共享的不变式）：`timestamp` 主排，

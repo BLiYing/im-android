@@ -240,6 +240,12 @@ data class IMDimens(
     val jumpButton: Dp = 36.dp,
     /** 日期分隔胶囊高。iOS `_datePillHeight` 24。 */
     val datePillHeight: Dp = 24.dp,
+    /** 消息行间距 5 = 气泡底距 cell 底 3 + 气泡顶距 2（iOS `_bubbleBottom −3` / `_bubbleTopPlain +2`，设计稿 §1）。 */
+    val chatRowGap: Dp = 5.dp,
+    /** 列表上内边距 = 首行 cell 自带的顶距 2。 */
+    val chatListPaddingTop: Dp = 2.dp,
+    /** 最后一条气泡距输入栏 3（iOS `contentInset.bottom` 恒 0，这 3 全靠 cell 自带的底距；设计稿 #3）。 */
+    val chatListPaddingBottom: Dp = 3.dp,
 
     // —— 顶部标题栏（UI_SPEC §4.5）——
     /**
