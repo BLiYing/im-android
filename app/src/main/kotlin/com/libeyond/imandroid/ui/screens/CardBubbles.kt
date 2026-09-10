@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.data.CardContent
@@ -41,7 +42,11 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 private val CARD_WIDTH = 240.dp
 
 @Composable
-internal fun ContactCardContent(content: String) {
+internal fun ContactCardContent(
+    content: String,
+    /** 内容宽。聊天记录详情页把卡片装进自带内边距的框里，要比气泡里窄。 */
+    width: Dp = CARD_WIDTH,
+) {
     val c = IMTheme.colors
     val appearance = IMTheme.appearance
     val card = CardContent.parseContact(content)
@@ -52,7 +57,7 @@ internal fun ContactCardContent(content: String) {
         return
     }
 
-    Column(modifier = Modifier.width(CARD_WIDTH)) {
+    Column(modifier = Modifier.width(width)) {
         Row(modifier = Modifier.fillMaxWidth()) {
             IMAvatar(
                 displayName = card.displayName,
@@ -91,36 +96,43 @@ internal fun ContactCardContent(content: String) {
 }
 
 @Composable
-internal fun ChatRecordCardContent(content: String) {
+internal fun ChatRecordCardContent(
+    content: String,
+    width: Dp = CARD_WIDTH,
+    /** 预览最多几行：气泡里 3（iOS `IMChatRecordCell`），详情页里的嵌套卡 2（`IMChatRecordViewController`）。 */
+    previewLines: Int = 3,
+) {
     val c = IMTheme.colors
     val appearance = IMTheme.appearance
-    val rec = CardContent.parseRecord(content)
+    val rec = CardContent.parseRecord(content, previewLines)
 
     if (rec == null) {
         Text2("[聊天记录] 无法显示", c.textTertiary, appearance.chatFontSize)
         return
     }
 
-    Column(modifier = Modifier.width(CARD_WIDTH)) {
+    // 间距照 iOS `IMChatRecordCell`：顶 4、标题、6、预览、8、分割线、6、脚注。
+    // 点卡片进详情页由气泡本体处理（Bubble 的 onClick），这里只管画。
+    Column(modifier = Modifier.width(width).padding(top = 4.dp)) {
         Text2(
             rec.title, c.textPrimary,
             maxOf(14f, appearance.chatFontSize.value - 2).sp,
             weight = FontWeight.SemiBold, maxLines = 1,
         )
         if (rec.lines.isNotEmpty()) {
-            Spacer(Modifier.height(4.dp))
-            // 最多 3 行预览（iOS `_preview.numberOfLines = 3`）；每行「发送者: 摘要」。
-            rec.lines.forEach { line ->
-                Text2(
-                    line, c.textSecondary,
-                    maxOf(12f, appearance.chatFontSize.value - 5).sp,
-                    maxLines = 1,
-                )
-            }
+            Spacer(Modifier.height(6.dp))
+            // **一个 label、按换行连起来、总共最多 3 行**（iOS `_preview.numberOfLines = 3`）：
+            // 前面一条长到折两行，后面的就少显，而不是每条各占一行各自截断。
+            Text2(
+                rec.lines.joinToString("\n"), c.textSecondary,
+                maxOf(12f, appearance.chatFontSize.value - 5).sp,
+                maxLines = previewLines,
+            )
         }
         Spacer(Modifier.height(8.dp))
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
         Spacer(Modifier.height(6.dp))
+        // 脚注只写「聊天记录」，**不写「共 N 条」**：iOS/Web 都没有这一段
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(
                 Lucide.MessageSquare, null, Modifier.size(11.dp),
@@ -128,10 +140,6 @@ internal fun ChatRecordCardContent(content: String) {
             )
             Spacer(Modifier.width(4.dp))
             Text2("聊天记录", c.textSecondary, 11.sp)
-            if (rec.total > rec.lines.size) {
-                Spacer(Modifier.width(6.dp))
-                Text2("共 ${rec.total} 条", c.textTertiary, 11.sp)
-            }
         }
     }
 }

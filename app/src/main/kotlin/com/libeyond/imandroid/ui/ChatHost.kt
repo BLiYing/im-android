@@ -120,6 +120,8 @@ fun ChatHost(
     var viewing by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
     // 点系统消息里的名字进的资料页
     var openUser by remember(conv.convId) { mutableStateOf<String?>(null) }
+    /** 聊天记录详情页栈 + 页内查看器。嵌套记录往里点就压一层，返回弹一层。 */
+    val recordNav = rememberChatRecordNav(conv.convId)
     var friendsByUid by remember(conv.convId) { mutableStateOf<Map<String, FriendEntry>>(emptyMap()) }
     LaunchedEffect(conv.convId) {
         runCatching { client.contacts.friends() }.onSuccess { l -> friendsByUid = l.associateBy { it.userId } }
@@ -164,16 +166,19 @@ fun ChatHost(
     // 被详情页盖住时让位：返回键归盖在上面那一页（它的 BackHandler 注册得更晚本就优先，这里再关一道保险）
     BackHandler(enabled = !covered) {
         val open = buildSet {
-            if (viewing != null) add(ChatOverlays.Layer.Viewer)
+            // 记录详情里点开的查看器与聊天页的查看器同一层（两者不会同时开：记录页盖住了聊天页）
+            if (viewing != null || recordNav.media != null) add(ChatOverlays.Layer.Viewer)
             if (openUser != null) add(ChatOverlays.Layer.UserProfile)
+            if (recordNav.isOpen) add(ChatOverlays.Layer.ChatRecord)
             if (pickingFriend != null) add(ChatOverlays.Layer.FriendPicker)
             if (picking) add(ChatOverlays.Layer.MediaPicker)
             if (forwarding != null) add(ChatOverlays.Layer.Forward)
             if (menuFor != null) add(ChatOverlays.Layer.ContextMenu)
         }
         when (ChatOverlays.topmost(open)) {
-            ChatOverlays.Layer.Viewer -> viewing = null
+            ChatOverlays.Layer.Viewer -> if (recordNav.media != null) recordNav.closeViewer() else viewing = null
             ChatOverlays.Layer.UserProfile -> openUser = null
+            ChatOverlays.Layer.ChatRecord -> recordNav.pop()
             ChatOverlays.Layer.FriendPicker -> pickingFriend = null
             ChatOverlays.Layer.MediaPicker -> picking = false
             ChatOverlays.Layer.Forward -> forwarding = null
@@ -265,6 +270,9 @@ fun ChatHost(
     var myRole by remember(conv.convId) { mutableStateOf<String?>(null) }
     /** 本群成员显示名——**只给没有 mention_spans 的老消息兜底**，超级群拿不到就空表。 */
     var mentionNames by remember(conv.convId) { mutableStateOf<List<String>>(emptyList()) }
+    /** 成员角色与显示名（uid 为键）：发送者徽标、名字、引用块与回复条的名字用。超级群只有我自己。 */
+    var memberRoles by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var memberNames by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     LaunchedEffect(conv.convId) {
         if (conv.isGroup) {
             runCatchingCancellable { client.groups.info(conv.convId) }
@@ -274,6 +282,8 @@ fun ChatHost(
                     // 超级群这里只回我自己（服务端刻意不下发 2 万人的成员表），
                     // 于是老消息的 @ 在超级群里不高亮——协议里写明的降级，别在这补救
                     mentionNames = it.members.map(GroupMember::displayName)
+                    memberRoles = it.members.associate { m -> m.userId to m.role }
+                    memberNames = it.members.associate { m -> m.userId to m.displayName }
                 }
         }
     }
@@ -305,6 +315,8 @@ fun ChatHost(
         loadLinkPreview = { url -> client.conversationsApi.linkPreview(url) },
         mentionNames = mentionNames,
         searchHighlight = search.needle,
+        roleOf = { uid -> memberRoles[uid] },
+        memberNameOf = { uid -> memberNames[uid] },
     )
 
     // 被盖住时不画、不进无障碍树：它还在组合里（为了返回保位），但读屏不该念出一页看不见的聊天。
@@ -452,6 +464,9 @@ fun ChatHost(
         },
         onDeleteSelected = { sel.confirmDelete = true },
         mentionNames = mentionNames,
+        roleOf = { uid -> memberRoles[uid] },
+        memberNameOf = { uid -> memberNames[uid] },
+        onOpenRecord = { recordNav.push(it) },
         searchHighlight = search.needle,
         rowsReady = rowsReady,
         // **自己发消息必须回到最新**：停在历史时发出去的那条在锚点窗里看不见，用户会以为没发出去。
@@ -463,6 +478,15 @@ fun ChatHost(
     }
 
     BatchDeleteConfirm(sel, client, conv.convId) { toast = it }
+
+    // —— 聊天记录详情（点合并转发卡进来）。画在查看器与资料页之前：从记录里点名片进的资料页要盖在它上面 ——
+    ChatRecordLayer(
+        nav = recordNav,
+        host = client.host,
+        useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+        onOpenUser = { uid -> openUser = uid },
+        onSave = saveMedia,
+    )
 
     // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——
     viewing?.let { m ->

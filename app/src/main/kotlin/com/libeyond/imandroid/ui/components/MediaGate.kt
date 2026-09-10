@@ -147,8 +147,9 @@ fun DownloadBadge(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 Modifier.size(side).clip(CircleShape).background(c.overlayStrong)
-                    // **失效不给点**：给了也是每点一次拉一次 404
-                    .clickable(enabled = state.phase != DownloadPhase.Expired, onClick = onTap),
+                    // **失效不给点**：给了也是每点一次拉一次 404。
+                    // 不用 clickable：它吃掉 down，徽标盖着的气泡/格子就长按不出菜单了（#13）
+                    .passThroughTap(enabled = state.phase != DownloadPhase.Expired, onTap = onTap),
                 contentAlignment = Alignment.Center,
             ) {
                 when (state.phase) {

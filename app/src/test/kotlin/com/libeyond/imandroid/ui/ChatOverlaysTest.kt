@@ -34,9 +34,11 @@ class ChatOverlaysTest {
         // 2026-09-08 加 UserProfile（点系统消息里的名字进资料页）时这条如期变红——
         // 加一层就得说清它排在哪，这正是这条测试存在的意义。
         // 它排在 Viewer 之下：查看器是从资料页也可能开出来的最临时的一层。
+        // 2026-09-10 加 ChatRecord（点合并转发卡进详情页）：排在资料页之下——
+        // 详情页里点名片会开资料页、点图会开查看器，这两层都得盖在它上面。
         assertEquals(
             listOf(
-                Layer.Viewer, Layer.UserProfile, Layer.FriendPicker,
+                Layer.Viewer, Layer.UserProfile, Layer.ChatRecord, Layer.FriendPicker,
                 Layer.MediaPicker, Layer.Forward, Layer.ContextMenu,
             ),
             Layer.entries,

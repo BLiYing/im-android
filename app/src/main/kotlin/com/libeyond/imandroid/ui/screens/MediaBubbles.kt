@@ -2,19 +2,15 @@ package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -24,20 +20,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.composables.icons.lucide.File
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Mic
 import com.composables.icons.lucide.Play
 import com.libeyond.imandroid.data.fileHint
+import com.libeyond.imandroid.data.MediaDisplaySize
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.Waveform
 import androidx.compose.runtime.remember
 import com.libeyond.imandroid.ui.rememberFrostedPainter
 import com.libeyond.imandroid.ui.components.DownloadBadge
+import com.libeyond.imandroid.ui.components.MiddleEllipsisText
+import com.libeyond.imandroid.ui.components.passThroughTap
 import com.libeyond.imandroid.ui.components.rememberGate
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.FileTypeIcon
@@ -55,11 +57,11 @@ fun MediaContent(
     msg: MessageEntity,
     host: String,
     useTls: Boolean,
-    maxWidth: androidx.compose.ui.unit.Dp = 240.dp,
     /** 群聊——自动下载策略的单聊/群聊分档要用（`DownloadPolicy.shouldAutoDownload`）。 */
     isGroup: Boolean = false,
+    /** 文件行的宽度 = 气泡内容区宽。定宽才有地方把长文件名截中间。 */
+    fileRowWidth: Dp = 240.dp,
 ) {
-    val url = MediaUrl.absolute(msg.content, host, useTls)
     // **图说整体化**：有 caption 时媒体只圆上角，和下方文字连成一整块（iOS `_captionBG`）；
     // 没有 caption 时四角都圆——此时媒体本身就是整个气泡。
     val r = IMTheme.appearance.bubbleRadius
@@ -69,26 +71,33 @@ fun MediaContent(
         RoundedCornerShape(topStart = r, topEnd = r, bottomStart = 0.dp, bottomEnd = 0.dp)
     }
     when (msg.contentType) {
-        "image" -> ImageContent(url, msg, maxWidth, shape, isGroup)
-        "video" -> VideoContent(url, msg, maxWidth, shape, host, useTls, isGroup)
-        "voice" -> VoiceContent(msg)
-        else -> FileContent(msg, isGroup)
+        "image" -> ImageContent(msg, shape, isGroup)
+        "video" -> VideoContent(msg, shape, host, useTls, isGroup)
+        "voice" -> VoiceContent(msg.duration?.toLong(), msg.waveform)
+        else -> FileContent(msg, isGroup, fileRowWidth)
+    }
+}
+
+/**
+ * 图/视频在聊天页里的显示尺寸（iOS `IMMediaDisplaySize` + `IMImageCell.maxBox`，式子在 [MediaDisplaySize]）。
+ * 按原图像素只缩不放、短边不足 80 再放大；像素未知时是方块——**视频也一样**，不再猜 16:9。
+ */
+@Composable
+internal fun rememberMediaDisplaySize(msg: MessageEntity): DpSize {
+    val screenW = LocalConfiguration.current.screenWidthDp
+    return remember(msg.mediaW, msg.mediaH, screenW) {
+        val s = MediaDisplaySize.fit(msg.mediaW, msg.mediaH, MediaDisplaySize.box(screenW.toFloat()))
+        DpSize(s.width.dp, s.height.dp)
     }
 }
 
 @Composable
 private fun ImageContent(
-    url: String,
     msg: MessageEntity,
-    maxWidth: androidx.compose.ui.unit.Dp,
     shape: androidx.compose.ui.graphics.Shape,
     isGroup: Boolean,
 ) {
     val c = IMTheme.colors
-    // 有服务端给的宽高就按原比例占位，避免加载完跳一下把下面的消息挤走
-    val ratio = if ((msg.mediaW ?: 0) > 0 && (msg.mediaH ?: 0) > 0) {
-        (msg.mediaW!!.toFloat() / msg.mediaH!!.toFloat()).coerceIn(0.5f, 2f)
-    } else 1f
     // 磨砂占位（M4-7）：原图到位之前显示消息里内嵌的 ~20px 缩略放大 + 模糊，
     // 而不是一块空底。没有 thumb（老消息 / 对端没带）就回退中性底——**不为占位联网**。
     val frosted = rememberFrostedPainter(msg.thumb)
@@ -96,10 +105,9 @@ private fun ImageContent(
     // Coil 照样把原图拉下来，门控就成了纯装饰。
     val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
     Box(
+        // 尺寸在排版前就定死（服务端给的宽高），加载完不跳版把下面的消息挤走
         modifier = Modifier
-            .widthIn(max = maxWidth)
-            .fillMaxWidth()
-            .aspectRatio(ratio)
+            .size(rememberMediaDisplaySize(msg))
             .clip(shape)
             .background(c.subtleFill),
         contentAlignment = Alignment.Center,
@@ -119,86 +127,81 @@ private fun ImageContent(
 
 @Composable
 private fun VideoContent(
-    url: String,
     msg: MessageEntity,
-    maxWidth: androidx.compose.ui.unit.Dp,
     shape: androidx.compose.ui.graphics.Shape,
     host: String,
     useTls: Boolean,
     isGroup: Boolean,
 ) {
     val c = IMTheme.colors
-    Column {
-        // 气泡比例按 media_w/media_h 走；服务端没给（老消息 / 发送端量不到）才回落 16:9。
-        // 一律 16:9 的后果是竖着拍的视频封面被裁掉上下，加载完还跳一下版。
-        val ratio = if ((msg.mediaW ?: 0) > 0 && (msg.mediaH ?: 0) > 0) {
-            msg.mediaW!!.toFloat() / msg.mediaH!!.toFloat()
-        } else {
-            16f / 9f
+    Box(
+        modifier = Modifier.size(rememberMediaDisplaySize(msg)).clip(shape).background(c.subtleFill),
+        contentAlignment = Alignment.Center,
+    ) {
+        // 封面：**解不了 HEVC 的端只能靠这张图**，没有它就是一片黑底加个播放钮。
+        // poster 为空时不画 AsyncImage —— 传空串给 Coil 会触发一次必然失败的加载。
+        val poster = msg.poster
+        val frosted = rememberFrostedPainter(msg.thumb)
+        if (!poster.isNullOrBlank()) {
+            AsyncImage(
+                model = MediaUrl.absolute(poster, host, useTls),
+                contentDescription = "视频封面",
+                contentScale = ContentScale.Crop,
+                // 封面还在下载 / 下不动时，先给内嵌缩略的磨砂版（M4-7）
+                placeholder = frosted,
+                error = frosted,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (frosted != null) {
+            // 连封面 URL 都没有（老视频 / 抽帧失败）：磨砂占位总比纯黑底强
+            Image(
+                painter = frosted,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
-        Box(
-            modifier = Modifier.widthIn(max = maxWidth).fillMaxWidth().aspectRatio(ratio)
-                .clip(shape).background(c.subtleFill),
-            contentAlignment = Alignment.Center,
-        ) {
-            // 封面：**解不了 HEVC 的端只能靠这张图**，没有它就是一片黑底加个播放钮。
-            // poster 为空时不画 AsyncImage —— 传空串给 Coil 会触发一次必然失败的加载。
-            val poster = msg.poster
-            val frosted = rememberFrostedPainter(msg.thumb)
-            if (!poster.isNullOrBlank()) {
-                AsyncImage(
-                    model = MediaUrl.absolute(poster, host, useTls),
-                    contentDescription = "视频封面",
-                    contentScale = ContentScale.Crop,
-                    // 封面还在下载 / 下不动时，先给内嵌缩略的磨砂版（M4-7）
-                    placeholder = frosted,
-                    error = frosted,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else if (frosted != null) {
-                // 连封面 URL 都没有（老视频 / 抽帧失败）：磨砂占位总比纯黑底强
-                androidx.compose.foundation.Image(
-                    painter = frosted,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
+        // 门控作用在**视频本体**上，封面照常加载——封面就几十 KB，
+        // 它是"信封"的一部分；把封面也门控掉的话，未下载的视频只剩一团磨砂，
+        // 用户连要不要下都判断不了。
+        val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
+        if (gate.ready) {
+            Box(
+                modifier = Modifier.size(44.dp).clip(CircleShape).background(c.overlay),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(Lucide.Play, "播放", Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onMedia))
             }
-            // 门控作用在**视频本体**上，封面照常加载——封面就几十 KB，
-            // 它是"信封"的一部分；把封面也门控掉的话，未下载的视频只剩一团磨砂，
-            // 用户连要不要下都判断不了。
-            val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
-            if (gate.ready) {
-                Box(
-                    modifier = Modifier.size(44.dp).clip(CircleShape).background(c.overlay),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Image(Lucide.Play, "播放", Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onMedia))
-                }
-            } else {
-                DownloadBadge(gate.state, msg.fileSize ?: 0L, gate.onTap)
-            }
-            // 时长角标：服务端给了才显，**不为拿它去下载视频**。
-            // 位置是**左上角**——协议 §4.1 明写「据 duration 在视频封面左上角显 mm:ss」，
-            // 三端同一份口径。画在右下角会和时间胶囊叠在一起（2026-09-07 真机实测撞见）。
-            val dur = MediaUrl.formatDuration(msg.duration)
-            if (msg.duration != null && msg.duration > 0) {
-                Box(
-                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
-                        .clip(RoundedCornerShape(4.dp)).background(c.overlay)
-                        .padding(horizontal = 5.dp, vertical = 1.dp),
-                ) { Text(dur, color = c.onMedia, fontSize = 10.sp) }
+        } else {
+            DownloadBadge(gate.state, msg.fileSize ?: 0L, gate.onTap)
+        }
+        // 时长角标：服务端给了才显，**不为拿它去下载视频**。
+        // 位置是**左上角**——协议 §4.1 明写「据 duration 在视频封面左上角显 mm:ss」，
+        // 三端同一份口径。画在右下角会和时间胶囊叠在一起（2026-09-07 真机实测撞见）。
+        // 形状与右下角的时间胶囊同一套（高 18、圆角 9），等宽数字不随秒数跳宽（iOS `_durationBadge`）
+        if (msg.duration != null && msg.duration > 0) {
+            Box(
+                modifier = Modifier.align(Alignment.TopStart).padding(6.dp).height(18.dp)
+                    .clip(RoundedCornerShape(9.dp)).background(c.overlay)
+                    .padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    MediaUrl.formatDuration(msg.duration),
+                    color = c.onMedia, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                )
             }
         }
     }
 }
 
+/** 语音行。聊天记录详情页也用（那里只有时长与波形，没有整条消息）。 */
 @Composable
-private fun VoiceContent(msg: MessageEntity) {
+internal fun VoiceContent(durationMs: Long?, waveform: String?) {
     val c = IMTheme.colors
     // 宽度按时长走，与 iOS `IMVoiceBubbleCell` 同一个式子：MIN(240, MAX(160, 96 + dur*3.6))。
     // **下限是 160 不是 96**——本端一开始写成 96，一秒的语音气泡只有 iOS 的一半宽。
-    val secs = ((msg.duration ?: 0) / 1000f)
+    val secs = ((durationMs ?: 0L) / 1000f)
     val w = minOf(240f, maxOf(160f, 96f + secs * 3.6f)).dp
     Row(
         modifier = Modifier.width(w).padding(vertical = 2.dp),
@@ -211,7 +214,7 @@ private fun VoiceContent(msg: MessageEntity) {
         Spacer(Modifier.width(8.dp))
         // 真波形：waveform(base64) → 0~1 柱高。缺字段时 Waveform 自己退化成等高条纹
         // （协议允许的合法状态，不是错误）。桶内取**最大值**不是平均——取平均会把波形抹平。
-        val bars = remember(msg.waveform) { Waveform.barsOf(msg.waveform, BAR_COUNT) }
+        val bars = remember(waveform) { Waveform.barsOf(waveform, BAR_COUNT) }
         Row(
             Modifier.weight(1f).height(20.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -226,22 +229,25 @@ private fun VoiceContent(msg: MessageEntity) {
             }
         }
         Spacer(Modifier.width(6.dp))
-        Text(MediaUrl.formatDuration(msg.duration), color = c.textSecondary, fontSize = 11.sp)
+        Text(MediaUrl.formatDuration(durationMs?.toInt()), color = c.textSecondary, fontSize = 11.sp)
     }
 }
 
 @Composable
-private fun FileContent(msg: MessageEntity, isGroup: Boolean) {
+private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp) {
     val c = IMTheme.colors
+    val appearance = IMTheme.appearance
     val context = androidx.compose.ui.platform.LocalContext.current
     val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
     val toast = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     toast.value?.let { com.libeyond.imandroid.ui.components.IMToast(it) { toast.value = null } }
+    val name = MediaUrl.displayFileName(msg.content, msg.fileName.orEmpty())
     Row(
-        modifier = Modifier.widthIn(max = 240.dp).padding(vertical = 2.dp)
+        modifier = Modifier.width(rowWidth).padding(vertical = 2.dp)
             // **就绪就能点开**（对齐 iOS：文件行/气泡在 ready 态点一下就是打开它）；
             // 没就绪时点一下等于点 ↓。此前这条气泡完全不可点——下下来了也没办法看。
-            .clickable {
+            // 用 passThroughTap 不用 clickable：后者吃掉 down，长按文件行弹不出菜单（#13）
+            .passThroughTap {
                 if (gate.ready) {
                     val f = gate.localFile
                     toast.value = if (f == null) {
@@ -249,9 +255,7 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean) {
                         gate.onTap()
                         "文件已不在本地，正在重新下载"
                     } else {
-                        com.libeyond.imandroid.ui.OpenFile.open(
-                            context, f, MediaUrl.displayFileName(msg.content, msg.fileName.orEmpty()),
-                        )
+                        com.libeyond.imandroid.ui.OpenFile.open(context, f, name)
                     }
                 } else {
                     gate.onTap()
@@ -264,23 +268,21 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean) {
         // **未就绪时图标上压门控徽标**：文件气泡没有"图"可以磨砂，
         // 状态只能挂在这枚图标上（iOS `IMBubbleCell` 的 `_fileIconWrap` 同理）。
         Box(contentAlignment = Alignment.Center) {
-            FileTypeIcon(MediaUrl.displayFileName(msg.content, msg.fileName.orEmpty()), size = 38.dp)
+            FileTypeIcon(name, size = 44.dp)
             DownloadBadge(gate.state, sizeBytes = 0, onTap = gate.onTap, compact = true)
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(
-                text = MediaUrl.displayFileName(msg.content, msg.fileName.orEmpty()),
-                color = c.textPrimary,
-                fontSize = 13.sp,
-                maxLines = 2,
-            )
+            // 名字用强调色、跟随聊天字号、**放不下截中间**（iOS `NSLineBreakByTruncatingMiddle`）：
+            // 截尾会把扩展名切掉，「季度报表-最终版-改…」看不出是表格还是文档
+            MiddleEllipsisText(name, color = c.accent, fontSize = appearance.chatFontSize, maxLines = 2)
             // 大小直接用服务端给的字节数格式化，**不重新下载文件去算**
             val size = MediaUrl.formatSize(msg.fileSize ?: 0)
             // 未下载时把状态写在大小旁边——徽标只是个 ↓，说不清"是没下还是下失败了"
             val hint = gate.state.phase.fileHint()
             if (size.isNotEmpty() || hint.isNotEmpty()) {
-                Text(size + hint, color = c.textSecondary, fontSize = 11.sp)
+                Spacer(Modifier.height(3.dp))
+                Text(size + hint, color = c.textSecondary, fontSize = 12.sp)
             }
         }
     }
@@ -290,10 +292,9 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean) {
 private const val BAR_COUNT = 24
 
 /**
- * 媒体气泡右下角的时间 + 状态胶囊（对齐 iOS `IMImageCell` 的 `_metaWrap`）。
+ * 媒体气泡右下角的时间 + 状态胶囊（对齐 iOS `IMImageCell` 的 `_metaWrap`：高 18、圆角 9、左右 6）。
  *
  * **必须自带底色**：它浮在不透明的图片上，没底色时遇到浅色照片就完全看不见。
- * iOS 用同款 badge wrap，两端一致。
  */
 @Composable
 internal fun MediaMetaChip(
@@ -308,9 +309,10 @@ internal fun MediaMetaChip(
     Row(
         modifier = modifier
             .padding(6.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .height(18.dp)
+            .clip(RoundedCornerShape(9.dp))
             .background(c.overlay)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(TimeFormat.bubbleTime(timestamp), color = c.onMedia, fontSize = 10.sp)

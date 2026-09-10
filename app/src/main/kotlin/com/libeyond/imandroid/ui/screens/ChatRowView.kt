@@ -4,6 +4,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.data.ReplyNames
+import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.SendState
 import com.libeyond.imandroid.sdk.api.LinkPreview
@@ -42,6 +44,10 @@ internal data class ChatRowStyle(
      * 新消息一律走片段那条路，与这份表无关。
      */
     val mentionNames: List<String> = emptyList(),
+    /** 群成员角色：uid → owner/admin/member，昵称旁的徽标用。拿不到（超级群）返回 null，退回消息上带的 from_role。 */
+    val roleOf: (String) -> String? = { null },
+    /** 群成员显示名：uid → 群昵称 > 昵称 > @句柄。排在备注之后、消息上的昵称之前。 */
+    val memberNameOf: (String) -> String? = { null },
 )
 
 /**
@@ -61,6 +67,8 @@ internal fun ChatRowView(
     onRetry: (String) -> Unit = {},
     /** 点引用块跳到原消息（按 conv_seq）。 */
     onJumpToSeq: (Long) -> Unit = {},
+    /** 点合并转发卡 → 聊天记录详情页（参数是那条的 content）。 */
+    onOpenRecord: (String) -> Unit = {},
     hiddenTile: Long = 0L,
 ) {
     val myUid = style.myUid
@@ -132,46 +140,67 @@ internal fun ChatRowView(
                 localName = localNameOf,
                 onTapUid = onOpenUser,
             )
-        } else Bubble(
-            text = r.msg.content,
-            msg = r.msg,
+        } else {
+            val m = r.msg
+            // 名字头只画在连续段首条；徽标跟着名字走（iOS `isFirstInSenderRun:` + `IMRoleBadge`）
+            val showName = showsSenderName(rows, i, myUid, isGroup)
+            Bubble(
+            text = m.content,
+            msg = m,
             mentionNames = style.mentionNames,
             // 点 @某人 与点系统消息里的名字是同一个去处：他的资料页
             onTapMention = onOpenUser,
-            onLongPress = { rect -> onLongPress(r.msg, rect) },
+            onLongPress = { rect -> onLongPress(m, rect) },
             onOpenMedia = onOpenMedia,
+            onOpenRecord = onOpenRecord,
             host = host,
             useTls = useTls,
-            mine = r.msg.sender == myUid,
-            timestamp = r.msg.timestamp,
-            senderName = if (r.msg.sender != myUid) r.msg.fromNickname else null,
+            mine = m.sender == myUid,
+            timestamp = m.timestamp,
+            // 备注 > 群成员名 > 消息上带的昵称（与引用块、回复条同一口径，见 ReplyNames）
+            senderName = if (m.sender != myUid) {
+                localNameOf(m.sender) ?: style.memberNameOf(m.sender) ?: m.fromNickname
+            } else {
+                null
+            },
+            showSenderName = showName,
+            senderBadge = if (showName) SenderRun.badgeOf(style.roleOf(m.sender), m.fromRole) else null,
             // 群聊两行式引用条（对齐 iOS）：被引用者昵称独占一行。
             // 单聊传 null——只有两个人，写谁的名字都是废话。
             // 快照三档：服务端冻结的 > 本地那条原消息现算 > 「原消息」。
             // 第二档是必需的——ack 回不来冻结快照，自己发的引用消息在自己这侧没有它。
-            quoteSnapshot = quoteSnapshotFor(rows, r.msg),
+            quoteSnapshot = quoteSnapshotFor(rows, m),
             // 引用块的真缩略与"能不能跳"都来自**本地反查到的那条原消息**
-            quoteThumb = originalOf(rows, r.msg.replyToConvSeq ?: 0L)?.thumb,
+            quoteThumb = originalOf(rows, m.replyToConvSeq ?: 0L)?.thumb,
             // 引用块**只要有原消息号就可点**。此前还要求它已经在渲染窗口里，
             // 于是"翻不到那么早"的原消息连点都点不了——而现在定位这一层会先把窗口撑到
             // 盖得住那一条（ChatLocator），真的不在本地时它会如实说一句。
-            onTapQuote = (r.msg.replyToConvSeq ?: 0L)
+            onTapQuote = (m.replyToConvSeq ?: 0L)
                 .takeIf { it > 0 }
                 ?.let { seq -> { onJumpToSeq(seq) } },
+            // **绝不退到 uid**：此前本地没备注时原样显示 10 位内部 ID（`localNameOf(it) ?: it`）
             replyFromName = if (isGroup) {
-                r.msg.replyToFrom?.let { localNameOf(it) ?: it.takeIf { u -> u.isNotBlank() } }
+                val from = m.replyToFrom
+                ReplyNames.quoteFrom(
+                    uid = from,
+                    myUid = myUid,
+                    localName = from?.let(localNameOf),
+                    memberName = from?.let(style.memberNameOf),
+                    originalNickname = originalOf(rows, m.replyToConvSeq ?: 0L)?.fromNickname,
+                )
             } else {
                 null
             },
             // 已读双勾：我发的、且对端读位点已越过它
-            read = r.msg.sender == myUid && peerReadSeq >= r.msg.convSeq,
-            delivered = r.msg.sender == myUid,
-            reserveAvatarColumn = isGroup && r.msg.sender != myUid,
+            read = m.sender == myUid && peerReadSeq >= m.convSeq,
+            delivered = m.sender == myUid,
+            reserveAvatarColumn = isGroup && m.sender != myUid,
             showAvatar = showsSenderAvatar(rows, i, myUid, isGroup),
-            avatarSeed = r.msg.sender,
+            avatarSeed = m.sender,
             loadLinkPreview = loadLinkPreview,
             searchHighlight = style.searchHighlight,
-        )
+            )
+        }
         is ChatRow.Pending -> {
             // 媒体/文件待发行的 content 是本地 content:// URI——按文本画就会在屏幕上
             // 出现一条写着 `content://media/...` 的绿气泡（真机撞见过）

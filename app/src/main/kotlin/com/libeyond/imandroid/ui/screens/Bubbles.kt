@@ -6,204 +6,45 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.libeyond.imandroid.data.ChatSearch
-import com.libeyond.imandroid.data.Mention
-import com.libeyond.imandroid.data.db.MessageEntity
-import com.libeyond.imandroid.ui.components.TimeFormat
-import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.LinkDetect
+import com.libeyond.imandroid.data.Mention
+import com.libeyond.imandroid.data.SenderRun
+import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
-import androidx.compose.foundation.text.ClickableText
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import com.libeyond.imandroid.data.SysSegments
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.ui.text.style.TextOverflow
-import com.composables.icons.lucide.IdCard
-import com.composables.icons.lucide.Image
-import com.composables.icons.lucide.MessageSquare
-import com.composables.icons.lucide.Mic
-import com.composables.icons.lucide.Video
-import com.libeyond.imandroid.ui.components.FileTypeIcon
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.ColorFilter
-import com.composables.icons.lucide.Lucide
-import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.theme.IMTheme
 
-// 气泡与分隔行。从 ChatScreen 拆出（CODING_STYLE §7②）：
-// 那个文件 526 行触了体量 WARN，规矩是**接近上限就规划拆分**，不等触顶。
-
-@Composable
-internal fun DaySeparator(ts: Long) {
-    val c = IMTheme.colors
-    val d = IMTheme.dimens
-    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-        Box(
-            // 胶囊高 24、圆角 = 半高（UI_SPEC §3，iOS _datePillHeight/_datePill.cornerRadius 同值）
-            modifier = Modifier
-                .height(d.datePillHeight)
-                .clip(RoundedCornerShape(d.datePillHeight / 2))
-                .background(c.datePillBackground)
-                .padding(horizontal = d.space3),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(TimeFormat.dayLabel(ts), color = c.onMedia, fontSize = 11.sp)
-        }
-    }
-}
-
-/**
- * 系统消息：**居中灰字，不是气泡**（与 iOS `IMSystemCell` / Web `.sys-note` 同一形态）。
- *
- * 本端此前把 `content_type=system` 当成对方的普通消息画成左气泡，还占了群头像列——
- * 「光辉岁月 被设为管理员」显示成有人在说话。2026-09-07 实测发现。
- *
- * 字号走 `sysFontSize`（= 聊天字号 × 0.8，跟随用户设置），宽度上限 80%——
- * 与 Web `.sys-note span { max-width: 80% }` 同口径，长系统消息换行而不贴边。
- */
-@Composable
-internal fun SystemNote(
-    text: String,
-    /** 落库的分段 JSON；null/坏数据 → 回退整句（历史消息本来就没有分段）。 */
-    sysSegments: String? = null,
-    /** 名字段的本地显示名：uid → 备注/群昵称。返回 null 用服务端给的公开昵称。 */
-    localName: (String) -> String? = { null },
-    /** 点名字。不传则名字只染色不可点（与 iOS `onTapUID` 为空时同）。 */
-    onTapUid: ((String) -> Unit)? = null,
-) {
-    val c = IMTheme.colors
-    val appearance = IMTheme.appearance
-    val segs = remember(sysSegments, text) { SysSegments.render(sysSegments, text) }
-
-    // 名字段用**琥珀色半粗**，不用 accent：胶囊底是主题绿，把名字染成同样是绿的 accent
-    // 两者色相几乎重合，看不出哪几个字是名字（iOS 2026-08-30 用户反馈过）。
-    // 也不用白——那与胶囊正文同色，只剩粗细之差。琥珀在绿胶囊与黑胶囊上都跳得出来。
-    val annotated = remember(segs, sysSegments) {
-        buildAnnotatedString {
-            segs.forEach { seg ->
-                if (!SysSegments.isName(seg)) {
-                    append(seg.text)
-                    return@forEach
-                }
-                val shown = SysSegments.displayName(seg, localName(seg.uid), null)
-                pushStringAnnotation(SYS_NAME_TAG, seg.uid)
-                withStyle(SpanStyle(color = SYS_NAME_COLOR, fontWeight = FontWeight.SemiBold)) {
-                    append(shown)
-                }
-                pop()
-            }
-        }
-    }
-
-    Box(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 40.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        // 胶囊：对齐 iOS `IMSystemCell` 的 _pill（圆角 11、datePillBg、内边距 10/4）
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(11.dp))
-                .background(c.datePillBackground)
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-        ) {
-            ClickableText(
-                text = annotated,
-                style = TextStyle(
-                    color = c.onMedia,
-                    fontSize = appearance.sysFontSize,
-                    textAlign = TextAlign.Center,
-                ),
-                onClick = { offset ->
-                    // 点在名字上才响应，点在固定文案上不动作（同 iOS 的 TextKit 反查）
-                    annotated.getStringAnnotations(SYS_NAME_TAG, offset, offset)
-                        .firstOrNull()?.let { onTapUid?.invoke(it.item) }
-                },
-            )
-        }
-    }
-}
-
-/**
- * 把命中词底色标出来（会话内搜索，SEARCH_DESIGN §13.5）。
- *
- * 底色用 **accentSoft**（accent 的低透明版），**不硬编码黄**——三端同一条：
- * iOS `+[IMBubbleCell applySearchHighlight:toMutable:]`、im-web `<mark class="search-hit">`。
- * 位置判定在纯函数 [ChatSearch.matchRanges] 里（有单测），这里只负责画。
- */
-internal fun highlightedText(
-    text: String,
-    needle: String,
-    background: androidx.compose.ui.graphics.Color,
-): AnnotatedString {
-    val ranges = ChatSearch.matchRanges(text, needle)
-    if (ranges.isEmpty()) return AnnotatedString(text)
-    return buildAnnotatedString {
-        var i = 0
-        for (r in ranges) {
-            if (r.first > i) append(text.substring(i, r.first))
-            withStyle(SpanStyle(background = background)) { append(text.substring(r.first, r.last + 1)) }
-            i = r.last + 1
-        }
-        if (i < text.length) append(text.substring(i))
-    }
-}
-
-/** 名字段的标注 tag 与颜色（iOS `datePillNameText` = #FFD98A）。 */
-private const val SYS_NAME_TAG = "sysName"
-private val SYS_NAME_COLOR = androidx.compose.ui.graphics.Color(0xFFFFD98A)
-
-@Composable
-internal fun UnreadDividerRow() {
-    val c = IMTheme.colors
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.weight(1f).height(0.5.dp).background(c.separator))
-        Text(
-            text = "以下为新消息",
-            color = c.textTertiary,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(horizontal = 8.dp),
-        )
-        Box(Modifier.weight(1f).height(0.5.dp).background(c.separator))
-    }
-}
-
+// 气泡本体。从 ChatScreen 拆出（CODING_STYLE §7②）：那个文件 526 行触了体量 WARN，
+// 规矩是**接近上限就规划拆分**，不等触顶。日期/系统消息/未读线这些非气泡行在 ChatNotes.kt。
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -215,11 +56,18 @@ internal fun Bubble(
     onLongPress: ((Rect) -> Unit)? = null,
     /** 点开媒体查看器（只对 image/video 生效）。 */
     onOpenMedia: ((MessageEntity) -> Unit)? = null,
+    /** 点合并转发卡 → 聊天记录详情页，参数是这条的 content（十七条对齐 #17）。 */
+    onOpenRecord: ((String) -> Unit)? = null,
     /** 媒体地址补全用的当前 host。 */
     host: String = "",
     useTls: Boolean = false,
     timestamp: Long,
+    /** 发送者显示名（备注 > 群成员名 > 消息上的昵称）。头像首字母也用它。 */
     senderName: String?,
+    /** 本条是否在气泡上方画昵称——只有连续段首条画（见 [showsSenderName]）。 */
+    showSenderName: Boolean = false,
+    /** 昵称旁的角色徽标；null = 普通成员不画。 */
+    senderBadge: SenderRun.Badge? = null,
     /** 被引用者的显示名（群聊两行式引用条用）。单聊传 null。 */
     replyFromName: String? = null,
     /**
@@ -311,13 +159,10 @@ internal fun Bubble(
             Spacer(Modifier.width(d.chatAvatarGap))
         }
         Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
-            if (!senderName.isNullOrBlank()) {
-                Text(
-                    text = senderName,
-                    color = c.textSecondary,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
-                )
+            // 昵称 + 角色徽标：**只在连续段首条**（iOS `isFirstInSenderRun:`）。
+            // 此前每条都显、还没有徽标——连发五条就是五行一样的名字（十七条对齐 #15）。
+            if (showSenderName && !senderName.isNullOrBlank()) {
+                SenderHeader(senderName, senderBadge)
             }
             val recalled = (msg?.recalledAt ?: 0) > 0
             // 图/视频要贴着气泡边渲染（撤回墓碑是纯文字，不算）
@@ -342,16 +187,9 @@ internal fun Bubble(
                     .then(
                         if (onLongPress != null && !recalled) {
                             Modifier.combinedClickable(
-                                // 图片/视频点开进查看器；其余类型点击**不做事**——
-                                // 文本气泡点一下就跳走是很怪的交互（iOS/Web 同样只有媒体可点）
-                                onClick = {
-                                    val m = msg
-                                    if (onOpenMedia != null && m != null &&
-                                        (m.contentType == ContentType.IMAGE || m.contentType == ContentType.VIDEO)
-                                    ) {
-                                        onOpenMedia(m)
-                                    }
-                                },
+                                // 图片/视频点开进查看器、合并转发卡点开详情页；其余类型点击**不做事**——
+                                // 文本气泡点一下就跳走是很怪的交互（iOS/Web 同样只有这几类可点）
+                                onClick = { msg?.let { onTapBubble(it, onOpenMedia, onOpenRecord) } },
                                 onLongClick = { onLongPress(bubbleRect) },
                             )
                         } else Modifier
@@ -365,7 +203,13 @@ internal fun Bubble(
                 val innerPad = if (flushMedia) {
                     Modifier.padding(horizontal = d.bubblePaddingH)
                 } else Modifier
-                Column(horizontalAlignment = Alignment.End) {
+                // 图/视频按原图像素定尺寸（iOS `IMMediaDisplaySize`）。贴边气泡**整列就是图那么宽**：
+                // 列宽一旦被引用块/图说的 fillMaxWidth 撑到气泡最大宽，图就离气泡左边空出一截（#16）
+                val mediaSize = if (flushMedia) rememberMediaDisplaySize(msg!!) else null
+                Column(
+                    modifier = if (mediaSize != null) Modifier.width(mediaSize.width) else Modifier,
+                    horizontalAlignment = Alignment.End,
+                ) {
                     // 引用条：被引用消息的降级快照（发送时冻结，原消息删了仍可展示）。
                     // **判据是 replyToConvSeq > 0 而不是"有没有快照"**（同 iOS `IMBubbleCell`）：
                     // 自己发的那条拿不到冻结快照，按"有快照才画"就会在自己这一侧整个不显示。
@@ -383,7 +227,6 @@ internal fun Bubble(
                                 .then(if (flushMedia) Modifier.padding(top = d.bubblePaddingV) else Modifier)
                                 .fillMaxWidth(),
                         )
-                        Spacer(Modifier.height(3.dp))
                     }
                     val isMedia = msg != null && msg.contentType in MEDIA_TYPES
                     when {
@@ -394,7 +237,11 @@ internal fun Bubble(
                         )
 
                         isMedia -> Box {
-                            MediaContent(msg!!, host, useTls, isGroup = isGroup)
+                            MediaContent(
+                                msg!!, host, useTls, isGroup = isGroup,
+                                // 文件行占满气泡内容区（iOS 文件气泡定宽），名字才有地方中间截断
+                                fileRowWidth = bubbleMax - d.bubblePaddingH * 2,
+                            )
                             // 时间胶囊**浮在媒体右下角**，不在下方另起一行——
                             // iOS `IMImageCell` 的 `_metaWrap` 就恒定钉在 thumb 右下（不论有无图说）。
                             // 图片是不透明的，所以胶囊必须自带底色才看得清。
@@ -425,11 +272,10 @@ internal fun Bubble(
                             fontSize = appearance.chatFontSize,
                         )
                     }
-                    // 图说：媒体下方的随附文本，**在气泡内**补回左右内边距，
-                    // 与媒体一起构成 Telegram 式的一整块（iOS `_captionBG`）。
+                    // 图说：媒体下方的随附文本，**在气泡内**补回内边距（iOS `_captionBG`：左右 10、上 6、下 10），
+                    // 与媒体一起构成 Telegram 式的一整块。列宽已钉成图宽，长图说在图宽内换行。
                     val cap = msg?.caption
                     if (flushMedia && !cap.isNullOrBlank()) {
-                        Spacer(Modifier.height(4.dp))
                         Text(
                             // 图说也参与命中（与后端 G4、im-web 的判据一致），所以也要高亮；
                             // @ 片段的参照系在非 text 消息上**就是 caption**（PROTOCOL §4.1）
@@ -446,7 +292,8 @@ internal fun Bubble(
                             ),
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
-                            modifier = innerPad.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 10.dp),
                         )
                     }
                     // 文本气泡里首个 URL 的富预览卡（iOS `IMLinkPreviewView`）。
@@ -457,14 +304,10 @@ internal fun Bubble(
                         val url = remember(text) { LinkDetect.firstUrl(text) }
                         if (url != null) LinkPreviewCard(url, loadLinkPreview, host, useTls)
                     }
-                    // 媒体气泡的时间已经浮在图上了，下面这一行只给非媒体气泡画
-                    if (flushMedia && msg?.caption.isNullOrBlank()) return@Column
+                    // 图/视频的时间**恒在图上的胶囊里**，有图说也不在图说下面再画一行（iOS 同）
+                    if (flushMedia) return@Column
                     Spacer(Modifier.height(2.dp))
-                    Row(
-                        modifier = innerPad
-                            .then(if (flushMedia) Modifier.padding(bottom = d.bubblePaddingV) else Modifier),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = TimeFormat.bubbleTime(timestamp),
                             color = if (mine) c.metaTime else c.textTertiary,
@@ -490,6 +333,18 @@ internal fun Bubble(
     } // BoxWithConstraints（量本行可用宽 → 气泡最大宽按比例）
 }
 
+/** 轻点气泡本体。文件行、引用块、下载徽标各自处理自己的轻点（passThroughTap 会先消费掉抬起）。 */
+private fun onTapBubble(
+    m: MessageEntity,
+    onOpenMedia: ((MessageEntity) -> Unit)?,
+    onOpenRecord: ((String) -> Unit)?,
+) {
+    when (m.contentType) {
+        ContentType.IMAGE, ContentType.VIDEO -> onOpenMedia?.invoke(m)
+        // 坏数据不开（iOS `IMLooksLikeChatRecordJSON` 同一道守卫）：否则推出一页空白的「聊天记录」
+        ContentType.CHAT_RECORD -> if (CardContent.looksLikeRecord(m.content)) onOpenRecord?.invoke(m.content)
+    }
+}
 
 /**
  * 引用快照的**前缀 token 本地化**（PROTOCOL §4.3）。
@@ -508,22 +363,6 @@ internal fun localizeReplySnapshot(raw: String): String = when {
     else -> raw
 }
 
-
-/**
- * 群内发送者头像**只挂在连续段的最后一条**上（与 iOS `IMBubbleCell` 的 gutter、
- * Web `.avatar-col` 一致）；段内其余行用等宽占位撑住，保证同一段所有气泡左缘齐平。
- *
- * 抽成纯函数是为了能单测——「只在段末挂」这条错了肉眼很难发现：
- * 段里每条都挂头像看着也"正常"，只是啰嗦；而**忘了占位**才会让气泡左缘参差，
- * 那时人多半会去调 padding 而不是想到这里。
- */
-internal fun showsSenderAvatar(rows: List<ChatRow>, index: Int, myUid: String, isGroup: Boolean): Boolean {
-    if (!isGroup) return false
-    val cur = rows.getOrNull(index) as? ChatRow.Confirmed ?: return false
-    if (cur.msg.sender.isBlank() || cur.msg.sender == myUid) return false
-    val next = rows.getOrNull(index + 1)
-    return !(next is ChatRow.Confirmed && next.msg.sender == cur.msg.sender)
-}
 
 /**
  * 气泡最大宽 = 可用内容区宽 × 比例（UI_SPEC §3）。

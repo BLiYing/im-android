@@ -21,6 +21,12 @@ internal object ChatOverlays {
         /** 点系统消息里的名字进的用户资料页。 */
         UserProfile,
 
+        /**
+         * 合并转发的聊天记录详情页（可嵌套，一层层压栈）。
+         * 排在资料页与查看器之下：详情页里点名片、点图，那两层要盖在它上面。
+         */
+        ChatRecord,
+
         /** 选联系人发名片。 */
         FriendPicker,
 

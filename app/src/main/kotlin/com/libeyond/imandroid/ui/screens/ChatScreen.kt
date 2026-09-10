@@ -180,6 +180,12 @@ fun ChatScreen(
     searchHighlight: String = "",
     /** 本群成员显示名——只给没有 mention_spans 的老消息兜底（见 [ChatRowStyle.mentionNames]）。 */
     mentionNames: List<String> = emptyList(),
+    /** 群成员角色 uid → owner/admin/member（发送者徽标）。见 [ChatRowStyle.roleOf]。 */
+    roleOf: (String) -> String? = { null },
+    /** 群成员显示名 uid → 群昵称/昵称/@句柄。发送者名、引用块、回复条共用。 */
+    memberNameOf: (String) -> String? = { null },
+    /** 点合并转发卡 → 聊天记录详情页。 */
+    onOpenRecord: (String) -> Unit = {},
     /**
      * 多选态：`conv_seq → 消息`；**null = 不在多选态**。
      * 判据与写入口在 `data/ChatSelection.kt`（按 conv_seq 记且连消息一起存，理由见那里）。
@@ -391,6 +397,8 @@ fun ChatScreen(
             loadLinkPreview = loadLinkPreview,
             searchHighlight = searchHighlight,
             mentionNames = mentionNames,
+            roleOf = roleOf,
+            memberNameOf = memberNameOf,
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -457,6 +465,7 @@ fun ChatScreen(
                     onOpenUser = onOpenUser,
                     onRetry = onRetry,
                     onJumpToSeq = onJumpToSeq,
+                    onOpenRecord = onOpenRecord,
                     // 宫格：长按的那一格自己隐形（整行不隐，其余格仍在原位）
                     hiddenTile = if (r0 is ChatRow.Album) menuForSeq else 0L,
                 )
@@ -513,33 +522,17 @@ fun ChatScreen(
             return@Column
         }
 
-        // —— 引用条（正在引用某条消息）——
-        if (replyTo != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().background(c.surface)
-                    .padding(horizontal = d.space3, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.width(2.dp).height(28.dp).background(c.accent))
-                Spacer(Modifier.width(8.dp))
-                // **与气泡内引用块同一套渲染**：引用时看到的那句话，
-                // 发出去以后在气泡里显示的必须是同一句（此前这里直接截 content，
-                // 引用一张图会显示 `/uploads/req-xxx__原名.jpg`）。
-                QuoteBlock(
-                    snapshot = replyPreviewOf(
-                        replyTo.contentType, replyTo.content, replyTo.fileName, replyTo.caption,
-                    ),
-                    fromName = if (isGroup) replyTo.fromNickname else null,
-                    // 输入栏这条引用条与气泡里的引用块**是同一个组件、同一句话、同一张缩略**
-                    // （iOS 的 IMMediaPlaceholder 也是这两处共用）。少传一个 thumb 就会出现
-                    // 「引的时候只有图标、发出去之后才有缩略」这种说不清的差别。
-                    thumb = replyTo.thumb,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("✕", color = c.textTertiary, modifier = Modifier.clickable { onCancelReply() })
-            }
-        }
+        // —— 回复条（正在引用某条消息）：点条跳原消息，下滑 / ✕ 取消 ——
+        ReplyBar(
+            replyTo = replyTo,
+            myUid = myUid,
+            isGroup = isGroup,
+            convTitle = title,
+            localNameOf = localNameOf,
+            memberNameOf = memberNameOf,
+            onJump = onJumpToSeq,
+            onCancel = onCancelReply,
+        )
 
         // 多选态：底部换成动作栏，输入栏整个不画（同 iOS：多选期间隐藏输入栏显示工具栏）
         if (selection != null) {
