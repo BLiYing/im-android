@@ -39,3 +39,6 @@ google-services.json
 # Claude Code 的 worktree 建在仓内。不排除的话它在主 checkout 里是一堆未跟踪文件，
 # 并行会话一个 `git add -A` 就会把整份 worktree 提交进去。
 .claude/worktrees/
+
+# 每次改动后按全局规则重写的一次性自查脚本，内容随任务变，不入库
+temp_verify.py
