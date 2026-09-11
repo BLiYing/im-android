@@ -14,8 +14,8 @@ import com.libeyond.imandroid.sdk.api.FavoriteApi
 import com.libeyond.imandroid.sdk.api.GroupApi
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.api.ConversationsApi
-import com.libeyond.imandroid.data.DownloadPolicy
 import com.libeyond.imandroid.data.DownloadSettings
+import com.libeyond.imandroid.data.DownloadSettingsStore
 import com.libeyond.imandroid.data.MediaCache
 import com.libeyond.imandroid.data.MediaDownloader
 import com.libeyond.imandroid.data.ThumbBackfill
@@ -30,6 +30,7 @@ import com.libeyond.imandroid.sdk.session.DeviceIdentity
 import com.libeyond.imandroid.sdk.session.RestoreOutcome
 import com.libeyond.imandroid.sdk.session.SessionStore
 import com.libeyond.imandroid.sdk.session.TokenSession
+import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.sdk.ws.IMSocketManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
@@ -88,7 +89,7 @@ class IMClient(context: Context) {
     val qr = QrApi(http)
     /** 上传。**公开**：除消息媒体外，改头像也要用它（「我」页编辑资料）。 */
     val upload = UploadApi(http) { session.token }
-    val downloadSettingsApi = DownloadSettingsApi(http)
+    private val downloadSettingsApi = DownloadSettingsApi(http)
 
     /**
      * 已下载媒体的落盘 + 下载编排（M4-7）。
@@ -105,33 +106,23 @@ class IMClient(context: Context) {
     )
 
     /**
-     * 自动下载策略。**进程内缓存一份**——它每渲染一格媒体都要读一次，
-     * 每次都去问服务端是不可能的。登录后拉一次，`capabilities_update` 到了重拉。
+     * 自动下载策略（M4-7）。**进程内一份**：门控每渲染一格媒体读一次 [downloadSettings]，
+     * 「数据和存储」设置页订阅 [DownloadSettingsStore.state]。
+     * 什么时候重拉见 init：真正连上时、收到 `capabilities_update` 时；另有 AppRoot 登录后拉一次。
      */
-    @Volatile
-    var downloadSettings: DownloadSettings = DownloadPolicy.defaults()
-        private set
+    val downloadSettingsStore = DownloadSettingsStore(
+        fetch = { downloadSettingsApi.get() },
+        put = { downloadSettingsApi.put(it) },
+        reset = { downloadSettingsApi.reset() },
+    )
 
-    suspend fun refreshDownloadSettings() {
-        runCatching { downloadSettingsApi.get() }
-            .onSuccess { (_, s) -> downloadSettings = s }
-            // 拉不到就按出厂默认走（DownloadPolicy.defaults 与服务端 Defaults 逐字对齐），
-            // **不是全关**——全关会让所有图片都要手点，比策略稍微不准糟得多
-            .onFailure { log.w("download_settings_fetch_failed") }
-    }
+    /**
+     * 门控读的当前策略。**拉不到就按出厂默认走**（DownloadPolicy.defaults 与服务端 Defaults 逐字对齐），
+     * 不是全关——全关会让所有图片都要手点，比策略稍微不准糟得多。
+     */
+    val downloadSettings: DownloadSettings get() = downloadSettingsStore.current
 
-    suspend fun saveDownloadSettings(s: DownloadSettings) {
-        downloadSettings = s
-        runCatching { downloadSettingsApi.put(s) }
-            .onSuccess { (_, saved) -> downloadSettings = saved }
-            .onFailure { log.w("download_settings_save_failed") }
-    }
-
-    suspend fun resetDownloadSettings() {
-        runCatching { downloadSettingsApi.reset() }
-            .onSuccess { (_, saved) -> downloadSettings = saved }
-            .onFailure { log.w("download_settings_reset_failed") }
-    }
+    suspend fun refreshDownloadSettings() = downloadSettingsStore.refresh("app_main")
 
     private val db = IMDatabase.get(context)
     val repo = MessageRepository(db.messages(), db.pending(), db.conversations())
@@ -256,8 +247,20 @@ class IMClient(context: Context) {
             socket.sessionEnded.collect {
                 log.w("session_ended_clearing_credentials", "reason" to it.name)
                 session.clear()
+                downloadSettingsStore.forget()
                 IMLog.currentUid = "-"
             }
+        }
+
+        // 自动下载策略的多端同步（对齐 iOS IMDownloadSettingsStore.start）：
+        // ① **真正连上**时补拉一次——断线期间别的端改过的话，那一帧推送已经错过了；
+        //    只认 Connected，Connecting 不发（弱网频繁重连会一秒几发 GET）；
+        // ② 收到 capabilities_update，按版本去重后重拉。
+        scope.launch {
+            socket.state.collect { if (it == ConnState.Connected) downloadSettingsStore.refresh("ws_connected") }
+        }
+        scope.launch {
+            messages.capabilityUpdates.collect { downloadSettingsStore.onPushed(it) }
         }
     }
 
@@ -304,10 +307,13 @@ class IMClient(context: Context) {
      *
      * **不清本地消息库**：切回同一账号时数据还在（iOS/Web 同构，单库多账号靠
      * ownerUid 隔离）。真要清是「删除账号数据」那个独立功能，不是退出登录。
+     *
+     * 自动下载策略**要清**：它是账号级的，下一个登录的账号在拉到自己的之前不能沿用上一个人的。
      */
     suspend fun logout() {
         socket.disconnect()
         tokens.logout()
+        downloadSettingsStore.forget()
     }
 
     /** 网络恢复 / 回到前台。 */

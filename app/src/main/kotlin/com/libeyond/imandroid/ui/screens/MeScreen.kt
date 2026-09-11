@@ -75,6 +75,7 @@ fun MeScreen(
     onOpenProfile: () -> Unit,
     onOpenQr: () -> Unit,
     onOpenDevices: () -> Unit,
+    onOpenDataStorage: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onComingSoon: (String) -> Unit,
     onLogout: () -> Unit,
@@ -95,7 +96,7 @@ fun MeScreen(
         listOf(
             MeRow("通知与提示音", Lucide.Bell, ic.red) { onComingSoon("通知与提示音") },
             MeRow("隐私与安全", Lucide.Lock, ic.gray, onClick = onOpenPrivacy),
-            MeRow("数据和存储", Lucide.HardDrive, ic.green) { onComingSoon("数据和存储") },
+            MeRow("数据和存储", Lucide.HardDrive, ic.green, onClick = onOpenDataStorage),
             MeRow("外观", Lucide.Contrast, ic.blue) { onComingSoon("外观") },
             MeRow("省电模式", Lucide.Zap, ic.yellow, rightValue = "关闭") { onComingSoon("省电模式") },
             MeRow("语言", Lucide.Globe, ic.purple, rightValue = "简体中文") { onComingSoon("语言") },

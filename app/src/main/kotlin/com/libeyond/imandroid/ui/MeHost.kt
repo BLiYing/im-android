@@ -13,7 +13,7 @@ import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.screens.MeScreen
 
 /** 「我」页里的二级页面。 */
-private enum class MePage { List, Profile, Qr, Devices, Privacy }
+private enum class MePage { List, Profile, Qr, Devices, DataStorage, Privacy }
 
 /**
  * 「我」页（对齐 iOS `IMSettingsViewController` 及其 push 出去的几页）。
@@ -42,6 +42,7 @@ fun MeHost(client: IMClient, onLogout: () -> Unit) {
 
     when (page) {
         MePage.Devices -> DevicesHost(client = client, onBack = { page = MePage.List })
+        MePage.DataStorage -> DataStorageHost(client = client, onBack = { page = MePage.List })
         MePage.Privacy -> PrivacySecurityHost(client = client, onBack = { page = MePage.List })
         MePage.Qr -> QrCardHost(client = client, me = me, onBack = { page = MePage.List })
         MePage.Profile -> MyProfileHost(
@@ -57,6 +58,7 @@ fun MeHost(client: IMClient, onLogout: () -> Unit) {
             onOpenProfile = { page = MePage.Profile },
             onOpenQr = { page = MePage.Qr },
             onOpenDevices = { page = MePage.Devices },
+            onOpenDataStorage = { page = MePage.DataStorage },
             onOpenPrivacy = { page = MePage.Privacy },
             onComingSoon = { toast = "「$it」还没做" },
             onLogout = { confirmLogout = true },

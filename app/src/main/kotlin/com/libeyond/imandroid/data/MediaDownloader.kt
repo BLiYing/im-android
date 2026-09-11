@@ -2,8 +2,11 @@ package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,12 +23,14 @@ import java.util.concurrent.TimeUnit
  * 只有一个入口，气泡 / 宫格逐格 / 文件气泡 / 详情页宫格四处共用同一份状态。
  * 不共用的话，同一条媒体在两个界面上会各下各的、进度也各显各的。
  *
- * ### 三条实现纪律
+ * ### 四条实现纪律
  * 1. **写 `.part`，下完才改名**——半截文件被当成"已就绪"渲染出来是最难查的一类问题；
  * 2. **404/410 判「失效」而不是「失败」**：服务端已清理的东西给重试就是每点一次拉一次 404，
  *    所以失效是终态，且**记在内存里**（同一会话内不再回源，掐 404 风暴）；
  * 3. **暂停 = 取消协程 + 删 `.part`**：本端**没有断点续传**，暂停后再点是从头开始。
- *    这一条要在界面上说清楚（iOS 有续传，本端没有——差异档记着）。
+ *    这一条要在界面上说清楚（iOS 有续传，本端没有——差异档记着）；
+ * 4. **只有登记在册的任务才写状态**：暂停 / 清缓存都是先把任务除名、再改状态，被叫停的任务
+ *    后到的进度不能把徽标改回「下载中」——改回去就是一个没有任务在跑、却永远转圈的徽标。
  */
 class MediaDownloader(
     private val scope: CoroutineScope,
@@ -66,11 +71,16 @@ class MediaDownloader(
         _states.value[url]?.let { if (it.phase != DownloadPhase.Ready) return it }
         if (cache.isReady(url, isVideo)) return DownloadState(DownloadPhase.Ready)
         if (url in expired) return DownloadState(DownloadPhase.Expired)
-        return _states.value[url] ?: DownloadState(DownloadPhase.NotStarted)
+        // 走到这里，记录要么没有，要么是 Ready 而文件已经不在了（清了缓存 / 被系统清理）。
+        // 后者照旧报 Ready 的话，localFile 给 null、Coil 拿不到图，气泡是一块空白而不是「未下载 ↓」。
+        return DownloadState(DownloadPhase.NotStarted)
     }
 
     fun localFile(url: String, isVideo: Boolean = false) =
         cache.fileFor(url, isVideo).takeIf { it.isFile && it.length() > 0 }
+
+    /** 已下载媒体占用的字节（「数据和存储 ▸ 存储用量」）。 */
+    fun cachedBytes(): Long = cache.totalBytes()
 
     /** 开始 / 重试。已在途或已就绪时是 no-op（重复点不会下两遍）。 */
     fun start(url: String, isVideo: Boolean = false, expectedBytes: Long = 0) {
@@ -79,15 +89,45 @@ class MediaDownloader(
         synchronized(startLock) {
             if (jobs[url]?.isActive == true) return
             put(url, DownloadState(DownloadPhase.Downloading, 0, expectedBytes))
-            jobs[url] = scope.launch { run(url, isVideo, expectedBytes) }
+            // LAZY：**先登记、再开跑**。任务只在自己仍登记在册时才写状态（纪律 4），
+            // 直接 launch 的话，秒下完的小文件可能赶在登记之前跑完，Ready 写不进去，徽标永远转圈。
+            val job = scope.launch(start = CoroutineStart.LAZY) { run(url, isVideo, expectedBytes) }
+            jobs[url] = job
+            job.start()
         }
     }
 
-    /** 暂停：取消协程并删掉半截文件（**没有续传**，见类注释）。 */
-    fun pause(url: String, isVideo: Boolean = false) {
+    /**
+     * 暂停：取消协程并删掉半截文件（**没有续传**，见类注释）。
+     *
+     * 与 [start] / [clearAll] 同一把锁：不加锁的话，除名之后、置 Paused 之前若有一次 `start` 插进来，
+     * 会删掉新任务正在写的 `.part`，再把它的「下载中」盖成「已暂停」——徽标说停了，后台其实还在下。
+     */
+    fun pause(url: String, isVideo: Boolean = false) = synchronized(startLock) {
         jobs.remove(url)?.cancel()
         runCatching { cache.partFor(url, isVideo).delete() }
         put(url, DownloadState(DownloadPhase.Paused))
+    }
+
+    /**
+     * 清掉全部已下载媒体（「数据和存储 ▸ 存储用量」，对齐 iOS `IMDataStorageViewController.clearCache`）。
+     *
+     * **必须经这里，不能直接 `cache.clear()`**：在途任务不先叫停，它下完会把文件改名回来；
+     * [states] 不清，已经画出来的格子收不到一次发射、不会重算，仍显示成已下载。
+     * 失效登记**不清**——那是服务端已经删掉的事实，清本机缓存改变不了它。
+     *
+     * @return 清掉的字节数。
+     */
+    fun clearAll(): Long = synchronized(startLock) {
+        val cancelled = jobs.size
+        jobs.values.forEach { it.cancel() }
+        jobs.clear()
+        val freed = cache.totalBytes()
+        cache.clear()
+        _states.value = emptyMap()
+        // 破坏性且不可撤销：不留痕就答不上「我的图片怎么全没了 / 怎么又重下了一遍」（iOS 同一行日志）
+        log.i("media_cache_cleared", "bytes" to freed, "cancelled" to cancelled)
+        freed
     }
 
     /**
@@ -99,6 +139,13 @@ class MediaDownloader(
     }
 
     private suspend fun run(url: String, isVideo: Boolean, expectedBytes: Long) {
+        val me = currentCoroutineContext()[Job]
+
+        // 纪律 4：暂停 / 清缓存已经把本任务除名的话，它之后的任何状态都不算数
+        fun report(s: DownloadState) {
+            if (me != null && jobs[url] === me) put(url, s)
+        }
+
         val part = cache.partFor(url, isVideo)
         val dst = cache.fileFor(url, isVideo)
         try {
@@ -112,7 +159,7 @@ class MediaDownloader(
                     if (resp.code == 404 || resp.code == 410) {
                         // 服务端已清理 —— 终态，不给重试
                         expired += url
-                        put(url, DownloadState(DownloadPhase.Expired))
+                        report(DownloadState(DownloadPhase.Expired))
                         log.i("media_expired", "code" to resp.code)
                         return@use
                     }
@@ -125,32 +172,36 @@ class MediaDownloader(
                         part.outputStream().use { out ->
                             val buf = ByteArray(64 * 1024)
                             while (true) {
+                                // 阻塞读不响应取消：不在这里查一次，暂停 / 清缓存之后流会照样一路读完
+                                ensureActive()
                                 val n = input.read(buf)
                                 if (n <= 0) break
                                 out.write(buf, 0, n)
                                 received += n
-                                put(url, DownloadState(DownloadPhase.Downloading, received, total))
+                                report(DownloadState(DownloadPhase.Downloading, received, total))
                             }
                         }
                     }
                     // **下完才改名**：半截 .part 绝不能被当成已就绪
                     if (received <= 0) throw IOException("zero bytes")
+                    ensureActive()
                     runCatching { dst.delete() }
                     if (!part.renameTo(dst)) throw IOException("rename failed")
-                    put(url, DownloadState(DownloadPhase.Ready, received, total))
+                    report(DownloadState(DownloadPhase.Ready, received, total))
                     log.i("media_download_ok", "bytes" to received)
                 }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
-            // 暂停走的就是这条：状态已由 pause() 置好，别覆盖成 Failed
+            // 暂停 / 清缓存走的就是这条：状态已由它们置好，别覆盖成 Failed
             runCatching { part.delete() }
             throw e
         } catch (e: Exception) {
             runCatching { part.delete() }
-            put(url, DownloadState(DownloadPhase.Failed))
+            report(DownloadState(DownloadPhase.Failed))
             log.w("media_download_failed", "err" to (e.message ?: e::class.simpleName ?: "?"))
         } finally {
-            jobs.remove(url)
+            // 只除名自己：暂停后立刻重下时，新任务已登记在同一个 url 上，不能被旧任务的 finally 顺手删掉
+            if (me != null) jobs.remove(url, me)
         }
     }
 }

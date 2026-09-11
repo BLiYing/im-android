@@ -339,6 +339,15 @@ data class MsgHiddenData(
     @SerialName("conv_seq") val convSeq: Long = 0,
 )
 
+/**
+ * capabilities_update 下行（§6.9）：账号级能力（目前只有自动下载策略）有变。
+ * **只带版本号**，不在帧里复制整份配置——收端据版本去重后重拉 `GET /api/v1/download-settings`。
+ */
+@Serializable
+data class CapabilitiesUpdateData(
+    val version: Long = 0,
+)
+
 /** presence 下行广播（§5.5 租约模型）。 */
 @Serializable
 data class PresenceFrame(

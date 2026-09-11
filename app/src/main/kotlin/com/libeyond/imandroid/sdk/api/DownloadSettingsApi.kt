@@ -36,13 +36,23 @@ class DownloadSettingsApi(private val http: HttpClient) {
 
     private fun parse(raw: kotlinx.serialization.json.JsonElement?): Pair<Long, DownloadSettings> =
         runCatching {
-            val o = raw as? JsonObject ?: return 0L to DownloadPolicy.defaults()
+            val o = raw as? JsonObject ?: return fallback("not_object")
             val r = ProtocolJson.decodeFromJsonElement(SettingsResp.serializer(), o)
             r.version to r.settings
-        }.getOrElse { 0L to DownloadPolicy.defaults() }
+        }.getOrElse { fallback(it.javaClass.simpleName) }
+
+    /**
+     * 回退出厂默认（version 0）时**必须留痕**：`DownloadSettingsStore` 会把 version 0 当成过期应答丢掉，
+     * 于是一次 200 的保存「成功」了、版本号却不动——不记这一行就答不上为什么。
+     */
+    private fun fallback(reason: String): Pair<Long, DownloadSettings> {
+        log.w("download_settings_parse_failed", "error" to reason)
+        return 0L to DownloadPolicy.defaults()
+    }
 
     internal companion object {
         private const val PATH = "/api/v1/download-settings"
+        private val log = com.libeyond.imandroid.sdk.logging.IMLog.tag("IM.Download")
 
         /**
          * 整份替换专用：**默认值也上线**。[ProtocolJson] 的 `encodeDefaults = false` 对增量帧是对的，

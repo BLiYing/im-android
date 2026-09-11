@@ -60,6 +60,17 @@ object IMLog {
 
     fun addSink(sink: Sink) { synchronized(sinks) { sinks.add(sink) } }
 
+    /**
+     * **只给 JVM 单测用**：把落点整个换掉。单测里的 `android.util.Log` 是桩、一调就抛，
+     * 不换的话凡是带日志的路径（下载器、策略存储）都没法测——异常会被业务代码的 catch 吞成「失败」。
+     */
+    internal fun useSinksForTest(vararg replacement: Sink) {
+        synchronized(sinks) {
+            sinks.clear()
+            sinks.addAll(replacement)
+        }
+    }
+
     fun tag(tag: String): Tagged = Tagged(tag)
 
     /** 绑定了 tag 的记录器——业务代码持有它，不直接调 [IMLog]。 */

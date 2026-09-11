@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -101,10 +102,11 @@ fun IMRowDivider(insetStart: androidx.compose.ui.unit.Dp = Dp.Unspecified) {
 }
 
 /**
- * 一行设置：彩色圆角图标方块 + 标题 +（可选）右值 + chevron。
+ * 一行设置：彩色圆角图标方块 + 标题（+ 副标题）+（可选）右值 + chevron。
  *
  * @param icon null 时不占图标位（iOS 的「退出登录」行就是这样），标题直接顶到左边距。
  * @param destructive 红字且不显 chevron —— 危险项不是「进下一页」，画个箭头是误导。
+ * @param subtitle 标题下的一行说明（iOS `UITableViewCellStyleSubtitle`，如「视频 15 MB · 文件 3 MB」）。
  * @param muted 灰置的占位行（iOS `IMPSCell` 的 `isPlaceholder`）：标题降一档、右值再降一档；
  *   **图标保留全彩、chevron 保留、照样可点**（点了提示开发中）——整片灰掉像是出错了。
  */
@@ -117,6 +119,7 @@ fun IMSettingsRow(
     iconBackground: Color = Color.Unspecified,
     rightValue: String = "",
     destructive: Boolean = false,
+    subtitle: String = "",
     muted: Boolean = false,
 ) {
     val c = IMTheme.colors
@@ -147,18 +150,28 @@ fun IMSettingsRow(
             }
             Spacer(Modifier.width(d.space3))
         }
-        Text(
-            text = title,
-            color = when {
-                destructive -> c.danger
-                muted -> c.textSecondary
-                else -> c.textPrimary
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = true),
-        )
+        Column(Modifier.weight(1f, fill = true)) {
+            Text(
+                text = title,
+                color = when {
+                    destructive -> c.danger
+                    muted -> c.textSecondary
+                    else -> c.textPrimary
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    color = c.textSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         if (rightValue.isNotEmpty()) {
             Text(
                 text = rightValue,
@@ -175,6 +188,73 @@ fun IMSettingsRow(
                 colorFilter = ColorFilter.tint(c.textTertiary),
             )
         }
+    }
+}
+
+/**
+ * 开关行（iOS 设置里 accessoryView 是 `UISwitch` 的那种行）。
+ *
+ * **整行不响应点击，只有开关本身可拨**（iOS `selectionStyle = None` 同）：整行可点的话，
+ * 滑动列表时手指一蹭就改了——而设置里改一下往往是一次整份保存加一次多端推送。
+ */
+@Composable
+fun IMSwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val d = IMTheme.dimens
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = d.settingsRowHeight)
+            .padding(start = d.space4, end = d.space3),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            color = IMTheme.colors.textPrimary,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+    }
+}
+
+/**
+ * 动作行（iOS 设置里的强调色文字行，如「重置自动下载设置」）：原地执行、不跳页，所以不画 chevron。
+ *
+ * @param enabled false = 置灰且不可点（如「已是出厂默认，无可重置」）。**灰掉而不是藏掉**：
+ *   藏掉的话，用户改过设置后这一行才冒出来，下面的内容整体往下跳。
+ * @param alignToIconRows 与同组带图标的行的**标题**左对齐（iOS 用透明占位图占住图标位）。
+ */
+@Composable
+fun IMActionRow(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    alignToIconRows: Boolean = false,
+) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .defaultMinSize(minHeight = d.settingsRowHeight)
+            .padding(start = if (alignToIconRows) d.settingsSeparatorInset else d.space4, end = d.space4),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            text = title,
+            color = if (enabled) c.accent else c.textTertiary,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

@@ -66,6 +66,13 @@ class MessageService(
     /** 好友关系有变（收到 friend 帧）。UI 据此重拉 /friends。 */
     val friendEvents: SharedFlow<Unit> = _friendEvents.asSharedFlow()
 
+    private val _capabilityUpdates = MutableSharedFlow<Long>(extraBufferCapacity = 8)
+    /**
+     * 账号级能力有变（收到 capabilities_update），值是服务端的新版本号（PROTOCOL §6.9）。
+     * 这里只转发，**去重与重拉在 [DownloadSettingsStore]**——只有它知道已经采纳到哪个版本。
+     */
+    val capabilityUpdates: SharedFlow<Long> = _capabilityUpdates.asSharedFlow()
+
     fun start() {
         scope.launch {
             socket.frames.collect { env ->
@@ -153,6 +160,15 @@ class MessageService(
             FrameType.FRIEND -> {
                 log.i("friend_event")
                 _friendEvents.tryEmit(Unit)
+            }
+
+            // 账号级能力有变（PROTOCOL §6.9）。这里只转发版本号，去重与重拉在 DownloadSettingsStore
+            FrameType.CAPABILITIES_UPDATE -> data?.let {
+                val d = ProtocolJson.decodeFromJsonElement(
+                    com.libeyond.imandroid.sdk.protocol.CapabilitiesUpdateData.serializer(), it,
+                )
+                log.i("capabilities_update", "version" to d.version)
+                _capabilityUpdates.tryEmit(d.version)
             }
 
             FrameType.ERROR -> data?.let {

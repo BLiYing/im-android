@@ -145,7 +145,8 @@ fun AppRoot(client: IMClient) {
         )
 
         Phase.Main -> {
-            // 自动下载策略：登录后拉一次，之后进程内缓存（每渲染一格媒体都要读它）。
+            // 自动下载策略：进主界面先拉一次，不等 WS 连上（HTTP 往往比握手先通）；
+            // 之后「连上即重拉」与 capabilities_update 由 IMClient 负责（DownloadSettingsStore）。
             // **拉不到就按出厂默认走**，不是全关——全关会让所有图片都要手点。
             LaunchedEffect(Unit) { client.refreshDownloadSettings() }
             // 下载门控的环境（下载器 + 策略 + 网络类型）。**整棵树共用一份**：
