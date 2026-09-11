@@ -20,6 +20,13 @@
 > 单聊对方名不能取 `conv.title`（备注优先）；举报确认框的名字只给自己看，反而用备注。
 > ② 从多选发起的转发，**选好目标才退出多选**，在选择页取消要回到原勾选。
 > ③ 逐条转发的相册要**每个目标会话**给新 `alb-` id，不能沿用原 id、也不能多目标共用。
+>
+> **真机首测即撞：拨任一开关都「保存失败，请检查网络后重试」→ 已修（2026-09-11）**。
+> 服务端日志实证 Android 的 PUT 全是 **400**（不是网络）：`DownloadSettingsApi.put` 把 body 套了一层
+> `{"settings":…}`，服务端要的是顶层 `{cellular,wifi}`（iOS/Web 同）。拆掉外层后还藏着第二个坑——
+> `ProtocolJson` 的 `encodeDefaults=false` 会省掉 `enabled/single/group=true`，Go 解码成 false，
+> **一次保存静默清成全关**。改为整份替换专用 `Json(from=ProtocolJson){encodeDefaults=true}`。
+> `DownloadSettingsWireTest` 4 例（先验红 4/4）；`temp_verify.py --e2e` 起隔离 imserver（:8091 + scratch 库）三种 body 实测通过。
 
 ## 下一步
 
@@ -36,6 +43,9 @@
 
 ## 已知坑 / 限制
 
+- **整份替换的 PUT body 不能用 `ProtocolJson` 直接编**：它 `encodeDefaults=false`（为增量帧设计），
+  等于 Kotlin 默认值的字段不上线，而 Go 端缺字段 = 零值 = false。照 `DownloadSettingsApi.putBody` 另起一个
+  `encodeDefaults=true` 的 Json，并配线上形状单测。「保存失败」吐司写死「请检查网络」，服务端 4xx 也这么说——易误导排查。
 - **`ONLY=X ./scripts/test.sh` 跑不了**：会在 `:media-picker` 报 "No tests found" 失败。
   跑单个类改用一次 gradle 带多个 `--tests`：`./gradlew :app:testDebugUnitTest --tests '*A*' --tests '*B*'`。
 - **批量收藏 / 多目标转发的循环挂在聊天页的协程作用域上**：中途离开聊天页，正在发的那一个请求会发完

@@ -6,9 +6,9 @@ import com.libeyond.imandroid.sdk.http.HttpClient
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.serialization.json.jsonObject
 
 @Serializable
 private data class SettingsResp(
@@ -28,13 +28,9 @@ class DownloadSettingsApi(private val http: HttpClient) {
 
     suspend fun get(): Pair<Long, DownloadSettings> = parse(http.call("GET", PATH))
 
-    /** 整体替换（与群设置同：服务端存的是整份 JSON，改一项也要把整份传回）。 */
-    suspend fun put(s: DownloadSettings): Pair<Long, DownloadSettings> {
-        val body = buildJsonObject {
-            put("settings", ProtocolJson.encodeToJsonElement(DownloadSettings.serializer(), s))
-        }
-        return parse(http.call("PUT", PATH, body))
-    }
+    /** 整体替换（与群设置同：服务端存的是整份 JSON，改一项也要把整份传回）。body 形状见 [putBody]。 */
+    suspend fun put(s: DownloadSettings): Pair<Long, DownloadSettings> =
+        parse(http.call("PUT", PATH, putBody(s)))
 
     suspend fun reset(): Pair<Long, DownloadSettings> = parse(http.call("POST", "$PATH/reset"))
 
@@ -45,7 +41,18 @@ class DownloadSettingsApi(private val http: HttpClient) {
             r.version to r.settings
         }.getOrElse { 0L to DownloadPolicy.defaults() }
 
-    private companion object {
-        const val PATH = "/api/v1/download-settings"
+    internal companion object {
+        private const val PATH = "/api/v1/download-settings"
+
+        /**
+         * 整份替换专用：**默认值也上线**。[ProtocolJson] 的 `encodeDefaults = false` 对增量帧是对的，
+         * 对这里是错的——Kotlin 默认 `enabled/single/group = true`，省略后 Go 解码成 false，
+         * 一次保存就把整套策略静默清成全关（服务端只探测两个网络在不在，探不到字段级缺失）。
+         */
+        private val FullJson = Json(from = ProtocolJson) { encodeDefaults = true }
+
+        /** body **顶层就是** `{cellular, wifi}`（iOS / Web 同），不套 `settings`——套了服务端回 400。 */
+        fun putBody(s: DownloadSettings): JsonObject =
+            FullJson.encodeToJsonElement(DownloadSettings.serializer(), s).jsonObject
     }
 }
