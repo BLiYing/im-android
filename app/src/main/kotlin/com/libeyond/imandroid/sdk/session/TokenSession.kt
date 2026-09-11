@@ -154,9 +154,32 @@ class TokenSession(
     }
 
     /**
+     * 改密成功后换上服务端轮换出的新续期凭据（凭据**唯一**的轮换点，见 `AuthApi.changePassword`）。
+     *
+     * 为空就什么都不动：服务端没下发（老会话 / 轮换失败改为作废），手上那枚要么本就没有、要么已死，
+     * 下次冷启动续期被拒会按判据二回登录页——那是对的结局，这里没有更好的补救。
+     *
+     * 拿 [refreshLock]，并在锁内核对**发起改密时的账号仍是当前账号**（[shouldAdoptRotated]）：
+     * 改密应答可能晚于「退出登录」回来——那时再写，就在已清空的本机里复活一枚仍然有效的长效凭据；
+     * 退出后换了个号登录，写进去的就是别人的凭据。[logout] 的清空也拿这把锁，二者谁后到谁说了算。
+     *
+     * @param startedUid 发起改密时的 [uid]。
+     */
+    suspend fun adoptRotatedRefreshToken(fresh: String?, startedUid: String?) {
+        val adopted = refreshLock.withLock {
+            shouldAdoptRotated(fresh, startedUid, store.uid).also { if (it) store.refreshToken = fresh }
+        }
+        log.i("session_refresh_rotated", "adopted" to adopted)
+    }
+
+    /**
      * 退出登录：**先调服务端吊销，再清本地**。
      * 反过来（先清本地）会让 `logout` 拿不到 token，服务端会话就留在那里了。
      * 服务端调用失败也照样清本地——用户点了退出就得退出。
+     *
+     * **清空要拿 [refreshLock]**：在途的续期（[refreshNow] 锁内落盘 token+uid）或改密轮换
+     * （[adoptRotatedRefreshToken]）若晚于清空才写，会把刚退出的会话写回本机。拿锁后清空一定是最后一次写；
+     * 代价是遇上在途续期要等它的请求回来。
      */
     suspend fun logout() {
         try {
@@ -164,7 +187,16 @@ class TokenSession(
         } catch (e: ApiException) {
             log.w("logout_server_call_failed", "code" to e.code)
         }
-        store.clear()
+        refreshLock.withLock { store.clear() }
         IMLog.currentUid = "-"
+    }
+
+    internal companion object {
+        /**
+         * 改密轮换出的凭据该不该落盘：有新凭据，且发起时与此刻是**同一个已登录账号**。
+         * 此刻 uid 为空 = 期间退出了；uid 变了 = 期间换号了——两种都不能写。
+         */
+        fun shouldAdoptRotated(fresh: String?, startedUid: String?, currentUid: String?): Boolean =
+            !fresh.isNullOrEmpty() && !startedUid.isNullOrEmpty() && startedUid == currentUid
     }
 }

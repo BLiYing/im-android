@@ -105,6 +105,8 @@ fun IMRowDivider(insetStart: androidx.compose.ui.unit.Dp = Dp.Unspecified) {
  *
  * @param icon null 时不占图标位（iOS 的「退出登录」行就是这样），标题直接顶到左边距。
  * @param destructive 红字且不显 chevron —— 危险项不是「进下一页」，画个箭头是误导。
+ * @param muted 灰置的占位行（iOS `IMPSCell` 的 `isPlaceholder`）：标题降一档、右值再降一档；
+ *   **图标保留全彩、chevron 保留、照样可点**（点了提示开发中）——整片灰掉像是出错了。
  */
 @Composable
 fun IMSettingsRow(
@@ -115,6 +117,7 @@ fun IMSettingsRow(
     iconBackground: Color = Color.Unspecified,
     rightValue: String = "",
     destructive: Boolean = false,
+    muted: Boolean = false,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -146,7 +149,11 @@ fun IMSettingsRow(
         }
         Text(
             text = title,
-            color = if (destructive) c.danger else c.textPrimary,
+            color = when {
+                destructive -> c.danger
+                muted -> c.textSecondary
+                else -> c.textPrimary
+            },
             style = MaterialTheme.typography.bodyLarge,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -155,7 +162,7 @@ fun IMSettingsRow(
         if (rightValue.isNotEmpty()) {
             Text(
                 text = rightValue,
-                color = c.textSecondary,
+                color = if (muted) c.textTertiary else c.textSecondary,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.width(6.dp))

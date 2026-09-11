@@ -32,8 +32,10 @@ import com.libeyond.imandroid.sdk.session.SessionStore
 import com.libeyond.imandroid.sdk.session.TokenSession
 import com.libeyond.imandroid.sdk.ws.IMSocketManager
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.SharedFlow
 
 /**
@@ -274,6 +276,24 @@ class IMClient(context: Context) {
     suspend fun register(username: String, password: String, nickname: String) {
         auth.register(username, password, nickname)
         login(username, password)
+    }
+
+    /**
+     * 修改密码（「我 ▸ 隐私与安全」）。成功时服务端下线其它设备，并**轮换本机的续期凭据**——
+     * 新的只在这次应答里出现一次，必须就地换掉本地那枚：旧的已作废，不换的话下次 access token
+     * 过期续期被拒，用户刚在本机改完密码就被弹回登录页（iOS / Web 同，各自在 SDK 层接住）。
+     *
+     * 整段 [NonCancellable]：`HttpClient` 走阻塞的 OkHttp `execute`，取消打不断请求——服务端照样改密、
+     * 照样作废旧凭据，而协程若在应答回来时已被取消，新凭据就丢在半路。
+     */
+    suspend fun changePassword(oldPassword: String, newPassword: String) {
+        // 发起时的账号：应答晚于「退出登录 / 换号」回来时据此拒写（见 adoptRotatedRefreshToken）
+        val startedUid = tokens.uid
+        withContext(NonCancellable) {
+            val r = auth.changePassword(oldPassword, newPassword)
+            tokens.adoptRotatedRefreshToken(r.refreshToken, startedUid)
+            log.i("password_changed", "rotated" to !r.refreshToken.isNullOrEmpty())
+        }
     }
 
     /** 已有有效会话时连接。 */

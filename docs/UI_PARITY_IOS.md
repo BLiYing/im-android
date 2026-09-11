@@ -565,6 +565,37 @@ Web：`src/messageContent.ts`（`selectableInMultiSelect` / `SELECT_MAX` / 批�
 - 群资料页那个带底部「退出群聊」按钮的 `IMGroupInfoViewController` 是**死代码**（全工程无人 push），
   别照着它复刻。
 
+## 4.9 隐私与安全（2026-09-11，**未真机手测**）
+
+iOS：`Modules/Me/IMPrivacySecurityViewController.m`（`buildGroups`）→ `Modules/Contacts/IMBlockedListViewController.m`
+/ `Modules/Me/IMChangePasswordViewController.m`；设计 `../IMServer/docs/design/PRIVACY_SECURITY_DESIGN.md`。
+Android：`ui/PrivacySecurityHost.kt` + 三个 `*Screen.kt`，判据在 `data/PrivacySecurity.kt` / `data/ChangePasswordRules.kt`。
+**动手前抄下来的结构清单**：
+
+- **容器页五组**：A（无组头）已屏蔽的用户（右值 = 人数，0 不显）/ 修改密码，组尾「已屏蔽的用户不能给你发消息，也看不到你的资料。」；
+  B 账号保护：两步验证「关闭」/ 通行密钥「关闭」/ 邮箱登录；C 会话隐私：自动删除消息「关闭」；
+  D 谁能看到：手机号码 / 上次上线 / 头像 / 个人简介 / 生日；E 数据：清除所有对话 / 导出我的数据。
+  B–E 灰置：标题降一档、右值再降一档，**图标全彩、chevron 保留**，点了只提示开发中。
+- **已屏蔽的用户**：顶部说明（空态时连说明一起藏）；行 = 44 头像 + 显示名 + @句柄；**左滑红色「取消屏蔽」、不二次确认**；
+  **点行无动作**（设计稿写了进资料页，iOS 没做）；空态三层（72 禁止图标 / 20 半粗大标题 / 小字）；刷新失败保留旧内容。
+- **修改密码**：旧密码一组 + 组尾（会下线其它设备）；新密码 + 确认一组；每框右侧眼睛；
+  失败红字 + 对应框描红、**输入不清空**、一改动就清红字；小字「新密码至少 6 位，与旧密码不同。」；
+  成功返回上一页 + 吐司「✓ 密码已修改，其它设备已下线」；**成功应答里轮换出的续期凭据必须就地替换**。
+
+| 项 | iOS | Android | 判定 |
+|---|---|---|---|
+| 容器页分组 / 文案 / 占位右值 / 图标底色 | 如上 | 同（`PrivacySecurityTest` 逐行钉） | ✅ |
+| 图标 | SF Symbols | lucide，与 Web `PrivacySecurityPanel` 同一套选择 | 🟢 图标库不同 |
+| 占位行点击提示 | 「X（开发中）」 | 「「X」还没做」 | 🟢 沿用本端「我」页口径，本端内一致优先 |
+| 占位行无障碍提示「即将上线」 | 有（`accessibilityHint`） | 无 | 🔴 本端无障碍统一补 |
+| 取消屏蔽失败 | 系统 alert | 吐司 | 🟢 本端错误反馈一律吐司 |
+| 黑名单首次就没拉到 | 静默（只剩说明） | 说明下显一行红字 | 🟢 空白不说原因更差 |
+| 改密码按钮何时亮 | 本地校验**全过**才亮 | 三个框**都填了**就亮，点了再说原因（Web 口径） | 🟢 iOS 那几句原因提示永远轮不到显示 |
+| 新密码超 72 字节 | 不挡，服务端回 100001 + 英文文案 | 本地挡 | 🟢 |
+| 「参数错」业务码 | 硬编码 **100002**（限流码）→「密码强度不足」分支走不到 | 按 **100001** | 🟢 iOS 的 bug，**别照抄**（iOS 未改） |
+| 会话过期 / 未知错误 | 吐司 | 同 | ✅ |
+| 提交途中返回上一页 | 回调仍把新凭据写进单例 | 挂 `client.scope` + `NonCancellable`，同样接得住 | ✅ |
+
 ---
 
 ---

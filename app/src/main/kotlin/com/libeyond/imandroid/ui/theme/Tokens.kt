@@ -315,6 +315,8 @@ data class IMSettingsIconColors(
     val yellow: Color,
     val purple: Color,
     val teal: Color,
+    /** systemPink（隐私与安全「生日」行）。 */
+    val pink: Color,
 )
 
 /** systemBlue/Green/... 的浅色取值。 */
@@ -327,6 +329,7 @@ val LightSettingsIconColors = IMSettingsIconColors(
     yellow = Color(0xFFFFCC00),
     purple = Color(0xFFAF52DE),
     teal = Color(0xFF30B0C7),
+    pink = Color(0xFFFF2D55),
 )
 
 /** systemBlue/Green/... 的深色取值（Apple 在深色下把这几个色调亮了一档）。 */
@@ -339,6 +342,7 @@ val DarkSettingsIconColors = IMSettingsIconColors(
     yellow = Color(0xFFFFD60A),
     purple = Color(0xFFBF5AF2),
     teal = Color(0xFF40C8E0),
+    pink = Color(0xFFFF375F),
 )
 
 /**

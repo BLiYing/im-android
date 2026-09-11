@@ -27,6 +27,17 @@ data class RegisterResult(
     val username: String,
 )
 
+/** `POST /users/me/password` 的返回（服务端 `handleChangePassword`）。 */
+@Serializable
+data class ChangePasswordResult(
+    /**
+     * 轮换出的新续期凭据。**可选**：会话登记降级的老会话、或服务端轮换失败改为作废时不带。
+     * 带了就必须就地替换本地那枚——旧的在这一刻已作废。
+     */
+    @SerialName("refresh_token") val refreshToken: String? = null,
+    @SerialName("refresh_expires_in") val refreshExpiresIn: Int = 0,
+)
+
 /**
  * 鉴权接口（PROTOCOL §11）。
  *
@@ -86,5 +97,26 @@ class AuthApi(private val http: HttpClient, private val device: DeviceIdentity) 
      */
     suspend fun logout() {
         http.call("POST", "/api/v1/logout")
+    }
+
+    /**
+     * 修改密码（**需鉴权**，本类里唯一一个）。成功后服务端：
+     * ① 下线本账号其它全部设备（best-effort，当前设备保持登录）；
+     * ② **轮换本机这枚续期凭据**，新的放在 [ChangePasswordResult.refreshToken] 里——
+     *    这是凭据唯一的轮换点，调用方必须就地替换（见 `IMClient.changePassword`）。
+     *
+     * 失败码：200002 旧密码错 / 100001 新密码不合规（<6 或 >72 字节）/ 200003 账号被封。
+     */
+    suspend fun changePassword(oldPassword: String, newPassword: String): ChangePasswordResult =
+        decode(
+            http.call("POST", "/api/v1/users/me/password", changePasswordBody(oldPassword, newPassword)),
+            ChangePasswordResult.serializer(),
+        )
+
+    companion object {
+        internal fun changePasswordBody(oldPassword: String, newPassword: String): JsonObject = buildJsonObject {
+            put("old_password", oldPassword)
+            put("new_password", newPassword)
+        }
     }
 }
