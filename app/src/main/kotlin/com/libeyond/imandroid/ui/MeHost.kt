@@ -6,14 +6,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.libeyond.imandroid.data.MePage
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.screens.MeScreen
-
-/** 「我」页里的二级页面。 */
-private enum class MePage { List, Profile, Qr, Devices, DataStorage, Privacy }
 
 /**
  * 「我」页（对齐 iOS `IMSettingsViewController` 及其 push 出去的几页）。
@@ -21,9 +20,11 @@ private enum class MePage { List, Profile, Qr, Devices, DataStorage, Privacy }
  * 这里只做**路由 + 本人资料的取用**，各页自己的状态在各自的 Host 里
  * ——把设备列表、二维码、编辑表单的状态都堆进这一个 Composable，就是
  * `App.tsx` 长到四千行的第一步（CODING_STYLE §7）。
+ *
+ * @param bottomBar 底部 Tab 栏，**只在根页画**；二级页整屏铺满（判据 `PushNav.showsTabBar`，外壳 [TabRoot]）。
  */
 @Composable
-fun MeHost(client: IMClient, onLogout: () -> Unit) {
+fun MeHost(client: IMClient, onLogout: () -> Unit, bottomBar: @Composable () -> Unit) {
     var page by remember { mutableStateOf(MePage.List) }
     var me by remember { mutableStateOf<UserCard?>(null) }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -32,6 +33,7 @@ fun MeHost(client: IMClient, onLogout: () -> Unit) {
     // 每次回到列表页都重拉：从编辑页保存后返回，头部要立刻是新昵称/新头像。
     // key 写 page 而不是 Unit——`LaunchedEffect(Unit)` 只在进入组合时跑一次，
     // 编辑完回来不会重跑（CODING_STYLE §4 的那条坑）。
+    // **挂在转场外面**：转场期间新旧两页同时在组合里，挂在页面里会随进场再跑一遍
     LaunchedEffect(page) {
         if (page == MePage.List) {
             runCatchingCancellable { client.contacts.me() }
@@ -40,29 +42,33 @@ fun MeHost(client: IMClient, onLogout: () -> Unit) {
         }
     }
 
-    when (page) {
-        MePage.Devices -> DevicesHost(client = client, onBack = { page = MePage.List })
-        MePage.DataStorage -> DataStorageHost(client = client, onBack = { page = MePage.List })
-        MePage.Privacy -> PrivacySecurityHost(client = client, onBack = { page = MePage.List })
-        MePage.Qr -> QrCardHost(client = client, me = me, onBack = { page = MePage.List })
-        MePage.Profile -> MyProfileHost(
-            client = client,
-            card = me,
-            onChanged = { me = it },
-            onBack = { page = MePage.List },
-        )
-        MePage.List -> MeScreen(
-            me = me,
-            fallbackName = client.myPublicName(),
-            seed = client.uid.orEmpty(),
-            onOpenProfile = { page = MePage.Profile },
-            onOpenQr = { page = MePage.Qr },
-            onOpenDevices = { page = MePage.Devices },
-            onOpenDataStorage = { page = MePage.DataStorage },
-            onOpenPrivacy = { page = MePage.Privacy },
-            onComingSoon = { toast = "「$it」还没做" },
-            onLogout = { confirmLogout = true },
-        )
+    PushTransition(targetState = page, depthOf = { it.depth }) { p ->
+        when (p) {
+            MePage.Devices -> DevicesHost(client = client, onBack = { page = MePage.List })
+            MePage.DataStorage -> DataStorageHost(client = client, onBack = { page = MePage.List })
+            MePage.Privacy -> PrivacySecurityHost(client = client, onBack = { page = MePage.List })
+            MePage.Qr -> QrCardHost(client = client, me = me, onBack = { page = MePage.List })
+            MePage.Profile -> MyProfileHost(
+                client = client,
+                card = me,
+                onChanged = { me = it },
+                onBack = { page = MePage.List },
+            )
+            MePage.List -> TabRoot(bottomBar) {
+                MeScreen(
+                    me = me,
+                    fallbackName = client.myPublicName(),
+                    seed = client.uid.orEmpty(),
+                    onOpenProfile = { page = MePage.Profile },
+                    onOpenQr = { page = MePage.Qr },
+                    onOpenDevices = { page = MePage.Devices },
+                    onOpenDataStorage = { page = MePage.DataStorage },
+                    onOpenPrivacy = { page = MePage.Privacy },
+                    onComingSoon = { toast = "「$it」还没做" },
+                    onLogout = { confirmLogout = true },
+                )
+            }
+        }
     }
 
     if (confirmLogout) {

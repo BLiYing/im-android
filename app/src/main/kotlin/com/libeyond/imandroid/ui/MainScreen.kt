@@ -48,7 +48,10 @@ import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.ConversationAction
 import com.libeyond.imandroid.data.ConversationActions
+import com.libeyond.imandroid.data.PushNav
 import com.libeyond.imandroid.ui.components.MessageContextMenu
+import com.libeyond.imandroid.ui.components.PushBase
+import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.ui.screens.ConversationListScreen
 import kotlinx.coroutines.launch
@@ -109,98 +112,128 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
      * 为什么要绕这一道、为什么两件事合成一个类型，见 [ChatArm]。
      */
     var chatArm by remember { mutableStateOf(ChatArm()) }
-    val conv = openConv
-    val infoConv = infoForConv
-    if (conv != null || infoConv != null) {
-        // 详情页**盖在**聊天页之上，聊天页不出组合（iOS push 之后底下那个 VC 还活着，同构）。
-        // 此前是二选一的 `return`：进详情就把 ChatHost 整个移出组合，回来时列表状态从头建、
-        // 按首屏规则重新定位——停在历史里点进详情，回来被甩回首条未读或底部（设计稿 #10）。
-        Box(Modifier.fillMaxSize()) {
-            if (conv != null) {
-                // 换会话（群资料里点成员「发消息」）要整页重建：列表位置、输入框、覆盖层都是按会话的
-                key(conv.convId) {
-                    ChatHost(
-                        client = client,
-                        conv = conv,
-                        onBack = { openConv = null },
-                        onOpenInfo = { infoForConv = conv },
-                        arm = chatArm,
-                        onArmConsumed = { chatArm = ChatArm() },
-                        covered = infoConv != null,
-                    )
-                }
-            }
-            if (infoConv != null) {
-                Box(Modifier.fillMaxSize().blockPointerInput()) {
-                    InfoPage(client, infoConv, knownFriends,
-                        onOpenChat = { stub -> infoForConv = null; openConv = stub },
-                        onArm = { arm -> infoForConv = null; chatArm = arm },
-                        onBack = { infoForConv = null },
-                        onLeft = { infoForConv = null; openConv = null },
-                    )
-                }
-            }
-        }
-        return
-    }
 
     var menuFor by remember { mutableStateOf<ConversationEntity?>(null) }
     var menuAnchor by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     val scope = rememberCoroutineScope()
 
-
-    Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().background(IMTheme.colors.groupedBackground)) {
-        Box(Modifier.weight(1f)) {
-            when (tab) {
-                Tab.Chats -> ConversationListScreen(
-                    conversations = conversations,
-                    onOpen = { openConv = it },
-                    onLongPress = { conv, rect -> menuFor = conv; menuAnchor = rect },
-                    onSettings = { tab = Tab.Me },
-                    connected = connState == ConnState.Connected,
-                )
-                Tab.Contacts -> ContactsHost(client = client, onOpenChat = { openConv = it })
-                Tab.Me -> MeHost(client = client, onLogout = onLogout)
-            }
-        }
+    // 底部 Tab 栏由各 Tab 的**根页**自己画（[TabRoot]），二级页整屏铺满——判据 PushNav.showsTabBar。
+    // 此前底栏画在这一层、各 Tab 的二级页在它上面的内容区里原地切换，于是一直挂着（2026-09-15 用户报）
+    val bottomBar: @Composable () -> Unit = {
         BottomBar(current = tab, unread = totalUnread, onSelect = { tab = it })
     }
 
-    // —— 会话长按菜单（CHAT_UX §12/§14）——
-    val target = menuFor
-    if (target != null) {
-        // **不是底部弹窗**：iOS 会话列表长按走的是 UIContextMenu（原位、贴着那一行）。
-        // 底部弹窗把「操作哪一条」这个信息丢了——手指在屏幕上半部长按，眼睛却要跑到底部找菜单。
-        // 与消息长按共用同一个组件，两处交互才一致。
-        MessageContextMenu(
-            anchor = menuAnchor,
-            // 会话行是整行全宽的，菜单靠左（跟着行的起始边，与 iOS 的 preview 锚点同侧）
-            mine = false,
-            items = ConversationActions
-                .availableFor(target.pinnedAt, target.muted, target.markedUnread, target.unread)
-                .map { a ->
-                    SheetItem(a.label, a.destructive, icon = convActionIcon(a)) {
-                        scope.launch {
-                            runCatching {
-                                when (a) {
-                                    ConversationAction.Pin -> settings(client, target, pinnedAt = System.currentTimeMillis())
-                                    ConversationAction.Unpin -> settings(client, target, pinnedAt = 0)
-                                    ConversationAction.Mute -> settings(client, target, muted = true)
-                                    ConversationAction.Unmute -> settings(client, target, muted = false)
-                                    ConversationAction.MarkUnread -> settings(client, target, markedUnread = true)
-                                    ConversationAction.MarkRead -> settings(client, target, markedUnread = false)
-                                    ConversationAction.Delete -> client.conversationsApi.delete(target.convId)
-                                }
-                            }
-                            client.messages.refreshConversations()
+    // —— 一级 push：Tab 根 ↔ 聊天页 ——
+    // 进聊天页时整个 Tab 层（连同底栏）向左让开、转场结束后离开组合——与此前 early return 同一语义
+    PushTransition(
+        targetState = openConv,
+        depthOf = { if (it == null) PushNav.ROOT_DEPTH else 1 },
+        // 同一个会话的实体被刷新不算换页；换会话（群资料里点成员「发消息」）才转场
+        contentKey = { it?.convId },
+    ) { conv ->
+        if (conv == null) {
+            Box(Modifier.fillMaxSize().background(IMTheme.colors.groupedBackground)) {
+                when (tab) {
+                    Tab.Chats -> TabRoot(bottomBar) {
+                        ConversationListScreen(
+                            conversations = conversations,
+                            onOpen = { openConv = it },
+                            onLongPress = { c, rect -> menuFor = c; menuAnchor = rect },
+                            onSettings = { tab = Tab.Me },
+                            connected = connState == ConnState.Connected,
+                        )
+                    }
+                    Tab.Contacts -> ContactsHost(client = client, onOpenChat = { openConv = it }, bottomBar = bottomBar)
+                    Tab.Me -> MeHost(client = client, onLogout = onLogout, bottomBar = bottomBar)
+                }
+                menuFor?.let { target ->
+                    ConversationMenu(client, target, menuAnchor, scope, onDismiss = { menuFor = null })
+                }
+            }
+        } else {
+            val covered = infoForConv != null
+            Box(Modifier.fillMaxSize()) {
+                // 详情页**盖在**聊天页之上，聊天页不出组合（iOS push 之后底下那个 VC 还活着，同构）。
+                // 此前是二选一的 `return`：进详情就把 ChatHost 整个移出组合，回来时列表状态从头建、
+                // 按首屏规则重新定位——停在历史里点进详情，回来被甩回首条未读或底部（设计稿 #10）。
+                // 被盖住时只左移让开（PushBase），不离开组合
+                PushBase(covered = covered) {
+                    // 换会话（群资料里点成员「发消息」）要整页重建：列表位置、输入框、覆盖层都是按会话的
+                    key(conv.convId) {
+                        ChatHost(
+                            client = client,
+                            conv = conv,
+                            onBack = { openConv = null },
+                            onOpenInfo = { infoForConv = conv },
+                            arm = chatArm,
+                            onArmConsumed = { chatArm = ChatArm() },
+                            covered = covered,
+                        )
+                    }
+                }
+                // —— 二级 push：聊天页 → 会话详情 / 群资料 ——
+                PushTransition(
+                    targetState = infoForConv,
+                    depthOf = { if (it == null) 0 else 1 },
+                    contentKey = { it?.convId },
+                ) { info ->
+                    if (info != null) {
+                        Box(Modifier.fillMaxSize().blockPointerInput()) {
+                            InfoPage(client, info, knownFriends,
+                                onOpenChat = { stub -> infoForConv = null; openConv = stub },
+                                onArm = { arm -> infoForConv = null; chatArm = arm },
+                                onBack = { infoForConv = null },
+                                onLeft = { infoForConv = null; openConv = null },
+                            )
                         }
                     }
-                },
-            onDismiss = { menuFor = null },
-        )
+                }
+            }
+        }
     }
-    }
+}
+
+/**
+ * 会话长按菜单（CHAT_UX §12/§14）。
+ *
+ * **不是底部弹窗**：iOS 会话列表长按走的是 UIContextMenu（原位、贴着那一行）。
+ * 底部弹窗把「操作哪一条」这个信息丢了——手指在屏幕上半部长按，眼睛却要跑到底部找菜单。
+ * 与消息长按共用同一个组件，两处交互才一致。
+ */
+@Composable
+private fun ConversationMenu(
+    client: IMClient,
+    target: ConversationEntity,
+    anchor: androidx.compose.ui.geometry.Rect,
+    scope: kotlinx.coroutines.CoroutineScope,
+    onDismiss: () -> Unit,
+) {
+    MessageContextMenu(
+        anchor = anchor,
+        // 会话行是整行全宽的，菜单靠左（跟着行的起始边，与 iOS 的 preview 锚点同侧）
+        mine = false,
+        items = ConversationActions
+            .availableFor(target.pinnedAt, target.muted, target.markedUnread, target.unread)
+            .map { a ->
+                SheetItem(a.label, a.destructive, icon = convActionIcon(a)) {
+                    scope.launch {
+                        runCatching {
+                            when (a) {
+                                ConversationAction.Pin -> settings(client, target, pinnedAt = System.currentTimeMillis())
+                                ConversationAction.Unpin -> settings(client, target, pinnedAt = 0)
+                                ConversationAction.Mute -> settings(client, target, muted = true)
+                                ConversationAction.Unmute -> settings(client, target, muted = false)
+                                ConversationAction.MarkUnread -> settings(client, target, markedUnread = true)
+                                ConversationAction.MarkRead -> settings(client, target, markedUnread = false)
+                                ConversationAction.Delete -> client.conversationsApi.delete(target.convId)
+                            }
+                        }
+                        client.messages.refreshConversations()
+                    }
+                }
+            },
+        onDismiss = onDismiss,
+    )
 }
 
 /**

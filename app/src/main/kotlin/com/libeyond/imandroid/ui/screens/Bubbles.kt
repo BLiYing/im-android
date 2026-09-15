@@ -33,6 +33,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.data.BubbleCaption
+import com.libeyond.imandroid.data.CaptionPlacement
 import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.LinkDetect
 import com.libeyond.imandroid.data.Mention
@@ -276,15 +278,15 @@ internal fun Bubble(
                             fontSize = appearance.chatFontSize,
                         )
                     }
-                    // 图说：媒体下方的随附文本，**在气泡内**补回内边距（iOS `_captionBG`：左右 10、上 6、下 10），
-                    // 与媒体一起构成 Telegram 式的一整块。列宽已钉成图宽，长图说在图宽内换行。
-                    val cap = msg?.caption
-                    if (flushMedia && !cap.isNullOrBlank()) {
+                    // 图说画不画、画在哪：**判据在 [BubbleCaption]**。此前挂在 `flushMedia` 上（只有图/视频），
+                    // 文件文的图说于是整段不画——同一条消息 iOS/Web 有字、本端只剩文件卡（2026-09-15 用户报）。
+                    val capPlacement = BubbleCaption.placementOf(msg?.contentType, msg?.caption, recalled)
+                    if (capPlacement != CaptionPlacement.None) {
                         Text(
                             // 图说也参与命中（与后端 G4、im-web 的判据一致），所以也要高亮；
                             // @ 片段的参照系在非 text 消息上**就是 caption**（PROTOCOL §4.1）
                             text = chatBodyText(
-                                text = cap,
+                                text = msg?.caption.orEmpty(),
                                 spans = remember(mentionSpansJson, msg?.mentionSpans) {
                                     Mention.parseSpans(mentionSpansJson ?: msg?.mentionSpans)
                                 },
@@ -296,8 +298,16 @@ internal fun Bubble(
                             ),
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 10.dp),
+                            modifier = if (capPlacement == CaptionPlacement.UnderMedia) {
+                                // 贴边媒体：在气泡内补回内边距（iOS `_captionBG`：左右 10、上 6、下 10），
+                                // 与媒体构成 Telegram 式的一整块；列宽已钉成图宽，长图说在图宽内换行
+                                Modifier.fillMaxWidth()
+                                    .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 10.dp)
+                            } else {
+                                // 文件卡：气泡自己有内边距，只与文件行隔开（iOS `_fileCaption` 距文件行 6）；
+                                // 列宽由定宽的文件行撑，图说在它宽内换行，时间行照旧在最下面靠右
+                                Modifier.padding(top = 6.dp)
+                            },
                         )
                     }
                     // 文本气泡里首个 URL 的富预览卡（iOS `IMLinkPreviewView`）。

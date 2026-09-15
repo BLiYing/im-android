@@ -14,6 +14,7 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.screens.BlockedUsersScreen
 import com.libeyond.imandroid.ui.screens.ChangePasswordScreen
 import com.libeyond.imandroid.ui.screens.PrivacySecurityScreen
@@ -104,43 +105,45 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit) {
     // 每回到容器页 / 进列表页都重拉（iOS 两页的 viewWillAppear 同）
     LaunchedEffect(page) { if (page != PrivacyPage.ChangePassword) reloadBlocked() }
 
-    when (page) {
-        PrivacyPage.Main -> {
-            BackHandler(onBack = onBack)
-            PrivacySecurityScreen(
-                blockedCount = blocked?.size,
-                onBack = onBack,
-                onOpenBlocked = { page = PrivacyPage.Blocked },
-                onOpenChangePassword = { page = PrivacyPage.ChangePassword },
-                onComingSoon = { toast = "「$it」还没做" },
-            )
-        }
+    PushTransition(targetState = page, depthOf = { if (it == PrivacyPage.Main) 0 else 1 }) { p ->
+        when (p) {
+            PrivacyPage.Main -> {
+                BackHandler(onBack = onBack)
+                PrivacySecurityScreen(
+                    blockedCount = blocked?.size,
+                    onBack = onBack,
+                    onOpenBlocked = { page = PrivacyPage.Blocked },
+                    onOpenChangePassword = { page = PrivacyPage.ChangePassword },
+                    onComingSoon = { toast = "「$it」还没做" },
+                )
+            }
 
-        PrivacyPage.Blocked -> {
-            BackHandler { page = PrivacyPage.Main }
-            BlockedUsersScreen(
-                blocked = blocked,
-                error = blockedError,
-                onUnblock = { unblock(it) },
-                onBack = { page = PrivacyPage.Main },
-            )
-        }
+            PrivacyPage.Blocked -> {
+                BackHandler { page = PrivacyPage.Main }
+                BlockedUsersScreen(
+                    blocked = blocked,
+                    error = blockedError,
+                    onUnblock = { unblock(it) },
+                    onBack = { page = PrivacyPage.Main },
+                )
+            }
 
-        PrivacyPage.ChangePassword -> {
-            BackHandler { leavePassword() }
-            ChangePasswordScreen(
-                oldPassword = form.old,
-                newPassword = form.new,
-                confirmPassword = form.confirm,
-                // 一改动就清红字（iOS `fieldChanged:`）：给一次重来的机会，但不清输入
-                onOldChange = { form = form.copy(old = it); pwdError = null },
-                onNewChange = { form = form.copy(new = it); pwdError = null },
-                onConfirmChange = { form = form.copy(confirm = it); pwdError = null },
-                error = pwdError,
-                submitting = submitting,
-                onSubmit = { submitPassword() },
-                onBack = { leavePassword() },
-            )
+            PrivacyPage.ChangePassword -> {
+                BackHandler { leavePassword() }
+                ChangePasswordScreen(
+                    oldPassword = form.old,
+                    newPassword = form.new,
+                    confirmPassword = form.confirm,
+                    // 一改动就清红字（iOS `fieldChanged:`）：给一次重来的机会，但不清输入
+                    onOldChange = { form = form.copy(old = it); pwdError = null },
+                    onNewChange = { form = form.copy(new = it); pwdError = null },
+                    onConfirmChange = { form = form.copy(confirm = it); pwdError = null },
+                    error = pwdError,
+                    submitting = submitting,
+                    onSubmit = { submitPassword() },
+                    onBack = { leavePassword() },
+                )
+            }
         }
     }
 

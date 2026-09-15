@@ -229,6 +229,8 @@ private fun RecordBody(item: CardContent.RecordItem, host: String, useTls: Boole
                     },
                 )
             }
+            // 文件文的图说（与上面图/视频那一支同口径）：此前只有图/视频画，文件这一支漏了
+            if (item.caption.isNotBlank()) Text(item.caption, color = c.textPrimary, fontSize = 15.sp)
         }
         ContentType.CONTACT -> if (CardContent.parseContact(item.content) == null) {
             Text("[个人名片]", color = c.textTertiary, fontSize = 16.sp)

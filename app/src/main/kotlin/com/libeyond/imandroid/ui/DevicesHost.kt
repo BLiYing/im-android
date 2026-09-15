@@ -13,6 +13,7 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.DeviceSession
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.screens.DeviceDetailScreen
 import com.libeyond.imandroid.ui.screens.DeviceListScreen
 import com.libeyond.imandroid.ui.screens.REVOKE_ALL
@@ -53,28 +54,35 @@ fun DevicesHost(client: IMClient, onBack: () -> Unit) {
 
     LaunchedEffect(Unit) { reload() }
 
-    val open = detail
-    if (open != null) {
-        BackHandler { detail = null }
-        DeviceDetailScreen(
-            device = open,
-            now = now,
-            submitting = revoking == open.sessionId,
-            onRevoke = { confirmOne = open },
-            onBack = { detail = null },
-        )
-    } else {
-        BackHandler(onBack = onBack)
-        DeviceListScreen(
-            devices = devices,
-            error = error,
-            revoking = revoking,
-            now = now,
-            onRefresh = { devices = null; scope.launch { reload() } },
-            onOpenDetail = { detail = it },
-            onRevokeOthers = { confirmOthers = true },
-            onBack = onBack,
-        )
+    // push 转场。**内容按转场自己的状态画**（`open`，不是 `detail`）：返回时 detail 已置空，
+    // 滑走中的那一页拿到的仍是它自己那台设备，不会半路变成列表
+    PushTransition(
+        targetState = detail,
+        depthOf = { if (it == null) 0 else 1 },
+        contentKey = { it?.sessionId },
+    ) { open ->
+        if (open != null) {
+            BackHandler { detail = null }
+            DeviceDetailScreen(
+                device = open,
+                now = now,
+                submitting = revoking == open.sessionId,
+                onRevoke = { confirmOne = open },
+                onBack = { detail = null },
+            )
+        } else {
+            BackHandler(onBack = onBack)
+            DeviceListScreen(
+                devices = devices,
+                error = error,
+                revoking = revoking,
+                now = now,
+                onRefresh = { devices = null; scope.launch { reload() } },
+                onOpenDetail = { detail = it },
+                onRevokeOthers = { confirmOthers = true },
+                onBack = onBack,
+            )
+        }
     }
 
     val one = confirmOne

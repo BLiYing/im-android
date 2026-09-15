@@ -17,6 +17,7 @@ import com.libeyond.imandroid.data.NetworkPolicy
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.screens.AutoDownloadCategoryScreen
 import com.libeyond.imandroid.ui.screens.AutoDownloadNetworkScreen
 import com.libeyond.imandroid.ui.screens.DataStorageScreen
@@ -27,6 +28,13 @@ private sealed interface StoragePage {
     data object Main : StoragePage
     data class Network(val net: DownloadNetwork) : StoragePage
     data class Category(val net: DownloadNetwork, val cat: DownloadCategory) : StoragePage
+}
+
+/** push 转场的深度：主页 → 某个网络 → 某个类别，逐层深一层。 */
+private fun depthOf(p: StoragePage): Int = when (p) {
+    StoragePage.Main -> 0
+    is StoragePage.Network -> 1
+    is StoragePage.Category -> 2
 }
 
 /**
@@ -81,48 +89,51 @@ fun DataStorageHost(client: IMClient, onBack: () -> Unit) {
     // 每回到主页重算一次用量（iOS `viewWillAppear` 同）
     LaunchedEffect(page) { if (page == StoragePage.Main) measure() }
 
-    when (val p = page) {
-        StoragePage.Main -> {
-            BackHandler(onBack = onBack)
-            DataStorageScreen(
-                cacheBytes = cacheBytes,
-                settings = settings,
-                onBack = onBack,
-                onStorageUsage = {
-                    when {
-                        clearing -> Unit
-                        (cacheBytes ?: 0L) > 0 -> confirmClear = true
-                        // 0 字节时 iOS 弹一个只有「取消」的框；本端一句提示，少点一下
-                        else -> toast = DownloadSettingsUi.clearCacheMessage(0)
-                    }
-                },
-                onOpenNetwork = { page = StoragePage.Network(it) },
-                onReset = { confirmReset = true },
-            )
-        }
+    // push 转场：三层依次深一层。页面数据跟着转场自己的状态走（`p`），滑走中的那一页不会半路换成别的网络
+    PushTransition(targetState = page, depthOf = ::depthOf) { p ->
+        when (p) {
+            StoragePage.Main -> {
+                BackHandler(onBack = onBack)
+                DataStorageScreen(
+                    cacheBytes = cacheBytes,
+                    settings = settings,
+                    onBack = onBack,
+                    onStorageUsage = {
+                        when {
+                            clearing -> Unit
+                            (cacheBytes ?: 0L) > 0 -> confirmClear = true
+                            // 0 字节时 iOS 弹一个只有「取消」的框；本端一句提示，少点一下
+                            else -> toast = DownloadSettingsUi.clearCacheMessage(0)
+                        }
+                    },
+                    onOpenNetwork = { page = StoragePage.Network(it) },
+                    onReset = { confirmReset = true },
+                )
+            }
 
-        is StoragePage.Network -> {
-            BackHandler { page = StoragePage.Main }
-            AutoDownloadNetworkScreen(
-                network = p.net,
-                policy = DownloadSettingsUi.policyOf(settings, p.net),
-                onBack = { page = StoragePage.Main },
-                onEnabledChange = { on -> update(p.net) { it.copy(enabled = on) } },
-                onCommitTier = { i -> update(p.net) { DownloadSettingsUi.commitTier(it, i) } },
-                onOpenCategory = { page = StoragePage.Category(p.net, it) },
-            )
-        }
+            is StoragePage.Network -> {
+                BackHandler { page = StoragePage.Main }
+                AutoDownloadNetworkScreen(
+                    network = p.net,
+                    policy = DownloadSettingsUi.policyOf(settings, p.net),
+                    onBack = { page = StoragePage.Main },
+                    onEnabledChange = { on -> update(p.net) { it.copy(enabled = on) } },
+                    onCommitTier = { i -> update(p.net) { DownloadSettingsUi.commitTier(it, i) } },
+                    onOpenCategory = { page = StoragePage.Category(p.net, it) },
+                )
+            }
 
-        is StoragePage.Category -> {
-            BackHandler { page = StoragePage.Network(p.net) }
-            AutoDownloadCategoryScreen(
-                category = p.cat,
-                rule = DownloadSettingsUi.ruleOf(DownloadSettingsUi.policyOf(settings, p.net), p.cat),
-                onBack = { page = StoragePage.Network(p.net) },
-                onSingleChange = { on -> updateRule(p.net, p.cat) { it.copy(single = on) } },
-                onGroupChange = { on -> updateRule(p.net, p.cat) { it.copy(group = on) } },
-                onCommitSize = { i -> updateRule(p.net, p.cat) { DownloadSettingsUi.commitSize(it, i) } },
-            )
+            is StoragePage.Category -> {
+                BackHandler { page = StoragePage.Network(p.net) }
+                AutoDownloadCategoryScreen(
+                    category = p.cat,
+                    rule = DownloadSettingsUi.ruleOf(DownloadSettingsUi.policyOf(settings, p.net), p.cat),
+                    onBack = { page = StoragePage.Network(p.net) },
+                    onSingleChange = { on -> updateRule(p.net, p.cat) { it.copy(single = on) } },
+                    onGroupChange = { on -> updateRule(p.net, p.cat) { it.copy(group = on) } },
+                    onCommitSize = { i -> updateRule(p.net, p.cat) { DownloadSettingsUi.commitSize(it, i) } },
+                )
+            }
         }
     }
 
