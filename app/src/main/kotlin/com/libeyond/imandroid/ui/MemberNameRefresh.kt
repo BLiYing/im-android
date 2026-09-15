@@ -16,7 +16,7 @@ import com.libeyond.imandroid.data.db.MessageEntity
  * 旧成员表会把这条新消息也压回旧名——所以末条换了、且它带的昵称与成员表对不上时重拉（5s 节流）。
  * 进会话读到的第一窗只记基线：那时的末条是本地老快照，拿它比只会白拉一次（进会话时已经拉过）。
  *
- * 对端：iOS `IMChatViewController+Group.m` 的 `refreshGroupInfoIfSenderRenamed:`、im-web `App.tsx` 的 memberNickTailRef effect。
+ * 对端：iOS `IMChatViewController+Group.m` 的 `refreshGroupInfoIfSenderRenamed:`、im-web `src/useGroupInfoRefresh.ts`。
  */
 @Composable
 internal fun rememberMembersRefreshRev(
