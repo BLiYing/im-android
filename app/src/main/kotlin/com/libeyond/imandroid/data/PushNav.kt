@@ -26,6 +26,16 @@ object PushNav {
     fun showsTabBar(depth: Int): Boolean = depth == ROOT_DEPTH
 }
 
+/**
+ * 「消息」Tab 里的页面：会话列表右上角 ＋ 推出去的两页（对齐 iOS `IMConversationListViewController` 的
+ * `plusTapped:`）。从这里建群是**一层**——与通讯录那条「群聊 → 建群」的两层不同，返回直接回会话列表。
+ */
+enum class ChatsPage(val depth: Int) {
+    List(PushNav.ROOT_DEPTH),
+    AddFriend(1),
+    CreateGroup(1),
+}
+
 /** 「通讯录」Tab 里的页面。建群是从「群聊」列表点进去的，比它深一层。 */
 enum class ContactsPage(val depth: Int) {
     List(PushNav.ROOT_DEPTH),

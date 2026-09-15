@@ -62,10 +62,11 @@ internal fun LinkPreviewCard(
             .padding(top = 6.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(c.subtleFill)
-            .padding(start = 8.dp, top = 6.dp, end = 8.dp, bottom = 6.dp),
+            .background(c.subtleFill),
     ) {
         if (p.image.isNotBlank()) {
+            // 图**贴卡片上、左、右三边**，上面两角由卡片的圆角裁（iOS `IMLinkPreviewView` 的 `_thumb`
+            // 三边贴 self、Web 同）。此前整卡 8/6 内边距把图框在里面，三端一眼两样（2026-09-15 用户报）
             AsyncImage(
                 model = MediaUrl.absolute(p.image, host, useTls),
                 contentDescription = null,
@@ -73,11 +74,20 @@ internal fun LinkPreviewCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(6.dp))
                     .background(c.neutralControl),
             )
-            Spacer(Modifier.height(6.dp))
         }
+        // 文字仍留内边距；有图时这 6 的顶距就是图与标题的间隔
+        Column(Modifier.fillMaxWidth().padding(start = 8.dp, top = 6.dp, end = 8.dp, bottom = 6.dp)) {
+            LinkPreviewTexts(p, url)
+        }
+    }
+}
+
+@Composable
+private fun LinkPreviewTexts(p: LinkPreview, url: String) {
+    val c = IMTheme.colors
+    Column {
         if (p.title.isNotBlank()) {
             Text(
                 p.title, color = c.textPrimary, fontSize = 13.sp,

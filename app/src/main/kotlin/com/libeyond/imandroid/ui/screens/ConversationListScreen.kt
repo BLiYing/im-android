@@ -2,7 +2,6 @@ package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.Alignment
@@ -39,9 +38,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Plus
+import com.libeyond.imandroid.data.ConversationListPhase
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.components.TimeFormat
+import com.libeyond.imandroid.ui.components.TopBarCircleButton
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -53,14 +57,17 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 @Composable
 fun ConversationListScreen(
     conversations: List<ConversationEntity>,
+    /** 画列表、空态还是什么都不画。判据在 [ConversationListPhase]——**别在这里拿 isEmpty 自己判**。 */
+    phase: ConversationListPhase,
     onOpen: (ConversationEntity) -> Unit,
     /** 长按一行，带上它在窗口坐标系里的矩形——菜单要贴着这一行弹（对齐 iOS UIContextMenu）。 */
-    onLongPress: (ConversationEntity, androidx.compose.ui.geometry.Rect) -> Unit,
-    onSettings: () -> Unit,
+    onLongPress: (ConversationEntity, Rect) -> Unit,
+    /** 右上角 ＋，带上按钮在窗口坐标系里的矩形——菜单贴着它弹（对齐 iOS `plusTapped:` 的 IMPopoverCard）。 */
+    onPlus: (Rect) -> Unit,
     connected: Boolean,
 ) {
     val c = IMTheme.colors
-    val d = IMTheme.dimens
+    var plusRect by remember { mutableStateOf(Rect.Zero) }
 
     Column(
         modifier = Modifier
@@ -68,40 +75,26 @@ fun ConversationListScreen(
             .background(c.groupedBackground)
             .systemBarsPadding(),
     ) {
-        // —— 标题栏 ——
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(c.surface)
-                .padding(horizontal = d.space4, vertical = d.space3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "消息",
-                style = MaterialTheme.typography.headlineSmall,
-                color = c.textPrimary,
-            )
-            // 连接状态：只在**未连接**时占位显示，连上了就不打扰用户
-            if (!connected) {
-                Spacer(Modifier.width(d.space2))
-                Text(
-                    text = "连接中…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = c.textTertiary,
+        // 标题**居中**、连接态走副标题，对齐 iOS 注入栏（标题恒为「消息」，连接中放在「在线」那个位置）。
+        // 此前是左对齐的大标题 + 右上角一个文字「我」——底栏已有「我」，那个入口是多余的（2026-09-15 用户报）
+        IMTopBar(
+            title = "消息",
+            subtitle = if (connected) "" else "连接中…",
+            right = {
+                TopBarCircleButton(
+                    icon = Lucide.Plus,
+                    description = "添加",
+                    onClick = { onPlus(plusRect) },
+                    modifier = Modifier.onGloballyPositioned { plusRect = it.boundsInWindow() },
                 )
-            }
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = "我",
-                color = c.accent,
-                modifier = Modifier.clickable { onSettings() },
-            )
-        }
+            },
+        )
 
-        if (conversations.isEmpty()) {
-            EmptyState()
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+        when (phase) {
+            // 还不知道有没有：什么都不画。画空态 = 先宣布「还没有会话」再改口
+            ConversationListPhase.Loading -> Unit
+            ConversationListPhase.Empty -> EmptyState()
+            ConversationListPhase.List -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(conversations, key = { it.convId }) { conv ->
                     ConversationRow(conv, onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) })
                 }
@@ -115,9 +108,9 @@ fun ConversationListScreen(
 private fun ConversationRow(
     conv: ConversationEntity,
     onClick: () -> Unit,
-    onLongClick: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onLongClick: (Rect) -> Unit,
 ) {
-    var rect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    var rect by remember { mutableStateOf(Rect.Zero) }
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val title = conv.title.ifBlank { conv.convId }
@@ -248,8 +241,9 @@ private fun EmptyState() {
     ) {
         Text("还没有会话", color = c.textSecondary, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
+        // 与 iOS emptyLabel 同一句：入口就在右上角 ＋
         Text(
-            "在另一个端给这个账号发条消息试试",
+            "点右上角 ＋ 新建群聊或添加好友",
             color = c.textTertiary,
             style = MaterialTheme.typography.bodyMedium,
         )

@@ -34,7 +34,8 @@ import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
- * 找人（M2.5-3）。
+ * 添加朋友（M2.5-3）。标题与 iOS `IMUserSearchViewController` 同为「添加朋友」
+ * ——此前叫「找人」，从通讯录右上角点进来与 iOS 不是同一个名字（2026-09-15 用户报）。
  *
  * **服务端按 username / phone 精确匹配，防枚举**——不是模糊搜索，
  * 界面文案要如实说清楚，否则用户输个昵称搜不到会以为坏了。
@@ -61,7 +62,7 @@ fun UserSearchScreen(
         modifier = Modifier.fillMaxSize().background(c.groupedBackground)
             .systemBarsPadding().imePadding(),
     ) {
-        IMTopBar(title = "找人", onLeft = onBack)
+        IMTopBar(title = "添加朋友", onLeft = onBack)
 
         Column(Modifier.padding(d.space4)) {
             IMTextField(query, onQueryChange, "用户名或手机号")

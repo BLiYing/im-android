@@ -73,6 +73,13 @@ class MessageService(
      */
     val capabilityUpdates: SharedFlow<Long> = _capabilityUpdates.asSharedFlow()
 
+    private val _listedConversations = kotlinx.coroutines.flow.MutableStateFlow<ListedConversations?>(null)
+    /**
+     * 本次进程里最近一次**成功**拉到的会话列表（哪个账号、几条）。会话列表的空态判据要它
+     * （[ConversationListPhase]：本地空 ≠ 没有会话，服务端也说没有才是）。失败不写——失败时它说不出结论。
+     */
+    val listedConversations: kotlinx.coroutines.flow.StateFlow<ListedConversations?> = _listedConversations
+
     fun start() {
         scope.launch {
             socket.frames.collect { env ->
@@ -453,7 +460,9 @@ class MessageService(
     suspend fun refreshConversations() {
         val owner = ownerProvider() ?: return
         try {
-            repo.applyConversationList(owner, conversationsApi.list(), presence)
+            val list = conversationsApi.list()
+            repo.applyConversationList(owner, list, presence)
+            _listedConversations.value = ListedConversations(owner, list.size)
         } catch (e: Exception) {
             log.w("conversations_refresh_failed", "err" to e.javaClass.simpleName)
         }

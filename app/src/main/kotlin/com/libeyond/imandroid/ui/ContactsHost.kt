@@ -22,14 +22,13 @@ import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.screens.ContactsScreen
-import com.libeyond.imandroid.ui.screens.CreateGroupScreen
 import com.libeyond.imandroid.ui.screens.GroupListScreen
 import com.libeyond.imandroid.ui.screens.NewFriendsScreen
-import com.libeyond.imandroid.ui.screens.UserSearchScreen
 import kotlinx.coroutines.launch
 
 /**
- * 通讯录接线层：好友列表 / 新的朋友 / 找人。
+ * 通讯录接线层：好友列表 / 新的朋友 / 群聊 / 资料页。
+ * 「添加朋友」「建群」两页的状态在 [AddFriendHost] / [CreateGroupHost]——消息页 ＋ 菜单也进这两页。
  *
  * @param onOpenChat 点好友发消息——由 [MainScreen] 负责真正打开聊天页。
  * @param bottomBar 底部 Tab 栏，**只在列表根页画**；二级页整屏铺满（判据 `PushNav.showsTabBar`，外壳 [TabRoot]）。
@@ -44,18 +43,6 @@ fun ContactsHost(
     var page by remember { mutableStateOf(ContactsPage.List) }
     var friends by remember { mutableStateOf<List<FriendEntry>>(emptyList()) }
 
-    var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<UserCard>>(emptyList()) }
-    var searching by remember { mutableStateOf(false) }
-    var searched by remember { mutableStateOf(false) }
-    var searchError by remember { mutableStateOf("") }
-
-    var groupName by remember { mutableStateOf("") }
-    var groupPicks by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var creating by remember { mutableStateOf(false) }
-    var createError by remember { mutableStateOf("") }
-    // **群上限读服务端配置，不硬编码**（要装更多人走大群，不是调大这个数）
-    var maxMembers by remember { mutableStateOf(0) }
     // 「群聊」入口：我加入的群（GET /groups），**不是**会话列表的子集——没聊过的群也在这里
     var groups by remember { mutableStateOf<List<GroupInfo>>(emptyList()) }
     var groupsLoading by remember { mutableStateOf(false) }
@@ -70,9 +57,6 @@ fun ContactsHost(
      * （`docs/UI_PARITY_IOS.md` §4.5.1）。
      */
     var confirmRemove by remember { mutableStateOf<FriendEntry?>(null) }
-    LaunchedEffect(Unit) {
-        runCatching { maxMembers = client.conversationsApi.serverConfig().maxGroupMembers }
-    }
 
     suspend fun reload() {
         try {
@@ -95,7 +79,6 @@ fun ContactsHost(
     val accepted = remember(friends) { friends.filter { it.status == FriendEntry.ACCEPTED } }
     val pending = remember(friends) { friends.filter { it.status == FriendEntry.PENDING } }
     val requested = remember(friends) { friends.filter { it.status == FriendEntry.REQUESTED } }
-    val relations = remember(friends) { friends.associate { it.userId to it.status } }
 
     // 二级页的返回键回到通讯录列表，不退出 App。
     // **资料页自己带 BackHandler**（UserProfileHost 里），这里不能再截一层，否则要按两次。
@@ -129,7 +112,7 @@ fun ContactsHost(
                             }
                         }
                     },
-                    onOpenSearch = { page = ContactsPage.Search; searched = false; results = emptyList() },
+                    onAddFriend = { page = ContactsPage.Search },
                     onOpenGroups = {
                         page = ContactsPage.Groups
                         scope.launch {
@@ -158,10 +141,7 @@ fun ContactsHost(
                 onOpen = { g ->
                     onOpenChat(client.groupConversationStubFor(g.convId, g.name, g.avatarUrl))
                 },
-                onCreate = {
-                    page = ContactsPage.CreateGroup
-                    groupName = ""; groupPicks = emptySet(); createError = ""
-                },
+                onCreate = { page = ContactsPage.CreateGroup },
                 onBack = { page = ContactsPage.List },
             )
 
@@ -194,62 +174,17 @@ fun ContactsHost(
                 onBack = { page = ContactsPage.List },
             )
 
-            ContactsPage.CreateGroup -> CreateGroupScreen(
-                name = groupName,
-                onNameChange = { groupName = it },
-                friends = accepted,
-                selected = groupPicks,
-                onToggle = { id ->
-                    groupPicks = if (id in groupPicks) groupPicks - id else groupPicks + id
-                },
-                maxMembers = maxMembers,
-                busy = creating,
-                error = createError,
-                onCreate = {
-                    scope.launch {
-                        creating = true; createError = ""
-                        try {
-                            client.groups.create(groupName.trim(), groupPicks.toList())
-                            client.messages.refreshConversations()
-                            page = ContactsPage.List
-                        } catch (e: ApiException) {
-                            createError = if (e.isTransport) "网络请求失败" else e.message
-                        } finally { creating = false }
-                    }
-                },
+            ContactsPage.CreateGroup -> CreateGroupHost(
+                client = client,
+                seedFriends = accepted,
+                onCreated = { page = ContactsPage.List },
                 onBack = { page = ContactsPage.List },
             )
 
-            ContactsPage.Search -> UserSearchScreen(
-                query = query,
-                onQueryChange = { query = it },
-                onSearch = {
-                    scope.launch {
-                        searching = true; searchError = ""
-                        try {
-                            results = client.contacts.search(query.trim())
-                            searched = true
-                        } catch (e: ApiException) {
-                            searchError = if (e.isTransport) "网络请求失败" else e.message
-                        } finally { searching = false }
-                    }
-                },
-                results = results,
-                relations = relations,
-                searching = searching,
-                searched = searched,
-                error = searchError,
-                onAdd = { u ->
-                    scope.launch {
-                        runCatching {
-                            // 已是对方的待确认申请 → 同意；否则发起申请
-                            if (relations[u.userId] == FriendEntry.PENDING) client.contacts.accept(u.userId)
-                            else client.contacts.request(u.userId)
-                        }
-                        reload()
-                    }
-                },
-                onOpenChat = { u -> onOpenChat(client.conversationStubFor(u.userId, u.displayName, u.avatarUrl)) },
+            ContactsPage.Search -> AddFriendHost(
+                client = client,
+                onOpenChat = onOpenChat,
+                onChanged = { scope.launch { reload() } },
                 onBack = { page = ContactsPage.List },
             )
         }

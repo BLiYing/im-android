@@ -7,6 +7,17 @@
 
 ## 当前焦点
 
+> **第四批用户报告（Android 部分）✅ 2026-09-15（用户自测通过，已提交）**：① 名片 / 聊天记录卡时间并进脚注行（`CardBubbles.kt` 的 `CardFooter`）；
+> ③ 链接预览图贴卡片上 / 左 / 右三边（`LinkPreviewCard.kt`）；④ 带圆钮的标题栏与二级页同高（`TopBarCircleButton` 只按 24 高参与测量，UI_SPEC §4.5）。
+
+> **第三批用户报告（Android 部分）✅ 2026-09-15（用户复测通过，已提交；test.sh 674 条全绿、新测试均变异验红）**，逐条见 IMServer `docs/CLIENT_PARITY.md` 顶部：
+> ① **冷启动/登录先闪「还没有会话」**：列表拿 `emptyList()` 当库初值 → 改 null + `data/ConversationListPhase.kt`（本地空且服务端拉成过也说没有才画；
+>    `MessageService.listedConversations`）；② 索引尺照 iOS 系统那条改观感（`ContactIndexBar`）；④ 通讯录右上角圆形「添加朋友」钮
+>    （`TopBarCircleButton`）+ 页标题「添加朋友」；⑤ **iOS 改密 → 本端半分钟才下线**：OkHttp 收到服务端关闭帧不自动回帧、`onClosed` 不来，
+>    等 25s ping 才发现 → `IMSocketManager.Listener.onClosing` 回 1000（`ServerCloseKickTest` 本地 WS 服务端复现，修前超时、修后 1.5s）；
+> ⑥ 消息页/通讯录标题居中（`IMTopBar`），消息页文字「我」换 ＋ 菜单（`ui/ChatsHost.kt` + `ChatsPage`；「添加朋友」「建群」状态抽成
+>    `AddFriendHost` / `CreateGroupHost`，通讯录同用），底栏蓝点口径改 `data/TabUnread.kt`（补上免打扰里被 @，删掉 DAO 那条 SQL）。
+
 > **第二批用户报告（Android 部分）✅ 2026-09-15（未提交；662 条单测全绿、变异验红、代码复查无正确性问题；模拟器实测未完成**——
 > im_test 冷启动后 systemui / system / IM 连续 ANR、输入丢字，放弃）。逐条见 IMServer `docs/CLIENT_PARITY.md` 顶部：
 > ① 「新的朋友」角标 `c.danger` → `c.unreadBadge`，并补高/最小宽 `d.unreadBadgeHeight` + 居中（同 `UnreadBadge`）；
@@ -42,6 +53,9 @@
 
 ## 下一步
 
+0. **真机手测第三批（2026-09-15）**：① 杀进程冷启动 / 重新登录，会话列表不再先闪「还没有会话」（新装包首登：先空白、列表到了直接出）；
+   ② 通讯录索引尺观感与 iOS 对照、按住拖动跳组；③ 两页标题居中、右上角圆钮观感，＋ 菜单贴按钮下方、三项可点、从 ＋ 建群后进新群；
+   ④ 用 iOS 改密码，本机 ≈1–2s 内回登录页并提示「已在别处登录」；⑤ 切到通讯录 / 我 时来消息，底栏「消息」蓝点亮。
 0. **真机手测 2026-09-15 三条**：① 「libeyond群」倒数三四条文件文出字、时间在最下靠右、长按浮起的那份也有字；
    ② 通讯录/「我」每个二级页底栏消失、页面铺到底，返回后底栏回来；从通讯录资料页「发消息」进聊天再返回，底栏在；
    根页列表底部与底栏之间**不该再有一条空白**（`TabRoot` 吃掉了导航栏 inset，属顺手改，要眼睛确认）；
@@ -66,6 +80,9 @@
 
 ## 已知坑 / 限制
 
+- **OkHttp 收到服务端关闭帧不会自己回帧**（2026-09-15）：不在 `onClosing` 里 `close(1000, null)`，`onClosed` 永远不来、连接停在假「已连接」，
+  踢下线 / 改密下线要等 25s ping 写失败才发现。回帧码不能照抄回调里的 code（服务端空负载 → 1005 保留码，会抛）。护栏 `ServerCloseKickTest`。
+- **会话列表离线首登是空白**：服务端一次都没拉成功时 `ConversationListPhase` 停在 Loading（不下「没有会话」的结论），连上后自动补拉。
 - **改密后的新续期凭据只出现一次**：任何新的「会让服务端轮换凭据」的调用都要照 `IMClient.changePassword` 那样
   `NonCancellable` 接住，**并带上发起时的 uid**——应答可能晚于退出登录/换号回来，照写会在清空的本机里复活凭据
   （判据 `TokenSession.shouldAdoptRotated`，`RotatedRefreshGuardTest`）。落盘本身没有 JVM 单测（`SessionStore` 要 Context），

@@ -303,6 +303,23 @@ class IMSocketManager(
             }
         }
 
+        /**
+         * 服务端**先发了关闭帧**（踢下线 / 改密下线其它设备 / 慢消费者被断，都走 gateway `writePump` 那一帧）。
+         *
+         * OkHttp 在这里**不会自己回 close**，读线程收到关闭帧就退出了：不回，[onClosed] 永远不来，
+         * 服务端随后关掉的 TCP 也没人读到——连接停在「看着已连接」的僵尸态，要等下一次 25s 应用层
+         * ping 写失败才发现。「iOS 改密码，Android 过了半分钟才回登录页」就是它（2026-09-15 用户报；
+         * iOS 的 URLSession 与浏览器 WebSocket 都会自己完成关闭握手，只有本端要手动回）。
+         *
+         * 回一帧完成握手 → OkHttp 随即回调 [onClosed]（对端已先断则是 [onFailure]）→ 既有退避重连 →
+         * 被吊销的 sid 握手 401 → [endSession]。关闭码写 1000：服务端的关闭帧不带负载，OkHttp 报的 1005
+         * 是**保留码**，原样回它会当场抛 IllegalArgumentException。我方先发起关闭时这里再调一次是空操作。
+         */
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            log.i("ws_closing_by_server", "code" to code)
+            webSocket.close(1000, null)
+        }
+
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             _state.value = ConnState.Idle
             socket = null

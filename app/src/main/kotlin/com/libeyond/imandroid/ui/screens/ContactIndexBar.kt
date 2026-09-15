@@ -1,15 +1,13 @@
 package com.libeyond.imandroid.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,8 +16,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
@@ -31,8 +27,15 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 /**
  * 右侧 A–Z 索引尺。
  *
- * iOS 那侧是系统的 `sectionIndexTitlesForTableView:`，Compose 没有对应控件，只能自绘
- * ——**要对齐的是"有一条能一按就跳组的尺"**，不是同一个控件（`docs/UI_PARITY_IOS.md` §4.5.1）。
+ * iOS 那侧是系统的 `sectionIndexTitlesForTableView:`，Compose 没有对应控件，只能自绘，
+ * **观感照系统那条抄**（2026-09-15 用户报「索引样式太丑、和 iOS 不一致」）：
+ * - 字母用**主色**、11sp 半粗、**不铺底色**——iOS 没设 `sectionIndexColor`，取的是窗口 tintColor，
+ *   而本工程窗口 tint 就是主色（`SceneDelegate` 里 `window.tintColor = IMAppearance.accentColor`）；
+ * - **固定行高、整条竖直居中**。此前按 SpaceEvenly 均分整列高度，只有几组时字母稀稀拉拉散满右边，
+ *   按下时还铺一条灰色圆角底，和 iOS 两样；
+ * - 字母多到放不下时（横屏 / 小屏）行高按可用高度收缩，不裁掉末尾那几个；
+ * - **按住时不高亮某个字母**（iOS 系统那条整条同色、不分主次），停在哪一组靠列表跳过去 + 触感表达；
+ *   下面的 `active` 只用来去重，不驱动观感——别当成漏写的高亮补回去。
  *
  * 两条与 iOS 一致的判据：
  * - [titles] 为空（没有好友）时**整条不画**（iOS 是 `sectionIndexTitles` 回 nil）。
@@ -63,42 +66,39 @@ internal fun ContactIndexBar(
         onPick(idx)
     }
 
-    Column(
-        modifier = modifier
-            .width(28.dp)
-            .fillMaxHeight()
-            .padding(vertical = 8.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (active >= 0) c.subtleFill else Color.Transparent)
-            .onGloballyPositioned { barHeight = it.size.height }
-            .pointerInput(titles) {
-                detectVerticalDragGestures(
-                    onDragStart = { pickAt(it.y) },
-                    onDragEnd = { active = -1 },
-                    onDragCancel = { active = -1 },
-                ) { change, _ -> pickAt(change.position.y) }
-            }
-            .pointerInput(titles) {
-                detectTapGestures(onPress = {
-                    pickAt(it.y)
-                    tryAwaitRelease()
-                    active = -1
-                })
-            },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        titles.forEachIndexed { i, t ->
-            // 高度由 SpaceEvenly 均分，不写死行高——字母数从 1 到 27 都要铺满整条，
-            // 写死的话只有两三组时会全挤在顶上，而那正是新账号的样子
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = t,
-                    color = if (i == active) c.accent else c.textSecondary,
-                    fontSize = 10.sp,
-                    fontWeight = if (i == active) FontWeight.Bold else FontWeight.Medium,
-                )
+    BoxWithConstraints(modifier.width(INDEX_WIDTH).fillMaxHeight(), contentAlignment = Alignment.Center) {
+        val rowHeight = minOf(INDEX_ROW_HEIGHT, maxHeight / titles.size)
+        Column(
+            modifier = Modifier
+                .width(INDEX_WIDTH)
+                .onGloballyPositioned { barHeight = it.size.height }
+                .pointerInput(titles) {
+                    detectVerticalDragGestures(
+                        onDragStart = { pickAt(it.y) },
+                        onDragEnd = { active = -1 },
+                        onDragCancel = { active = -1 },
+                    ) { change, _ -> pickAt(change.position.y) }
+                }
+                .pointerInput(titles) {
+                    detectTapGestures(onPress = {
+                        pickAt(it.y)
+                        tryAwaitRelease()
+                        active = -1
+                    })
+                },
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            titles.forEach { t ->
+                Box(Modifier.height(rowHeight), contentAlignment = Alignment.Center) {
+                    Text(text = t, color = c.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
             }
         }
     }
 }
+
+/** 触摸条宽。 */
+private val INDEX_WIDTH = 24.dp
+
+/** 每个字母的行高上限（iOS 系统索引尺约 16pt 一格）。 */
+private val INDEX_ROW_HEIGHT = 16.dp

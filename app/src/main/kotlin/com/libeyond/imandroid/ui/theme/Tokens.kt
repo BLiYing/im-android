@@ -257,6 +257,14 @@ data class IMDimens(
     val topBarAvatar: Dp = 32.dp,
     /** 左键图标（返回箭头等）。 */
     val topBarIcon: Dp = 24.dp,
+    /**
+     * 右侧**圆形图标钮**直径（通讯录「添加朋友」、消息页 ＋）。iOS `actionCircular` 是 44pt；
+     * 本端标题栏上下各 12 内边距、内容高 24，取 36（UI_SPEC §4.5）。**圆钮不参与栏高测量**
+     * （只占 [topBarIcon] 的高，上下溢出进内边距），所以带圆钮的一级页与二级页栏高一致。
+     */
+    val topBarCircleButton: Dp = 36.dp,
+    /** 圆形图标钮里的图标。 */
+    val topBarCircleIcon: Dp = 20.dp,
 
     // —— 输入栏（UI_SPEC §4）——
     /** 输入栏**单行态**总高。iOS `inputBar.heightAnchor` 56；多行时本端允许长高。 */

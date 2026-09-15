@@ -45,11 +45,12 @@ import androidx.compose.foundation.Image
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Headphones
 import com.composables.icons.lucide.Megaphone
-import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.UserPlus
 import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.IMTopBar
+import com.libeyond.imandroid.ui.components.TopBarCircleButton
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -69,7 +70,8 @@ fun ContactsScreen(
     friends: List<FriendEntry>,
     pendingCount: Int,
     onOpenNewFriends: () -> Unit,
-    onOpenSearch: () -> Unit,
+    /** 右上角「添加朋友」。 */
+    onAddFriend: () -> Unit,
     onOpenGroups: () -> Unit,
     /** 尚未实现的入口（公众号/服务号）——由 Host 弹「开发中」。 */
     onComingSoon: (String) -> Unit,
@@ -84,20 +86,12 @@ fun ContactsScreen(
     // （2026-09-08 用户报的就是这个：「通讯录」四个字骑在时间和信号图标上）。
     // 会话列表与「我」页早就有，唯独这一页漏了。
     Column(modifier = Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(c.surface)
-                .padding(horizontal = d.space4, vertical = d.space3),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("通讯录", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
-            Spacer(Modifier.weight(1f))
-            Image(
-                imageVector = Lucide.Search,
-                contentDescription = "找人",
-                modifier = Modifier.size(22.dp).clickable { onOpenSearch() },
-                colorFilter = ColorFilter.tint(c.accent),
-            )
-        }
+        // 标题居中 + 右上角圆形「添加朋友」钮，对齐 iOS（`person.badge.plus` 圆钮 → `IMUserSearchViewController`）。
+        // 此前是左对齐的大标题 + 一枚主色裸放大镜，点进去标题叫「找人」（2026-09-15 用户报）
+        IMTopBar(
+            title = "通讯录",
+            right = { TopBarCircleButton(icon = Lucide.UserPlus, description = "添加朋友", onClick = onAddFriend) },
+        )
 
         // 按拼音首字母分组（判据在 ContactSection，与 iOS IMContactSectionIndex 同一套规则）
         val groups = remember(friends) { ContactSection.group(friends) { it.displayName } }
@@ -128,7 +122,7 @@ fun ContactsScreen(
                     item {
                         SectionLabel("好友")
                         Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            Text("还没有好友，点右上角搜索添加", color = c.textTertiary,
+                            Text("还没有好友，点右上角添加朋友", color = c.textTertiary,
                                 style = MaterialTheme.typography.bodyMedium)
                         }
                     }

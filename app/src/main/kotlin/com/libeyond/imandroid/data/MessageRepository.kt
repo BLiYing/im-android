@@ -82,8 +82,6 @@ class MessageRepository(
     fun observePending(owner: String, convId: String): Flow<List<PendingMessageEntity>> =
         pending.observe(owner, convId)
 
-    fun observeTotalUnread(owner: String): Flow<Int> = conversations.observeTotalUnread(owner)
-
     suspend fun syncCursors(owner: String): List<Pair<String, Long>> =
         conversations.all(owner).map { it.convId to it.syncedConvSeq }
 

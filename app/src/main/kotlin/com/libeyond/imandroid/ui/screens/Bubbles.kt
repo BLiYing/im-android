@@ -233,6 +233,12 @@ internal fun Bubble(
                         )
                     }
                     val isMedia = msg != null && msg.contentType in MEDIA_TYPES
+                    // 名片 / 聊天记录卡的时间并进卡片脚注那一行，不在下面另起一行（iOS/Web 同）
+                    val isCard = !recalled && !isMedia &&
+                        (msg?.contentType == ContentType.CONTACT || msg?.contentType == ContentType.CHAT_RECORD)
+                    val timeMeta: @Composable () -> Unit = {
+                        BubbleTimeMeta(timestamp, mine, sending = sending, delivered = delivered, read = read)
+                    }
                     when {
                         recalled -> Text(
                             text = "你撤回了一条消息",
@@ -259,8 +265,8 @@ internal fun Bubble(
                         }
                         // 卡片类：名片 / 合并转发。**在这之前它们走 else 分支被当纯文本，
                         // 于是聊天页里直接显示裸 JSON**（实体机实测发现）。
-                        msg?.contentType == ContentType.CONTACT -> ContactCardContent(text)
-                        msg?.contentType == ContentType.CHAT_RECORD -> ChatRecordCardContent(text)
+                        msg?.contentType == ContentType.CONTACT -> ContactCardContent(text, footerTrailing = timeMeta)
+                        msg?.contentType == ContentType.CHAT_RECORD -> ChatRecordCardContent(text, footerTrailing = timeMeta)
                         else -> Text(
                             // @提及高亮与搜索命中底色是同一次遍历铺的两层（见 chatBodyText）
                             text = chatBodyText(
@@ -319,32 +325,39 @@ internal fun Bubble(
                         if (url != null) LinkPreviewCard(url, loadLinkPreview, host, useTls)
                     }
                     // 图/视频的时间**恒在图上的胶囊里**，有图说也不在图说下面再画一行（iOS 同）
-                    if (flushMedia) return@Column
+                    if (flushMedia || isCard) return@Column
                     Spacer(Modifier.height(2.dp))
-                    Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = TimeFormat.bubbleTime(timestamp),
-                            color = if (mine) c.metaTime else c.textTertiary,
-                            fontSize = 10.sp,
-                        )
-                        if (sending) {
-                            Spacer(Modifier.width(3.dp))
-                            Text("🕐", fontSize = 9.sp)
-                        } else if (delivered) {
-                            Spacer(Modifier.width(3.dp))
-                            // 已读=绿双勾 / 未读=灰单勾，与 iOS/Web 同一表意
-                            Text(
-                                text = if (read) "✓✓" else "✓",
-                                color = if (read) c.checkRead else c.textTertiary,
-                                fontSize = 10.sp,
-                            )
-                        }
-                    }
+                    Box(Modifier.align(Alignment.End)) { timeMeta() }
                 }
             }
         }
     }
     } // BoxWithConstraints（量本行可用宽 → 气泡最大宽按比例）
+}
+
+/** 气泡时间 + 发送态（🕐 / ✓ / ✓✓）。文本类挂气泡右下角，卡片类挂脚注行右端。 */
+@Composable
+private fun BubbleTimeMeta(timestamp: Long, mine: Boolean, sending: Boolean, delivered: Boolean, read: Boolean) {
+    val c = IMTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = TimeFormat.bubbleTime(timestamp),
+            color = if (mine) c.metaTime else c.textTertiary,
+            fontSize = 10.sp,
+        )
+        if (sending) {
+            Spacer(Modifier.width(3.dp))
+            Text("🕐", fontSize = 9.sp)
+        } else if (delivered) {
+            Spacer(Modifier.width(3.dp))
+            // 已读=绿双勾 / 未读=灰单勾，与 iOS/Web 同一表意
+            Text(
+                text = if (read) "✓✓" else "✓",
+                color = if (read) c.checkRead else c.textTertiary,
+                fontSize = 10.sp,
+            )
+        }
+    }
 }
 
 /**

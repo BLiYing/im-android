@@ -2,13 +2,17 @@ package com.libeyond.imandroid.ui.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
@@ -36,6 +40,49 @@ data class TopBarAvatar(
     val url: String = "",
     val onClick: (() -> Unit)? = null,
 )
+
+/**
+ * 标题栏右侧的**圆形图标钮**（通讯录「添加朋友」、消息页 ＋），经 [IMTopBar] 的 `right` 槽放进去。
+ *
+ * 对齐 iOS `IMLiquidNavigationBar` 的 `actionCircular`：iOS 26 是液态玻璃圆钮，旧系统是 `.gray()` 填充 +
+ * 0.5pt 分割线描边——**图标用正文色，不用主色**。本端不做液态玻璃（UI_SPEC §6.4 的正当差异），
+ * 取旧系统那一版。此前通讯录右上角是一枚主色的裸放大镜，与 iOS 一眼两样（2026-09-15 用户报）。
+ * 尺寸见 `IMDimens.topBarCircleButton` 的注释（UI_SPEC §4.5）。
+ */
+@Composable
+fun TopBarCircleButton(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    // **只按左键图标的高参与标题栏测量**：栏高因此与二级页（返回箭头）一模一样，圆钮上下各溢出 6，
+    // 落在栏自带的 12 内边距里。此前按圆钮直径撑，一级页（消息 / 通讯录）的栏比二级页高一截（2026-09-15 用户报）。
+    // 溢出部分不裁剪，点击命中照常覆盖整个圆。
+    Box(
+        modifier = modifier.size(width = d.topBarCircleButton, height = d.topBarIcon),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .requiredSize(d.topBarCircleButton)
+                .clip(CircleShape)
+                .background(c.subtleFill)
+                .border(0.5.dp, c.separator, CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                imageVector = icon,
+                contentDescription = description,
+                modifier = Modifier.size(d.topBarCircleIcon),
+                colorFilter = ColorFilter.tint(c.textPrimary),
+            )
+        }
+    }
+}
 
 /**
  * 全局唯一的顶部标题栏：左（返回或自定义图标）+ **居中**标题/副标题 + 右（文字动作或会话头像）。

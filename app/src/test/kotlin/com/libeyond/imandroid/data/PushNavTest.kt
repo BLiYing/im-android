@@ -38,6 +38,11 @@ class PushNavTest {
     }
 
     @Test
+    fun `消息页只有会话列表是根页——右上角加号推出去的添加朋友 新建群聊不画底栏`() {
+        assertEquals(listOf(ChatsPage.List), ChatsPage.entries.filter { PushNav.showsTabBar(it.depth) })
+    }
+
+    @Test
     fun `我页只有列表页是根页——资料 二维码 设备 数据和存储 隐私与安全一律不画底栏`() {
         assertEquals(listOf(MePage.List), MePage.entries.filter { PushNav.showsTabBar(it.depth) })
     }

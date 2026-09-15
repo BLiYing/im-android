@@ -46,6 +46,8 @@ internal fun ContactCardContent(
     content: String,
     /** 内容宽。聊天记录详情页把卡片装进自带内边距的框里，要比气泡里窄。 */
     width: Dp = CARD_WIDTH,
+    /** 脚注行右端的内容（气泡里传时间 + 勾）。null = 不画（聊天记录详情页里的嵌套卡）。 */
+    footerTrailing: (@Composable () -> Unit)? = null,
 ) {
     val c = IMTheme.colors
     val appearance = IMTheme.appearance
@@ -53,7 +55,7 @@ internal fun ContactCardContent(
 
     if (card == null) {
         // 降级：老版本/被截断的名片。给一句人话，不给 JSON。
-        Text2("[个人名片] 无法显示", c.textTertiary, appearance.chatFontSize)
+        CardFallback("[个人名片] 无法显示", footerTrailing)
         return
     }
 
@@ -84,14 +86,7 @@ internal fun ContactCardContent(
         Spacer(Modifier.height(6.dp))
         // 脚注前那枚小图标：iOS 用 `person.crop.square`（11pt，textSecondary）。
         // 只有文字没有图标时，名片卡和聊天记录卡的底部长得一模一样，一眼分不出是哪种卡。
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(
-                Lucide.Contact, null, Modifier.size(11.dp),
-                colorFilter = ColorFilter.tint(c.textSecondary),
-            )
-            Spacer(Modifier.width(4.dp))
-            Text2("个人名片", c.textSecondary, 11.sp)
-        }
+        CardFooter(Lucide.Contact, "个人名片", footerTrailing)
     }
 }
 
@@ -101,13 +96,15 @@ internal fun ChatRecordCardContent(
     width: Dp = CARD_WIDTH,
     /** 预览最多几行：气泡里 3（iOS `IMChatRecordCell`），详情页里的嵌套卡 2（`IMChatRecordViewController`）。 */
     previewLines: Int = 3,
+    /** 同 [ContactCardContent] 的 footerTrailing。 */
+    footerTrailing: (@Composable () -> Unit)? = null,
 ) {
     val c = IMTheme.colors
     val appearance = IMTheme.appearance
     val rec = CardContent.parseRecord(content, previewLines)
 
     if (rec == null) {
-        Text2("[聊天记录] 无法显示", c.textTertiary, appearance.chatFontSize)
+        CardFallback("[聊天记录] 无法显示", footerTrailing)
         return
     }
 
@@ -133,13 +130,40 @@ internal fun ChatRecordCardContent(
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
         Spacer(Modifier.height(6.dp))
         // 脚注只写「聊天记录」，**不写「共 N 条」**：iOS/Web 都没有这一段
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(
-                Lucide.MessageSquare, null, Modifier.size(11.dp),
-                colorFilter = ColorFilter.tint(c.textSecondary),
-            )
-            Spacer(Modifier.width(4.dp))
-            Text2("聊天记录", c.textSecondary, 11.sp)
+        CardFooter(Lucide.MessageSquare, "聊天记录", footerTrailing)
+    }
+}
+
+/**
+ * 卡片脚注：小图标 + 类型名，右端可挂时间。**时间与「个人名片 / 聊天记录」在同一行**（iOS/Web 同）——
+ * 此前时间在卡片下面另起一行，气泡平白高出一截（2026-09-15 用户报）。
+ */
+@Composable
+private fun CardFooter(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    trailing: (@Composable () -> Unit)?,
+) {
+    val c = IMTheme.colors
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Image(icon, null, Modifier.size(11.dp), colorFilter = ColorFilter.tint(c.textSecondary))
+        Spacer(Modifier.width(4.dp))
+        Text2(label, c.textSecondary, 11.sp)
+        if (trailing != null) {
+            Spacer(Modifier.weight(1f))
+            trailing()
+        }
+    }
+}
+
+/** 解析失败的降级一句话。时间照样要画——没有脚注行可挂，就挂在这句话下面靠右。 */
+@Composable
+private fun CardFallback(text: String, trailing: (@Composable () -> Unit)?) {
+    Column {
+        Text2(text, IMTheme.colors.textTertiary, IMTheme.appearance.chatFontSize)
+        if (trailing != null) {
+            Spacer(Modifier.height(2.dp))
+            Box(Modifier.align(Alignment.End)) { trailing() }
         }
     }
 }

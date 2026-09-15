@@ -239,9 +239,6 @@ interface ConversationDao {
     """)
     suspend fun markRead(owner: String, convId: String, seq: Long)
 
-    @Query("SELECT COALESCE(SUM(unread), 0) FROM conversation WHERE ownerUid = :owner AND muted = 0")
-    fun observeTotalUnread(owner: String): Flow<Int>
-
     @Query("DELETE FROM conversation WHERE ownerUid = :owner")
     suspend fun clearAccount(owner: String)
 }

@@ -49,11 +49,11 @@ import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.ConversationAction
 import com.libeyond.imandroid.data.ConversationActions
 import com.libeyond.imandroid.data.PushNav
+import com.libeyond.imandroid.data.TabUnread
 import com.libeyond.imandroid.ui.components.MessageContextMenu
 import com.libeyond.imandroid.ui.components.PushBase
 import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.components.SheetItem
-import com.libeyond.imandroid.ui.screens.ConversationListScreen
 import kotlinx.coroutines.launch
 import com.libeyond.imandroid.ui.theme.IMTheme
 import kotlinx.coroutines.flow.emptyFlow
@@ -84,14 +84,15 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
 
     var openConv by remember { mutableStateOf<ConversationEntity?>(null) }
 
+    // 初值 null = 本地库还没回第一份。**不能拿 emptyList() 当初值**：那等于先宣布「还没有会话」、
+    // 库回数据再改口——冷启动 / 登录都先闪一下空态（2026-09-15 用户报，判据见 ConversationListPhase）
     val conversations by remember(owner) {
         if (owner.isEmpty()) emptyFlow() else client.repo.observeConversations(owner)
-    }.collectAsState(initial = emptyList())
+    }.collectAsState(initial = null)
 
     val connState by client.socket.state.collectAsState()
-    val totalUnread by remember(owner) {
-        if (owner.isEmpty()) emptyFlow() else client.repo.observeTotalUnread(owner)
-    }.collectAsState(initial = 0)
+    // 底栏「消息」蓝点：与会话行同一份数据现算，口径见 TabUnread（三端同口径）
+    val tabUnread = remember(conversations) { TabUnread.count(conversations.orEmpty()) }
 
     // 进主界面就拉一次会话列表——WS 的 onConnected 也会拉，但那条路只在
     // 「本次冷启动真的新建了连接」时触发；会话已存活时进来不会有 onConnected。
@@ -120,7 +121,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     // 底部 Tab 栏由各 Tab 的**根页**自己画（[TabRoot]），二级页整屏铺满——判据 PushNav.showsTabBar。
     // 此前底栏画在这一层、各 Tab 的二级页在它上面的内容区里原地切换，于是一直挂着（2026-09-15 用户报）
     val bottomBar: @Composable () -> Unit = {
-        BottomBar(current = tab, unread = totalUnread, onSelect = { tab = it })
+        BottomBar(current = tab, unread = tabUnread, onSelect = { tab = it })
     }
 
     // —— 一级 push：Tab 根 ↔ 聊天页 ——
@@ -134,15 +135,15 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
         if (conv == null) {
             Box(Modifier.fillMaxSize().background(IMTheme.colors.groupedBackground)) {
                 when (tab) {
-                    Tab.Chats -> TabRoot(bottomBar) {
-                        ConversationListScreen(
-                            conversations = conversations,
-                            onOpen = { openConv = it },
-                            onLongPress = { c, rect -> menuFor = c; menuAnchor = rect },
-                            onSettings = { tab = Tab.Me },
-                            connected = connState == ConnState.Connected,
-                        )
-                    }
+                    Tab.Chats -> ChatsHost(
+                        client = client,
+                        conversations = conversations,
+                        connected = connState == ConnState.Connected,
+                        knownFriends = knownFriends,
+                        onOpenChat = { openConv = it },
+                        onLongPress = { c, rect -> menuFor = c; menuAnchor = rect },
+                        bottomBar = bottomBar,
+                    )
                     Tab.Contacts -> ContactsHost(client = client, onOpenChat = { openConv = it }, bottomBar = bottomBar)
                     Tab.Me -> MeHost(client = client, onLogout = onLogout, bottomBar = bottomBar)
                 }
