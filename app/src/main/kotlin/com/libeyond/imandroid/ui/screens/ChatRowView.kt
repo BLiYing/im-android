@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.ReplyNames
+import com.libeyond.imandroid.data.SenderNames
 import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.SendState
@@ -48,6 +49,23 @@ internal data class ChatRowStyle(
     val roleOf: (String) -> String? = { null },
     /** 群成员显示名：uid → 群昵称 > 昵称 > @句柄。排在备注之后、消息上的昵称之前。 */
     val memberNameOf: (String) -> String? = { null },
+    /** 我给这个人起的备注（没起返回 null）：发送者名链的第一级，见 [SenderNames]。 */
+    val remarkOf: (String) -> String? = { null },
+    /** 本窗该发送者最新一条的昵称快照（[SenderNames.latestNicknames]）：成员表查不到时压过这条自己的老快照。 */
+    val latestNicknameOf: (String) -> String? = { null },
+)
+
+/**
+ * 气泡发送者名：备注 > 群成员名 > 本窗该发送者最新快照 > 本条快照 > 好友名（[SenderNames.bubbleName]）。
+ * 原先是 `localNameOf ?: memberNameOf ?: fromNickname`——好友名（昵称）压过群昵称，
+ * 且超级群成员表只有自己，非好友一律落到落库时的老快照，改了名也不变（2026-09-15）。
+ */
+private fun ChatRowStyle.senderNameOf(m: MessageEntity): String? = SenderNames.bubbleName(
+    remark = remarkOf(m.sender),
+    memberName = memberNameOf(m.sender),
+    latestSnapshot = latestNicknameOf(m.sender),
+    ownSnapshot = m.fromNickname,
+    friendNickname = localNameOf(m.sender),
 )
 
 /**
@@ -90,8 +108,7 @@ internal fun ChatRowView(
             AlbumBubble(
             isGroup = isGroup,
             // 发送者头与头像列：与下面 Confirmed 分支同一套口径（名字源 / 首条显名 / 段末挂头像）
-            senderName = firstSent?.takeIf { !albumMine }
-                ?.let { localNameOf(it.sender) ?: style.memberNameOf(it.sender) ?: it.fromNickname },
+            senderName = firstSent?.takeIf { !albumMine }?.let { style.senderNameOf(it) },
             showSenderName = albumShowName,
             senderBadge = firstSent?.takeIf { albumShowName }
                 ?.let { SenderRun.badgeOf(style.roleOf(it.sender), it.fromRole) },
@@ -168,9 +185,9 @@ internal fun ChatRowView(
             useTls = useTls,
             mine = m.sender == myUid,
             timestamp = m.timestamp,
-            // 备注 > 群成员名 > 消息上带的昵称（与引用块、回复条同一口径，见 ReplyNames）
+            // 备注 > 群成员名 > 本窗最新快照 > 本条快照 > 好友名（SenderNames，三端同序）
             senderName = if (m.sender != myUid) {
-                localNameOf(m.sender) ?: style.memberNameOf(m.sender) ?: m.fromNickname
+                style.senderNameOf(m)
             } else {
                 null
             },

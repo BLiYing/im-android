@@ -14,6 +14,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.libeyond.imandroid.data.AttachItems
+import com.libeyond.imandroid.data.SenderNames
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.screens.FriendPickerScreen
@@ -256,7 +257,9 @@ fun ChatHost(
     var mentionNames by remember(conv.convId) { mutableStateOf<List<String>>(emptyList()) }
     /** 成员角色与显示名（uid 为键）：发送者徽标、名字、引用块与回复条的名字用。超级群只有我自己。 */
     var memberRoles by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
-    LaunchedEffect(conv.convId) {
+    // 成员表过期（会话开着时对方改名再发消息）→ 版本号 +1 → 下面重拉群资料（MemberNameRefresh.kt）
+    val membersRev = rememberMembersRefreshRev(conv.convId, conv.isGroup, rowsReady, messages.lastOrNull(), memberNames)
+    LaunchedEffect(conv.convId, membersRev) {
         if (conv.isGroup) {
             runCatchingCancellable { client.groups.info(conv.convId) }
                 .onSuccess {
@@ -271,6 +274,9 @@ fun ChatHost(
                 }
         }
     }
+
+    // 本窗每个发送者最新一条的昵称快照：成员表查不到时（超级群只有自己）压过那条自己的老快照（SenderNames）。
+    val latestNicks = remember(messages) { SenderNames.latestNicknames(messages) }
 
     // 群 @提及态（M4-8）。**声明在 myRole 之后**——面板要用它决定画不画「@所有人」。
     // 单聊 isGroup=false，面板恒不出现。
@@ -296,6 +302,8 @@ fun ChatHost(
         peerReadSeq = if (conv.isGroup) 0 else conv.peerReadSeq,
         uploadProgress = uploadProgress,
         localNameOf = { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
+        remarkOf = { uid -> friendsByUid[uid]?.remark?.takeIf { it.isNotBlank() } },
+        latestNicknameOf = { uid -> latestNicks[uid] },
         loadLinkPreview = { url -> client.conversationsApi.linkPreview(url) },
         mentionNames = mentionNames,
         searchHighlight = search.needle,
@@ -449,6 +457,8 @@ fun ChatHost(
         mentionNames = mentionNames,
         roleOf = { uid -> memberRoles[uid] },
         memberNameOf = { uid -> memberNames[uid] },
+        remarkOf = { uid -> friendsByUid[uid]?.remark?.takeIf { it.isNotBlank() } },
+        latestNicknameOf = { uid -> latestNicks[uid] },
         onOpenRecord = { recordNav.push(it) },
         searchHighlight = search.needle,
         rowsReady = rowsReady,

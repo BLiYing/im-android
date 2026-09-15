@@ -7,6 +7,24 @@
 
 ## 当前焦点
 
+> **第二批用户报告（Android 部分）✅ 2026-09-15（未提交；662 条单测全绿、变异验红、代码复查无正确性问题；模拟器实测未完成**——
+> im_test 冷启动后 systemui / system / IM 连续 ANR、输入丢字，放弃）。逐条见 IMServer `docs/CLIENT_PARITY.md` 顶部：
+> ① 「新的朋友」角标 `c.danger` → `c.unreadBadge`，并补高/最小宽 `d.unreadBadgeHeight` + 居中（同 `UnreadBadge`）；
+> ② **改昵称后老消息仍显旧名**（iOS/Web 的 bug，本端普通群本不中招）：发送者名链统一为「备注 > 成员表 > 本窗最新快照 >
+>    本条快照 > 好友名」（`data/SenderNames.kt` + `SenderNamesTest`，调用点 `ChatRowView.senderNameOf`）——原先好友昵称压过群昵称、
+>    超级群非好友落老快照；会话开着时末条昵称对不上成员表 → 重拉群资料（`ui/MemberNameRefresh.kt`，5s 节流）。
+> 顺带：`ChatScreen.kt` 598 行、`ChatHost.kt` 576 行，贴近 600 门禁，再加东西先拆。`ONLY=<类> ./scripts/test.sh` 在多模块下会被
+> `:media-picker` 报 "No tests found" 中止（过滤没限定 `:app`），跑单类用 `./gradlew :app:testDebugUnitTest --tests`。
+
+> **用户报的三条 ✅ 已改、未提交、未真机手测**（2026-09-15，差异登记 `docs/UI_PARITY_IOS.md` §3.5 / §4）：
+> ① **文件文不显示文字**——图说判据挂在「贴边媒体」上，文件气泡不贴边，字整段不画。判据抽到
+> `data/BubbleCaption.kt`（`Bubbles.kt` 用它），聊天记录详情页文件项同漏、一并补；
+> ② **二级页底部 Tab 栏一直显示**——「通讯录」「我」的二级页在底栏上方的内容区原地切换。改成各 Host 根页经
+> `ui/TabRoot.kt` 插槽自己画底栏（判据 `data/PushNav.kt` 的 depth；页面枚举 `ContactsPage`/`MePage` 移到 data 带深度）；
+> ③ **没有 push 转场**——新增 `ui/components/PushTransition.kt`（AnimatedContent；退场页换一个脱离 Activity 的返回键分发器
+> + Initial 阶段吞触摸，防连按返回被吞、防点到滑走中的页）与 `PushBase`（聊天页被详情盖住时只让开、不出组合）。
+> 单测 `BubbleCaptionTest`(5) / `PushNavTest`(6)，三处变异验红。
+>
 > **「我 ▸ 隐私与安全」✅ 已实现，未真机手测**（2026-09-11，对齐 iOS `IMPrivacySecurityViewController` 三页，
 > 差异登记 `docs/UI_PARITY_IOS.md` §4.9）：容器页五组（活行只有「已屏蔽的用户」「修改密码」，其余四组灰置占位）/
 > 已屏蔽的用户（计数、左滑取消屏蔽、空态三层、刷新失败保留旧内容）/ 修改密码（眼睛切换、本地校验、按业务码红字 + 描红）。
@@ -19,13 +37,18 @@
 >
 > **上一轮「数据和存储」✅ 已实现、未真机手测**（三层设置页 + `capabilities_update` 同步；真机首测撞的「保存失败」已修：
 > PUT body 多套了一层 `settings`，且 `encodeDefaults=false` 会把 true 默认值省掉被 Go 解成 false）。
-> **两轮改动都还在工作区、没提交**，`MeHost` / `MeScreen` / `SettingsRows` / `IMClient` 两轮交叠。
 >
 > 更早的「聊天页第三轮九条」仍待真机手测（清单在 `docs/UI_PARITY_IOS.md` §4.8）。
 
 ## 下一步
 
-1. **真机手测隐私与安全**：计数随拉黑/取消变化；左滑取消屏蔽后行消失、清空后出空态；
+0. **真机手测 2026-09-15 三条**：① 「libeyond群」倒数三四条文件文出字、时间在最下靠右、长按浮起的那份也有字；
+   ② 通讯录/「我」每个二级页底栏消失、页面铺到底，返回后底栏回来；从通讯录资料页「发消息」进聊天再返回，底栏在；
+   根页列表底部与底栏之间**不该再有一条空白**（`TabRoot` 吃掉了导航栏 inset，属顺手改，要眼睛确认）；
+   ③ 转场方向与层叠（前进新页在上、后退滑走页在上）、转场中连按返回 / 连点列表不出错、
+   聊天↔详情来回聊天列表原位不动、详情里点成员「发消息」换会话。确认后提交。
+1. **转场没接的几处**（见 UI_PARITY_IOS §4 那行）：群资料 / 聊天信息内部子页等，内容读已置空的状态，要先改成按转场状态渲染。
+2. **真机手测隐私与安全**：计数随拉黑/取消变化；左滑取消屏蔽后行消失、清空后出空态；
    改密码三种红字（旧密码错 / 太短 / 不一致）与描红、眼睛切换不吞字、键盘不挡按钮；
    **改密成功后杀进程等 token 过期（或手动清 token）再进，确认不被弹回登录页**；另一台设备确实被下线。
 2. **真机手测数据和存储**：滑杆拖动与松手吸附、总开关关时档位置灰、自定义第四档的出现与消失、

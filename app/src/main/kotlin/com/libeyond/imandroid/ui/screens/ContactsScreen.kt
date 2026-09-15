@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.getValue
@@ -35,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -217,10 +220,25 @@ private fun EntryRow(
         Text(title, color = c.textPrimary, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
         if (badge > 0) {
+            // 角标三端统一蓝（2026-09-15 用户要求，原为 danger 红）；高/最小宽与会话列表 UnreadBadge 同一令牌，
+            // 内容居中——个位数是正圆，两位数才拉成胶囊（此前只有 padding、没有最小宽与居中）。
             Box(
-                modifier = Modifier.clip(CircleShape).background(c.danger)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            ) { Text(badge.toString(), color = c.onAccent, fontSize = 11.sp) }
+                modifier = Modifier
+                    .height(d.unreadBadgeHeight)
+                    .widthIn(min = d.unreadBadgeHeight)
+                    .clip(CircleShape)
+                    .background(c.unreadBadge)
+                    .padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (badge > 99) "99+" else badge.toString(),
+                    color = c.onAccent,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }

@@ -184,6 +184,8 @@ fun ChatScreen(
     roleOf: (String) -> String? = { null },
     /** 群成员显示名 uid → 群昵称/昵称/@句柄。发送者名、引用块、回复条共用。 */
     memberNameOf: (String) -> String? = { null },
+    remarkOf: (String) -> String? = { null }, // 发送者名链（SenderNames），见 ChatRowStyle.remarkOf
+    latestNicknameOf: (String) -> String? = { null }, // 同上，见 ChatRowStyle.latestNicknameOf
     /** 点合并转发卡 → 聊天记录详情页。 */
     onOpenRecord: (String) -> Unit = {},
     /**
@@ -415,6 +417,8 @@ fun ChatScreen(
             mentionNames = mentionNames,
             roleOf = roleOf,
             memberNameOf = memberNameOf,
+            remarkOf = remarkOf,
+            latestNicknameOf = latestNicknameOf,
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
