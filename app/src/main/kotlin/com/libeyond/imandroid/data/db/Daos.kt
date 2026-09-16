@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import com.libeyond.imandroid.data.SeqPoint
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -67,6 +68,30 @@ interface MessageDao {
 
     @Query("SELECT COUNT(*) FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun countIn(owner: String, convId: String): Int
+
+    /**
+     * 会话媒体时间线（查看器左右翻页用）：**整个会话**里最新的 [limit] 条图片/视频。
+     *
+     * 与 [observeWindow] 的区别同 [search]：那是"渲染当前屏"的一窗，这问的是"整个会话有哪些图"。
+     * 在渲染窗口里过滤出来的序列会让用户看到「这张图前后没有别的图了」——而那是假的
+     * （iOS `mediaMessagesForConv:` 的注释记的是同一条）。
+     *
+     * **排序按 conv_seq，不是 timestamp 主排**：这一条与本文件其余查询刻意不同。翻页序列要与
+     * 服务端媒体接口（`conv_seq DESC` 游标分页）拼在一起，两边排序口径不一致的话，续拉回来的
+     * 更早一页会插在错的位置上。显示序那条契约管的是聊天列表，这里不涉及。
+     *
+     * **必须带 limit**（同 [observeWindow] 的那条教训：13 万条的会话整窗构造对象会把页面渲染成空白）。
+     */
+    @Query("""
+        SELECT * FROM message
+        WHERE ownerUid = :owner AND convId = :convId
+          AND recalledAt IS NULL AND deletedAt IS NULL
+          AND convSeq > 0 AND content <> ''
+          AND contentType IN ('${ContentType.IMAGE}', '${ContentType.VIDEO}')
+        ORDER BY convSeq DESC
+        LIMIT :limit
+    """)
+    suspend fun convMedia(owner: String, convId: String, limit: Int): List<MessageEntity>
 
     /**
      * 会话内搜索（SEARCH_DESIGN §4）：**整个会话查库，不是在渲染窗口里过滤**。

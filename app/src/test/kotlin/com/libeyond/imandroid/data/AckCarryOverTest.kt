@@ -18,6 +18,7 @@ class AckCarryOverTest {
         caption = "看这个", fileName = "a.mp4", fileSize = 123,
         replyToConvSeq = 7, forwardFrom = "张三", groupId = "alb-x",
         mediaW = 1080, mediaH = 586, duration = 27351, poster = "/uploads/p.jpg",
+        waveform = "ChwsPU1e",
     )
 
     private fun ackRow() = MessageEntity(
@@ -41,6 +42,8 @@ class AckCarryOverTest {
         assertEquals(586, row.mediaH)
         assertEquals(27351, row.duration)
         assertEquals("/uploads/p.jpg", row.poster)
+        // 不补的话自己转发出去的语音在自己这一侧是等高条纹、对端正常（第七次「只在发送者一侧坏」）
+        assertEquals("ChwsPU1e", row.waveform)
     }
 
     @Test

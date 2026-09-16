@@ -50,8 +50,8 @@ object MessageActions {
         val mine = msg.sender == myUid
         val out = mutableListOf<MessageAction>()
 
-        // 复制**只给文本**：给图片/文件一个"复制"却什么都没进剪贴板，比没有更糟
-        if (msg.contentType == ContentType.TEXT && msg.content.isNotEmpty()) out += MessageAction.Copy
+        // 复制什么、给不给复制，都归 [copyKindOf]（对齐 iOS `copyMessageToPasteboard:` 那张矩阵）
+        if (copyKindOf(msg) != null) out += MessageAction.Copy
 
         // 系统消息不可引用（它没有发送者，引用条显示不出来源）
         if (msg.contentType != ContentType.SYSTEM) out += MessageAction.Reply
@@ -76,6 +76,46 @@ object MessageActions {
 
         return out
     }
+}
+
+/**
+ * 「复制」这一下到底往剪贴板里放什么（对齐 iOS `copyMessageToPasteboard:`）。
+ *
+ * iOS 那段的顺序是硬约定，**caption 压过一切**：带图说的消息，「复制」作用在**文本**上
+ * （"这类消息的文本操作作用于文本"），而不是把图复制走。
+ */
+enum class CopyKind {
+    /** 图说文本（消息带 caption 时，无论它是图还是文件）。 */
+    Caption,
+
+    /** 图片字节本身。安卓没有位图剪贴板，实际放的是 FileProvider 的 `content://`，见 `ui/CopyImageAction.kt`。 */
+    Image,
+
+    /** 媒体的绝对链接（video / file）。 */
+    Link,
+
+    /** 纯文本正文。 */
+    Text,
+}
+
+/**
+ * 这条消息「复制」什么；`null` = 不给「复制」这一项。
+ *
+ * 本端此前**只给 TEXT**，理由写的是"给图片一个复制却什么都没进剪贴板，比没有更糟"——
+ * 那在没有复制图片能力时是对的，2026-09-16 补了图片复制之后就该放开了（用户报的对齐项）。
+ *
+ * **两处刻意不跟 iOS**：
+ * ① **voice 不给**——iOS 走的是最后那条兜底分支，复制的是 `message.content`，
+ *    也就是一段形如 `/uploads/x.m4a` 的相对路径，对用户没有任何意义；
+ * ② **系统消息不给**——它不是用户写的话，本端连「引用」都没给它。
+ */
+fun copyKindOf(msg: MessageEntity): CopyKind? = when {
+    !msg.caption.isNullOrBlank() -> CopyKind.Caption
+    msg.contentType == ContentType.IMAGE && msg.content.isNotBlank() -> CopyKind.Image
+    (msg.contentType == ContentType.VIDEO || msg.contentType == ContentType.FILE) &&
+        msg.content.isNotBlank() -> CopyKind.Link
+    msg.contentType == ContentType.TEXT && msg.content.isNotEmpty() -> CopyKind.Text
+    else -> null
 }
 
 /** 会话长按菜单（CHAT_UX §12/§14）。 */

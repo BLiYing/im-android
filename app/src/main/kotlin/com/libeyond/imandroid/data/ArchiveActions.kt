@@ -78,13 +78,29 @@ data class ArchiveTarget(
     val fileSize: Long? = null,
     val caption: String? = null,
     val timestamp: Long = 0,
+    /**
+     * 封面 / 像素 / 时长 / 内嵌缩略。**转发要靠它们**（判据 [Forward.attributesOf]）——
+     * 归档查看器的「更多 → 转发」走的就是这条路，不带的话转出去的视频在收端没有封面、
+     * 按方块排版，而且事后补不回来（2026-09-16 用户报，与聊天页转发同一个根因）。
+     */
+    val poster: String? = null,
+    val thumb: String? = null,
+    val mediaW: Int? = null,
+    val mediaH: Int? = null,
+    val duration: Int? = null,
+    /**
+     * 语音振幅指纹（仅 voice）。**从服务端归档进来的那条路恒为 null**——
+     * `ConvMediaItem` 没有这个字段（`internal/conversation/media.go` 不回带），
+     * 所以从「语音」页签长按转发出去的语音在收端只有等高条纹。从本地消息进来的那条路有。
+     */
+    val waveform: String? = null,
 ) {
     /**
      * 转成一条可转发的消息。
      *
-     * 只填 `MessageService.forward` 真正会读的那几个字段（content / contentType /
-     * fileName / fileSize / caption），其余留默认——**别顺手多填**：填错比缺字段更难查，
-     * 而这条实体只活到转发发出为止，不落库。
+     * 只填 `MessageService.forward` 真正会读的那些字段（content / contentType /
+     * fileName / fileSize / caption + [Forward.attributesOf] 读的那五个媒体元数据），
+     * 其余留默认——**别顺手多填**：填错比缺字段更难查，而这条实体只活到转发发出为止，不落库。
      */
     fun toMessageEntity(owner: String, convId: String) = com.libeyond.imandroid.data.db.MessageEntity(
         ownerUid = owner,
@@ -97,6 +113,12 @@ data class ArchiveTarget(
         fileSize = fileSize,
         caption = caption,
         timestamp = timestamp,
+        poster = poster,
+        thumb = thumb,
+        mediaW = mediaW,
+        mediaH = mediaH,
+        duration = duration,
+        waveform = waveform,
     )
 }
 
@@ -110,6 +132,11 @@ fun com.libeyond.imandroid.sdk.api.ConvMediaItem.toArchiveTarget() = ArchiveTarg
     fileSize = fileSize.takeIf { it > 0 },
     caption = caption.takeIf { it.isNotBlank() },
     timestamp = timestamp,
+    poster = poster.takeIf { it.isNotBlank() },
+    thumb = thumb.takeIf { it.isNotBlank() },
+    mediaW = mediaW.takeIf { it > 0 },
+    mediaH = mediaH.takeIf { it > 0 },
+    duration = duration.takeIf { it > 0 },
 )
 
 /** 本地消息（链接页签那一格）→ 菜单目标。 */
@@ -122,4 +149,10 @@ fun com.libeyond.imandroid.data.db.MessageEntity.toArchiveTarget() = ArchiveTarg
     fileSize = fileSize,
     caption = caption,
     timestamp = timestamp,
+    poster = poster,
+    thumb = thumb,
+    mediaW = mediaW,
+    mediaH = mediaH,
+    duration = duration,
+    waveform = waveform,
 )

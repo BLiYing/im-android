@@ -251,16 +251,28 @@ class MessageService(
      */
     suspend fun forward(msg: MessageEntity, toConvId: String, to: String, origin: String, groupId: String? = null) {
         val owner = ownerProvider() ?: return
+        // 封面/尺寸/时长必须跟着转发走，判据与理由在 [Forward.attributesOf]：
+        // 漏带是**静默**的——收端只能按「像素未知」渲染（16:9 的视频变成方块、没有封面），
+        // 且这几个字段随消息落库，事后补不回来。iOS `forwardEchoContent:` 与 im-web
+        // `useForward.ts` 一直带着，本端此前是这条对称链上唯一没跟的一端。
+        val attrs = Forward.attributesOf(msg)
         val p = repo.createPending(
             owner = owner, convId = toConvId, to = to,
             content = msg.content, contentType = msg.contentType,
             forwardFrom = origin, groupId = groupId,
+            // **待发行也要有**：`resend` 是从这一行读字段的，行里没有就等于"重发一次元数据就没了"
+            // （createPending 的 KDoc 记着这个坑已经第四次了）；待发气泡的排版也读它。
+            fileName = msg.fileName, fileSize = msg.fileSize, caption = msg.caption,
+            mediaW = attrs.mediaW, mediaH = attrs.mediaH, duration = attrs.duration,
+            poster = attrs.poster, thumb = attrs.thumb, waveform = attrs.waveform,
         )
         transmit(
             p.clientMsgId, toConvId, to, msg.contentType, msg.content,
             replyToConvSeq = null,   // 引用不跟着转发走：被引用的那条不在新会话里
             fileName = msg.fileName, fileSize = msg.fileSize, caption = msg.caption,
             forwardFrom = origin, groupId = groupId,
+            mediaW = attrs.mediaW, mediaH = attrs.mediaH, duration = attrs.duration,
+            poster = attrs.poster, thumb = attrs.thumb, waveform = attrs.waveform,
         )
         log.i("msg_forwarded", "from" to msg.convId, "to" to toConvId, "seq" to msg.convSeq)
     }
@@ -362,7 +374,7 @@ class MessageService(
         transmit(
             p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
             p.fileName, p.fileSize, p.caption, p.forwardFrom, p.groupId,
-            p.mediaW, p.mediaH, p.duration, p.poster, p.thumb,
+            p.mediaW, p.mediaH, p.duration, p.poster, p.thumb, p.waveform,
             // @提及三件套按落库的片段**重新推导**，不另存 mentions/mentionAll：
             // 片段里已经含了每个 token 指向谁，空 uid 就是 @所有人——两份状态早晚会不一致
             mentions = Mention.parseMentions(p.mentions),
@@ -388,6 +400,8 @@ class MessageService(
         duration: Int? = null,
         poster: String? = null,
         thumb: String? = null,
+        /** 语音振幅指纹（仅 voice）。服务端对非 voice 与非法值静默丢弃，端上照传即可。 */
+        waveform: String? = null,
         mentions: List<String> = emptyList(),
         mentionAll: Boolean = false,
         mentionSpans: List<MentionSpan> = emptyList(),
@@ -411,6 +425,7 @@ class MessageService(
                 duration = duration,
                 poster = poster,
                 thumb = thumb,
+                waveform = waveform,
                 // 空表不传 null 之外的东西：服务端按 omitempty 读，传 [] 与不传等价但白占字节
                 mentions = mentions.takeIf { it.isNotEmpty() },
                 mentionAll = true.takeIf { mentionAll },

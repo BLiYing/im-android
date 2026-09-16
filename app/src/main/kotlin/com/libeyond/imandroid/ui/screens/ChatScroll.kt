@@ -4,13 +4,18 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import android.os.SystemClock
 import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import com.libeyond.imandroid.data.ChatEntry
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputChange
@@ -167,6 +172,137 @@ internal fun Modifier.chatListTaps(
             }
             ChatScroll.TapAction.DismissKeyboard -> onDismissKeyboard()
         }
+    }
+}
+
+/** 距顶多少行以内就去加载更早的一页。 */
+private const val LOAD_OLDER_THRESHOLD = 3
+
+/**
+ * 聊天列表的**滚动时序**一整组：首屏定位 → 贴底收敛 → 行变后的跟底 → 翻页保位 → 可见即读。
+ *
+ * 2026-09-16 从 `ChatScreen.kt` 整段平移过来（那份文件到 598/600 行，而"消息列表什么时候该滚到哪"
+ * 与"这一页长什么样"是两件事）。**逐字平移，无逻辑改动**——这几条 effect 之间的先后与互斥
+ * 是反复调出来的，见各自的注释。
+ *
+ * 它们必须待在一起：四条都读写同一份 [ChatScrollMarks]，拆散了就会出现
+ * 「一条 effect 把另一条刚设的待办覆盖掉」。
+ */
+@Composable
+@Suppress("LongParameterList")
+internal fun ChatListSync(
+    convId: String,
+    listState: LazyListState,
+    marks: ChatScrollMarks,
+    rows: List<ChatRow>,
+    rowsReady: Boolean,
+    readSeq: Long,
+    unread: Int,
+    /** 用户正拖着列表——拖动期间不跟底（让用户赢）。 */
+    listDragged: Boolean,
+    /** 被详情页盖住：不报已读（用户看的不是这一页）。 */
+    covered: Boolean,
+    onLoadOlder: () -> Unit,
+    onOutgoingEcho: () -> Unit,
+    onVisibleSeq: (Long) -> Unit,
+) {
+    // —— 首屏定位（CHAT_UX §3）：有未读锚到首条未读，无未读贴底 ——
+    // **在组合期下达**（requestScrollToItem），列表第一次测量就落在目标上。此前是 effect 里
+    // scrollToItem：先按第 0 行画出一帧再跳过去，进会话肉眼可见地闪一下（设计稿 #2）。
+    // 只做一次（iOS didInitialPosition），**不能与下面的自动贴底合并**：合并会让「停在首条未读」被贴底当场覆盖掉。
+    val entryReady = rowsReady && rows.isNotEmpty()
+    if (entryReady && !marks.didEntry) {
+        val idx = ChatEntry.entryScrollIndex(rows.map { it.seqOrZero() }, readSeq, unread)
+        marks.didEntry = true
+        marks.entryAtBottom = idx == rows.lastIndex
+        marks.rowsSize = rows.size
+        marks.outgoing = outgoingKeysOf(rows) // 进来时就躺在出箱里的（失败待重发）不算"刚发的"
+        listState.requestScrollToItem(idx)
+    }
+    // 贴底那一支还欠一次收敛：对齐的是最后一行的**顶**，最后一行比屏高（长文/竖图）时停在它开头
+    LaunchedEffect(entryReady) {
+        if (!entryReady || !marks.entryAtBottom) return@LaunchedEffect
+        marks.entryAtBottom = false
+        withFrameNanos { } // 等第一次测量
+        stickToBottom(listState)
+    }
+
+    // —— 行变了之后的贴底 ——
+    // ① 刚点过 ↓ / 刚发出一条（保质期内）→ 精确贴底；② 行数变多且用户本来就贴着底 → 跟到底。
+    val outgoingKeys = remember(rows) { outgoingKeysOf(rows) }
+    LaunchedEffect(rows.size, outgoingKeys) {
+        if (!marks.didEntry || rows.isEmpty()) return@LaunchedEffect
+        // 自己发的 = 出箱里新冒出一条。口径收在出箱回显这一个入口（CHAT_UX §9），不在每条发送路径上各挂一次
+        if (ChatScroll.hasNewOutgoing(marks.outgoing, outgoingKeys)) {
+            onOutgoingEcho() // 停在历史时 Host 换回尾窗；新那一窗到了本 effect 再跑一次，仍在保质期内
+            marks.stickUntil = SystemClock.uptimeMillis() + ChatScroll.STICK_BOTTOM_ARM_MS
+            marks.locatingUntil = 0L // 自己发了东西就该回到最新，刚才那次跳转作废
+        }
+        marks.outgoing = outgoingKeys
+        val grew = rows.size > marks.rowsSize
+        marks.rowsSize = rows.size
+        // 刚跳到某条：换锚点窗让行数变了，这时跟底会把刚居中的目标甩走
+        if (SystemClock.uptimeMillis() < marks.locatingUntil) return@LaunchedEffect
+        if (SystemClock.uptimeMillis() < marks.stickUntil && !listDragged) {
+            stickToBottom(listState)
+            return@LaunchedEffect
+        }
+        // 只在**变多**时跟：ack 把待发换成已确认、行数不变，那时 animateScrollToItem 会把比屏高的最后一行滚回开头
+        if (!grew) return@LaunchedEffect
+        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+        if (ChatEntry.shouldAutoScroll(last, rows.size)) {
+            listState.animateScrollToItem(rows.size - 1)
+        }
+    }
+
+    // —— 滚到顶部附近就加载更早的一页 ——
+    //
+    // 两件事一起做，缺一条都会出问题：
+    // ① **在途守卫**：不守的话 rows.size 一变 effect 就再触发，一路把整个会话
+    //    （可能十几万条）全加载进来，等于没做窗口。
+    // ② **翻页保位**：在顶部插入 N 条后，firstVisibleItemIndex 仍指向同一个**下标**，
+    //    而那个下标现在对应的是更早的消息——用户会看到列表凭空跳走。
+    //    补偿一律**按同一条消息**（下标 + 新增条数），不按 contentSize 差值。
+    var pendingOlder by remember(convId) { mutableStateOf(false) }
+    var rowsBeforeLoad by remember(convId) { mutableStateOf(0) }
+
+    LaunchedEffect(rows.size, listState.firstVisibleItemIndex) {
+        if (!marks.didEntry || rows.isEmpty()) return@LaunchedEffect
+        // 刚跳到某条：这时行数变是换锚点窗换的，不是上一页回来了——按新增条数补偿会把目标推走
+        if (SystemClock.uptimeMillis() < marks.locatingUntil) {
+            pendingOlder = false
+            return@LaunchedEffect
+        }
+
+        // 上一页加载回来了 → 把视口按同一条消息补偿回去
+        if (pendingOlder && rows.size > rowsBeforeLoad) {
+            val added = rows.size - rowsBeforeLoad
+            pendingOlder = false
+            listState.scrollToItem(
+                (listState.firstVisibleItemIndex + added).coerceAtMost(rows.lastIndex),
+                listState.firstVisibleItemScrollOffset,
+            )
+            return@LaunchedEffect
+        }
+
+        if (!pendingOlder && listState.firstVisibleItemIndex <= LOAD_OLDER_THRESHOLD) {
+            pendingOlder = true
+            rowsBeforeLoad = rows.size
+            onLoadOlder()
+        }
+    }
+
+    // —— 可见即读 ——
+    // **注意**：程序化滚到底之后紧跟"可见即读"上报，等于替用户把消息读完
+    // （十万条未读进一次会话清零就是这么来的，CHAT_UX §3）。
+    // 故只在**首屏定位完成后**才上报，且只报真正可见的行。
+    // 被详情页盖住期间也不报（用户看的不是这一页）；露出来时 covered 一变，这里补报一次。
+    LaunchedEffect(rows.size, listState.layoutInfo.visibleItemsInfo.size, covered) {
+        if (!marks.didEntry || covered) return@LaunchedEffect
+        val maxSeq = listState.layoutInfo.visibleItemsInfo
+            .mapNotNull { (rows.getOrNull(it.index) as? ChatRow.Confirmed)?.msg?.convSeq }
+            .maxOrNull() ?: return@LaunchedEffect
+        onVisibleSeq(maxSeq)
     }
 }
 

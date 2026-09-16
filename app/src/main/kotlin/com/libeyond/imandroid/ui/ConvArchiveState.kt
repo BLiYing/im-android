@@ -38,6 +38,14 @@ class ConvArchive internal constructor() {
     var hasMore by mutableStateOf(false)
         internal set
 
+    /**
+     * 上一次取数失败了（网络不通 / 服务端出错）。
+     * 页签本身靠"空列表 + 空态文案"兜着，但**查看器翻页要据此说一句**：
+     * 停在已拉到的那几页没错，不说才是错（OFFLINE_BACKLOG_DESIGN §4.9）。
+     */
+    var failed by mutableStateOf(false)
+        internal set
+
     internal var cursor = 0L
     internal var run: (Boolean) -> Unit = {}
 
@@ -67,7 +75,9 @@ internal fun rememberConvArchive(client: IMClient, convId: String, tab: DetailTa
         if (kind != null && !archive.loading) { // 在途守卫：滚到底会连续触发，不守就把同一页追加两次
             archive.loading = true
             scope.launch {
-                runCatching { client.conversationsApi.media(convId, kind, if (reset) 0L else archive.cursor) }
+                // 同 ChatMediaTimelineState：裸 runCatching 连 CancellationException 一起吞，
+                // 页面被关掉时 onFailure 还会去写 failed 标志
+                runCatchingCancellable { client.conversationsApi.media(convId, kind, if (reset) 0L else archive.cursor) }
                     .onSuccess { p ->
                         archive.items = if (reset) {
                             p.items
@@ -78,8 +88,12 @@ internal fun rememberConvArchive(client: IMClient, convId: String, tab: DetailTa
                         }
                         archive.cursor = p.nextCursor
                         archive.hasMore = p.hasMore
+                        archive.failed = false
                     }
-                    .onFailure { IMLog.tag("IM.Detail").w("conv_media_failed", "kind" to kind) }
+                    .onFailure {
+                        archive.failed = true
+                        IMLog.tag("IM.Detail").w("conv_media_failed", "kind" to kind)
+                    }
                 archive.loading = false
             }
         }
@@ -89,6 +103,7 @@ internal fun rememberConvArchive(client: IMClient, convId: String, tab: DetailTa
         archive.items = emptyList()
         archive.cursor = 0L
         archive.hasMore = false
+        archive.failed = false
         archive.run(true)
     }
     return archive

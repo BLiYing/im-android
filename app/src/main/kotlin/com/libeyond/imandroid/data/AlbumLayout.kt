@@ -59,6 +59,16 @@ object AlbumLayout {
     /** 环里还放不放得下百分比数字（小环放不下，只画环）。 */
     fun showsRingPercent(tile: Float): Boolean = tile >= 100f
 
+    /**
+     * 视频格中心要不要画播放角标（iOS `IMAlbumTileView` 的 `_playBadge`）。
+     *
+     * 中心位同一时刻只放一样东西：上传中（环）/ 发失败（❗）/ 没下载完（↓ ⏸ ↻ ⊘ 门控字形）都占着它，
+     * 只有**就绪**的视频格才轮到播放角标。此前本端宫格里的视频格压根没画——下载完的视频
+     * 在宫格里看不出是视频，而单条视频气泡与 iOS 宫格都有（2026-09-16 用户报）。
+     */
+    fun showsPlayBadge(isVideo: Boolean, sending: Boolean, failed: Boolean, gateReady: Boolean): Boolean =
+        isVideo && !sending && !failed && gateReady
+
     /** 整个宫格的总高。行高确定 → cell 高确定，加载图片时不会跳版。 */
     fun heightFor(n: Int): Float {
         val rows = rowPattern(n)

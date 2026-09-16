@@ -42,3 +42,8 @@ google-services.json
 
 # 每次改动后按全局规则重写的一次性自查脚本，内容随任务变，不入库
 temp_verify.py
+
+# CodeGraph 的本地索引（SQLite 知识图谱），随本机代码重建，不入库。
+# 另两仓（IMServer / IMProgram）早就忽略了它，本仓一直漏着——不补的话
+# 任何人一个 `git add -A` 就会把整份索引提交进来。
+/.codegraph/

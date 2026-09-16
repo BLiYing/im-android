@@ -7,21 +7,28 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import com.libeyond.imandroid.data.ChatSearch
+import com.libeyond.imandroid.data.LinkDetect
 import com.libeyond.imandroid.data.Mention
 import com.libeyond.imandroid.sdk.protocol.MentionSpan
 
 /**
- * 气泡正文的富文本：**@提及高亮（可点）+ 会话内搜索命中底色**。
+ * 气泡正文的富文本：**@提及高亮（可点）+ 链接高亮（可点）+ 会话内搜索命中底色**。
  *
- * 两种装饰互相正交、可以叠在同一段字上（搜「开会」而那句正好是「@小明 开会」），
- * 所以这里是一次遍历同时铺两层，而不是先切段再各画各的。
+ * 几种装饰互相正交、可以叠在同一段字上（搜「开会」而那句正好是「@小明 开会」），
+ * 所以这里是一次遍历同时铺几层，而不是先切段再各画各的。
  *
  * ### 走哪条路由 iOS 那侧的判据决定（`IMBubbleCell.attributedContent:...spans:`）
  * **有可用片段就走片段**——位置由发送方给出，不查任何成员表；超级群（2 万人）不下发
  * 成员表，下面那条老路在那里对普通成员必然失效。片段与本地文本对不上（编辑过的老消息、
  * 脏数据）会被 [Mention.validSpans] 逐段丢掉，**一段不剩才回落**按昵称扫文本。
+ *
+ * ### 链接（iOS `applyURLHighlight:`，蓝字下划线，点开走 `openLink:`）
+ * 此前本端正文**从不识别链接**：不高亮、也没有点击注解，气泡本体的轻点又只处理聊天记录卡——
+ * 于是「url 消息点不开」（2026-09-16 用户报）。区间判据在 [LinkDetect.urlRanges]（逐字照抄 iOS 正则）。
+ * 链接只在**非提及段**里再切：两者几乎不会重叠，真重叠时提及优先，免得「点名字进资料页」被抢走。
  *
  * ### 点击
  * 用 `LinkAnnotation.Clickable` 而不是 `ClickableText`：后者已废弃，而且它自己吃掉 tap
@@ -39,19 +46,26 @@ internal fun chatBodyText(
     mentionColor: Color,
     /** 点 @某人。null = 不可点（如长按菜单里的原位重绘，那时不该再响应点击）。 */
     onTapMention: ((String) -> Unit)?,
+    /** 识别并高亮 http(s) 链接。**只对文本消息的正文开**：iOS 的图说不识别链接，这里不多出一处不一致。 */
+    linkify: Boolean = false,
+    linkColor: Color = Color.Unspecified,
+    /** 点链接（应用内浏览器）。null = 只高亮不可点。 */
+    onTapLink: ((String) -> Unit)? = null,
 ): AnnotatedString {
     val valid = Mention.validSpans(text, spans)
     val segs =
         if (valid.isNotEmpty()) Mention.segmentBySpans(text, valid)
         else Mention.segmentByNames(text, memberNames)
     val hits = ChatSearch.matchRanges(text, searchNeedle)
-    // 只有"既没有提及、也没有命中"才走快速通道。
+    val links = if (linkify) LinkDetect.urlRanges(text) else emptyList()
+    // 只有"没有提及、没有命中、也没有链接"才走快速通道。
     // 原来写的是 `segs.size <= 1`——而**整条正文就是一段提及**时（选完人直接发，
     // 正文恰好是 `@小明`）也只有一段，于是那条消息不高亮也点不动。
     // 真机那次验的是「@用户3472 kaihui」，两段，正好绕过了这个洞（2026-09-09 `/code-review` 抓出）。
-    if (hits.isEmpty() && segs.none { it.mention }) return AnnotatedString(text)
+    if (hits.isEmpty() && links.isEmpty() && segs.none { it.mention }) return AnnotatedString(text)
 
     val mentionStyle = SpanStyle(color = mentionColor, fontWeight = FontWeight.Medium)
+    val linkStyle = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)
     return buildAnnotatedString {
         var at = 0
         for (seg in segs) {
@@ -60,10 +74,24 @@ internal fun chatBodyText(
             val uid = seg.uid
             when {
                 seg.mention && uid != null && onTapMention != null ->
-                    withLinkCompat(uid, mentionStyle, onTapMention) { appendHighlighted(seg.text, start, hits, highlightBackground) }
+                    withClickable(uid, mentionStyle, onTapMention) { appendHighlighted(seg.text, start, hits, highlightBackground) }
                 seg.mention ->
                     withStyle(mentionStyle) { appendHighlighted(seg.text, start, hits, highlightBackground) }
-                else -> appendHighlighted(seg.text, start, hits, highlightBackground)
+                else -> {
+                    for (p in LinkDetect.splitByLinks(start, end, links)) {
+                        val piece = seg.text.substring(p.start - start, p.end - start)
+                        val link = p.link
+                        when {
+                            link == null -> appendHighlighted(piece, p.start, hits, highlightBackground)
+                            onTapLink != null -> {
+                                // 点被截断的那半也打开整条地址
+                                val url = text.substring(link.first, link.last + 1)
+                                withClickable(url, linkStyle, onTapLink) { appendHighlighted(piece, p.start, hits, highlightBackground) }
+                            }
+                            else -> withStyle(linkStyle) { appendHighlighted(piece, p.start, hits, highlightBackground) }
+                        }
+                    }
+                }
             }
             at = end
         }
@@ -101,18 +129,18 @@ private fun AnnotatedString.Builder.appendHighlighted(
     if (i < piece.length) append(piece.substring(i))
 }
 
-/** `withLink` 的一层薄封装：把样式与点击绑在一起，免得每处都拼一遍 [TextLinkStyles]。 */
-private inline fun AnnotatedString.Builder.withLinkCompat(
-    uid: String,
+/** `pushLink` 的一层薄封装：把样式与点击绑在一起，免得每处都拼一遍 [TextLinkStyles]。[tag] 回传给 [onTap]。 */
+private inline fun AnnotatedString.Builder.withClickable(
+    tag: String,
     style: SpanStyle,
     noinline onTap: (String) -> Unit,
     block: AnnotatedString.Builder.() -> Unit,
 ) {
     pushLink(
         LinkAnnotation.Clickable(
-            tag = uid,
+            tag = tag,
             styles = TextLinkStyles(style = style),
-            linkInteractionListener = { onTap(uid) },
+            linkInteractionListener = { onTap(tag) },
         ),
     )
     block()

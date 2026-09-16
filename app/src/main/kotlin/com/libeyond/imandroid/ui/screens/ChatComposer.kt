@@ -46,12 +46,19 @@ internal fun Composer(
     onSend: () -> Unit,
     onPlus: () -> Unit,
     onInputFocus: () -> Unit,
-    /** 输入栏**上方**的内联层（@成员面板）。没有就不画。 */
+    /** 输入栏**上方**的内联层（@成员面板 / 粘贴图预览条）。没有就不画。 */
     above: (@Composable () -> Unit)? = null,
+    /**
+     * 正文之外还有东西可发（目前＝粘贴条上挂着待发图）。
+     *
+     * **发送键的可用态不能只看正文**：粘了一张图但一个字没打时，光看 `input.text` 会把
+     * 发送键判成灰的，那张图就发不出去（对齐 iOS：粘贴图挂在 pasteBar 上，由输入栏那颗发送键统一发出）。
+     */
+    extraSendable: Boolean = false,
 ) {
     Column(Modifier.fillMaxWidth()) {
         above?.invoke()
-        ComposerBar(input, onInputChange, onSend, onPlus, onInputFocus)
+        ComposerBar(input, onInputChange, onSend, onPlus, onInputFocus, extraSendable)
     }
 }
 
@@ -62,9 +69,12 @@ private fun ComposerBar(
     onSend: () -> Unit,
     onPlus: () -> Unit,
     onInputFocus: () -> Unit,
+    extraSendable: Boolean,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
+    // 正文有字 **或** 粘贴条上挂着图，就能发
+    val canSend = input.text.isNotBlank() || extraSendable
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -116,8 +126,8 @@ private fun ComposerBar(
             modifier = Modifier
                 .size(d.inputControl)
                 .clip(CircleShape)
-                .background(if (input.text.isNotBlank()) c.accent else c.neutralControl)
-                .clickable(enabled = input.text.isNotBlank()) { onSend() },
+                .background(if (canSend) c.accent else c.neutralControl)
+                .clickable(enabled = canSend) { onSend() },
             contentAlignment = Alignment.Center,
         ) {
             Image(

@@ -29,8 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -43,15 +41,20 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
 import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.MediaUrl
-import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.FileTypeIcon
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
-/** 详情页里点开的一条图/视频（记录里只有地址，没有整条消息）。 */
-internal data class RecordMedia(val contentType: String, val content: String)
+/**
+ * 详情页里点开的一条图/视频（记录里只有地址，没有整条消息）。
+ *
+ * [index] 是它在这份记录 `items` 里的下标——**查看器翻页拿它当身份**。
+ * 记录里的媒体没有 `conv_seq`（那是一份 JSON 快照，不是本会话的消息），
+ * 所以既不能按 conv_seq 定位，也无从向服务端续拉；下标是这里唯一稳定的标识。
+ */
+internal data class RecordMedia(val contentType: String, val content: String, val index: Int)
 
 /**
  * 聊天记录详情页：点合并转发卡进来，逐条列出记录里的消息（十七条对齐 #17）。
@@ -73,7 +76,8 @@ internal fun ChatRecordScreen(
 ) {
     val c = IMTheme.colors
     val doc = remember(content) { CardContent.parseRecordDoc(content) }
-    val uri = LocalUriHandler.current
+    // 记录里的文件在 App 内打开（宿主 WebLinkHost；iOS 同样交给应用内浏览器 SFSafariViewController）
+    val openLink = com.libeyond.imandroid.ui.components.LocalOpenLink.current
     Column(
         Modifier
             .fillMaxSize()
@@ -91,7 +95,7 @@ internal fun ChatRecordScreen(
                     continued = i > 0 && items[i - 1].senderKey == item.senderKey,
                     host = host,
                     useTls = useTls,
-                    onTap = recordTap(item, host, useTls, uri, onOpenRecord, onOpenUser, onOpenMedia),
+                    onTap = recordTap(item, i, host, useTls, openLink, onOpenRecord, onOpenUser, onOpenMedia),
                 )
             }
         }
@@ -99,11 +103,15 @@ internal fun ChatRecordScreen(
 }
 
 /** 点一条记录做什么（iOS `didSelectRowAtIndexPath`）；null = 这一条不可点。 */
+@Suppress("LongParameterList")
 private fun recordTap(
     item: CardContent.RecordItem,
+    /** 它在这份记录里的下标——查看器翻页的身份（见 [RecordMedia]）。 */
+    index: Int,
     host: String,
     useTls: Boolean,
-    uri: UriHandler,
+    /** 应用内浏览器；null = 没有宿主（预览），文件项不可点。 */
+    openLink: ((String) -> Unit)?,
     onOpenRecord: (String) -> Unit,
     onOpenUser: (String) -> Unit,
     onOpenMedia: (RecordMedia) -> Unit,
@@ -117,16 +125,13 @@ private fun recordTap(
             return { onOpenUser(card.uid) }
         }
         ContentType.IMAGE, ContentType.VIDEO -> if (item.content.isNotBlank()) {
-            return { onOpenMedia(RecordMedia(item.contentType, item.content)) }
+            return { onOpenMedia(RecordMedia(item.contentType, item.content, index)) }
         }
-        // 文件交给浏览器（记录里的文件不走聊天页的下载门控，iOS 同样是外部打开）；只认 http(s)
+        // 文件在 App 内打开（记录里的文件不走聊天页的下载门控；iOS 同样交给应用内浏览器 SFSafariViewController）；只认 http(s)
         ContentType.FILE -> {
             val url = MediaUrl.absolute(item.content, host, useTls)
-            if (url.startsWith("http://") || url.startsWith("https://")) {
-                return {
-                    runCatching { uri.openUri(url) }
-                        .onFailure { IMLog.tag("IM.Chat").w("record_file_open_failed", "error" to it.javaClass.simpleName) }
-                }
+            if (openLink != null && (url.startsWith("http://") || url.startsWith("https://"))) {
+                return { openLink(url) }
             }
         }
     }

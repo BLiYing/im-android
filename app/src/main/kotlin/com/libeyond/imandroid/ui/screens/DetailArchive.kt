@@ -38,16 +38,15 @@ import com.composables.icons.lucide.Link
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Mic
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailTab
 import com.libeyond.imandroid.data.toArchiveTarget
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.DetailTabs
 import com.libeyond.imandroid.data.LinkScan
+import com.libeyond.imandroid.data.MediaGrid
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.ui.components.TimeFormat
@@ -195,7 +194,7 @@ internal fun LinkRow(
  * 服务端没有可索引的链接列（`internal/conversation/media.go`），这一格只能扫本地文本，
  * 与其他几格的"全量"语义不同。不说的话用户会以为链接丢了。
  */
-internal const val LINK_TAB_NOTE = "链接由本机已加载的聊天记录扫出，往上翻得越多、这里越全。点一条用浏览器打开。"
+internal const val LINK_TAB_NOTE = "链接由本机已加载的聊天记录扫出，往上翻得越多、这里越全。点一条在 App 内打开。"
 
 /** 语音页签的脚注。如实写清楚这一格现在能做什么、不能做什么。 */
 internal const val VOICE_TAB_NOTE = "归档里暂不能播放（长按可定位回聊天、转发或删除）。"
@@ -420,25 +419,55 @@ internal fun LazyListScope.archiveTab(
             } else if (archive.isEmpty()) {
                 item { Hint(DetailTabs.emptyText(tab)) }
             } else {
-                item {
-                    // 宫格嵌在纵向列表里：**给定高度不能无界**，否则 LazyVerticalGrid
-                    // 在 LazyColumn 里会崩（无限高约束）。按行数算高度。
-                    val rows = (archive.size + 3) / 4
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(4),
-                        modifier = Modifier.fillMaxWidth().height((rows * 92).dp.coerceAtMost(1200.dp)),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        items(archive, key = { it.convSeq }) { item ->
-                            ArchiveTile(
-                                item, host, useTls, isGroup = isGroup, onOpen = onOpenArchive,
-                                onLongPress = { r -> onLongPressArchive(item.toArchiveTarget(), r) },
-                            )
-                        }
-                    }
-                }
+                mediaGrid(archive, host, useTls, isGroup, onOpenArchive, onLongPressArchive)
                 if (hasMore) item { LoadMore(onLoadMore) }
+            }
+        }
+    }
+}
+
+/**
+ * 媒体宫格：**由外层列表逐行渲染**，本身不是一个会滚动的容器。
+ * 详情页「媒体」页签与会话媒体库页共用这一份。
+ *
+ * ### 为什么不能用 LazyVerticalGrid（2026-09-16 用户报了两条，都是它）
+ * 此前是把 `LazyVerticalGrid` 塞进 `LazyColumn` 的一个 `item {}` 里，
+ * 高度按条数算成 `rows * 92dp` 再 `coerceAtMost(1200dp)`：
+ *
+ * 1. **纵向嵌套同向滚动**——手指落在宫格上时竖向拖动被内层吃掉，整个详情页滚不动。
+ *    用户报的「这个页面很卡、划不动」就是它，不是性能问题，是手势被抢了。
+ * 2. **1200dp 封顶把内容裁掉**——媒体超过约 13 行之后，多出来的格子被切在容器外，
+ *    滚都滚不到，即「看不到媒体里全部照片」。
+ *
+ * 一行一个 `item` 之后：没有内层滚动容器、没有高度要算、没有上限要夹，
+ * 而且天然惰性（只组合可见的那几行）。分行与补位的判据在 [MediaGrid]。
+ */
+internal fun LazyListScope.mediaGrid(
+    archive: List<ConvMediaItem>,
+    host: String,
+    useTls: Boolean,
+    isGroup: Boolean,
+    onOpenArchive: (ConvMediaItem) -> Unit,
+    onLongPressArchive: (ArchiveTarget, Rect) -> Unit,
+) {
+    val rows = MediaGrid.rows(archive)
+    itemsIndexed(rows, key = { _, row -> row.first().convSeq }) { idx, row ->
+        Row(
+            Modifier.fillMaxWidth().padding(top = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            row.forEach { item ->
+                Box(Modifier.weight(1f)) {
+                    ArchiveTile(
+                        item, host, useTls, isGroup = isGroup, onOpen = onOpenArchive,
+                        onLongPress = { r -> onLongPressArchive(item.toArchiveTarget(), r) },
+                    )
+                }
+            }
+            // 末行用等宽空位补齐：不补的话只有两张图的那一行会各占半屏，
+            // 同一个宫格里格子大小不一，看着像排版坏了
+            if (idx == rows.lastIndex) {
+                repeat(MediaGrid.blanksInLastRow(archive.size)) { Spacer(Modifier.weight(1f)) }
             }
         }
     }

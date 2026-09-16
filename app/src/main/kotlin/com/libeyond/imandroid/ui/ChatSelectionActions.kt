@@ -45,10 +45,7 @@ internal data class ForwardJob(
     val record: String? = null,
     val fromSelection: Boolean = false,
     val expiredSkipped: Int = 0,
-) {
-    /** 选择页标题用的条数。合并转发发出去是**一条**卡片。 */
-    val count: Int get() = if (record != null) 1 else msgs.size
-}
+)
 
 /** 待填理由的一次举报。 */
 internal data class ReportDraft(val seqs: List<Long>, val title: String)
@@ -258,7 +255,6 @@ internal fun ForwardPickerLayer(
     val convs by client.repo.observeConversations(client.uid.orEmpty()).collectAsState(initial = emptyList())
     ForwardPickerScreen(
         conversations = convs,
-        count = job.count,
         onCancel = onClose,
         onToast = onToast,
         onConfirm = { targets ->

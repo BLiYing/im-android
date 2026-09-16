@@ -24,6 +24,15 @@ import kotlinx.coroutines.flow.map
 import java.util.UUID
 
 /**
+ * 查看器翻页序列一次从本地取多少条媒体。
+ *
+ * 取的是**最新的 N 条媒体**（不是最新 N 条消息里的媒体）。超过这个数的更早部分靠翻到头时
+ * 向服务端续拉（[MediaTimeline] 的注释写了为什么只能往更旧续）。不设上限的话，一条几万张图的
+ * 会话进查看器就要把几万行构造成对象——与 `observeWindow` 那条教训同源。
+ */
+internal const val MEDIA_TIMELINE_LIMIT = 300
+
+/**
  * 消息收发与落库。
  *
  * ## 发送链路（PROTOCOL §4）
@@ -79,6 +88,18 @@ class MessageRepository(
 
     suspend fun messageCount(owner: String, convId: String): Int = messages.countIn(owner, convId)
 
+    /**
+     * 会话媒体时间线（查看器翻页的本地那一半），**升序返回**（旧→新）。
+     *
+     * Dao 那侧按 `convSeq DESC LIMIT n` 取最新 N 条，这里反转成序列序——
+     * 写成 ASC + LIMIT 会取到最**旧**的 N 条（Dao 注释里记着的那个容易犯的错）。
+     */
+    suspend fun conversationMedia(
+        owner: String,
+        convId: String,
+        limit: Int = MEDIA_TIMELINE_LIMIT,
+    ): List<MessageEntity> = messages.convMedia(owner, convId, limit).asReversed()
+
     fun observePending(owner: String, convId: String): Flow<List<PendingMessageEntity>> =
         pending.observe(owner, convId)
 
@@ -118,6 +139,8 @@ class MessageRepository(
         duration: Int? = null,
         poster: String? = null,
         thumb: String? = null,
+        /** 语音振幅指纹（仅 voice）。转发语音要靠它，见 [PendingMessageEntity.waveform]。 */
+        waveform: String? = null,
         /** @提及片段的 JSON（见 [PendingMessageEntity.mentionSpans]）。 */
         mentionSpans: String? = null,
         /** 被 @ 的 uid 列表 JSON（见 [PendingMessageEntity.mentions]，重名成员反推不出来）。 */
@@ -141,6 +164,7 @@ class MessageRepository(
             duration = duration,
             poster = poster,
             thumb = thumb,
+            waveform = waveform,
             mentionSpans = mentionSpans,
             mentions = mentions,
             state = SendState.Sending.name,

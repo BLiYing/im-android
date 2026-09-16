@@ -124,6 +124,12 @@ data class PendingMessageEntity(
     /** 极小模糊缩略（M4-7）。ack 不回带，故待发行里必须留一份（见 [AckCarryOver]）。 */
     val thumb: String? = null,
     /**
+     * 语音振幅指纹（仅 voice，PROTOCOL §4.1）。ack 同样不回带。
+     * 不存的话**自己转发出去的语音在自己这一侧是等高条纹**、对端却正常——
+     * 又是 [AckCarryOver] 表里那一族「只在发送者一侧坏」的坑，第七次。
+     */
+    val waveform: String? = null,
+    /**
      * @提及片段的 JSON。**待发行也要存一份**：ack 只回带 seq/时间戳，不回带这个字段，
      * 落地成正式行时是从待发行取的（见 [com.libeyond.imandroid.data.AckCarryOver]）。
      * 不存的结果是**自己发的 @ 在自己这一侧不高亮**、对端一切正常——

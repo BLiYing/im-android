@@ -1,10 +1,13 @@
 package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.data.sendMsgOp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -149,10 +152,13 @@ internal fun ChatMessageMenu(
     onForward: (MessageEntity) -> Unit,
     /** 进多选态，并默认勾上这一条。 */
     onMultiSelect: (MessageEntity) -> Unit,
+    /** 「复制」要说一句（iOS 三档文案：已复制 / 已复制图片 / 已复制链接）。 */
+    onToast: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val owner = client.uid.orEmpty()
     val clipboard = LocalClipboardManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val actions = MessageActions.availableFor(target, owner, conv.isGroup, iAmManager)
     MessageContextMenu(
@@ -179,31 +185,98 @@ internal fun ChatMessageMenu(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                        .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius)),
+                        .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
+                        // 预览里点图片 = **关菜单**（不开查看器）：预览层的约定是点哪儿都穿透到
+                        // 背景把菜单关掉，而这一格原先压根没挂点击，点了毫无反应（2026-09-16 用户报）。
+                        // 不要涟漪——预览是"原位浮起的那一格"，它不是个按钮。
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismiss,
+                        ),
                 )
             } else if (idx >= 0) {
-                ChatRowView(rows = rows, i = idx, style = rowStyle)
+                // 预览里的链接**只高亮不可点**：预览层的约定是点哪儿都穿透到背景把菜单关掉，
+                // 链接可点的话会在菜单还开着时再盖一层浏览器（2026-09-16 code-reviewer 抓出）
+                androidx.compose.runtime.CompositionLocalProvider(
+                    com.libeyond.imandroid.ui.components.LocalOpenLink provides null,
+                ) {
+                    // 同理，预览里点图片/宫格格子只关菜单：`onOpenMedia` 不传时吃的是
+                    // ChatRowView 的空实现默认值，点了什么都不发生（看起来像卡住了）。
+                    ChatRowView(
+                        rows = rows, i = idx, style = rowStyle,
+                        onOpenMedia = { onDismiss() },
+                    )
+                }
             }
         },
         items = buildMessageMenu(actions) { a ->
             when (a) {
-                MessageAction.Copy -> clipboard.setText(AnnotatedString(target.content))
+                // 复制什么由矩阵定（`copyKindOf`，对齐 iOS `copyMessageToPasteboard:`）：
+                // **caption 压过一切**——带图说的图片复制的是那段文字，不是图。
+                MessageAction.Copy -> when (com.libeyond.imandroid.data.copyKindOf(target)) {
+                    com.libeyond.imandroid.data.CopyKind.Caption -> {
+                        clipboard.setText(AnnotatedString(target.caption.orEmpty()))
+                        onToast("已复制")
+                    }
+                    com.libeyond.imandroid.data.CopyKind.Text -> {
+                        clipboard.setText(AnnotatedString(target.content))
+                        onToast("已复制")
+                    }
+                    com.libeyond.imandroid.data.CopyKind.Link -> {
+                        clipboard.setText(
+                            AnnotatedString(
+                                MediaUrl.absolute(
+                                    target.content, client.host, com.libeyond.imandroid.BuildConfig.USE_TLS,
+                                ),
+                            ),
+                        )
+                        onToast("已复制链接")
+                    }
+                    // 图片走与查看器「更多 → 复制」同一条（本地原件优先），别另搓一份
+                    com.libeyond.imandroid.data.CopyKind.Image -> scope.launch {
+                        val local = client.downloads.localFile(target.content)
+                        val url = local?.let { android.net.Uri.fromFile(it).toString() }
+                            ?: MediaUrl.absolute(
+                                target.content, client.host, com.libeyond.imandroid.BuildConfig.USE_TLS,
+                            )
+                        onToast(CopyImage.copy(context, url))
+                    }
+                    null -> Unit
+                }
                 MessageAction.Reply -> onReply(target)
                 MessageAction.Forward -> onForward(target)
                 // 进多选态：**默认把触发的那条勾上**（同 iOS enterSelectionWithMessage:）
                 MessageAction.MultiSelect -> onMultiSelect(target)
                 MessageAction.Recall ->
                     client.messages.sendMsgOp(conv.convId, MsgOp.RECALL, target.convSeq)
-                MessageAction.DeleteForEveryone ->
-                    client.messages.sendMsgOp(conv.convId, MsgOp.DELETE, target.convSeq)
-                MessageAction.HideForMe -> scope.launch {
-                    // 走 REST，不是 msg_op——「仅为我删除」是每用户私有偏好，
-                    // 不进会话事件流、不占 conv_seq、不广播给其他成员（§6.7.1）
-                    runCatching { client.conversationsApi.hideMessage(conv.convId, target.convSeq) }
-                    client.repo.applyMsgHidden(owner, conv.convId, target.convSeq)
-                }
+                MessageAction.DeleteForEveryone, MessageAction.HideForMe ->
+                    runMessageDelete(client, conv.convId, a, target.convSeq, scope)
             }
         },
         onDismiss = onDismiss,
     )
+}
+
+/**
+ * 两档删除的**执行**。气泡长按菜单与查看器「更多」（`ChatViewerLayer`）共用——各写一遍的话，
+ * 哪天「仅为我删除」换了接口，查看器那一侧会悄悄还走老路。其余动作传进来不做事。
+ */
+internal fun runMessageDelete(
+    client: IMClient,
+    convId: String,
+    action: MessageAction,
+    convSeq: Long,
+    scope: kotlinx.coroutines.CoroutineScope,
+) {
+    when (action) {
+        MessageAction.DeleteForEveryone -> client.messages.sendMsgOp(convId, MsgOp.DELETE, convSeq)
+        MessageAction.HideForMe -> scope.launch {
+            // 走 REST，不是 msg_op——「仅为我删除」是每用户私有偏好，
+            // 不进会话事件流、不占 conv_seq、不广播给其他成员（§6.7.1）
+            runCatching { client.conversationsApi.hideMessage(convId, convSeq) }
+            client.repo.applyMsgHidden(client.uid.orEmpty(), convId, convSeq)
+        }
+        else -> Unit
+    }
 }

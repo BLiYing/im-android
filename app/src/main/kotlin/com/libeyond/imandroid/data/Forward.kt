@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 
 /**
@@ -59,6 +60,78 @@ object Forward {
         if (selected.size >= max) return null
         return selected + convId
     }
+
+    /**
+     * 转发选择页里列哪些会话（iOS `IMForwardPickerViewController` 的 `loadConversations` + `applyFilter`）。
+     *
+     * ① **剔除系统通知单聊**：那是只读会话，服务端直接拒发往 system 的消息
+     *    （IMServer `docs/design/SYSTEM_NOTICE_SESSION_DESIGN.md` §2.2），列出来只会点了报错。
+     *    群聊不看 peer——群会话的 peer 无意义，所以先判 isGroup。
+     * ② 按搜索词过滤：匹配显示名与单聊对端 uid（uid 只参与匹配、不展示，同 iOS）。
+     */
+    fun pickable(convs: List<ConversationEntity>, query: String): List<ConversationEntity> =
+        convs.filter { c ->
+            (c.isGroup || !DetailActions.isSystemPeer(c.peerUid)) &&
+                ListSearch.matches(query, listOf(titleOf(c), c.peerUid))
+        }
+
+    /** 行上显示的名字。末级**不落内部 ID**（10 位随机数字对人没有意义，见 [DisplayName]）。 */
+    fun titleOf(c: ConversationEntity): String =
+        c.title.ifBlank { if (c.isGroup) "未命名群聊" else DisplayName.UNNAMED }
+
+    /**
+     * 按**勾选顺序**取回目标会话（iOS `_selected` 是有序数组，发送顺序即勾选顺序）。
+     * 搜索只影响看得见哪些行、不影响已选——所以从全量里找，不从当前可见的行里找。
+     */
+    fun targetsInOrder(selectedIds: List<String>, convs: List<ConversationEntity>): List<ConversationEntity> {
+        val byId = convs.associateBy { it.convId }
+        return selectedIds.mapNotNull { byId[it] }
+    }
+
+    /**
+     * 转发时必须跟着走的媒体元数据（对端 iOS `IMMediaAttributes`、im-web `useForward.ts` 的
+     * `poster/thumb/mediaW/mediaH/duration`）。
+     *
+     * ### 为什么这也要是纯函数
+     * **漏带是静默的**：编译过、测试过、消息也确实发出去了，只有收件人那一侧看得出来——
+     * 视频没有 `poster` 就没有封面（本端 `VideoContent` 只剩一块磨砂），没有 `media_w/media_h`
+     * 就按「像素未知」走 [MediaDisplaySize] 的方块兜底，于是一条 16:9 的视频变成 180×180 的方块。
+     * **而且事后补不回来**：这几个字段是随消息落库的，收端不会再去问一遍。
+     *
+     * im-web 已经为此改过一轮（`useForward.ts` 里写着同一句理由），iOS 的 `forwardEchoContent:`
+     * 也一直带着 attributes——**本端是这条对称链上唯一没跟的一端**（IMServer `docs/SYMMETRY.md`）。
+     *
+     * `waveform` **不在这里**：`SendMsgData` 没有这个字段（协议只在收帧侧有），
+     * 所以本端转发语音会丢波形，收端退化成等高条纹。iOS 带得上，这是一处真实的端差异。
+     */
+    data class Attributes(
+        val mediaW: Int? = null,
+        val mediaH: Int? = null,
+        val duration: Int? = null,
+        val poster: String? = null,
+        val thumb: String? = null,
+        /**
+         * 语音振幅指纹（仅 voice）。**不带就是转发出去的语音在收端只有等高条纹**——
+         * 服务端一直收这个字段（`protocol.SanitizeVoiceWaveform`，`gateway/voice_flow_test.go` 钉着），
+         * iOS 也一直带，2026-09-16 本端才补上。
+         */
+        val waveform: String? = null,
+    )
+
+    /**
+     * 这条消息转发出去时要带上的元数据。
+     *
+     * 空串一律归一成 `null`：协议按 `omitempty` 读，空串与缺省等价但会白占字节，
+     * 而端上 `poster.isNullOrBlank()` 与 `poster == null` 两种判法并存时容易写岔。
+     */
+    fun attributesOf(msg: MessageEntity): Attributes = Attributes(
+        mediaW = msg.mediaW?.takeIf { it > 0 },
+        mediaH = msg.mediaH?.takeIf { it > 0 },
+        duration = msg.duration?.takeIf { it > 0 },
+        poster = msg.poster?.takeIf { it.isNotBlank() },
+        thumb = msg.thumb?.takeIf { it.isNotBlank() },
+        waveform = msg.waveform?.takeIf { it.isNotBlank() },
+    )
 
     /**
      * 能不能转发这一条。撤回/删除/系统消息不可转发（与 iOS/Web 同）；

@@ -32,9 +32,9 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMTextPrompt
 import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.LocalOpenLink
 import com.libeyond.imandroid.ui.screens.ChatDetailScreen
 import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
-import com.libeyond.imandroid.ui.screens.MediaViewerScreen
 import com.libeyond.imandroid.ui.screens.linkUrlOf
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
@@ -56,10 +56,16 @@ fun ChatDetailHost(
     onSearchInChat: () -> Unit = {},
     /** 归档长按「定位到聊天」：同上，关掉本页、把 conv_seq 交给聊天页。 */
     onLocateInChat: (Long) -> Unit = {},
+    /** 进来先落在哪个页签。查看器的「媒体」钮要直达媒体页签（单聊默认就是它）。 */
+    initialTab: DetailTab = DetailTab.Media,
+    /** 只当会话媒体库用（查看器右下角「媒体」钮进的那一页）。见 `ChatDetailScreen.galleryOnly`。 */
+    galleryOnly: Boolean = false,
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+    // 「链接」页签点一条在 App 内打开（宿主在 WebLinkHost，iOS `openLink:`）
+    val openLink = LocalOpenLink.current
     val owner = client.uid.orEmpty()
 
     var profile by remember(conv.convId) { mutableStateOf(false) }
@@ -87,8 +93,10 @@ fun ChatDetailHost(
     // 归档长按菜单（媒体/文件/语音/链接四格共用；接线在 ArchiveActionsHost）
     var archiveMenuFor by remember(conv.convId) { mutableStateOf<ArchiveTarget?>(null) }
     var archiveMenuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
+    /** 归档要转发的那一项（长按菜单与查看器「更多」共用这一份状态，见 ArchiveActionsHost 的注释）。 */
+    var archiveForward by remember(conv.convId) { mutableStateOf<ArchiveTarget?>(null) }
 
-    var tab by remember(conv.convId) { mutableStateOf(DetailTab.Media) }
+    var tab by remember(conv.convId) { mutableStateOf(initialTab) }
     // 归档取数与「链接」本地扫都收在这两个 helper 里（群资料那侧共用同一份）
     val archive = rememberConvArchive(client, conv.convId, tab)
     val linkMessages = rememberLinkMessages(client, conv.convId)
@@ -120,17 +128,15 @@ fun ChatDetailHost(
 
     when (page) {
         ChatDetailPage.Media -> viewing?.let { m ->
-            MediaViewerScreen(
-                contentType = m.contentType,
-                content = m.content,
-                poster = m.poster,
-                localFile = client.downloads.localFile(m.content, m.contentType == ContentType.VIDEO),
-                host = client.host,
-                useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+            // 翻页 / 「更多」/ 转发都在 ArchiveViewer.kt 里，与群资料那侧共用
+            ArchiveMediaViewer(
+                client = client, convId = conv.convId, isGroup = false, iAmManager = false,
+                archive = archive, current = m, scope = scope,
                 onSave = saveMedia,
-                // 归档里**没有转发**：转发选择页与发送上下文都在聊天页那一侧。
-                // 按钮不画，不做成点了没反应的。
-                onForward = null,
+                onForwardPicker = { archiveForward = it },
+                onLocateInChat = { seq -> viewing = null; onLocateInChat(seq) },
+                onChanged = { archive.reload() },
+                onToast = { toast = it },
                 onClose = { viewing = null },
             )
         }
@@ -168,7 +174,7 @@ fun ChatDetailHost(
                 openArchiveItem(client, context, item, onToast = { toast = it }) { viewing = it }
             },
             onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
-            onOpenLink = { url -> openInBrowser(context, url) { toast = it } },
+            onOpenLink = { url -> openLink?.invoke(url) },
             onTogglePinned = { v -> pinned = v; pushSettings(v, muted) },
             onToggleMuted = { v -> muted = v; pushSettings(pinned, v) },
             // 备注名改在用户资料页里（那里已有输入框与 setRemark 接线），不在这里重复一套
@@ -219,6 +225,7 @@ fun ChatDetailHost(
             },
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+            galleryOnly = galleryOnly,
             onBack = onBack,
         )
     }
@@ -298,7 +305,6 @@ fun ChatDetailHost(
         val convs by client.repo.observeConversations(owner).collectAsState(initial = emptyList())
         ForwardPickerScreen(
             conversations = convs.filter { it.convId != conv.convId },
-            count = 1,
             onCancel = { sharing = false },
             onToast = { toast = it },
             onConfirm = { targets ->
@@ -340,8 +346,18 @@ fun ChatDetailHost(
         onLocateInChat = { seq -> archiveMenuFor = null; onLocateInChat(seq) },
         onChanged = { archive.reload() },
         onToast = { toast = it },
+        onForwardPicker = { archiveForward = it },
         onDismiss = { archiveMenuFor = null },
     )
+
+    // 归档转发选择页（长按菜单与查看器「更多」共用）
+    archiveForward?.let { t ->
+        ArchiveForwardPicker(
+            client = client, convId = conv.convId, target = t, scope = scope,
+            onDismiss = { archiveForward = null },
+            onToast = { toast = it },
+        )
+    }
 
     // toast 放最后：它是一层 fillMaxSize 的浮层，画在页面之前会被页面盖住
     toast?.let { t -> IMToast(t) { toast = null } }

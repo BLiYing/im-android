@@ -87,6 +87,17 @@ internal fun ChatDetailScreen(
     onMore: (DetailMoreAction) -> Unit,
     host: String,
     useTls: Boolean,
+    /**
+     * 只当**会话媒体库**用：去掉头像头部/信息卡/设置卡/页签条，整页就是媒体宫格，
+     * 标题换成会话名。查看器右下角的「媒体」钮进的是这一页。
+     *
+     * **为什么不是直接跳详情页**：iOS 那边 `galleryTapped` 打开的是独立的
+     * `IMConversationMediaViewController`（标题＝会话名的全屏媒体库），而不是
+     * 「聊天信息」页。本端此前跳的是详情页并落在媒体页签上——用户点「媒体」却进了设置页
+     * （2026-09-16 用户报）。**复用本页而不是另起一页**：归档取数、长按菜单、查看器、
+     * 转发选择页那整套接线都在宿主里，另写一页必然分叉（`ConvMediaScreen` 已经因此被并掉过一次）。
+     */
+    galleryOnly: Boolean = false,
     onBack: () -> Unit,
 ) {
     val c = IMTheme.colors
@@ -94,12 +105,12 @@ internal fun ChatDetailScreen(
     val tabs = DetailTabs.visible(isGroup = false)
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        IMTopBar(title = "聊天信息", onLeft = onBack)
+        IMTopBar(title = if (galleryOnly) title else "聊天信息", onLeft = onBack)
 
         // 页签内容是可滚动的长列表，头部/卡片作为它的头几项 —— 整页一条滚动轴，
         // 与 iOS 的 tableHeaderView + sections 同构（不是"上面固定、下面单独滚"）。
         LazyColumn(Modifier.fillMaxSize()) {
-            item {
+            if (!galleryOnly) item {
                 // —— 大头像头部（对齐 iOS 的 300pt tableHeaderView）——
                 Column(
                     Modifier.fillMaxWidth().background(c.pageBackground)

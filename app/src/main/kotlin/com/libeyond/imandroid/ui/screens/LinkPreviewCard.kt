@@ -28,6 +28,7 @@ import coil.compose.AsyncImage
 import com.libeyond.imandroid.data.LinkDetect
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.sdk.api.LinkPreview
+import com.libeyond.imandroid.ui.components.passThroughTap
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -45,6 +46,8 @@ internal fun LinkPreviewCard(
     load: suspend (String) -> LinkPreview?,
     host: String,
     useTls: Boolean,
+    /** 点卡片打开链接（iOS `IMLinkPreviewView.onTap` → `openLink:`）。null = 不可点。此前卡片没有任何点击。 */
+    onTap: ((String) -> Unit)? = null,
 ) {
     val c = IMTheme.colors
     var preview by remember(url) { mutableStateOf<LinkPreview?>(null) }
@@ -62,7 +65,9 @@ internal fun LinkPreviewCard(
             .padding(top = 6.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(c.subtleFill),
+            .background(c.subtleFill)
+            // 只吃轻点、长按让给外层气泡：用 clickable 的话「长按带链接的文本」在卡片上弹不出菜单
+            .passThroughTap(enabled = onTap != null) { onTap?.invoke(url) },
     ) {
         if (p.image.isNotBlank()) {
             // 图**贴卡片上、左、右三边**，上面两角由卡片的圆角裁（iOS `IMLinkPreviewView` 的 `_thumb`

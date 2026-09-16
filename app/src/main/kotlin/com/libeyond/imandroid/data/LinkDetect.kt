@@ -38,4 +38,41 @@ object LinkDetect {
         }.getOrDefault("").ifBlank {
             url.substringAfter("://").substringBefore('/').removePrefix("www.")
         }
+
+    /**
+     * 文本里**全部** http(s) 链接的区间（气泡正文高亮 + 可点，iOS `IMBubbleCell applyURLHighlight:`）。
+     *
+     * 正则**逐字照抄** iOS `IMURLRegexShared`（IMProgram `Common/IMMediaUtil.m`）：中部只允许 URL 合法字符
+     * （汉字、中文标点、空白天然成边界），末字符再收窄一档，把句末的 `.,;:?)` 让出去。
+     * 与上面 [firstUrl] 口径不同是刻意的：那条决定**要不要去服务端抓预览**（多认 `www.`），
+     * 这条决定**正文里哪几个字画成链接**——iOS 两处也是分开的。
+     */
+    private val RANGE_RE = Regex("""https?://[-A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%]+[-A-Za-z0-9_~/#\[\]@!$&'*+=%]""")
+
+    fun urlRanges(text: String): List<IntRange> = RANGE_RE.findAll(text).map { it.range }.toList()
+
+    /** 正文里的一小段 `[start, end)`；落在链接上时 [link] 是**整条**链接的区间（被截断的那段点了也打开整条）。 */
+    data class Piece(val start: Int, val end: Int, val link: IntRange?)
+
+    /**
+     * 把 `[start, end)` 这一段按链接切开。
+     *
+     * 正文先按 @提及切过段（提及优先，见 `chatBodyText`），链接只在非提及段里再切一次，
+     * 所以要处理「链接跨过段边界」：截在段内，但记着整条地址。
+     */
+    fun splitByLinks(start: Int, end: Int, links: List<IntRange>): List<Piece> {
+        if (start >= end) return emptyList()
+        val out = mutableListOf<Piece>()
+        var at = start
+        for (r in links.sortedBy { it.first }) {
+            val from = maxOf(r.first, at)
+            val to = minOf(r.last + 1, end)
+            if (from >= to) continue
+            if (from > at) out += Piece(at, from, null)
+            out += Piece(from, to, r)
+            at = to
+        }
+        if (at < end) out += Piece(at, end, null)
+        return out
+    }
 }

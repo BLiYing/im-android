@@ -159,15 +159,18 @@ fun AppRoot(client: IMClient) {
                     onWifi = rememberOnWifi(),
                 ),
             ) {
-                MainScreen(
-                    client = client,
-                    onLogout = {
-                        scope.launch {
-                            client.logout()
-                            phase = Phase.Login
-                        }
-                    },
-                )
+                // 应用内浏览器盖在整个主界面之上：聊天 / 详情 / 群资料 / 聊天记录里点开的链接都走它
+                WebLinkHost {
+                    MainScreen(
+                        client = client,
+                        onLogout = {
+                            scope.launch {
+                                client.logout()
+                                phase = Phase.Login
+                            }
+                        },
+                    )
+                }
             }
         }
     }

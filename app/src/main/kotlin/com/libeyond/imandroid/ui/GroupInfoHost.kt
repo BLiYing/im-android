@@ -19,8 +19,6 @@ import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailAction
 import com.libeyond.imandroid.data.DetailTab
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
-import com.libeyond.imandroid.sdk.protocol.ContentType
-import com.libeyond.imandroid.ui.screens.MediaViewerScreen
 import com.libeyond.imandroid.data.DetailActions
 import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.data.GroupPermissions
@@ -70,11 +68,17 @@ fun GroupInfoHost(
     onSearchInChat: () -> Unit = {},
     /** 归档长按「定位到聊天」：同上，关掉本页、把 conv_seq 交给聊天页。 */
     onLocateInChat: (Long) -> Unit = {},
+    /** 进来先落在哪个页签。聊天页查看器的「媒体」钮要直达媒体页签（群资料默认是「成员」）。 */
+    initialTab: DetailTab = DetailTab.Members,
+    /** 只当会话媒体库用（查看器右下角「媒体」钮进的那一页）。见 `ChatDetailScreen.galleryOnly`。 */
+    galleryOnly: Boolean = false,
     onBack: () -> Unit,
     onLeft: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    // 「链接」页签点一条在 App 内打开（宿主 WebLinkHost，iOS `openLink:`）
+    val openLink = com.libeyond.imandroid.ui.components.LocalOpenLink.current
     var info by remember(convId) { mutableStateOf<GroupInfo?>(null) }
     var members by remember(convId) { mutableStateOf<List<GroupMember>>(emptyList()) }
     var cursor by remember(convId) { mutableStateOf("") }
@@ -91,12 +95,14 @@ fun GroupInfoHost(
     var managing by remember(convId) { mutableStateOf(false) }
     // 会话媒体归档（详情页的「聊天媒体」，与单聊那侧同一个组件）
     // 归档已并进内联页签（2026-09-09），只剩「点开一张图/视频」还是独立的一层
-    var tab by remember(convId) { mutableStateOf(DetailTab.Members) }
+    var tab by remember(convId) { mutableStateOf(initialTab) }
     val archive = rememberConvArchive(client, convId, tab)
     val linkMessages = rememberLinkMessages(client, convId)
     var viewing by remember(convId) { mutableStateOf<ConvMediaItem?>(null) }
     var archiveMenuFor by remember(convId) { mutableStateOf<ArchiveTarget?>(null) }
     var archiveMenuAnchor by remember(convId) { mutableStateOf(Rect.Zero) }
+    /** 归档要转发的那一项（长按菜单与查看器「更多」共用这一份状态，见 ArchiveActionsHost 的注释）。 */
+    var archiveForward by remember(convId) { mutableStateOf<ArchiveTarget?>(null) }
     // 治理三页 + 一个通用选人页
     var bans by remember(convId) { mutableStateOf<List<GroupBan>?>(null) }
     var bansLoading by remember(convId) { mutableStateOf(false) }
@@ -339,16 +345,16 @@ fun GroupInfoHost(
         )
     } else if (viewing != null) {
         val m = viewing!!
-        MediaViewerScreen(
-            contentType = m.contentType,
-            content = m.content,
-            poster = m.poster,
-            localFile = client.downloads.localFile(m.content, m.contentType == ContentType.VIDEO),
-            host = client.host,
-            useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+        // 翻页 / 「更多」/ 转发都在 ArchiveViewer.kt 里，与单聊详情共用
+        ArchiveMediaViewer(
+            client = client, convId = convId, isGroup = true,
+            iAmManager = info?.iAmManager == true,
+            archive = archive, current = m, scope = scope,
             onSave = saveMedia,
-            // 归档里**不放转发按钮**：转发在长按菜单里（与单聊那侧一致）
-            onForward = null,
+            onForwardPicker = { archiveForward = it },
+            onLocateInChat = { seq -> viewing = null; onLocateInChat(seq) },
+            onChanged = { archive.reload() },
+            onToast = { toast = it },
             onClose = { viewing = null },
         )
     } else if (managing) {
@@ -460,9 +466,10 @@ fun GroupInfoHost(
                 openArchiveItem(client, context, item, onToast = { toast = it }) { viewing = it }
             },
             onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
-            onOpenLink = { url -> openInBrowser(context, url) { toast = it } },
+            onOpenLink = { url -> openLink?.invoke(url) },
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+            galleryOnly = galleryOnly,
             onBack = onBack,
         )
     }
@@ -550,8 +557,18 @@ fun GroupInfoHost(
         onLocateInChat = { seq -> archiveMenuFor = null; onLocateInChat(seq) },
         onChanged = { archive.reload() },
         onToast = { toast = it },
+        onForwardPicker = { archiveForward = it },
         onDismiss = { archiveMenuFor = null },
     )
+
+    // 归档转发选择页（长按菜单与查看器「更多」共用）
+    archiveForward?.let { t ->
+        ArchiveForwardPicker(
+            client = client, convId = convId, target = t, scope = scope,
+            onDismiss = { archiveForward = null },
+            onToast = { toast = it },
+        )
+    }
 
     toast?.let { t -> IMToast(t) { toast = null } }
 }

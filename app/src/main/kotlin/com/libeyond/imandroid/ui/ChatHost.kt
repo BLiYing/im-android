@@ -16,9 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.libeyond.imandroid.data.AttachItems
 import com.libeyond.imandroid.data.SenderNames
 import com.libeyond.imandroid.sdk.api.FriendEntry
-import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.screens.FriendPickerScreen
-import com.libeyond.imandroid.ui.screens.MediaViewerScreen
 import com.libeyond.mediapicker.MediaPickerHost
 import com.libeyond.mediapicker.PickedMedia
 import androidx.compose.foundation.layout.Box
@@ -67,6 +65,8 @@ fun ChatHost(
     onArmConsumed: () -> Unit = {},
     /** 被会话详情 / 群资料盖住了（本页仍在组合里，返回时列表原位不动，见 MainScreen）。 */
     covered: Boolean = false,
+    /** 查看器「媒体」钮：打开本会话详情的媒体页签（iOS 查看器的媒体库入口）。 */
+    onOpenMediaGallery: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -75,6 +75,8 @@ fun ChatHost(
     val owner = client.uid.orEmpty()
     // 值 + 光标：@提及要靠光标算「正在输入的 @查询词」，裸 String 算不出来
     var input by remember(conv.convId) { mutableStateOf(TextFieldValue("")) }
+    /** 粘进输入框的待发图片（机制与端差异见 `data/PasteImage.kt` 与 [PasteImageBar]）。 */
+    val paste = rememberPasteImages(conv.convId)
 
     /** 多选态（M4-3）。判据在 `data/ChatSelection.kt`，状态在 [ChatSelectionController]。 */
     val sel = rememberChatSelection(conv.convId)
@@ -327,11 +329,17 @@ fun ChatHost(
         peerReadSeq = if (conv.isGroup) 0 else conv.peerReadSeq,
         input = input,
         onInputChange = {
-            input = it
-            mention.onInputChanged(it, conv.isGroup)
+            // 系统把 URI 型剪贴项 coerce 成文本插进来：把图摘走，剩下的字回填
+            // （没认出图片时 consumeFrom 原样返回，连光标都不动）
+            val v = paste.consumeFrom(context, it) { msg -> toast = msg }
+            input = v
+            mention.onInputChanged(v, conv.isGroup)
         },
-        composerAbove = if (!mention.panelOpen) null else {
-            {
+        // 粘贴条只负责"挂着、可逐张撤掉"，发送归输入栏那颗发送键（对齐 iOS）
+        extraSendable = !paste.isEmpty,
+        composerAbove = {
+            if (!paste.isEmpty) PasteImageBar(paste)
+            if (mention.panelOpen) {
                 MentionPanel(
                     members = mention.members,
                     canMentionAll = mention.showsMentionAllRow,
@@ -347,6 +355,13 @@ fun ChatHost(
             }
         },
         onSend = {
+            // 粘贴条上挂着的图**随这一次发送一起走**（iOS pasteBar 同）。
+            // 先发图再发文字：两者是两条消息，顺序按用户看到的先后来
+            if (!paste.isEmpty) {
+                val pastedImages = paste.items
+                paste.clear()
+                scope.launch { mediaSend.send(pastedImages, sendOriginal = false) { toast = it } }
+            }
             val text = input.text.trim()
             if (text.isNotEmpty()) {
                 val quoted = replyTo
@@ -482,21 +497,16 @@ fun ChatHost(
     )
 
     // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——
-    viewing?.let { m ->
-        MediaViewerScreen(
-            contentType = m.contentType,
-            content = m.content,
-            poster = m.poster.orEmpty(),
-            // 门控已经把它下到本地了，查看器就该放本地那份（断网也看得了）
-            localFile = client.downloads.localFile(m.content, m.contentType == ContentType.VIDEO),
-            host = client.host,
-            useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
-            onSave = saveMedia,
-            // 先关查看器再开转发选择页：两层叠着关掉上面一层会露出黑底大图
-            onForward = { viewing = null; selActions.forwardOne(m) },
-            onClose = { viewing = null },
-        )
-    }
+    // 「更多」「媒体」与删除选择单都在 ChatViewerLayer 里；外部动作一律先关查看器再执行
+    ChatViewerLayer(
+        client = client, conv = conv, viewing = viewing, iAmManager = iAmManager,
+        onSave = saveMedia,
+        onLocate = { seq -> locator.locate(seq) },
+        onForward = { m -> selActions.forwardOne(m) },
+        onOpenGallery = onOpenMediaGallery,
+        onClose = { viewing = null },
+        onToast = { toast = it },
+    )
 
     // —— 点系统消息里的名字 → 用户资料页 ——
     openUser?.let { uid ->
@@ -559,6 +569,7 @@ fun ChatHost(
     // —— 消息长按菜单 ——（拼装与原位重绘都在 MessageMenuItems.kt）
     menuFor?.let { target ->
         ChatMessageMenu(
+            onToast = { toast = it },
             target = target,
             anchor = menuAnchor,
             rows = rows,

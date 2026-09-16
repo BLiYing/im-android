@@ -93,8 +93,13 @@ internal object MediaSaver {
             }
         }
 
-    /** 本地 `content://` 直接读；否则走 HTTP。 */
-    private fun openSource(context: Context, url: String): InputStream {
+    /**
+     * 本地 `content://` 直接读；否则走 HTTP。
+     *
+     * **`internal` 是因为 [CopyImage] 也要它**：「复制图片」与「存相册」拿字节的方式必须是同一条——
+     * 各搓一份的话，哪天服务端给媒体加上鉴权（见下方注释），只会有一条路被补上 Authorization。
+     */
+    internal fun openSource(context: Context, url: String): InputStream {
         if (url.startsWith("content://") || url.startsWith("file://")) {
             return context.contentResolver.openInputStream(Uri.parse(url))
                 ?: throw IllegalStateException("openInputStream returned null")

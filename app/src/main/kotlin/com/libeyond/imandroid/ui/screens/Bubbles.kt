@@ -119,6 +119,9 @@ internal fun Bubble(
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val appearance = IMTheme.appearance
+    // 点链接走应用内浏览器（宿主 WebLinkHost，iOS `openLink:`）。长按菜单的原位预览里由 ChatMessageMenu 置空。
+    // **别改成按 onLongPress 判**：ChatRowView 传进来的长按回调恒非空，那条判据永远不生效
+    val openLink = com.libeyond.imandroid.ui.components.LocalOpenLink.current
     // 记住整行矩形：长按菜单按它定位（iOS 是 UITargetedPreview 把位图钉回原位）。
     var bubbleRect by remember { mutableStateOf(Rect.Zero) }
     // 气泡最大宽是**内容区的比例**不是固定 dp（UI_SPEC §3）：固定值在窄机上过宽、宽机上过窄。
@@ -268,7 +271,7 @@ internal fun Bubble(
                         msg?.contentType == ContentType.CONTACT -> ContactCardContent(text, footerTrailing = timeMeta)
                         msg?.contentType == ContentType.CHAT_RECORD -> ChatRecordCardContent(text, footerTrailing = timeMeta)
                         else -> Text(
-                            // @提及高亮与搜索命中底色是同一次遍历铺的两层（见 chatBodyText）
+                            // @提及高亮、链接、搜索命中底色是同一次遍历铺的几层（见 chatBodyText）
                             text = chatBodyText(
                                 text = text,
                                 spans = remember(mentionSpansJson, msg?.mentionSpans) {
@@ -279,6 +282,10 @@ internal fun Bubble(
                                 highlightBackground = c.accentSoft,
                                 mentionColor = c.link,
                                 onTapMention = onTapMention,
+                                // 链接蓝字下划线、点开走应用内浏览器（iOS `applyURLHighlight:` + `openLink:`）
+                                linkify = true,
+                                linkColor = c.link,
+                                onTapLink = openLink,
                             ),
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
@@ -322,7 +329,7 @@ internal fun Bubble(
                         msg.contentType == ContentType.TEXT
                     ) {
                         val url = remember(text) { LinkDetect.firstUrl(text) }
-                        if (url != null) LinkPreviewCard(url, loadLinkPreview, host, useTls)
+                        if (url != null) LinkPreviewCard(url, loadLinkPreview, host, useTls, onTap = openLink)
                     }
                     // 图/视频的时间**恒在图上的胶囊里**，有图说也不在图说下面再画一行（iOS 同）
                     if (flushMedia || isCard) return@Column

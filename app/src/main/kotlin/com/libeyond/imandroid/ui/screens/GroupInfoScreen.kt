@@ -100,15 +100,17 @@ fun GroupInfoScreen(
     moreItems: List<DetailMoreAction>,
     onAction: (DetailAction) -> Unit,
     onMore: (DetailMoreAction) -> Unit,
+    /** 只当**会话媒体库**用：去掉头部与页签条，整页就是媒体宫格。理由见 `ChatDetailScreen` 同名参数。 */
+    galleryOnly: Boolean = false,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        IMTopBar(title = "群聊信息", onLeft = onBack)
+        IMTopBar(title = if (galleryOnly) info.name else "群聊信息", onLeft = onBack)
 
         LazyColumn(Modifier.fillMaxSize()) {
-            item {
+            if (!galleryOnly) item {
                 // —— 群头部 ——
                 Column(
                     modifier = Modifier.fillMaxWidth().background(c.pageBackground)

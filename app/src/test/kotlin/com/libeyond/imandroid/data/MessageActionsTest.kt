@@ -42,11 +42,22 @@ class MessageActionsTest {
         assertTrue(actions(msg(seq = 0)).isEmpty())
     }
 
-    /** 复制**只给文本**。给图片一个"复制"却什么都没进剪贴板，比没有更糟。 */
+    /**
+     * 复制**按矩阵给**（2026-09-16 起，对齐 iOS `copyMessageToPasteboard:`）。
+     *
+     * 这条原先钉的是「复制只给文本」，理由写的是"给图片一个复制却什么都没进剪贴板，比没有更糟"
+     * ——那在**没有复制图片能力**的时候是对的；2026-09-16 补了图片复制之后，这个前提就不成立了，
+     * 于是放开（用户报的对齐项）。**复制什么**（图说压过一切 / 图 / 链接 / 文本）归
+     * [copyKindOf]，逐档在 `MessageCopyKindTest` 里钉着，本条只管"给不给这一项"。
+     */
     @Test
-    fun `复制只给文本`() {
+    fun `复制按矩阵给`() {
         assertTrue(MessageAction.Copy in actions(msg()))
-        assertFalse(MessageAction.Copy in actions(msg(type = ContentType.IMAGE, content = "/uploads/x.jpg")))
+        assertTrue(MessageAction.Copy in actions(msg(type = ContentType.IMAGE, content = "/uploads/x.jpg")))
+        assertTrue(MessageAction.Copy in actions(msg(type = ContentType.VIDEO, content = "/uploads/x.mp4")))
+        assertTrue(MessageAction.Copy in actions(msg(type = ContentType.FILE, content = "/uploads/x.pdf")))
+        // 语音刻意不给：iOS 那支走兜底分支复制 `message.content`，也就是一段相对路径，对用户没意义
+        assertFalse(MessageAction.Copy in actions(msg(type = ContentType.VOICE, content = "/uploads/x.m4a")))
         assertFalse(MessageAction.Copy in actions(msg(content = "")))
     }
 

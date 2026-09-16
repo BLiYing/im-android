@@ -194,12 +194,8 @@ private fun VideoContent(
             MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText, expiredCaption = "视频已失效")
             return@Box
         }
-        Box(
-            modifier = Modifier.size(44.dp).clip(CircleShape).background(c.overlay),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(Lucide.Play, "播放", Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.onMedia))
-        }
+        // 与相册宫格的视频格同一枚角标（VideoPlayBadge），两处才不会各画各的
+        com.libeyond.imandroid.ui.components.VideoPlayBadge()
         // 时长角标：服务端给了才显，**不为拿它去下载视频**。
         // 位置是**左上角**——协议 §4.1 明写「据 duration 在视频封面左上角显 mm:ss」，
         // 三端同一份口径。画在右下角会和时间胶囊叠在一起（2026-09-07 真机实测撞见）。

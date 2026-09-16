@@ -32,6 +32,9 @@ internal object AckCarryOver {
         "forwardFrom", "groupId", "mediaW", "mediaH", "duration", "poster", "thumb",
         // @提及片段：ack 不回带，不从待发行取的话自己发的 @ 在自己这一侧不高亮
         "mentionSpans",
+        // 语音振幅指纹：ack 同样不回带。不补的话**自己转发出去的语音在自己这一侧是等高条纹**、
+        // 对端正常——正是本表列的那一族「只在发送者一侧坏」的第七次
+        "waveform",
     )
 
     /** 把待发行里的字段补进 ack 生成的行。[cached] 为 null（罕见）时原样返回。 */
@@ -52,6 +55,7 @@ internal object AckCarryOver {
             poster = cached.poster,
             thumb = cached.thumb,
             mentionSpans = cached.mentionSpans,
+            waveform = cached.waveform,
         )
     }
 }

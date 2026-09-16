@@ -95,6 +95,17 @@ data class SendMsgData(
      * 所以宁可不带也别带超长的（截断的 base64 解出来是一团噪声，比没有占位更糟）。
      */
     val thumb: String? = null,
+    /**
+     * 语音振幅指纹（§4.1，**仅 voice**；base64，原始字节 ≤120，每字节 0~100）。
+     * 收端不下载音频就能画气泡波形；缺它退化成等高条纹。
+     *
+     * 服务端只做归一化（`protocol.SanitizeVoiceWaveform`：可 base64 解码且原始 ≤120 字节），
+     * **非法/超长静默丢弃字段、不拒发**，非 voice 类型带上也会被丢。
+     *
+     * 本端一直没带这个字段，于是**转发语音会丢波形**（iOS `IMSocketManager` 一直在带）——
+     * 2026-09-16 补上。本端自己还不能录音，所以它目前只在转发路径上有值。
+     */
+    val waveform: String? = null,
 )
 
 /** ack 下行负载（PROTOCOL §4.2）——对 send_msg 的确认。 */

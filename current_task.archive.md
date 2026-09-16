@@ -5,6 +5,52 @@
 
 ## 历史焦点（新 → 旧）
 
+> ⬇ 以下几块 2026-09-16 从活快照原样转入（第二～四批用户报告、聊天页三条、隐私与安全、数据和存储）。
+
+> **第四批用户报告（Android 部分）✅ 2026-09-15（用户自测通过，已提交）**：① 名片 / 聊天记录卡时间并进脚注行（`CardBubbles.kt` 的 `CardFooter`）；
+> ③ 链接预览图贴卡片上 / 左 / 右三边（`LinkPreviewCard.kt`）；④ 带圆钮的标题栏与二级页同高（`TopBarCircleButton` 只按 24 高参与测量，UI_SPEC §4.5）。
+
+> **第三批用户报告（Android 部分）✅ 2026-09-15（用户复测通过，已提交；test.sh 674 条全绿、新测试均变异验红）**，逐条见 IMServer `docs/CLIENT_PARITY.md` 顶部：
+> ① **冷启动/登录先闪「还没有会话」**：列表拿 `emptyList()` 当库初值 → 改 null + `data/ConversationListPhase.kt`（本地空且服务端拉成过也说没有才画；
+>    `MessageService.listedConversations`）；② 索引尺照 iOS 系统那条改观感（`ContactIndexBar`）；④ 通讯录右上角圆形「添加朋友」钮
+>    （`TopBarCircleButton`）+ 页标题「添加朋友」；⑤ **iOS 改密 → 本端半分钟才下线**：OkHttp 收到服务端关闭帧不自动回帧、`onClosed` 不来，
+>    等 25s ping 才发现 → `IMSocketManager.Listener.onClosing` 回 1000（`ServerCloseKickTest` 本地 WS 服务端复现，修前超时、修后 1.5s）；
+> ⑥ 消息页/通讯录标题居中（`IMTopBar`），消息页文字「我」换 ＋ 菜单（`ui/ChatsHost.kt` + `ChatsPage`；「添加朋友」「建群」状态抽成
+>    `AddFriendHost` / `CreateGroupHost`，通讯录同用），底栏蓝点口径改 `data/TabUnread.kt`（补上免打扰里被 @，删掉 DAO 那条 SQL）。
+
+> **第二批用户报告（Android 部分）✅ 2026-09-15（未提交；662 条单测全绿、变异验红、代码复查无正确性问题；模拟器实测未完成**——
+> im_test 冷启动后 systemui / system / IM 连续 ANR、输入丢字，放弃）。逐条见 IMServer `docs/CLIENT_PARITY.md` 顶部：
+> ① 「新的朋友」角标 `c.danger` → `c.unreadBadge`，并补高/最小宽 `d.unreadBadgeHeight` + 居中（同 `UnreadBadge`）；
+> ② **改昵称后老消息仍显旧名**（iOS/Web 的 bug，本端普通群本不中招）：发送者名链统一为「备注 > 成员表 > 本窗最新快照 >
+>    本条快照 > 好友名」（`data/SenderNames.kt` + `SenderNamesTest`，调用点 `ChatRowView.senderNameOf`）——原先好友昵称压过群昵称、
+>    超级群非好友落老快照；会话开着时末条昵称对不上成员表 → 重拉群资料（`ui/MemberNameRefresh.kt`，5s 节流）。
+> 顺带：`ChatScreen.kt` 598 行、`ChatHost.kt` 576 行，贴近 600 门禁，再加东西先拆。`ONLY=<类> ./scripts/test.sh` 在多模块下会被
+> `:media-picker` 报 "No tests found" 中止（过滤没限定 `:app`），跑单类用 `./gradlew :app:testDebugUnitTest --tests`。
+
+> **用户报的三条 ✅ 已改、未提交、未真机手测**（2026-09-15，差异登记 `docs/UI_PARITY_IOS.md` §3.5 / §4）：
+> ① **文件文不显示文字**——图说判据挂在「贴边媒体」上，文件气泡不贴边，字整段不画。判据抽到
+> `data/BubbleCaption.kt`（`Bubbles.kt` 用它），聊天记录详情页文件项同漏、一并补；
+> ② **二级页底部 Tab 栏一直显示**——「通讯录」「我」的二级页在底栏上方的内容区原地切换。改成各 Host 根页经
+> `ui/TabRoot.kt` 插槽自己画底栏（判据 `data/PushNav.kt` 的 depth；页面枚举 `ContactsPage`/`MePage` 移到 data 带深度）；
+> ③ **没有 push 转场**——新增 `ui/components/PushTransition.kt`（AnimatedContent；退场页换一个脱离 Activity 的返回键分发器
+> + Initial 阶段吞触摸，防连按返回被吞、防点到滑走中的页）与 `PushBase`（聊天页被详情盖住时只让开、不出组合）。
+> 单测 `BubbleCaptionTest`(5) / `PushNavTest`(6)，三处变异验红。
+>
+> **「我 ▸ 隐私与安全」✅ 已实现，未真机手测**（2026-09-11，对齐 iOS `IMPrivacySecurityViewController` 三页，
+> 差异登记 `docs/UI_PARITY_IOS.md` §4.9）：容器页五组（活行只有「已屏蔽的用户」「修改密码」，其余四组灰置占位）/
+> 已屏蔽的用户（计数、左滑取消屏蔽、空态三层、刷新失败保留旧内容）/ 修改密码（眼睛切换、本地校验、按业务码红字 + 描红）。
+> 判据在 `data/PrivacySecurity.kt` 与 `data/ChangePasswordRules.kt`，持有者 `ui/PrivacySecurityHost.kt`。
+>
+> **做法上非显然的点**：① **改密应答里的 `refresh_token` 必须接住**——那是续期凭据唯一的轮换点，服务端这一刻已作废旧的；
+> 接不住的话本机在 access token 下次过期时被登出。故 `IMClient.changePassword` 整段 `NonCancellable`、Host 挂 `client.scope`；
+> ② 参数错是 **100001**，iOS 写成了 100002（限流码），本端不照抄、有单测钉住；
+> ③ 按钮「三个框都填了就亮」取 Web 口径——iOS「校验全过才亮」让那几句原因提示永远显示不出来。
+>
+> **上一轮「数据和存储」✅ 已实现、未真机手测**（三层设置页 + `capabilities_update` 同步；真机首测撞的「保存失败」已修：
+> PUT body 多套了一层 `settings`，且 `encodeDefaults=false` 会把 true 默认值省掉被 Go 解成 false）。
+>
+> 更早的「聊天页第三轮九条」仍待真机手测（清单在 `docs/UI_PARITY_IOS.md` §4.8）。
+
 > **`/code-review --fix` 打回四条 ✅ 2026-09-09**（在 IMServer 会话里跑的那一轮，顺带扫到本仓
 > 未推送的 6 个 commit）。一条严重：
 > **遗留 `msg_op` 事件行的一次性收敛「取 500 条、却删全部」**——`legacyMsgOpRows(limit=500)`

@@ -246,6 +246,15 @@ private fun AlbumTileView(
         )
         // 门控层：压暗 + 裸字形 + 36dp 环 + 左上角一项角标（iOS `IMAlbumTileView`），就绪不画
         if (gate != null) AlbumTileGate(gate.state, m.sizeBytes)
+        // 就绪的视频格中心画播放角标（iOS `_playBadge`）；上传 / 失败 / 门控期中心位让给它们（判据见 AlbumLayout）。
+        // 比单条视频气泡小一号：iOS 宫格是 30pt，而 3 列时格子只有约 79dp，44dp 的气泡版会压掉半格
+        if (AlbumLayout.showsPlayBadge(m.contentType == ContentType.VIDEO, m.sending, m.failed, gate?.ready ?: true)) {
+            com.libeyond.imandroid.ui.components.VideoPlayBadge(
+                modifier = Modifier.align(Alignment.Center),
+                diameter = 32.dp,
+                iconSize = 16.dp,
+            )
+        }
         if (m.sending || m.failed) {
             // 还在发 / 发失败：压一层暗底，让人看出这一格没完成
             Box(Modifier.size(size).background(c.overlay))

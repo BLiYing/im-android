@@ -108,6 +108,15 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
 
     // —— 二级页：聊天 / 群资料（占满全屏，不显 Tab 栏）——
     var infoForConv by remember { mutableStateOf<ConversationEntity?>(null) }
+    /** 详情页进来先落在哪个页签；null = 各自默认（群资料「成员」、单聊「媒体」）。查看器的「媒体」钮要直达媒体页签。 */
+    var infoTab by remember { mutableStateOf<com.libeyond.imandroid.data.DetailTab?>(null) }
+    /**
+     * 这一趟进的是**会话媒体库**（查看器右下角「媒体」钮），不是「聊天信息」。
+     * iOS 那颗钮打开的是独立的 `IMConversationMediaViewController`；本端此前跳详情页并落在
+     * 媒体页签上——用户点「媒体」却进了设置页（2026-09-16 用户报）。页面复用同一个宿主，
+     * 只是把头部与页签条收起来（`galleryOnly`），归档取数/长按菜单/查看器那整套接线不另写一份。
+     */
+    var infoGallery by remember { mutableStateOf(false) }
     /**
      * 「关掉详情页，回聊天页顺带做一件事」的待办（开搜索 / 定位到某条）。
      * 为什么要绕这一道、为什么两件事合成一个类型，见 [ChatArm]。
@@ -165,7 +174,12 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                             client = client,
                             conv = conv,
                             onBack = { openConv = null },
-                            onOpenInfo = { infoForConv = conv },
+                            onOpenInfo = { infoTab = null; infoGallery = false; infoForConv = conv },
+                            onOpenMediaGallery = {
+                                infoTab = com.libeyond.imandroid.data.DetailTab.Media
+                                infoGallery = true
+                                infoForConv = conv
+                            },
                             arm = chatArm,
                             onArmConsumed = { chatArm = ChatArm() },
                             covered = covered,
@@ -180,7 +194,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                 ) { info ->
                     if (info != null) {
                         Box(Modifier.fillMaxSize().blockPointerInput()) {
-                            InfoPage(client, info, knownFriends,
+                            InfoPage(client, info, knownFriends, infoTab, infoGallery,
                                 onOpenChat = { stub -> infoForConv = null; openConv = stub },
                                 onArm = { arm -> infoForConv = null; chatArm = arm },
                                 onBack = { infoForConv = null },
@@ -249,6 +263,10 @@ private fun InfoPage(
     client: IMClient,
     conv: ConversationEntity,
     knownFriends: Map<String, FriendEntry>,
+    /** 先落在哪个页签；null = 各自默认。 */
+    initialTab: com.libeyond.imandroid.data.DetailTab?,
+    /** 这一趟只当会话媒体库用（收起头部与页签条）。 */
+    galleryOnly: Boolean,
     onOpenChat: (ConversationEntity) -> Unit,
     onArm: (ChatArm) -> Unit,
     onBack: () -> Unit,
@@ -263,6 +281,8 @@ private fun InfoPage(
             onOpenChat = onOpenChat,
             onSearchInChat = { onArm(ChatArm(openSearch = true)) },
             onLocateInChat = { seq -> onArm(ChatArm(locateSeq = seq)) },
+            initialTab = initialTab ?: com.libeyond.imandroid.data.DetailTab.Members,
+            galleryOnly = galleryOnly,
             onBack = onBack,
             onLeft = onLeft,
         )
@@ -273,6 +293,8 @@ private fun InfoPage(
             knownFriends = knownFriends,
             onSearchInChat = { onArm(ChatArm(openSearch = true)) },
             onLocateInChat = { seq -> onArm(ChatArm(locateSeq = seq)) },
+            initialTab = initialTab ?: com.libeyond.imandroid.data.DetailTab.Media,
+            galleryOnly = galleryOnly,
             onBack = onBack,
         )
     }

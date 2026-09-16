@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -110,6 +110,20 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /**
+         * v8 → v9：**待发行**加 `waveform`（语音振幅指纹，PROTOCOL §4.1）。
+         *
+         * 只加待发那张表——`message` 表从 v1 起就有这一列。
+         * ack 不回带波形，待发行里没有的话**自己转发出去的语音在自己这一侧是等高条纹**、
+         * 对端却正常：又是 [com.libeyond.imandroid.data.AckCarryOver] 表里那一族
+         * 「只在发送者一侧坏」的坑，这是第七次。
+         */
+        internal val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE pending_message ADD COLUMN waveform TEXT")
+            }
+        }
+
         /** v2 → v3：消息加 `groupId`（相册宫格，M4+）。老行为 NULL = 不属于任何相册。 */
         internal val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -127,7 +141,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 // 直接删库重建，用户的本地消息全没。加列要写真的 Migration。
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
                 )
                 .build().also { instance = it }
         }
