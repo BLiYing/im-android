@@ -17,8 +17,6 @@ import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import com.libeyond.imandroid.sdk.protocol.ReceiptData
 import com.libeyond.imandroid.sdk.protocol.ReplyToData
 import com.libeyond.imandroid.sdk.protocol.SendMsgData
-import com.libeyond.imandroid.sdk.protocol.SyncCursorItem
-import com.libeyond.imandroid.sdk.protocol.SyncReqData
 import com.libeyond.imandroid.sdk.protocol.TypingData
 import com.libeyond.imandroid.sdk.protocol.WatchData
 import com.libeyond.imandroid.sdk.protocol.PresenceFrame
@@ -42,14 +40,25 @@ import kotlinx.serialization.json.JsonElement
 class MessageService(
     private val scope: CoroutineScope,
     internal val socket: IMSocketManager,
-    private val repo: MessageRepository,
+    /**
+     * 仓库。与 [ownerProvider] / [media] / [transmit] 一样是 `internal` 而不是 `private`，
+     * 为的是让 `MessageSync.kt` 够得着（连接后的同步编排那一组，搬出去只为控体量，调用形态一个字没改）。
+     *
+     * ⚠️ **别把这理解成"只有同包能碰"**：Kotlin 的 `internal` 是**模块级**，没有 Java 那种 package-private，
+     * 而 `:app` 统共一个模块、`IMClient.messages` 又是公开的——整个 `ui` 包照样写得出
+     * `client.messages.repo` / `.transmit(...)`。**编译器守不住这条线，只能靠约定**：
+     * 约定是「除 `MessageSync.kt` 外谁都别碰」，因为协议知识集中在本类，绕过去写库就没人执行
+     * [MessageRepository] 入库边界上那套口径了。review 时真正该打回的信号就是
+     * `ui` 里冒出 `client.messages.repo` / `.transmit(` / `.media`。
+     */
+    internal val repo: MessageRepository,
     val presence: PresenceStore,
     private val conversationsApi: ConversationsApi,
     private val upload: UploadApi,
     /** 已下载媒体的落盘。自己发出去的字节直接放进它，免得发完再下回来一遍。 */
     private val mediaCache: MediaCache,
     /** 当前账号；未登录为 null。切账号时必须换掉，否则新账号会写进旧账号的行。 */
-    private val ownerProvider: () -> String?,
+    internal val ownerProvider: () -> String?,
 ) {
     /** 「按锚点开窗」的一问一答（MESSAGE_WINDOW_DESIGN §3.2），实现在 [WindowRequester]。 */
     internal val windows = WindowRequester(socket, scope)
@@ -290,7 +299,7 @@ class MessageService(
     // 拆的理由是体量门禁（本文件 626 > 600），拆的**边界**是「一条媒体从选中到发出去」
     // 这条完整链路：它自成一体，且四个入口（图片/视频/重发/失败标记）共享同一套状态机——
     // 状态机分叉过一次就会出现「视频发失败了但没有红❗」这种查不出来的事。
-    private val media = MediaSendPipeline(
+    internal val media = MediaSendPipeline(
         repo = repo,
         cache = mediaCache,
         upload = upload,
@@ -383,7 +392,7 @@ class MessageService(
         )
     }
 
-    private fun transmit(
+    internal fun transmit(
         clientMsgId: String,
         convId: String,
         to: String,
@@ -461,16 +470,6 @@ class MessageService(
 
     // ————————————————— 连接与同步 —————————————————
 
-    private suspend fun onConnected() {
-        val owner = ownerProvider() ?: return
-        refreshConversations()
-        requestSync(owner)
-        resendInFlight(owner)
-        // watch 订阅是**连接级易失态**，断连即清 → 重连必须重发当前集合，
-        // 否则重连后所有在线态就此冻在旧值上（PROTOCOL §5.5「生命周期」）。
-        sendWatch(presence.currentWatchSet().toSet(), force = true)
-    }
-
     /** 拉会话列表（权威快照）。 */
     suspend fun refreshConversations() {
         val owner = ownerProvider() ?: return
@@ -482,99 +481,4 @@ class MessageService(
             log.w("conversations_refresh_failed", "err" to e.javaClass.simpleName)
         }
     }
-
-    /** 按各会话的本地游标发一次 `sync_req`（增量补拉）。开窗取数走 [windows]，不是这一路。 */
-    private suspend fun requestSync(owner: String) {
-        val cursors = repo.syncCursors(owner).map { (convId, seq) -> SyncCursorItem(convId, seq) }
-        if (cursors.isEmpty()) return
-        socket.send(
-            FrameType.SYNC_REQ,
-            ProtocolJson.encodeToJsonElement(SyncReqData.serializer(), SyncReqData(cursors)),
-        )
-        log.i("sync_requested", "conversations" to cursors.size)
-    }
-
-    /**
-     * 应用一页同步结果。
-     *
-     * 游标推进严格走 [SyncCursorRule]：**先把本页按序落库，成功了才推进到 covered**。
-     * `has_more` 时以**新游标**续拉，不是以 latest。
-     */
-    private suspend fun applySync(owner: String, resp: SyncRespData) {
-        var needMore = false
-        val nextCursors = mutableListOf<SyncCursorItem>()
-        for (c in resp.conversations) {
-            val firstFailed = repo.onIncomingBatch(owner, c.messages)
-            repo.advanceCursor(owner, c.convId, c.coveredConvSeq, firstFailed)
-            log.i(
-                "sync_page_applied",
-                "convId" to c.convId, "msgs" to c.messages.size,
-                "covered" to c.coveredConvSeq, "hasMore" to c.hasMore,
-            )
-            if (c.hasMore && firstFailed == null) {
-                needMore = true
-                nextCursors += SyncCursorItem(c.convId, SyncCursorRule.nextSince(c.coveredConvSeq))
-            }
-        }
-        if (needMore) {
-            socket.send(
-                FrameType.SYNC_REQ,
-                ProtocolJson.encodeToJsonElement(SyncReqData.serializer(), SyncReqData(nextCursors)),
-            )
-        }
-        // 同步完刷一次会话列表，未读数以服务端为准
-        refreshConversations()
-    }
-
-    /** 重连后把在途未确认的消息按同一 client_msg_id 重发。 */
-    private suspend fun resendInFlight(owner: String) {
-        val list = repo.inFlight(owner)
-        if (list.isEmpty()) return
-
-        // **正文还是本地 uri 的媒体消息不能重发**：那是「上传没走完就被杀进程/断线」的残留。
-        // 原样发出去，服务端会把 `content://media/...` 当消息正文存下来，
-        // 收件人拿到一个**永远打不开的地址**——而且这条错误消息再也改不回来了。
-        // 字节已经不在内存里（Uri 的读权限也随进程没了），重发无从谈起，
-        // 只能标失败让用户重选一次。
-        // **正在上传的那几条既不重发也不标失败**——它们的上传协程还在跑，
-        // 标失败会让用户看到红❗，而几秒后它自己又发出去了（见 MediaSendPipeline.uploading）。
-        val inProgress = list.filter { isLocalUri(it.content) && media.isUploading(it.clientMsgId) }
-        val rest = list - inProgress.toSet()
-        if (inProgress.isNotEmpty()) log.i("resend_skipped_uploading", "count" to inProgress.size)
-        val (resendable, stale) = rest.partition { !isLocalUri(it.content) }
-        stale.forEach {
-            repo.onSendRejected(
-                owner,
-                com.libeyond.imandroid.sdk.protocol.ErrorData(
-                    code = com.libeyond.imandroid.sdk.protocol.ErrCode.PARAM_INVALID,
-                    message = "上传未完成，请重新发送",
-                    clientMsgId = it.clientMsgId,
-                ),
-            )
-        }
-        if (stale.isNotEmpty()) log.w("resend_dropped_unuploaded", "count" to stale.size)
-
-        if (resendable.isEmpty()) return
-        log.i("resend_in_flight", "count" to resendable.size)
-        resendable.forEach {
-            transmit(
-                it.clientMsgId, it.convId, it.to, it.contentType, it.content, it.replyToConvSeq,
-                it.fileName, it.fileSize, it.caption, it.forwardFrom, it.groupId,
-                it.mediaW, it.mediaH, it.duration, it.poster, it.thumb,
-                mentions = Mention.parseMentions(it.mentions),
-                mentionAll = Mention.mentionAllFromSpans(it.mentionSpans),
-                mentionSpans = Mention.parseSpans(it.mentionSpans),
-            )
-        }
-    }
 }
-
-
-/**
- * 判断一条待发消息的正文是不是**本地** uri（还没上传完）。
- *
- * 抽成顶层纯函数便于单测——这条判据错了不会报错，只会让收件人收到一个
- * 打不开的 `content://` 地址，而且再也改不回来。
- */
-internal fun isLocalUri(content: String): Boolean =
-    content.startsWith("content://") || content.startsWith("file://")

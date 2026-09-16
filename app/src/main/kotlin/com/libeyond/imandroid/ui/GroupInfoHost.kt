@@ -1,9 +1,6 @@
 package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,7 +26,6 @@ import com.libeyond.imandroid.ui.components.ActionSheet
 import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.IMTextPrompt
-import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.GroupInfo
@@ -42,13 +38,9 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.screens.GroupAdminListScreen
 import com.libeyond.imandroid.ui.screens.GroupBanListScreen
 import com.libeyond.imandroid.ui.screens.GroupInfoScreen
-import com.libeyond.imandroid.ui.screens.PickListScreen
-import com.libeyond.imandroid.ui.screens.PickRow
 import com.libeyond.imandroid.ui.screens.GroupManageScreen
 import com.libeyond.imandroid.ui.screens.JoinRequestsScreen
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * 群资料接线层。
@@ -172,29 +164,16 @@ fun GroupInfoHost(
         }
     }
 
-    // 换群头像：选图 → 压成 JPEG → POST /avatar → PUT /groups/{id}（**整体替换**：
-    // 名字与简介必须原样带回，否则会被清空，见 PROTOCOL §11）。
-    // 与「我的资料」那侧的差别是**这里立刻提交**：群管理页没有「保存」按钮，
-    // 每一项都是即时生效的，头像若只更新预览就成了唯一一个"改了但没生效"的项。
-    val pickGroupAvatar = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri ->
-        val g0 = info
-        if (uri == null || g0 == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            toast = "上传中…"
-            val bytes = withContext(Dispatchers.IO) { AvatarPrepare.fromUri(context, uri) }
-            if (bytes == null) { toast = "图片处理失败，换一张试试"; return@launch }
-            val up = runCatching { client.upload.uploadAvatar(bytes) }
-            val url = up.getOrNull()?.url
-            if (url == null) {
-                toast = "头像上传失败"
-                IMLog.tag("IM.Group").w("group_avatar_upload_failed")
-                return@launch
-            }
-            runManage("修改群头像") { client.groups.updateInfo(convId, g0.name, url, g0.intro) }
-        }
-    }
+    // 换群头像：选图 → 压成 JPEG → POST /avatar → PUT /groups/{id}（**整体替换**，
+    // 名字与简介必须原样带回，见 PROTOCOL §11）。整条链与"为什么立刻提交"在 GroupAvatarPicker.kt。
+    val pickGroupAvatar = rememberGroupAvatarPicker(
+        client = client,
+        convId = convId,
+        info = { info },
+        scope = scope,
+        onToast = { toast = it },
+        runManage = ::runManage,
+    )
 
     /** 拉全量（待处理 + 已处理）——只拉待处理的话，审批完列表会空掉，看着像没生效。 */
     suspend fun reloadJoinRequests() {
@@ -218,49 +197,22 @@ fun GroupInfoHost(
     val pk = pick
     stateHolder.SaveableStateProvider(page) {
     if (pk != null) {
-        // 三种用途共用一个选择页（见 PickListScreen 的注释）：为每种单写一个，
-        // 最后必然在「已选计数」「上限截断」「空态文案」上各写各的。
-        val rows = when (pk) {
-            PickPurpose.AddAdmin -> members
-                .filter { it.role == GroupMember.ROLE_MEMBER }
-                .map { PickRow(it.userId, it.displayName, it.avatarUrl, it.handle) }
-            PickPurpose.Transfer -> members
-                .filter { it.userId != myUid }
-                .map { PickRow(it.userId, it.displayName, it.avatarUrl, it.handle) }
-            PickPurpose.Invite -> {
-                val inGroup = members.mapTo(HashSet()) { it.userId }
-                friends.filter { it.userId !in inGroup }
-                    .map { PickRow(it.userId, it.displayName, it.avatarUrl, it.handle) }
-            }
-        }
-        PickListScreen(
-            title = when (pk) {
-                PickPurpose.AddAdmin -> "添加管理员"
-                PickPurpose.Transfer -> "选择新群主"
-                PickPurpose.Invite -> "邀请入群"
-            },
-            rows = rows,
-            selected = picked,
-            multi = pk == PickPurpose.Invite,
-            emptyText = when (pk) {
-                PickPurpose.AddAdmin -> "没有可设为管理员的普通成员"
-                PickPurpose.Transfer -> "群里还没有别人"
-                PickPurpose.Invite -> "好友都已在群里"
-            },
+        // 三种用途共用一个选择页；名单/标题/空态的判据在 data/GroupPick.kt（有单测），
+        // 画法在 GroupPickPage.kt。这里只留"点下去之后做什么"。
+        GroupPickPage(
+            purpose = pk,
+            members = members,
+            friends = friends,
+            picked = picked,
+            myUid = myUid,
             onToggle = { id -> picked = if (id in picked) picked - id else picked + id },
-            onPick = { row ->
-                when (pk) {
-                    // 设管理员是可撤销的，直接做；转让不可逆，先二次确认
-                    PickPurpose.AddAdmin -> {
-                        pick = null
-                        runManage("设为管理员") { client.groups.setRole(convId, row.id, GroupMember.ROLE_ADMIN) }
-                    }
-                    PickPurpose.Transfer -> confirmTransfer = members.firstOrNull { it.userId == row.id }
-                    PickPurpose.Invite -> Unit
-                }
+            // 设管理员是可撤销的，直接做；转让不可逆，先二次确认
+            onAddAdmin = { id ->
+                pick = null
+                runManage("设为管理员") { client.groups.setRole(convId, id, GroupMember.ROLE_ADMIN) }
             },
-            onConfirm = {
-                val ids = picked.toList()
+            onTransferTo = { id -> confirmTransfer = members.firstOrNull { it.userId == id } },
+            onConfirmInvite = { ids ->
                 pick = null
                 picked = emptySet()
                 if (ids.isNotEmpty()) runManage("邀请入群") { client.groups.invite(convId, ids) }
@@ -395,11 +347,7 @@ fun GroupInfoHost(
             onOpenAdmins = { adminsOpen = true },
             onTransferOwner = { pick = PickPurpose.Transfer },
             // 与「群名称/群简介」同一份判据——权限分叉了就会出现"相机圈亮着，点了报 300204"
-            onPickAvatar = if (GroupPermissions.canEditInfo(g)) {
-                { pickGroupAvatar.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-            } else {
-                null
-            },
+            onPickAvatar = if (GroupPermissions.canEditInfo(g)) pickGroupAvatar else null,
             onBack = { managing = false },
         )
     } else {
@@ -531,20 +479,16 @@ fun GroupInfoHost(
         )
     }
 
-    confirmTransfer?.let { m ->
-        IMConfirmDialog(
-            title = "转让群组",
-            message = "转让给「${m.displayName}」后你将立即变为普通成员，且不可撤销。",
-            confirmText = "转让",
-            destructive = true,
-            onDismiss = { confirmTransfer = null },
-            onConfirm = {
-                confirmTransfer = null
-                pick = null
-                runManage("转让群组") { client.groups.transferOwner(convId, m.userId) }
-            },
-        )
-    }
+    // 转让的二次确认（文案在 GroupInfoDialogs.kt，与「更多」那三个确认框同住）
+    GroupTransferConfirmDialog(
+        member = confirmTransfer,
+        onDismiss = { confirmTransfer = null },
+        onConfirm = { m ->
+            confirmTransfer = null
+            pick = null
+            runManage("转让群组") { client.groups.transferOwner(convId, m.userId) }
+        },
+    )
 
     // 归档长按菜单 + 转发选择页（与单聊详情共用同一份接线）
     ArchiveActionsHost(

@@ -11,14 +11,9 @@ import com.libeyond.imandroid.data.observeWindow
 import com.libeyond.imandroid.ui.screens.ChatRowStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import com.libeyond.imandroid.data.AttachItems
 import com.libeyond.imandroid.data.SenderNames
 import com.libeyond.imandroid.sdk.api.FriendEntry
-import com.libeyond.imandroid.ui.screens.FriendPickerScreen
-import com.libeyond.mediapicker.MediaPickerHost
-import com.libeyond.mediapicker.PickedMedia
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -181,39 +176,8 @@ fun ChatHost(
         }
     }
     val mediaSend = remember(conv.convId) { MediaSendFlow(context, client, conv) }
-    /** 相机产物的落点；拍完从这里读字节。 */
-    var cameraUri by remember(conv.convId) { mutableStateOf<android.net.Uri?>(null) }
-
-    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val uri = cameraUri
-        cameraUri = null
-        // ok=false 就是用户在相机里按了取消——**不提示**，那不是错误
-        if (ok && uri != null) {
-            scope.launch {
-                mediaSend.send(
-                    listOf(
-                        PickedMedia(
-                            uri = uri.toString(),
-                            displayName = "camera_${System.currentTimeMillis()}.jpg",
-                            mime = "image/jpeg",
-                            // 相机产物走压缩路径，字节数由压缩后的结果决定，这里给 1 只为过
-                            // 「0 = MediaStore 坏行」那道判断
-                            sizeBytes = 1,
-                            isVideo = false,
-                        ),
-                    ),
-                    // 相机原片动辄 10MB+，默认压（与相册同口径）
-                    sendOriginal = false,
-                ) { toast = it }
-            }
-        }
-    }
-
-    val pickFile = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri != null) scope.launch { mediaSend.sendFile(uri) { toast = it } }
-    }
+    // 相机与系统文件选择器这两条「出 App 再回来」的路（含相机产物的跨进程落点），见 ChatMediaLaunchers.kt
+    val launchers = rememberChatMediaLaunchers(conv.convId, scope, mediaSend) { toast = it }
     /** 长按菜单锚点：被长按气泡在窗口坐标系里的矩形，菜单按它定位（对齐 iOS UIContextMenu）。 */
     var menuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
 
@@ -392,18 +356,8 @@ fun ChatHost(
         onAttach = { kind ->
             when (kind) {
                 AttachItems.Kind.Photo -> picking = true
-                AttachItems.Kind.Camera -> {
-                    val uri = MediaSendFlow.newCameraUri(context)
-                    if (uri == null) {
-                        toast = "打不开相机"
-                    } else {
-                        cameraUri = uri
-                        takePhoto.launch(uri)
-                    }
-                }
-                // 任意类型：服务端按扩展名走白名单，端上不预筛——预筛只会让用户
-                // 「明明有这个文件却选不中」，而真正的规则在服务端
-                AttachItems.Kind.File -> pickFile.launch(arrayOf("*/*"))
+                AttachItems.Kind.Camera -> launchers.openCamera()
+                AttachItems.Kind.File -> launchers.openFilePicker()
                 AttachItems.Kind.ContactCard -> scope.launch {
                     pickingFriend = runCatchingCancellable { client.contacts.friends("accepted") }
                         .getOrElse {
@@ -508,50 +462,27 @@ fun ChatHost(
         onToast = { toast = it },
     )
 
-    // —— 点系统消息里的名字 → 用户资料页 ——
-    openUser?.let { uid ->
-        val f = friendsByUid[uid]
-        UserProfileHost(
-            client = client,
-            userId = uid,
-            knownRelation = f?.status.orEmpty(),
-            seed = com.libeyond.imandroid.sdk.api.UserCard(
-                userId = uid,
-                username = f?.username.orEmpty(),
-                nickname = f?.nickname.orEmpty(),
-                avatarUrl = f?.avatarUrl.orEmpty(),
-                remark = f?.remark.orEmpty(),
-            ),
-            onSendMessage = { openUser = null },
-            onBack = { openUser = null },
-        )
-    }
-
-    // —— 选联系人发名片（覆盖在聊天页之上）——
-    pickingFriend?.let { list ->
-        FriendPickerScreen(
-            friends = list,
-            onCancel = { pickingFriend = null },
-            onPick = { f ->
-                pickingFriend = null
-                scope.launch { mediaSend.sendContactCard(f) { toast = it } }
-            },
-        )
-    }
-
-    // —— 相册选择页（覆盖在聊天页之上）——
-    if (picking) {
-        MediaPickerHost(
-            skin = rememberPickerSkin(),
-            onPicked = { items, sendOriginal ->
-                picking = false
-                scope.launch { mediaSend.send(items, sendOriginal) { toast = it } }
-            },
-            onDismiss = { picking = false },
-            onToast = { toast = it },
-            log = PickerLog,
-        )
-    }
+    // —— 三层「整页盖住聊天页」的覆盖层：用户资料 / 选联系人发名片 / 相册选择页 ——
+    // 渲染顺序即层级，实现在 ChatPickerLayers.kt（返回键仍由上面那个 BackHandler 一处派发）
+    ChatPickerLayers(
+        client = client,
+        openUser = openUser,
+        friendsByUid = friendsByUid,
+        pickingFriend = pickingFriend,
+        picking = picking,
+        onCloseUser = { openUser = null },
+        onCancelFriendPicker = { pickingFriend = null },
+        onPickFriend = { f ->
+            pickingFriend = null
+            scope.launch { mediaSend.sendContactCard(f) { toast = it } }
+        },
+        onPicked = { items, sendOriginal ->
+            picking = false
+            scope.launch { mediaSend.send(items, sendOriginal) { toast = it } }
+        },
+        onDismissPicker = { picking = false },
+        onToast = { toast = it },
+    )
 
     // —— 转发目标选择页（覆盖在聊天页之上）——
     val fwd = forwarding

@@ -3,6 +3,7 @@ import com.libeyond.imandroid.ui.screens.GroupManageAction
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
+import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMTextPrompt
 
 import androidx.compose.runtime.Composable
@@ -51,6 +52,29 @@ internal fun GroupMoreConfirmDialog(
         )
         else -> Unit
     }
+}
+
+/**
+ * 转让群主的二次确认。
+ *
+ * 与「设管理员」刻意不对称：设管理员可撤销，选中即执行；**转让不可逆**，
+ * 且转让后自己当场变普通成员——这两句必须都说出来（同 iOS `confirmTransferOwner:`）。
+ */
+@Composable
+internal fun GroupTransferConfirmDialog(
+    member: GroupMember?,
+    onDismiss: () -> Unit,
+    onConfirm: (GroupMember) -> Unit,
+) {
+    member ?: return
+    IMConfirmDialog(
+        title = "转让群组",
+        message = "转让给「${member.displayName}」后你将立即变为普通成员，且不可撤销。",
+        confirmText = "转让",
+        destructive = true,
+        onDismiss = onDismiss,
+        onConfirm = { onConfirm(member) },
+    )
 }
 
 /**

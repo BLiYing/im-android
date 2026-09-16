@@ -3,7 +3,6 @@ package com.libeyond.imandroid.data
 import com.libeyond.imandroid.data.db.ConversationDao
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageDao
-import com.libeyond.imandroid.sdk.protocol.SysSegment
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.PendingMessageDao
@@ -378,7 +377,8 @@ class MessageRepository(
                 title = DisplayName.ofConversation(s),
                 avatarUrl = if (s.isGroup) s.avatarUrl else s.peerAvatarUrl,
                 peerRemark = s.peerRemark,
-                lastContent = s.lastMessage?.let { previewOf(it) } ?: "",
+                lastContent = s.lastMessage
+                    ?.let { MessagePreview.of(it.contentType, it.content, it.caption) } ?: "",
                 lastContentType = s.lastMessage?.contentType ?: ContentType.TEXT,
                 lastTimestamp = s.lastMessage?.timestamp ?: 0,
                 lastConvSeq = s.latestConvSeq,
@@ -505,7 +505,7 @@ class MessageRepository(
         )
         conversations.upsert(
             c.copy(
-                lastContent = previewOfEntity(row),
+                lastContent = MessagePreview.of(row.contentType, row.content, row.caption),
                 lastContentType = row.contentType,
                 lastTimestamp = maxOf(c.lastTimestamp, row.timestamp),
                 lastConvSeq = maxOf(c.lastConvSeq, row.convSeq),
@@ -513,75 +513,4 @@ class MessageRepository(
             )
         )
     }
-
-    private fun previewOf(m: MessageData): String = when (m.contentType) {
-        ContentType.TEXT -> m.content
-        ContentType.IMAGE -> m.caption?.takeIf { it.isNotBlank() } ?: "[图片]"
-        ContentType.VIDEO -> m.caption?.takeIf { it.isNotBlank() } ?: "[视频]"
-        ContentType.VOICE -> "[语音]"
-        ContentType.FILE -> m.caption?.takeIf { it.isNotBlank() } ?: "[文件]"
-        ContentType.CONTACT -> "[个人名片]"
-        ContentType.CHAT_RECORD -> "[聊天记录]"
-        ContentType.SYSTEM -> m.content
-        else -> m.content
-    }
-
-    private fun previewOfEntity(m: MessageEntity): String = when (m.contentType) {
-        ContentType.TEXT -> m.content
-        ContentType.IMAGE -> m.caption?.takeIf { it.isNotBlank() } ?: "[图片]"
-        ContentType.VIDEO -> m.caption?.takeIf { it.isNotBlank() } ?: "[视频]"
-        ContentType.VOICE -> "[语音]"
-        ContentType.FILE -> m.caption?.takeIf { it.isNotBlank() } ?: "[文件]"
-        ContentType.CONTACT -> "[个人名片]"
-        ContentType.CHAT_RECORD -> "[聊天记录]"
-        else -> m.content
-    }
 }
-
-private fun MessageData.toEntity(owner: String) = MessageEntity(
-    ownerUid = owner,
-    convId = convId,
-    convSeq = convSeq,
-    serverMsgId = serverMsgId,
-    sender = from,
-    fromNickname = fromNickname,
-    fromRole = fromRole,
-    contentType = contentType,
-    content = content,
-    caption = caption,
-    timestamp = timestamp,
-    fileName = fileName,
-    fileSize = fileSize,
-    mediaW = mediaW,
-    mediaH = mediaH,
-    duration = duration,
-    poster = poster,
-    thumb = thumb,
-    waveform = waveform,
-    replyToConvSeq = replyToConvSeq,
-    replySnapshot = replySnapshot,
-    replyToFrom = replyToFrom,
-    recalledAt = recalledAt,
-    deletedAt = deletedAt,
-    editedAt = editedAt,
-    pinnedAt = pinnedAt,
-    forwardFrom = forwardFrom,
-    groupId = groupId,
-    // 分段落库：不落的话刷新/重进会话后系统消息退回"显真实昵称、不可点"
-    sysSegments = sysSegments?.takeIf { it.isNotEmpty() }?.let {
-        ProtocolJson.encodeToString(kotlinx.serialization.builtins.ListSerializer(SysSegment.serializer()), it)
-    },
-    // @提及片段落库：不落的话重进会话后 @ 不再高亮、也点不动（同上一条的坑）
-    mentionSpans = Mention.encodeSpans(mentionSpans.orEmpty()),
-)
-
-/**
- * 本地一页搜索结果。
- *
- * 单独一个类型只为带上 [truncated]：命中被单页上限截断时计数要补 `+`，
- * 而这件事只有**查询层**知道（UI 拿到的是复核过滤之后的列表，长度反推不出来）。
- */
-data class LocalSearchPage(
-    val rows: List<MessageEntity>,
-    val truncated: Boolean,
-)

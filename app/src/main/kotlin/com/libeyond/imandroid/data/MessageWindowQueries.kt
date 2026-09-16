@@ -76,6 +76,18 @@ suspend fun MessageRepository.searchMessages(
     )
 }
 
+/**
+ * 本地一页搜索结果。
+ *
+ * 单独一个类型只为带上 [truncated]：命中被单页上限截断时计数要补 `+`，
+ * 而这件事只有**查询层**知道（UI 拿到的是复核过滤之后的列表，长度反推不出来）。
+ * 与 [searchMessages] 同住一个文件——它是这个类型唯一的产地。
+ */
+data class LocalSearchPage(
+    val rows: List<MessageEntity>,
+    val truncated: Boolean,
+)
+
 /** 本地这个会话齐不齐（[ChatSearch.isLocalComplete] 的取数版本）。 */
 suspend fun MessageRepository.isLocalComplete(owner: String, convId: String): Boolean {
     val row = conversations.byId(owner, convId)
