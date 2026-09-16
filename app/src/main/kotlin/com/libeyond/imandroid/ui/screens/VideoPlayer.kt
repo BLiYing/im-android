@@ -216,6 +216,12 @@ internal fun VideoPlayer(
                     this.player = player
                 }
             },
+            // ⚠️ **必须重新绑定**：[player] 是 `remember(absolute)` 的，地址一变就是**另一个实例**
+            // （原视频下完切本地那一刻就会变）。`factory` 只在第一次组合时跑，不在这里重绑的话
+            // `PlayerView` 还挂着上一个、而且那个已经在 `DisposableEffect` 的 onDispose 里 release 了：
+            // 新播放器没有输出 surface，于是**有声音、没画面**——退出页面重进才好
+            // （2026-09-17 用户报：下载完点播放只有声音，关掉重进才正常）。
+            update = { view -> if (view.player !== player) view.player = player },
             modifier = Modifier.fillMaxSize(),
         )
 

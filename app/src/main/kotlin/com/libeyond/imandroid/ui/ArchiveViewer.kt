@@ -69,6 +69,8 @@ internal fun ArchiveMediaViewer(
     iAmManager: Boolean,
     archive: ConvArchive,
     current: ConvMediaItem,
+    /** 查看器顶部标题＝会话名（iOS `IMMediaPagerViewController.conversationTitle`）。 */
+    title: String = "",
     /** 宿主的作用域（见文件头的 ⚠️）。 */
     scope: CoroutineScope,
     onSave: (url: String, isVideo: Boolean) -> Unit,
@@ -85,6 +87,7 @@ internal fun ArchiveMediaViewer(
     MediaViewerScreen(
         pages = pages,
         startSeq = current.convSeq,
+        title = title,
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
         localFileOf = { vm -> client.downloads.localFile(vm.content, vm.contentType == ContentType.VIDEO) },

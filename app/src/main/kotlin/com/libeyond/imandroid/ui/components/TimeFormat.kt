@@ -36,6 +36,24 @@ object TimeFormat {
         }
     }
 
+    /**
+     * 归档（详情页的媒体 / 文件 / 语音 / 链接页签）里那一行时间：**完整的年月日 + 时分**。
+     *
+     * 对齐 iOS `IMFormatFileDateTime`（文件行、链接行、语音行第三行都用它）。
+     * **不能用 [conversationTime]**：那是"今天显 HH:mm、昨天显『昨天』"的相对口径，
+     * 放在归档里等于告诉用户"这个文件是昨天的"却不说是哪天几点——
+     * 归档是翻历史的地方，相对时间在这里没有意义（2026-09-17 与 iOS 对齐时改的）。
+     */
+    fun fileDateTime(tsMillis: Long): String {
+        if (tsMillis <= 0) return ""
+        val c = Calendar.getInstance().apply { timeInMillis = tsMillis }
+        return String.format(
+            Locale.getDefault(), "%d年%d月%d日 %02d:%02d",
+            c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH),
+            c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE),
+        )
+    }
+
     /** 气泡内的时间，恒 `HH:mm`。 */
     fun bubbleTime(tsMillis: Long): String {
         if (tsMillis <= 0) return ""

@@ -41,4 +41,18 @@ class MediaGridTest {
         assertEquals(listOf(listOf(1, 2)), MediaGrid.rows(listOf(1, 2), columns = 4))
         assertEquals(2, MediaGrid.blanksInLastRow(2, columns = 4))
     }
+
+    /**
+     * **默认列数必须是 3**，与 iOS 两处宫格逐字一致（`IMConversationMediaViewController` 的
+     * `cols = 3`、详情页 `IMDetailMediaContainerCell.tileForWidth:`）。
+     *
+     * 上面几条都显式传了 `columns = 4`，所以**没有一条钉得住默认值**——本端的默认值一直是 4、
+     * 注释还写着"与 iOS 同"，2026-09-17 对照源码才发现是错的。这条就是补那个洞。
+     */
+    @Test
+    fun `默认列数与 iOS 同为 3`() {
+        assertEquals(3, MediaGrid.COLUMNS)
+        assertEquals(listOf(listOf(1, 2, 3), listOf(4)), MediaGrid.rows(listOf(1, 2, 3, 4)))
+        assertEquals(2, MediaGrid.blanksInLastRow(4))
+    }
 }

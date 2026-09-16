@@ -87,6 +87,10 @@ internal fun ChatDetailScreen(
     onMore: (DetailMoreAction) -> Unit,
     host: String,
     useTls: Boolean,
+    /** 见 [archiveTab] 同名参数：语音行要显发送者名。 */
+    senderNameOf: (String) -> String = { "" },
+    /** 见 [archiveTab] 同名参数：归档接口不回带波形，由本地消息表兜底。 */
+    waveformOf: (Long) -> String? = { null },
     /**
      * 只当**会话媒体库**用：去掉头像头部/信息卡/设置卡/页签条，整页就是媒体宫格，
      * 标题换成会话名。查看器右下角的「媒体」钮进的是这一页。
@@ -105,7 +109,10 @@ internal fun ChatDetailScreen(
     val tabs = DetailTabs.visible(isGroup = false)
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        IMTopBar(title = if (galleryOnly) title else "聊天信息", onLeft = onBack)
+        // 会话媒体库的标题是**「图片与视频」**，不是会话名——逐字对齐 iOS
+        // `IMConversationMediaViewController.viewDidLoad` 的 `self.title = @"图片与视频"`
+        // （2026-09-17 用户报：本端显的是会话名）。
+        IMTopBar(title = if (galleryOnly) GALLERY_TITLE else "聊天信息", onLeft = onBack)
 
         // 页签内容是可滚动的长列表，头部/卡片作为它的头几项 —— 整页一条滚动轴，
         // 与 iOS 的 tableHeaderView + sections 同构（不是"上面固定、下面单独滚"）。
@@ -171,6 +178,8 @@ internal fun ChatDetailScreen(
                 host = host,
                 useTls = useTls,
                 isGroup = false,
+                senderNameOf = senderNameOf,
+                waveformOf = waveformOf,
             )
             item { Spacer(Modifier.height(24.dp)) }
         }

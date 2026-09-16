@@ -252,6 +252,8 @@ internal fun Bubble(
                         isMedia -> Box {
                             MediaContent(
                                 msg!!, host, useTls, isGroup = isGroup,
+                                // 自己发的不门控（转发来的图在自己这侧曾是个空盒，见 MediaContent.mine）
+                                mine = mine,
                                 // 文件行占满气泡内容区（iOS 文件气泡定宽），名字才有地方中间截断
                                 fileRowWidth = bubbleMax - d.bubblePaddingH * 2,
                                 // 图/视频整块自己接点击（就绪才打开）；可点的口径与下面长按一致

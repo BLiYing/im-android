@@ -97,6 +97,8 @@ internal fun ChatViewerLayer(
         MediaViewerScreen(
             pages = pages,
             startSeq = m.convSeq,
+            // 标题＝会话名（iOS `IMMediaPagerViewController.conversationTitle`）
+            title = conv.title,
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
             // 门控已经把它下到本地了，查看器就该放本地那份（断网也看得了）

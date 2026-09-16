@@ -2,7 +2,6 @@ package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.data.sendMsgOp
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.ArchiveAction
 import com.libeyond.imandroid.data.ArchiveActions
@@ -46,10 +45,18 @@ internal fun ArchiveActionsHost(
      * 与这里的长按菜单是同一件事，两处各留一份选择页状态的话，两条路的行为迟早分叉。
      */
     onForwardPicker: (ArchiveTarget) -> Unit,
+    /**
+     * **宿主的作用域，本层绝不自建**（同本包 `ArchiveViewer.kt` 文件头那条 ⚠️）。
+     *
+     * 菜单点完就 `onDismiss()` 把自己关掉，`rememberCoroutineScope()` 绑的是本 composable，
+     * 于是「仅删除自己」那次 REST 请求会随组合一起被取消——**点了像没反应**。
+     * 2026-09-17 在聊天页长按菜单上抓到了同一个形状（`LeftCompositionCancellationException`），
+     * 顺手把归档这一侧一并收了。
+     */
+    scope: CoroutineScope,
     onDismiss: () -> Unit,
 ) {
     val owner = client.uid.orEmpty()
-    val scope = rememberCoroutineScope()
 
     if (target == null) return
 

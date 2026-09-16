@@ -302,6 +302,8 @@ fun GroupInfoHost(
             client = client, convId = convId, isGroup = true,
             iAmManager = info?.iAmManager == true,
             archive = archive, current = m, scope = scope,
+            // 查看器标题＝群名（iOS `IMMediaPagerViewController.conversationTitle`）
+            title = info?.name.orEmpty(),
             onSave = saveMedia,
             onForwardPicker = { archiveForward = it },
             onLocateInChat = { seq -> viewing = null; onLocateInChat(seq) },
@@ -357,6 +359,20 @@ fun GroupInfoHost(
         GroupInfoScreen(
         info = g,
         members = members,
+        // 语音行的发送者名：我自己显「你自己」（同 iOS）→ 成员表 → **本地消息里的昵称快照**。
+        // 最后那一档是为超级群准备的：那里成员表只回我自己，不兜底的话 1997 人的群里
+        // 每条语音都没有名字（见 rememberLocalSenderNames）。三档都空才整行不画，**不落内部 uid**。
+        senderNameOf = rememberLocalSenderNames(client, convId).let { localNames ->
+            { uid: String ->
+                if (uid == client.uid) {
+                    "你自己"
+                } else {
+                    members.firstOrNull { it.userId == uid }?.displayName ?: localNames[uid].orEmpty()
+                }
+            }
+        },
+        // 波形：服务端归档接口不回带，从本地消息表按 conv_seq 兜底（见 rememberVoiceWaveforms）
+        waveformOf = rememberVoiceWaveforms(client, convId)::get,
         hasMoreMembers = hasMore,
         onLoadMoreMembers = {
             // 在途守卫：滚到底会连续触发，不守的话同一页会被追加两次——
@@ -496,6 +512,8 @@ fun GroupInfoHost(
         convId = convId,
         isGroup = true,
         iAmManager = info?.iAmManager == true,
+        // 同 ChatDetailHost：菜单点完就关，请求不能挂在它身上
+        scope = scope,
         target = archiveMenuFor,
         anchor = archiveMenuAnchor,
         onLocateInChat = { seq -> archiveMenuFor = null; onLocateInChat(seq) },

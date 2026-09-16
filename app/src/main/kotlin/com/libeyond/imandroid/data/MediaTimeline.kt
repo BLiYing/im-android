@@ -102,6 +102,13 @@ data class ViewerMedia(
     val timestamp: Long = 0,
     /** 原件字节数（`file_size`）。「查看原视频」胶囊要显示它，下载器也拿它当进度分母。 */
     val sizeBytes: Long = 0,
+    /**
+     * 内嵌的极小模糊缩略（M4-7 的 `thumb`）。**查看器要拿它当加载期的占位**——
+     * 没有它时整屏是纯黑，用户以为"这张图没了"（2026-09-17 用户报）。
+     * iOS 同款：`IMMediaViewerViewController.showThumbPlaceholder` 先画内嵌 thumb 的磨砂版 + 菊花，
+     * 原图到达后原地替换。
+     */
+    val thumb: String = "",
 ) {
     val isVideo: Boolean get() = contentType == ContentType.VIDEO
 }
@@ -110,7 +117,10 @@ data class ViewerMedia(
 fun MessageEntity.toViewerMedia(): ViewerMedia? {
     val recalled = (recalledAt ?: 0L) > 0L || (deletedAt ?: 0L) > 0L
     if (!MediaTimeline.viewable(contentType, content, convSeq, recalled)) return null
-    return ViewerMedia(convSeq, contentType, content, poster.orEmpty(), sender, timestamp, fileSize ?: 0L)
+    return ViewerMedia(
+        convSeq, contentType, content, poster.orEmpty(), sender, timestamp, fileSize ?: 0L,
+        thumb.orEmpty(),
+    )
 }
 
 /**
@@ -121,5 +131,5 @@ fun MessageEntity.toViewerMedia(): ViewerMedia? {
  */
 fun ConvMediaItem.toViewerMedia(): ViewerMedia? {
     if (!MediaTimeline.viewable(contentType, content, convSeq, recalled = false)) return null
-    return ViewerMedia(convSeq, contentType, content, poster, sender, timestamp, fileSize)
+    return ViewerMedia(convSeq, contentType, content, poster, sender, timestamp, fileSize, thumb)
 }

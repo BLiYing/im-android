@@ -100,6 +100,8 @@ fun ChatDetailHost(
     // 归档取数与「链接」本地扫都收在这两个 helper 里（群资料那侧共用同一份）
     val archive = rememberConvArchive(client, conv.convId, tab)
     val linkMessages = rememberLinkMessages(client, conv.convId)
+    // 语音页签的波形：服务端归档接口不回带，从本地消息表按 conv_seq 兜底（见 rememberVoiceWaveforms）
+    val voiceWaveforms = rememberVoiceWaveforms(client, conv.convId)
 
     val page = ChatDetailNav.current(mediaOpen = viewing != null, profileOpen = profile)
     // 返回键一处派发（同 GroupInfoHost；理由见 ChatDetailPage 的注释）
@@ -132,6 +134,8 @@ fun ChatDetailHost(
             ArchiveMediaViewer(
                 client = client, convId = conv.convId, isGroup = false, iAmManager = false,
                 archive = archive, current = m, scope = scope,
+                // 查看器标题＝会话名（iOS `IMMediaPagerViewController.conversationTitle`）
+                title = conv.title,
                 onSave = saveMedia,
                 onForwardPicker = { archiveForward = it },
                 onLocateInChat = { seq -> viewing = null; onLocateInChat(seq) },
@@ -225,6 +229,9 @@ fun ChatDetailHost(
             },
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+            // 语音行的发送者名。单聊只有两个人：我自己显「你自己」（同 iOS），对方显本机显示名
+            senderNameOf = { uid -> if (uid == owner) "你自己" else conv.peerRemark.ifBlank { conv.title } },
+            waveformOf = { seq -> voiceWaveforms[seq] },
             galleryOnly = galleryOnly,
             onBack = onBack,
         )
@@ -341,6 +348,8 @@ fun ChatDetailHost(
         isGroup = false,
         // 单聊没有管理员这回事；「为所有人删除」只对自己发的开（ArchiveActions 里判）
         iAmManager = false,
+        // 菜单点完就关，删除/隐藏那几次请求不能挂在它身上（见 ArchiveActionsHost 的 scope 注释）
+        scope = scope,
         target = archiveMenuFor,
         anchor = archiveMenuAnchor,
         onLocateInChat = { seq -> archiveMenuFor = null; onLocateInChat(seq) },

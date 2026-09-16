@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +35,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -49,6 +52,7 @@ import com.libeyond.imandroid.data.OriginalVideo
 import com.libeyond.imandroid.data.ViewerMedia
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.SheetItem
+import com.libeyond.imandroid.ui.rememberFrostedPainter
 import com.libeyond.imandroid.ui.theme.IMTheme
 import com.libeyond.mediapicker.ZoomableImage
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -96,6 +100,11 @@ internal fun MediaViewerScreen(
     pages: List<ViewerMedia>,
     /** 打开时看哪一条（`conv_seq`）。不在 [pages] 里就从第一条开始。 */
     startSeq: Long,
+    /**
+     * 顶部标题＝**会话名**（iOS `IMMediaPagerViewController` 的 `conversationTitle`）。
+     * 空串则只剩页码那一行。见 [ViewerTopBar] 的注释：iOS 是"标题在上、i/N 在下"两行。
+     */
+    title: String = "",
     host: String,
     useTls: Boolean,
     /** 已下载到本地的原件（由 Host 从下载器取）。有就用它显示/播放/存相册。 */
@@ -206,6 +215,9 @@ internal fun MediaViewerScreen(
                 ZoomableImage(
                     model = sourceOf(item, localOf, host, useTls),
                     contentDescription = "图片",
+                    // 磨砂占位：没下到本地的原图是现拉的，那几秒不能是纯黑
+                    // （iOS `showThumbPlaceholder` 同）。没有 thumb 的老消息仍回落黑底。
+                    placeholder = rememberFrostedPainter(item.thumb),
                 )
             }
         }
@@ -230,14 +242,36 @@ internal fun MediaViewerScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ViewerButton(Lucide.X, "关闭", onClose)
-            // i/N：只有真能翻页时才画（iOS 的计数标签同）
-            if (pages.size > 1) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text("${state.currentPage + 1}/${pages.size}", color = Color.White, fontSize = 15.sp)
+            // **标题在上、页码在下**，逐条对齐 iOS：`IMMediaPagerViewController` 用的是聊天页同款
+            // `IMLiquidNavigationBar`，主标题＝会话名（17 semibold），副标题＝`i / N`（13 regular、次要灰），
+            // 且 `_count <= 1` 时副标题为空串。本端此前只有一个居中的 `21/21`，没有标题
+            // （2026-09-17 用户报：查看器标题与 iOS 不一致）。
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (title.isNotBlank()) {
+                    Text(
+                        title,
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
-                // 右侧留出与关闭钮等宽的空位，让计数真正居中
-                Box(Modifier.size(VIEWER_BUTTON))
+                // i/N：只有真能翻页时才画（iOS 的计数标签同）
+                if (pages.size > 1) {
+                    Text(
+                        "${state.currentPage + 1} / ${pages.size}",
+                        // iOS 副标题是 secondaryLabel，在深色查看器上解析成半透明白
+                        color = Color(0xB3FFFFFF),
+                        fontSize = 13.sp,
+                    )
+                }
             }
+            // 右侧留出与关闭钮等宽的空位，让标题真正居中
+            Box(Modifier.size(VIEWER_BUTTON))
         }
 
         // 降级说明：挂在顶栏下方，**不挡画面中心、也不与右下角按钮排抢位置**

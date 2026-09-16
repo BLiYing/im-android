@@ -19,8 +19,14 @@ package com.libeyond.imandroid.data
  */
 object MediaGrid {
 
-    /** 每行几格。与 iOS 媒体库同为 4（`IMConversationMediaViewController` 的 4 列布局）。 */
-    const val COLUMNS = 4
+    /**
+     * 每行几格。**3 列**，与 iOS 两处宫格逐字一致：`IMConversationMediaViewController`
+     * （`cols = 3, spacing = 2`）与详情页的 `IMDetailMediaContainerCell.tileForWidth:`
+     * （`floor((width - (cols-1)*sp) / 3)`，正方格）。
+     *
+     * 此前写的是 4，注释还声称"与 iOS 同"——**是错的**，格子比 iOS 小一圈（2026-09-17 对照源码核出来的）。
+     */
+    const val COLUMNS = 3
 
     /** 按 [columns] 把条目切成一行一行。空集回空表（调用方据此走空态，不画空行）。 */
     fun <T> rows(items: List<T>, columns: Int = COLUMNS): List<List<T>> =

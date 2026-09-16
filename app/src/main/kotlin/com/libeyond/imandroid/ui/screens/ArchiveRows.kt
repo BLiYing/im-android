@@ -69,52 +69,86 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  * 四类归档行/格共用这一个：各写一遍的话，迟早有一处忘了记矩形，
  * 表现是"长按有反应但菜单弹在屏幕角落"。
  */
+/**
+ * 只为装一个「稍后在回调里读一次」的值。
+ *
+ * **不用 `mutableStateOf`**：`onGloballyPositioned` 在滚动时每一帧都回调，
+ * 而这个矩形没有任何**组合期**读取方（只在长按回调里读），进快照系统纯属白开销。
+ * （注：它也**不是**「详情页划不动」的原因——那条实测下来是宫格里的图全被门控挡成了空格子，
+ * 见 [MediaTile] 的注释；这里只是顺手把无谓的每帧状态写去掉。）
+ */
+internal class RectHolder {
+    var value: Rect = Rect.Zero
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun Modifier.archiveItemGestures(
     onClick: () -> Unit,
     onLongPress: ((Rect) -> Unit)?,
 ): Modifier {
-    var rect by remember { mutableStateOf(Rect.Zero) }
+    val rect = remember { RectHolder() }
     return this
-        .onGloballyPositioned { rect = it.boundsInWindow() }
-        .combinedClickable(onClick = onClick, onLongClick = onLongPress?.let { cb -> { cb(rect) } })
+        .onGloballyPositioned { rect.value = it.boundsInWindow() }
+        .combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongPress?.let { cb -> { cb(rect.value) } },
+        )
 }
 
 /**
- * 语音行。**点不响**——归档里播放要接进聊天页那套单例播放器（否则会同时响两处，iOS 是复用
- * `IMVoicePlayer sharedPlayer`，本端还没接）。但**长按可以**：定位回聊天、转发、删除。
+ * 语音行。**三行结构，逐条对齐 iOS** `IMChatDetailViewController.decorateVoiceRow3Cell:`
+ * （发送者名 / 迷你播放器（波形 + 时长）/ 完整时间，行高 106pt）：
+ *
+ * 1. **发送者名**——此前本端整行只有"时长 + 相对时间"，看不出是谁发的，而语音恰恰最需要这个；
+ * 2. **波形**：直接复用聊天页语音气泡那一份 [VoiceContent]（iOS 那侧同样是复用
+ *    `IMVoiceMiniPlayerView`）。两份实现必然在柱数/归一化上分叉，而那没有任何自动手段能发现；
+ * 3. **完整年月日时分**（[TimeFormat.fileDateTime]，同 iOS `IMFormatFileDateTime`）。
+ *
+ * **仍与 iOS 差一条：点不响。** iOS 那行的 ▶ 与波形都能就地播（`IMVoicePlayer sharedPlayer`），
+ * 本端**整个 App 还没有语音播放器**（聊天页的语音气泡同样只画波形），
+ * 所以这里刻意不画播放按钮——画一个按下去没反应的 ▶ 比没有更糟。页签脚注 [VOICE_TAB_NOTE] 如实说了这件事。
+ *
+ * 长按仍可用：定位回聊天、转发、删除。
+ *
+ * @param senderName 发送者显示名；空则不画第一行（拿不到成员表时，比如超级群）。
+ * @param waveform   振幅指纹。**服务端归档接口不回带这个字段**，由调用方从本地消息表按
+ *   `conv_seq` 兜底取；取不到就是等高条纹（协议允许的合法状态，见 [com.libeyond.imandroid.data.Waveform]）。
  */
 @Composable
-internal fun VoiceRow(item: ConvMediaItem, onLongPress: ((Rect) -> Unit)? = null) {
+internal fun VoiceRow(
+    item: ConvMediaItem,
+    senderName: String = "",
+    waveform: String? = null,
+    onLongPress: ((Rect) -> Unit)? = null,
+) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Column {
         Row(
             Modifier.fillMaxWidth().background(c.surface)
                 .archiveItemGestures(onClick = {}, onLongPress = onLongPress)
-                .padding(horizontal = d.space4, vertical = 12.dp),
+                .padding(horizontal = d.space4, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(c.accentSoft),
-                contentAlignment = Alignment.Center,
-            ) {
-                androidx.compose.foundation.Image(
-                    Lucide.Mic, "语音", Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.accent),
-                )
-            }
-            Spacer(Modifier.width(d.space3))
             Column(Modifier.weight(1f)) {
+                if (senderName.isNotBlank()) {
+                    Text(
+                        senderName,
+                        color = c.textPrimary,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                VoiceContent(item.duration.toLong(), waveform)
                 Text(
-                    MediaUrl.formatDuration(item.duration).ifBlank { "语音" },
-                    color = c.textPrimary, style = MaterialTheme.typography.bodyLarge,
+                    TimeFormat.fileDateTime(item.timestamp),
+                    color = c.textTertiary, style = MaterialTheme.typography.bodySmall,
                 )
-                Text(TimeFormat.conversationTime(item.timestamp),
-                    color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
             }
         }
-        Box(Modifier.fillMaxWidth().padding(start = 68.dp).height(0.5.dp).background(c.separator))
+        Box(Modifier.fillMaxWidth().padding(start = d.space4).height(0.5.dp).background(c.separator))
     }
 }
 
@@ -146,20 +180,33 @@ internal fun LinkRow(
             }
             Spacer(Modifier.width(d.space3))
             Column(Modifier.weight(1f)) {
-                Text(url, color = c.accent, style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                // 原文与 URL 不同才显摘要——整条就是个链接时再显一遍是纯噪音
-                if (text.trim() != url) {
-                    Text(text, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Text(TimeFormat.conversationTime(timestamp),
+                // **三行**（对齐 iOS `IMLinkRowView`：t1 标题 / t2 host+path 等宽 / t3 完整时间）。
+                // iOS 的 t1 优先用 og:title，拿不到才回落 host——本端归档里不逐行拉预览
+                // （一屏几十条各发一次 HTTP），所以 t1 用**原文摘要**、没有摘要才回落 host。
+                Text(
+                    text.trim().takeIf { it.isNotEmpty() && it != url } ?: hostOf(url),
+                    color = c.textPrimary, style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    url, color = c.accent, style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Text(TimeFormat.fileDateTime(timestamp),
                     color = c.textTertiary, style = MaterialTheme.typography.bodySmall)
             }
         }
         Box(Modifier.fillMaxWidth().padding(start = 68.dp).height(0.5.dp).background(c.separator))
     }
 }
+
+/**
+ * 链接行第一行的兜底：URL 里的 host（iOS `IMLinkRowView` 的 t1 在没有 og:title 时同样回落 host）。
+ * 纯字符串切分，不解析 URL——这里只要给人看，解析失败也不该抛。
+ */
+private fun hostOf(url: String): String =
+    url.substringAfter("://", url).substringBefore('/').ifBlank { url }
 
 /** 媒体宫格的一格（供详情页内联复用）。 */
 @Composable
@@ -191,14 +238,24 @@ internal fun MediaTile(
         Modifier.aspectRatio(1f).background(c.subtleFill)
             .archiveItemGestures(onClick = { onOpen(item) }, onLongPress = onLongPress),
     ) {
-        // 磨砂占位（M4-7）：一屏四列十几格全从空底开始加载最难看，这一格最该有它
+        // 磨砂占位（M4-7）：一屏十几格全从空底开始加载最难看，这一格最该有它
         val frosted = rememberFrostedPainter(item.thumb)
         AsyncImage(
-            // 视频用 poster：直接把视频 URL 交给 Coil 会去下整段再抽帧
+            // 视频用 poster：直接把视频 URL 交给 Coil 会去下整段再抽帧。
+            //
+            // 图片**一律用远端地址，不走 `gate.model`**（2026-09-17 用户报「媒体库里看不到图」）：
+            // 门控未就绪时 `gate.model` 是 null，于是整个归档宫格只剩一片磨砂 + 一排 ↓ 徽标，
+            // 而这一页的**全部意义**就是让人一眼扫过去找那张图。iOS 两处宫格
+            // （`IMConversationMediaViewController` / `IMDetailMediaContainerCell` 里的
+            // `IMMediaTileCell`）都是直接按 URL 加载缩略，门控只作为**盖在上面的状态层**存在
+            // （`autoPrefetchEnabled = NO` 管的是"不自动整包预取原件"，不是"不显示这张图"）。
+            //
+            // 聊天气泡那侧**仍然守门控**（`MediaBubbles.ImageContent` 的 `gate.model`）——
+            // 那里一屏只有一两张、且紧跟着就是原图查看，与"翻历史找图"不是一回事。
             model = if (isVideo) {
                 MediaUrl.absolute(item.poster, host, useTls).takeIf { item.poster.isNotBlank() }
             } else {
-                gate.model
+                MediaUrl.absolute(item.content, host, useTls).takeIf { item.content.isNotBlank() }
             },
             contentDescription = if (isVideo) "视频" else "图片",
             contentScale = ContentScale.Crop,
@@ -267,17 +324,21 @@ internal fun FileRow(
                 DownloadBadge(gate.state, sizeBytes = 0, onTap = gate.onTap, compact = true)
             }
             Spacer(Modifier.width(d.space3))
+            // **三行**（对齐 iOS `IMDetailFileCell`：文件名 / 状态副行 / 时间行，行高 74pt）：
+            // 此前是两行、且把时间挤进了状态行，于是"1.3 MB · 昨天 · 已下载"读起来像一句话，
+            // 时间还用的相对口径（2026-09-17 对齐 iOS 时改的）。
             Column(Modifier.weight(1f)) {
                 Text(
                     name,
                     color = c.textPrimary, style = MaterialTheme.typography.bodyLarge, maxLines = 2,
                 )
-                val size = MediaUrl.formatSize(item.fileSize)
-                val when1 = TimeFormat.conversationTime(item.timestamp)
                 Text(
-                    listOf(size, when1).filter { it.isNotEmpty() }.joinToString(" · ") +
-                        gate.state.phase.fileHint(),
+                    MediaUrl.formatSize(item.fileSize) + gate.state.phase.fileHint(),
                     color = c.textSecondary, style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    TimeFormat.fileDateTime(item.timestamp),
+                    color = c.textTertiary, style = MaterialTheme.typography.bodySmall,
                 )
             }
         }

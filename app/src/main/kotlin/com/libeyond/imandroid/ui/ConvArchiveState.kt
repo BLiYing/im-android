@@ -110,6 +110,54 @@ internal fun rememberConvArchive(client: IMClient, convId: String, tab: DetailTa
 }
 
 /**
+ * 「语音」页签的波形兜底：`conv_seq → waveform`，**从本地消息表来**。
+ *
+ * 服务端归档接口不回带 `waveform`（`internal/conversation/media.go` 没有这一列），
+ * 于是归档里的语音行此前一律是等高条纹，**从那里转发出去的语音也丢波形**（老限制，
+ * 记在 im-android `current_task.md` 的「已知坑」里）。本地库里有那条消息时就能补上——
+ * 与「链接」页签同一条路子（都是服务端接口不覆盖、只能本地扫）。
+ *
+ * 只覆盖**本地已加载**的那一段，与链接页签同一语义；拿不到就退回等高条纹，
+ * 那是协议允许的合法状态（见 `data/Waveform.kt`），不是错误。
+ */
+@Composable
+internal fun rememberVoiceWaveforms(client: IMClient, convId: String): Map<Long, String> {
+    val owner = client.uid.orEmpty()
+    val local by remember(convId, owner) {
+        if (owner.isEmpty()) emptyFlow() else client.repo.observeMessages(owner, convId, LINK_SCAN_LIMIT)
+    }.collectAsState(initial = emptyList<MessageEntity>())
+    return remember(local) {
+        local.asSequence()
+            .filter { it.contentType == "voice" && !it.waveform.isNullOrBlank() }
+            .associate { it.convSeq to it.waveform.orEmpty() }
+    }
+}
+
+/**
+ * `uid → 公开显示名`，**从本地消息里的 `from_nickname` 快照取**。
+ *
+ * 归档语音行要显发送者（iOS 那行第一行就是它），常规来源是群成员表——但**超级群拿不到**：
+ * `GET /groups/{id}` 对超级群只回我自己（协议里写明的降级）。于是大群的语音行整行没有名字，
+ * 而大群恰恰最需要"这段语音是谁发的"（2026-09-17 真机实测撞见：1997 人的群里名字是空的）。
+ * 本地消息带着发送时的昵称快照，拿它兜底即可；都拿不到才回空串（**不落内部 uid**，
+ * 10 位随机数字对人没有意义）。
+ *
+ * 与波形兜底同一条路子：只覆盖本地已加载的那一段，拿不到不是错误。
+ */
+@Composable
+internal fun rememberLocalSenderNames(client: IMClient, convId: String): Map<String, String> {
+    val owner = client.uid.orEmpty()
+    val local by remember(convId, owner) {
+        if (owner.isEmpty()) emptyFlow() else client.repo.observeMessages(owner, convId, LINK_SCAN_LIMIT)
+    }.collectAsState(initial = emptyList<MessageEntity>())
+    return remember(local) {
+        local.asSequence()
+            .filter { !it.fromNickname.isNullOrBlank() }
+            .associate { it.sender to it.fromNickname.orEmpty() }
+    }
+}
+
+/**
  * 「链接」页签的数据：**本地扫**。
  *
  * 服务端归档接口不覆盖这一格——链接不是独立的 `content_type`，没有可索引的列

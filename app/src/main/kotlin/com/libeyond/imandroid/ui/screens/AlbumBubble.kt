@@ -120,13 +120,13 @@ internal fun AlbumBubble(
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
-    var rect by remember { mutableStateOf(Rect.Zero) }
     val pattern = remember(tiles.size) { AlbumLayout.rowPattern(tiles.size) }
 
+    // 这里原先挂着一个 `onGloballyPositioned { rect = ... }` 把**整个宫格**的矩形写进
+    // `MutableState`，而那个 rect **没有任何读取方**（长按浮起用的是逐格的 `tileRect`）——
+    // 滚动时每帧回调、每帧写一次快照状态，纯属白开销，删掉。
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .onGloballyPositioned { rect = it.boundsInWindow() },
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
         if (reserveAvatarColumn) {
@@ -170,7 +170,7 @@ internal fun AlbumBubble(
                                 // 挂在外层容器上的 combinedClickable 永远收不到长按
                                 // ——2026-09-08 用户报的「九宫格消息不支持长按」就是这个。
                                 AlbumTileView(
-                                    m, tile, host, useTls, isGroup,
+                                    m, tile, host, useTls, isGroup, mine,
                                     onTap = { onTapTile(at) },
                                     onLongPress = { r -> onLongPressTile(at, r) },
                                     hidden = at == hiddenIndex,
@@ -208,34 +208,39 @@ private fun AlbumTileView(
     host: String,
     useTls: Boolean,
     isGroup: Boolean,
+    /** 这一组是我自己发的——同 [MediaContent] 的 `mine`：不门控，直接按地址显示。 */
+    mine: Boolean,
     onTap: () -> Unit = {},
     onLongPress: (Rect) -> Unit = {},
     hidden: Boolean = false,
 ) {
     val c = IMTheme.colors
-    // 每一格记住**自己**的矩形：长按浮起的是这一格，不是整个宫格
-    var tileRect by remember { mutableStateOf(Rect.Zero) }
+    // 每一格记住**自己**的矩形：长按浮起的是这一格，不是整个宫格。
+    // 用普通持有对象而不是 `mutableStateOf`，理由见 [RectHolder]。
+    val tileRect = remember { RectHolder() }
     // 待发那格（本地 content:// uri）不进门控——它还没上传，本来就在本地。
-    // **已确认的那几格必须走门控**：不走的话 Coil 见到远端地址照样把原件拉下来，
+    // **别人发来的那几格必须走门控**：不走的话 Coil 见到远端地址照样把原件拉下来，
     // 门控就成了纯装饰（2026-09-08 这一处的编辑静默没生效过一次，
     // 表现正是"文件气泡有门控徽标、宫格却在偷偷下原图"）。
+    // **我自己发的同样不门控**（2026-09-17）：多图转发在自己这一侧本机并没有那些字节，
+    // 门控会把我刚发出去的一整组图渲染成一片带 ↓ 的空格子（单图那条见 `MediaContent.mine`）。
     val sending = m.sending || m.failed
-    val gate = if (sending) null else rememberGate(m.url, m.contentType, m.sizeBytes, isGroup)
+    val gate = if (sending || mine) null else rememberGate(m.url, m.contentType, m.sizeBytes, isGroup)
     Box(
         modifier = Modifier.size(size).background(c.subtleFill)
-            .onGloballyPositioned { tileRect = it.boundsInWindow() }
+            .onGloballyPositioned { tileRect.value = it.boundsInWindow() }
             .alpha(if (hidden) 0f else 1f)
             .combinedClickable(
                 // 没下下来的格子点一下是下载（开始 / 暂停 / 重试，失效不做事），**不打开**（iOS `IMAlbumCell` 同）
                 onClick = { if (gate != null && !gate.ready) gate.onTap() else onTap() },
-                onLongClick = { onLongPress(tileRect) },
+                onLongClick = { onLongPress(tileRect.value) },
             ),
     ) {
         val frosted = rememberFrostedPainter(m.thumb)
         AsyncImage(
-            // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，
-            // 所以选完立刻有图，不用等上传完
-            model = if (sending) MediaUrl.absolute(m.url, host, useTls) else gate?.model,
+            // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，所以选完立刻有图、
+            // 不用等上传完；自己发的那几格（gate 为 null）同样按地址直出。
+            model = if (gate == null) MediaUrl.absolute(m.url, host, useTls) else gate.model,
             contentDescription = if (m.contentType == ContentType.VIDEO) "视频" else "图片",
             contentScale = ContentScale.Crop,
             // 磨砂占位（M4-7）：宫格逐格都要有，不然一屏九张全是空底

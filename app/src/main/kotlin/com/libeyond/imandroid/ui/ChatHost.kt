@@ -508,6 +508,9 @@ fun ChatHost(
             client = client,
             conv = conv,
             iAmManager = iAmManager,
+            // 复制图片 / 仅删除自己都是 launch 出去的活，**不能挂在菜单自己身上**
+            // （菜单点完就关，作用域随之取消）——见 ChatMessageMenu 的 scope 注释
+            scope = scope,
             onReply = { replyTo = it },
             onForward = { selActions.forwardOne(it) },
             // 进多选默认勾上触发的那条（同 iOS enterSelectionWithMessage:）

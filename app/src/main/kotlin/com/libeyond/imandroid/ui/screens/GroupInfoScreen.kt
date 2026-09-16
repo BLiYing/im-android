@@ -92,6 +92,10 @@ fun GroupInfoScreen(
     onOpenLink: (String) -> Unit,
     host: String,
     useTls: Boolean,
+    /** 见 [com.libeyond.imandroid.ui.screens.archiveTab] 同名参数：语音行要显发送者名。 */
+    senderNameOf: (String) -> String = { "" },
+    /** 见 [com.libeyond.imandroid.ui.screens.archiveTab] 同名参数：波形由本地消息表兜底。 */
+    waveformOf: (Long) -> String? = { null },
     /** 邀请好友入群。**入口按 [GroupPermissions.canInvite] 显隐**——
      *  开了「仅管理员可邀请」还给普通成员留入口，点进去只会拿到 300212。 */
     onInvite: () -> Unit,
@@ -107,7 +111,8 @@ fun GroupInfoScreen(
     val d = IMTheme.dimens
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        IMTopBar(title = if (galleryOnly) info.name else "群聊信息", onLeft = onBack)
+        // 媒体库标题逐字对齐 iOS（理由见 `ChatDetailScreen` 同一行）
+        IMTopBar(title = if (galleryOnly) GALLERY_TITLE else "群聊信息", onLeft = onBack)
 
         LazyColumn(Modifier.fillMaxSize()) {
             if (!galleryOnly) item {
@@ -263,6 +268,8 @@ fun GroupInfoScreen(
                     host = host,
                     useTls = useTls,
                     isGroup = true,
+                    senderNameOf = senderNameOf,
+                    waveformOf = waveformOf,
                 )
             }
 

@@ -28,6 +28,33 @@ internal object CopyImage {
     private val log = IMLog.tag("IM.Export")
 
     /**
+     * 放进剪贴板的那一项：**同时带 URI 与纯文本两种表示**。
+     *
+     * ### 为什么不能只用 `ClipData.newUri`
+     * 它的 `ClipDescription` 只声明图片类 MIME，**不含 `text/plain`**。而 Compose 的
+     * （⚠️ 注释里别写「斜杠 + 星号」这种通配 MIME 字面量：Kotlin 的块注释**可嵌套**，
+     *   那两个字符会当场开一层内层注释，本段的结束符只关掉里层、外层一路吞到文件尾，
+     *   而编译器报的却是「Missing '}'」。2026-09-17 在这上面栽过一次。）
+     * `BasicTextField` 判断"能不能粘贴"走的是 `ClipboardManager.hasText()`，那个方法只看
+     * description 里有没有文本类 MIME——于是复制完图片回到自家输入框长按，
+     * 系统菜单里根本不出现「粘贴」，看着像**长按没反应**
+     * （2026-09-17 用户报；iOS 那侧是 `UIPasteboard.image` + 重写 `canPerformAction:`，
+     * 系统天然认得图片剪贴项，本端没有这个通道）。
+     *
+     * 补一条文本表示之后：认 URI 的应用（相册/聊天/邮件）拿到的仍是同一张图，
+     * 只认文本的输入框拿到一段 `content://…`——而那正是 [com.libeyond.imandroid.data.PasteImage]
+     * 认领并还原成待发图的形状。两条路合起来才等价于 iOS 的「粘到哪儿都是图」。
+     */
+    private fun imageClip(context: Context, uri: android.net.Uri): ClipData {
+        val mime = context.contentResolver.getType(uri) ?: "image/*"
+        val desc = android.content.ClipDescription(
+            "图片",
+            arrayOf(android.content.ClipDescription.MIMETYPE_TEXT_PLAIN, mime),
+        )
+        return ClipData(desc, ClipData.Item(uri.toString(), null, uri))
+    }
+
+    /**
      * @param url 绝对 URL，或待发消息那条本地 `content://`。
      * @return 给用户看的文案（成功失败都有话说，不静默）。
      */
@@ -42,12 +69,18 @@ internal object CopyImage {
                 out.outputStream().use { input.copyTo(it) }
             }
             val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", out)
-            val clip = ClipData.newUri(context.contentResolver, "图片", uri)
+            val clip = imageClip(context, uri)
             withContext(Dispatchers.Main) {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
             }
             log.i("image_copied")
             "已复制图片"
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // **必须原样抛回去**：下面那个 `catch (Exception)` 会把取消也吞掉，于是"协程被取消"
+            // 被记成一条 `image_copy_failed`，看起来像复制失败、实际是调用方那一层已经离开组合
+            // （2026-09-17 真机抓到的正是 `LeftCompositionCancellationException`）。
+            // 吞掉取消还会破坏取消传播，这是本仓 `runCatchingCancellable` 存在的同一个理由。
+            throw e
         } catch (e: Exception) {
             // 网络失败、磁盘满、厂商 ROM 拦剪贴板都会到这——如实说，别静默
             log.w("image_copy_failed", "err" to e.javaClass.simpleName)

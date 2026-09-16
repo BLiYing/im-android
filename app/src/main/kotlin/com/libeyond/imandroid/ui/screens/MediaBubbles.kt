@@ -62,6 +62,16 @@ fun MediaContent(
     useTls: Boolean,
     /** 群聊——自动下载策略的单聊/群聊分档要用（`DownloadPolicy.shouldAutoDownload`）。 */
     isGroup: Boolean = false,
+    /**
+     * 这条是**我自己发出去的**。为真时图/视频**不走下载门控**，直接按地址显示。
+     *
+     * 起因是 2026-09-17 用户报的「转发了一张图，却没看到那条图片消息」：转发透传的是原图 URL、
+     * **本机并没有这张图的字节**（原图当初就没下过），于是自己刚发出去的那条在**自己这一侧**
+     * 渲染成一个带 ↓ 的空盒子——要用户对自己刚发的东西再点一次「下载」才看得见。
+     * 门控是拿来挡"别人发来的、我还没决定要不要下"的流量的，**对自己发出去的内容没有意义**。
+     * 普通发图那条路不受影响（字节本就在 `MediaCache` 里，门控恒 Ready），受影响的只有转发。
+     */
+    mine: Boolean = false,
     /** 文件行的宽度 = 气泡内容区宽。定宽才有地方把长文件名截中间。 */
     fileRowWidth: Dp = 240.dp,
     /**
@@ -81,8 +91,8 @@ fun MediaContent(
         RoundedCornerShape(topStart = r, topEnd = r, bottomStart = 0.dp, bottomEnd = 0.dp)
     }
     when (msg.contentType) {
-        "image" -> ImageContent(msg, shape, isGroup, onOpenMedia)
-        "video" -> VideoContent(msg, shape, host, useTls, isGroup, onOpenMedia)
+        "image" -> ImageContent(msg, shape, host, useTls, isGroup, mine, onOpenMedia)
+        "video" -> VideoContent(msg, shape, host, useTls, isGroup, mine, onOpenMedia)
         "voice" -> VoiceContent(msg.duration?.toLong(), msg.waveform)
         else -> FileContent(msg, isGroup, fileRowWidth)
     }
@@ -105,16 +115,25 @@ internal fun rememberMediaDisplaySize(msg: MessageEntity): DpSize {
  * 图/视频整块的轻点：就绪 → 打开；没就绪 → 门控动作（开始 / 暂停 / 重试）；失效 → 不接（iOS 失效层点击穿透）。
  * 用 passThroughTap：只吃抬起，气泡上的长按菜单照常弹。
  */
-private fun Modifier.mediaTap(gate: GateInfo, msg: MessageEntity, onOpenMedia: ((MessageEntity) -> Unit)?): Modifier =
-    passThroughTap(enabled = onOpenMedia != null && gate.state.phase != DownloadPhase.Expired) {
-        if (gate.ready) onOpenMedia?.invoke(msg) else gate.onTap()
+private fun Modifier.mediaTap(
+    gate: GateInfo,
+    msg: MessageEntity,
+    onOpenMedia: ((MessageEntity) -> Unit)?,
+    /** 绕过门控直接打开（自己发的，见 [MediaContent] 的 `mine`）。 */
+    openAnyway: Boolean = false,
+): Modifier =
+    passThroughTap(enabled = onOpenMedia != null && (openAnyway || gate.state.phase != DownloadPhase.Expired)) {
+        if (gate.ready || openAnyway) onOpenMedia?.invoke(msg) else gate.onTap()
     }
 
 @Composable
 private fun ImageContent(
     msg: MessageEntity,
     shape: androidx.compose.ui.graphics.Shape,
+    host: String,
+    useTls: Boolean,
     isGroup: Boolean,
+    mine: Boolean,
     onOpenMedia: ((MessageEntity) -> Unit)?,
 ) {
     val c = IMTheme.colors
@@ -124,17 +143,21 @@ private fun ImageContent(
     // 下载门控（M4-7）：**未就绪时 model 是 null 而不是远端地址**——给远端地址等于
     // Coil 照样把原图拉下来，门控就成了纯装饰。
     val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
+    // **自己发出去的不门控**（理由见 [MediaContent] 的 `mine`）：已就绪走本地件，
+    // 没就绪就按地址显示，而不是给用户一个要再点一次下载的空盒子。
+    val model = gate.model
+        ?: if (mine) MediaUrl.absolute(msg.content, host, useTls).takeIf { it.isNotBlank() } else null
     Box(
         // 尺寸在排版前就定死（服务端给的宽高），加载完不跳版把下面的消息挤走
         modifier = Modifier
             .size(rememberMediaDisplaySize(msg))
             .clip(shape)
             .background(c.subtleFill)
-            .mediaTap(gate, msg, onOpenMedia),
+            .mediaTap(gate, msg, onOpenMedia, openAnyway = mine),
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
-            model = gate.model,
+            model = model,
             contentDescription = "图片",
             contentScale = ContentScale.Crop,
             placeholder = frosted,
@@ -142,7 +165,10 @@ private fun ImageContent(
             fallback = frosted,
             modifier = Modifier.fillMaxSize(),
         )
-        MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText = null, expiredCaption = "图片已失效")
+        // 自己发的不画门控层——它表达的是"要不要下载"，而这条是我自己发出去的
+        if (!mine) {
+            MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText = null, expiredCaption = "图片已失效")
+        }
     }
 }
 
@@ -153,6 +179,7 @@ private fun VideoContent(
     host: String,
     useTls: Boolean,
     isGroup: Boolean,
+    mine: Boolean,
     onOpenMedia: ((MessageEntity) -> Unit)?,
 ) {
     val c = IMTheme.colors
@@ -162,7 +189,7 @@ private fun VideoContent(
     val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
     Box(
         modifier = Modifier.size(rememberMediaDisplaySize(msg)).clip(shape).background(c.subtleFill)
-            .mediaTap(gate, msg, onOpenMedia),
+            .mediaTap(gate, msg, onOpenMedia, openAnyway = mine),
         contentAlignment = Alignment.Center,
     ) {
         // 封面：**解不了 HEVC 的端只能靠这张图**，没有它就是一片黑底加个播放钮。
@@ -189,7 +216,8 @@ private fun VideoContent(
             )
         }
         val durationText = msg.duration?.takeIf { it > 0 }?.let { MediaUrl.formatDuration(it) }
-        if (!gate.ready) {
+        // 自己发的：直接当就绪渲染（播放钮 + 时长），点开在查看器里流式播（同 `mine` 的理由）
+        if (!gate.ready && !mine) {
             // 没下下来：时长并进左上角那块胶囊（「大小 · 时长」），不另画一块（iOS `renderGatedDownloadUI`）
             MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText, expiredCaption = "视频已失效")
             return@Box

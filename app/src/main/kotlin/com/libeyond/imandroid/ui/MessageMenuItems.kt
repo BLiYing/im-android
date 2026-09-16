@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
@@ -154,12 +153,22 @@ internal fun ChatMessageMenu(
     onMultiSelect: (MessageEntity) -> Unit,
     /** 「复制」要说一句（iOS 三档文案：已复制 / 已复制图片 / 已复制链接）。 */
     onToast: (String) -> Unit,
+    /**
+     * **宿主的作用域，本层绝不自建**（同 `ArchiveViewer.kt` 文件头那条 ⚠️）。
+     *
+     * 菜单是"点一下就把自己关掉"的浮层：`rememberCoroutineScope()` 绑的是本 composable，
+     * 点完菜单项 `onDismiss()` 一走，本层离开组合、作用域当场取消，**挂在上面的活全废**。
+     * 2026-09-17 真机抓到的就是这个：点「复制」后日志里是
+     * `image_copy_failed {err=LeftCompositionCancellationException}`——图片压根没进剪贴板，
+     * 用户看到的现象是"复制完回输入框长按，没有粘贴"。同一条线上还有「仅删除自己」
+     * （[runMessageDelete] 的 HideForMe 也是 launch）。
+     */
+    scope: kotlinx.coroutines.CoroutineScope,
     onDismiss: () -> Unit,
 ) {
     val owner = client.uid.orEmpty()
     val clipboard = LocalClipboardManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
-    val scope = rememberCoroutineScope()
     val actions = MessageActions.availableFor(target, owner, conv.isGroup, iAmManager)
     MessageContextMenu(
         anchor = anchor,

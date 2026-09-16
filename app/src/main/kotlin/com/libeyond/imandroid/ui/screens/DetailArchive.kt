@@ -70,6 +70,13 @@ internal const val LINK_TAB_NOTE = "链接由本机已加载的聊天记录扫�
 /** 语音页签的脚注。如实写清楚这一格现在能做什么、不能做什么。 */
 internal const val VOICE_TAB_NOTE = "归档里暂不能播放（长按可定位回聊天、转发或删除）。"
 
+/**
+ * 会话媒体库页的标题。**逐字取自 iOS** `IMConversationMediaViewController.viewDidLoad`
+ * 的 `self.title = @"图片与视频"`——本端此前显的是会话名（2026-09-17 用户报）。
+ * 单聊详情与群资料共用这一个常量，别在两处各写一遍字面量。
+ */
+internal const val GALLERY_TITLE = "图片与视频"
+
 /** 判定一条本地消息是不是链接（薄封装，方便调用点读起来短）。 */
 internal fun linkUrlOf(contentType: String, content: String, convSeq: Long): String? =
     if (LinkScan.isLinkMessage(contentType, content, convSeq)) LinkScan.firstUrl(content) else null
@@ -133,6 +140,18 @@ internal fun LazyListScope.archiveTab(
     host: String,
     useTls: Boolean,
     isGroup: Boolean,
+    /**
+     * uid → 显示名。**语音行要显发送者**（iOS 语音 cell 第一行就是它）；拿不到时给空串，
+     * 那一行整行不画，而不是显一串内部 uid。
+     */
+    senderNameOf: (String) -> String = { "" },
+    /**
+     * conv_seq → 波形。服务端归档接口**不回带** `waveform`（`internal/conversation/media.go` 没有这一列），
+     * 所以由调用方从**本地消息表**按 conv_seq 兜底取；取不到就是等高条纹（协议允许的合法状态）。
+     * 这同时修掉了「从语音页签转发出去的语音在收端只有等高条纹」那条老限制——
+     * 下面把它一并写进 [ArchiveTarget]。
+     */
+    waveformOf: (Long) -> String? = { null },
 ) {
     when (tab) {
         DetailTab.Members -> Unit // 不是消息，见 KDoc
@@ -152,7 +171,11 @@ internal fun LazyListScope.archiveTab(
         DetailTab.Voice -> {
             item { Footnote(VOICE_TAB_NOTE) }
             archiveList(archive, loading, hasMore, tab, onLoadMore) { item ->
-                VoiceRow(item) { r -> onLongPressArchive(item.toArchiveTarget(), r) }
+                val wave = waveformOf(item.convSeq)
+                VoiceRow(item, senderName = senderNameOf(item.sender), waveform = wave) { r ->
+                    // 波形一并带进菜单目标：从这一格转发出去的语音才不会丢波形
+                    onLongPressArchive(item.toArchiveTarget().copy(waveform = wave), r)
+                }
             }
         }
         DetailTab.Files -> archiveList(archive, loading, hasMore, tab, onLoadMore) { item ->

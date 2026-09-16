@@ -41,6 +41,14 @@ fun ZoomableImage(
     modifier: Modifier = Modifier,
     maxScale: Float = 4f,
     doubleTapScale: Float = 2.5f,
+    /**
+     * 加载期 / 失败时画什么（通常是消息里内嵌缩略的磨砂版）。
+     *
+     * **没有它就是一屏纯黑**：原件动辄几 MB，未下载时查看器是现拉的，那几秒里用户看到的是
+     * 黑屏，只能理解成"这张图没了"（2026-09-17 用户报）。iOS 同款：
+     * `IMMediaViewerViewController.showThumbPlaceholder` 先画内嵌 thumb 的模糊版，原图到达后原地替换。
+     */
+    placeholder: androidx.compose.ui.graphics.painter.Painter? = null,
 ) {
     var scale by remember(model) { mutableFloatStateOf(1f) }
     var offsetX by remember(model) { mutableFloatStateOf(0f) }
@@ -112,6 +120,9 @@ fun ZoomableImage(
             model = model,
             contentDescription = contentDescription,
             contentScale = ContentScale.Fit,
+            placeholder = placeholder,
+            error = placeholder,
+            fallback = placeholder,
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer(

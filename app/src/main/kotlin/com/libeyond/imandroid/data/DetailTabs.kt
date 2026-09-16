@@ -45,12 +45,17 @@ object DetailTabs {
         DetailTab.Members -> null
     }
 
+    /**
+     * 空态文案。**逐字对齐 iOS** `IMChatDetailViewController` 的 `tabCell:` / `emptyCell:`
+     * （「暂无媒体 / 暂无文件 / 暂无语音 / 暂无链接」）——本端此前是自己另写的一套长句
+     * （"这个会话还没有图片或视频"），同一个页签两端文案不同（2026-09-17 对照源码核出来的）。
+     */
     fun emptyText(tab: DetailTab): String = when (tab) {
         DetailTab.Members -> "还没有成员"
-        DetailTab.Media -> "这个会话还没有图片或视频"
-        DetailTab.Files -> "这个会话还没有文件"
-        DetailTab.Voice -> "这个会话还没有语音"
-        DetailTab.Links -> "这段聊天记录里没有链接"
+        DetailTab.Media -> "暂无媒体"
+        DetailTab.Files -> "暂无文件"
+        DetailTab.Voice -> "暂无语音"
+        DetailTab.Links -> "暂无链接"
     }
 }
 
