@@ -19,10 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -225,14 +222,19 @@ private fun AlbumTileView(
     // **我自己发的同样不门控**（2026-09-17）：多图转发在自己这一侧本机并没有那些字节，
     // 门控会把我刚发出去的一整组图渲染成一片带 ↓ 的空格子（单图那条见 `MediaContent.mine`）。
     val sending = m.sending || m.failed
-    val gate = if (sending || mine) null else rememberGate(m.url, m.contentType, m.sizeBytes, isGroup)
+    val gate = if (sending) null else rememberGate(m.url, m.contentType, m.sizeBytes, isGroup)
+    // 待发那格、以及自己发的那几格都不门控；**但「已失效」不豁免**
+    // （2026-09-17 `/code-review` 抓出，同 `MediaBubbles.ImageContent` 的 `ungated`）：
+    // 豁免掉的话失效的格子会装作正常、点进去是空查看器，而不是显示 ⊘。
+    val ungated = gate == null ||
+        (mine && gate.state.phase != com.libeyond.imandroid.data.DownloadPhase.Expired)
     Box(
         modifier = Modifier.size(size).background(c.subtleFill)
             .onGloballyPositioned { tileRect.value = it.boundsInWindow() }
             .alpha(if (hidden) 0f else 1f)
             .combinedClickable(
                 // 没下下来的格子点一下是下载（开始 / 暂停 / 重试，失效不做事），**不打开**（iOS `IMAlbumCell` 同）
-                onClick = { if (gate != null && !gate.ready) gate.onTap() else onTap() },
+                onClick = { if (!ungated && gate != null && !gate.ready) gate.onTap() else onTap() },
                 onLongClick = { onLongPress(tileRect.value) },
             ),
     ) {
@@ -240,7 +242,7 @@ private fun AlbumTileView(
         AsyncImage(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，所以选完立刻有图、
             // 不用等上传完；自己发的那几格（gate 为 null）同样按地址直出。
-            model = if (gate == null) MediaUrl.absolute(m.url, host, useTls) else gate.model,
+            model = if (ungated) MediaUrl.absolute(m.url, host, useTls) else gate?.model,
             contentDescription = if (m.contentType == ContentType.VIDEO) "视频" else "图片",
             contentScale = ContentScale.Crop,
             // 磨砂占位（M4-7）：宫格逐格都要有，不然一屏九张全是空底
@@ -249,11 +251,15 @@ private fun AlbumTileView(
             fallback = frosted,
             modifier = Modifier.size(size),
         )
-        // 门控层：压暗 + 裸字形 + 36dp 环 + 左上角一项角标（iOS `IMAlbumTileView`），就绪不画
-        if (gate != null) AlbumTileGate(gate.state, m.sizeBytes)
+        // 门控层：压暗 + 裸字形 + 36dp 环 + 左上角一项角标（iOS `IMAlbumTileView`），就绪不画。
+        // 豁免门控的那几格不画——**失效的除外**（`ungated` 已把失效排除在豁免之外）
+        if (gate != null && !ungated) AlbumTileGate(gate.state, m.sizeBytes)
         // 就绪的视频格中心画播放角标（iOS `_playBadge`）；上传 / 失败 / 门控期中心位让给它们（判据见 AlbumLayout）。
         // 比单条视频气泡小一号：iOS 宫格是 30pt，而 3 列时格子只有约 79dp，44dp 的气泡版会压掉半格
-        if (AlbumLayout.showsPlayBadge(m.contentType == ContentType.VIDEO, m.sending, m.failed, gate?.ready ?: true)) {
+        if (AlbumLayout.showsPlayBadge(
+                m.contentType == ContentType.VIDEO, m.sending, m.failed, ungated || gate?.ready == true,
+            )
+        ) {
             com.libeyond.imandroid.ui.components.VideoPlayBadge(
                 modifier = Modifier.align(Alignment.Center),
                 diameter = 32.dp,
@@ -293,7 +299,7 @@ private fun AlbumTileView(
         }
         // 视频格左上角显时长（服务端给了才显，**不为拿它去下载视频**）。
         // 没下下来时左上角让给门控角标——格子窄，容不下两项，时长等就绪再回来（iOS 同）
-        if (m.contentType == ContentType.VIDEO && (m.durationMs ?: 0) > 0 && (gate == null || gate.ready)) {
+        if (m.contentType == ContentType.VIDEO && (m.durationMs ?: 0) > 0 && (ungated || gate?.ready == true)) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)

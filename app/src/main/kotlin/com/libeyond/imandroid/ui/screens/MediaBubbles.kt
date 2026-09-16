@@ -145,15 +145,20 @@ private fun ImageContent(
     val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
     // **自己发出去的不门控**（理由见 [MediaContent] 的 `mine`）：已就绪走本地件，
     // 没就绪就按地址显示，而不是给用户一个要再点一次下载的空盒子。
+    //
+    // ⚠️ **但「已失效」不在豁免之列**（2026-09-17 `/code-review` 抓出）：服务端清理过的媒体
+    // 自己发的那条同样会失效，豁免掉的话它会**装作一切正常**——图渲染不出来却没有任何说明，
+    // 点一下还打开一个空查看器。失效是终态，必须照常画失效层（[ungated] 只豁免"没下载"这一档）。
+    val ungated = mine && gate.state.phase != DownloadPhase.Expired
     val model = gate.model
-        ?: if (mine) MediaUrl.absolute(msg.content, host, useTls).takeIf { it.isNotBlank() } else null
+        ?: if (ungated) MediaUrl.absolute(msg.content, host, useTls).takeIf { it.isNotBlank() } else null
     Box(
         // 尺寸在排版前就定死（服务端给的宽高），加载完不跳版把下面的消息挤走
         modifier = Modifier
             .size(rememberMediaDisplaySize(msg))
             .clip(shape)
             .background(c.subtleFill)
-            .mediaTap(gate, msg, onOpenMedia, openAnyway = mine),
+            .mediaTap(gate, msg, onOpenMedia, openAnyway = ungated),
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
@@ -165,8 +170,8 @@ private fun ImageContent(
             fallback = frosted,
             modifier = Modifier.fillMaxSize(),
         )
-        // 自己发的不画门控层——它表达的是"要不要下载"，而这条是我自己发出去的
-        if (!mine) {
+        // 自己发的不画门控层——它表达的是"要不要下载"；**失效那一档除外**（见上）
+        if (!ungated) {
             MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText = null, expiredCaption = "图片已失效")
         }
     }
@@ -187,9 +192,11 @@ private fun VideoContent(
     // 它是"信封"的一部分；把封面也门控掉的话，未下载的视频只剩一团磨砂，
     // 用户连要不要下都判断不了。
     val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
+    // 自己发的豁免门控，但**失效不豁免**（理由同 [ImageContent] 的 `ungated`）
+    val ungated = mine && gate.state.phase != DownloadPhase.Expired
     Box(
         modifier = Modifier.size(rememberMediaDisplaySize(msg)).clip(shape).background(c.subtleFill)
-            .mediaTap(gate, msg, onOpenMedia, openAnyway = mine),
+            .mediaTap(gate, msg, onOpenMedia, openAnyway = ungated),
         contentAlignment = Alignment.Center,
     ) {
         // 封面：**解不了 HEVC 的端只能靠这张图**，没有它就是一片黑底加个播放钮。
@@ -216,8 +223,9 @@ private fun VideoContent(
             )
         }
         val durationText = msg.duration?.takeIf { it > 0 }?.let { MediaUrl.formatDuration(it) }
-        // 自己发的：直接当就绪渲染（播放钮 + 时长），点开在查看器里流式播（同 `mine` 的理由）
-        if (!gate.ready && !mine) {
+        // 自己发的：直接当就绪渲染（播放钮 + 时长），点开在查看器里流式播（同 `mine` 的理由）；
+        // 失效那一档仍走门控层，显示「视频已失效」
+        if (!gate.ready && !ungated) {
             // 没下下来：时长并进左上角那块胶囊（「大小 · 时长」），不另画一块（iOS `renderGatedDownloadUI`）
             MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText, expiredCaption = "视频已失效")
             return@Box

@@ -246,32 +246,37 @@ internal fun MediaViewerScreen(
             // `IMLiquidNavigationBar`，主标题＝会话名（17 semibold），副标题＝`i / N`（13 regular、次要灰），
             // 且 `_count <= 1` 时副标题为空串。本端此前只有一个居中的 `21/21`，没有标题
             // （2026-09-17 用户报：查看器标题与 iOS 不一致）。
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (title.isNotBlank()) {
-                    Text(
-                        title,
-                        color = Color.White,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+            // i/N：只有真能翻页时才画（iOS `_count <= 1` 时副标题为空串）
+            val showsCounter = pages.size > 1
+            // **两样都没有就整块不画**：否则单张、又没给标题时会凭空多出一个空列 + 右侧占位
+            // （2026-09-17 `/code-review` 抓出的 nit）。
+            if (title.isNotBlank() || showsCounter) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (title.isNotBlank()) {
+                        Text(
+                            title,
+                            color = Color.White,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (showsCounter) {
+                        Text(
+                            "${state.currentPage + 1} / ${pages.size}",
+                            // iOS 副标题是 secondaryLabel，在深色查看器上解析成半透明白
+                            color = Color(0xB3FFFFFF),
+                            fontSize = 13.sp,
+                        )
+                    }
                 }
-                // i/N：只有真能翻页时才画（iOS 的计数标签同）
-                if (pages.size > 1) {
-                    Text(
-                        "${state.currentPage + 1} / ${pages.size}",
-                        // iOS 副标题是 secondaryLabel，在深色查看器上解析成半透明白
-                        color = Color(0xB3FFFFFF),
-                        fontSize = 13.sp,
-                    )
-                }
+                // 右侧留出与关闭钮等宽的空位，让标题真正居中
+                Box(Modifier.size(VIEWER_BUTTON))
             }
-            // 右侧留出与关闭钮等宽的空位，让标题真正居中
-            Box(Modifier.size(VIEWER_BUTTON))
         }
 
         // 降级说明：挂在顶栏下方，**不挡画面中心、也不与右下角按钮排抢位置**
