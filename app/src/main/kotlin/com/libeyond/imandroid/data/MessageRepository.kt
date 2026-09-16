@@ -50,10 +50,13 @@ internal const val MEDIA_TIMELINE_LIMIT = 300
  */
 class MessageRepository(
     /**
-     * DAO 是 `internal` 而不是 `private`：**只为让同包的查询扩展够得着**
-     * （`MessageWindowQueries.kt`——窗口与搜索那一组读查询，从这里搬出去只是为了控体量，
-     * 调用点仍写成 `repo.windowAround(...)`）。**除那个文件外别在包内直接碰它们**，
-     * 写侧一律走本类的方法：入库边界上挂着 [IncomingRule] 那套口径，绕过去就没人执行了。
+     * DAO 是 `internal` 而不是 `private`，为的是让 `MessageWindowQueries.kt` 够得着
+     * （窗口与搜索那一组读查询，搬出去只为控体量，调用点仍写成 `repo.windowAround(...)`）。
+     *
+     * ⚠️ **别把这读成"只有同包碰得到"**：Kotlin 的 `internal` 是**模块级**，没有 Java 那种
+     * package-private，而 `:app` 统共一个模块——`ui` 包照样够得着。所以那是**约定不是保证**，
+     * 编译器不替你守。约定是：除那个文件外谁都别直接碰，写侧一律走本类的方法——
+     * 入库边界上挂着 [IncomingRule] 那套口径，绕过去就没人执行了。
      */
     internal val messages: MessageDao,
     private val pending: PendingMessageDao,

@@ -7,7 +7,8 @@
 
 ## 当前焦点
 
-> **四个贴线文件按职责拆分 ✅ 已改、未提交（2026-09-16；test.sh 777 例绿。纯重构，行为未改，后端零改动，不必真机回归）**：
+> **五个贴线文件按职责拆分 ✅（2026-09-16/17；纯重构，行为未改，后端零改动，不必真机回归）**：
+> ①–④ 已提交 `93fff31`；⑤ 与注释订正待提交。test.sh 777 例绿。
 > ① **`MessageRepository` 588→516**：两份**逐字同构**的预览文案合成一份 `data/MessagePreview.kt`（新判据 + 单测；
 >    原先 HTTP 快照与落库行各走一份，分叉的表现是"刚发出去列表显示 A、重进 App 显示 B"）；`toEntity` →
 >    `data/MessageMapping.kt`（「加一个随消息走的字段要动七处」的第一处，单独放好找）；`LocalSearchPage` 归到
@@ -17,8 +18,8 @@
 >    （§4.11.1 的 `max_gap`、区间清单、sync 路径回 `delivered`）以后就动这个文件**。代价是 `repo` / `ownerProvider` /
 >    `media` / `transmit` 放宽到 internal——**Kotlin 的 internal 是模块级，等于对整个 `:app` 敞开**，编译器守不住，
 >    靠约定（实测目前没人绕过；review 该打回的信号是 `ui` 里冒出 `client.messages.repo` / `.transmit(`，
->    记在 `MessageService.repo` 的注释上）。**既有的 `MessageRepository` DAO 与 `MessageSignals` 两处注释也写着
->    "同包"这个不准确的说法**，这次没顺手改，哪天动到那两个文件时一并纠正。
+>    记在 `MessageService.repo` 的注释上）。`MessageRepository` 的 DAO 注释原先也写着"只为让同包的查询扩展够得着"，
+>    **已一并改准**；`MessageSignals` 那句"调用点同包"讲的是扩展函数跨包要多一行 import，本来就对，没动。
 > ③ **`ChatHost` 587→518**：相机/文件两个 launcher + **相机产物的跨进程落点 uri** → `ui/ChatMediaLaunchers.kt`；
 >    三层整页覆盖层（资料 / 选联系人发名片 / 相册）→ `ui/ChatPickerLayers.kt`（同 `ChatViewerLayer` 套路，
 >    **渲染顺序即层级**，返回键仍由宿主那个 `BackHandler` 一处派发）。
@@ -26,6 +27,11 @@
 >    只列普通成员 / 剔掉自己 / 剔掉已在群的好友——**三条写反都不报错**，只在点下去之后被服务端拒）；画法 →
 >    `ui/GroupPickPage.kt`；换群头像 → `ui/GroupAvatarPicker.kt`；转让确认框并入既有 `GroupInfoDialogs.kt`。
 > 两个新判据**都变异验红过**。搬家逐条比对了返回键分层、`ForwardPickerLayer` 那处早退的相对位置、三层渲染顺序。
+> ⑤ **`DetailArchive` 495→242**（2026-09-17）：四类归档项的**画法**（语音行 / 链接行 / 文件行 / 媒体格，
+>    外加它们共用的 `archiveItemGestures`——长按要上报自己在窗口里的矩形，菜单贴着它弹）整组搬进
+>    `ui/screens/ArchiveRows.kt`（286 行）。切口是「**画一条** vs **排布与调度**」：留下的是页签条与
+>    `archiveTab` / `mediaGrid` / `archiveList`（谁先谁后、空态、分页）。**同包移动，零 import 变更**，
+>    没有新判据也就没有新测试。同批把 `MessageRepository` 的 DAO 注释改准（理由见 ②）。
 >
 > 上一批：**与 iOS 的最后三条已知差异已收掉 ✅ 已改、未提交、待真机自测（2026-09-16；test.sh 764 例绿）**：
 > ① **转发语音不再丢波形**：服务端一直收 `waveform`、iOS 一直带，只有本端的 `SendMsgData` 与待发行缺字段。
@@ -161,10 +167,11 @@
 - **批量收藏 / 多目标转发的循环挂在聊天页的协程作用域上**：中途离开聊天页，后面还没发的不再发、回执吐司也不弹。
 - **合并转发的「我」名是 `@句柄`**（`myPublicName()`），不是昵称；单聊引用块不显名（同 iOS）。
 - **失效媒体判据只认本次进程里下载器登记过的 404/410**，没有 iOS 那种持久登记——没点过的失效图照样会被转出去。
-- **五个贴线文件已全部拆开**（2026-09-16）：`ChatScreen.kt` 520、`MessageRepository.kt` 516、`ChatHost.kt` 518、
-  `GroupInfoHost.kt` 529、`MessageService.kt` 479（上限 600，**WARN 线 480**——门禁里现在还 WARN 的五个就是它们加
-  `DetailArchive.kt` 495）。搬去哪见「当前焦点」。**别把新东西再往这五个里加**：它们离红线只剩 70–120 行，
-  而本仓每次贴线都是"合并两条线的改动"那一下触顶的。
+- **六个贴线文件已全部拆开**（2026-09-16/17）：`GroupInfoHost.kt` 529、`ChatScreen.kt` 520、`MessageRepository.kt` 519、
+  `ChatHost.kt` 518、`MessageService.kt` 484、`DetailArchive.kt` 242（上限 600，**WARN 线 480**——门禁里还 WARN 的
+  就是前五个）。搬去哪见「当前焦点」。**别把新东西再往这五个里加**：它们离红线只剩 70–115 行，
+  而本仓每次贴线都是"合并两条线的改动"那一下触顶的。真要再拆时优先照 `DetailArchive` 那一刀切
+  （**画一条 vs 排布与调度**），比按行数硬切干净；`ui/screens/ArchiveRows.kt` 286 是拆出来的新文件，别再往它堆。
 - 新消息自动贴底与 ↓ 按钮按**行数**判，键盘跟随按**像素**判，两套口径并存；发送后抑制窗 1s（iOS 0.5s）。
 - **视频不转码**、**分片上传不跨进程续传**、**视频没有本地缓存**、**图片不压缩**（只挡 20MB）。
 - **查看器翻页只能往更旧续拉**（服务端媒体接口是 `conv_seq < cursor` 的倒序分页，没有"往更新翻"的方向）：更新那一端以本地已有的为准，本地一次最多取 300 条（`MEDIA_TIMELINE_LIMIT`）。续拉失败即停、**不反复重试**，但会在查看器顶部说一句。归档里语音不能播。
