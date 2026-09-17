@@ -1,44 +1,16 @@
 package com.libeyond.imandroid.ui.components
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.composables.icons.lucide.Ban
-import com.composables.icons.lucide.Download
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Pause
-import com.composables.icons.lucide.RotateCw
 import com.libeyond.imandroid.data.DownloadPhase
 import com.libeyond.imandroid.data.DownloadPolicy
 import com.libeyond.imandroid.data.DownloadSettings
 import com.libeyond.imandroid.data.DownloadState
 import com.libeyond.imandroid.data.DownloadTap
 import com.libeyond.imandroid.data.MediaDownloader
-import com.libeyond.imandroid.data.MediaUrl
-import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
  * 下载门控要用的东西——放 CompositionLocal 而不是层层传参：媒体渲染点有四处
@@ -49,6 +21,12 @@ class MediaGateEnv(
     val downloads: MediaDownloader,
     val settings: () -> DownloadSettings,
     val onWifi: Boolean,
+    /**
+     * 我是谁（iOS 编排器构造时就带 `myUserID`）。**归档与收藏宫格判"自己发的不门控"要用**
+     * （[DownloadPolicy.archiveTileUngated]）：那两处拿到的是服务端来的条目，没有聊天气泡那样现成的 `mine`。
+     * 用函数而不是值：切账号不重建这份环境。
+     */
+    val myUid: () -> String = { "" },
 )
 
 val LocalMediaGate = compositionLocalOf<MediaGateEnv?> { null }
@@ -61,6 +39,12 @@ data class GateInfo(
     val onTap: () -> Unit,
     /** 已下载到本地的原件；未就绪为 null。查看器/播放器/存相册都该优先用它。 */
     val localFile: java.io.File? = null,
+    /**
+     * 自动下载策略此刻放不放行这一条（[DownloadPolicy.shouldAutoDownload]）。
+     * **与是否真的去下无关**——`autoPrefetch = false` 的归档页照样算它：图片放行即按地址显示
+     * （见 [DownloadPolicy.archiveTileUngated]）。
+     */
+    val autoAllowed: Boolean = true,
 ) {
     val ready: Boolean get() = state.phase == DownloadPhase.Ready
 }
@@ -98,18 +82,22 @@ fun rememberGate(
     val states by env.downloads.states.collectAsState()
     val state = remember2(states, url) { env.downloads.stateOf(url, isVideo) }
 
+    // 策略判一次就记住：宫格滚动时每格每次重组都会走到这里。策略本身也进 key——
+    // 进主界面后才拉到的账号策略（或 capabilities_update 推来的新策略）要能改过来
+    val settings = env.settings()
+    val auto = androidx.compose.runtime.remember(url, contentType, sizeBytes, isGroup, env.onWifi, settings) {
+        DownloadPolicy.shouldAutoDownload(settings, contentType, sizeBytes, isGroup, env.onWifi)
+    }
+
     // 策略放行就自动开下。**每条只判一次**（key 用 url）——不然每次重组都会再调一次 start，
     // start 内部虽然幂等，但每帧调一次是纯浪费。
     LaunchedEffect(url, isGroup, autoPrefetch) {
         if (url.isBlank() || !autoPrefetch) return@LaunchedEffect
-        val auto = DownloadPolicy.shouldAutoDownload(
-            env.settings(), contentType, sizeBytes, isGroup, env.onWifi,
-        )
         if (auto) env.downloads.start(url, isVideo, sizeBytes)
     }
 
     val local = if (state.phase == DownloadPhase.Ready) env.downloads.localFile(url, isVideo) else null
-    return GateInfo(state, local, localFile = local, onTap = {
+    return GateInfo(state, local, localFile = local, autoAllowed = auto, onTap = {
         when (state.tapAction()) {
             DownloadTap.Start -> env.downloads.start(url, isVideo, sizeBytes)
             DownloadTap.Pause -> env.downloads.pause(url, isVideo)
@@ -122,82 +110,3 @@ fun rememberGate(
 @Composable
 private fun <T> remember2(a: Any?, b: Any?, calc: () -> T): T =
     androidx.compose.runtime.remember(a, b) { calc() }
-
-/**
- * 门控徽标：**未下载 ↓+大小 / 下载中 环+⏸ / 暂停 ↓ / 失败 ↻ / 失效 ⊘**。
- * 五态各画各的（对齐 iOS `IMDownloadProgress`），合并任意两个都会让用户误解当前发生了什么。
- *
- * 就绪态**不画**——画一个"已下载"的标记只是噪声。
- */
-@Composable
-fun DownloadBadge(
-    state: DownloadState,
-    sizeBytes: Long,
-    onTap: () -> Unit,
-    modifier: Modifier = Modifier,
-    /** 小格子（宫格）里徽标要缩小，且不画大小文字。 */
-    compact: Boolean = false,
-) {
-    if (state.phase == DownloadPhase.Ready) return
-    val c = IMTheme.colors
-    val side: Dp = if (compact) 32.dp else 44.dp
-    val icon: Dp = if (compact) 14.dp else 20.dp
-
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                Modifier.size(side).clip(CircleShape).background(c.overlayStrong)
-                    // **失效不给点**：给了也是每点一次拉一次 404。
-                    // 不用 clickable：它吃掉 down，徽标盖着的气泡/格子就长按不出菜单了（#13）
-                    .passThroughTap(enabled = state.phase != DownloadPhase.Expired, onTap = onTap),
-                contentAlignment = Alignment.Center,
-            ) {
-                when (state.phase) {
-                    DownloadPhase.Downloading -> {
-                        if (state.hasPercent) {
-                            CircularProgressIndicator(
-                                progress = { state.fraction },
-                                modifier = Modifier.size(side),
-                                color = c.onMedia,
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            // 服务端没给 Content-Length：只能显示"在动"
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(side),
-                                color = c.onMedia,
-                                strokeWidth = 2.dp,
-                            )
-                        }
-                        Image(Lucide.Pause, "暂停", Modifier.size(icon), colorFilter = ColorFilter.tint(c.onMedia))
-                    }
-                    DownloadPhase.Failed -> Image(
-                        Lucide.RotateCw, "重试", Modifier.size(icon), colorFilter = ColorFilter.tint(c.onMedia),
-                    )
-                    DownloadPhase.Expired -> Image(
-                        Lucide.Ban, "已失效", Modifier.size(icon), colorFilter = ColorFilter.tint(c.onMedia),
-                    )
-                    else -> Image(
-                        Lucide.Download, "下载", Modifier.size(icon), colorFilter = ColorFilter.tint(c.onMedia),
-                    )
-                }
-            }
-            val label = when {
-                state.phase == DownloadPhase.Expired -> "文件已失效"
-                compact -> ""
-                state.phase == DownloadPhase.Downloading -> ""
-                sizeBytes > 0 -> MediaUrl.formatSize(sizeBytes)
-                else -> ""
-            }
-            if (label.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                Box(
-                    Modifier.clip(RoundedCornerShape(8.dp)).background(c.overlayStrong)
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                ) {
-                    Text(label, color = c.onMedia, fontSize = 10.sp, textAlign = TextAlign.Center)
-                }
-            }
-        }
-    }
-}

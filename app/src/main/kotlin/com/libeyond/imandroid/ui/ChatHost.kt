@@ -89,6 +89,8 @@ fun ChatHost(
     var picking by remember(conv.convId) { mutableStateOf(false) }
     /** 选联系人发名片中（null = 不在选）。 */
     var pickingFriend by remember(conv.convId) { mutableStateOf<List<FriendEntry>?>(null) }
+    /** 「从收藏发送」选择页开着。 */
+    var pickingFavorites by remember(conv.convId) { mutableStateOf(false) }
     /** 正在全屏查看的媒体（null = 没在看）。 */
     var viewing by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
     // 点系统消息里的名字进的资料页
@@ -153,6 +155,7 @@ fun ChatHost(
             if (recordNav.isOpen) add(ChatOverlays.Layer.ChatRecord)
             if (pickingFriend != null) add(ChatOverlays.Layer.FriendPicker)
             if (picking) add(ChatOverlays.Layer.MediaPicker)
+            if (pickingFavorites) add(ChatOverlays.Layer.FavoritePicker)
             if (forwarding != null) add(ChatOverlays.Layer.Forward)
             if (menuFor != null) add(ChatOverlays.Layer.ContextMenu)
         }
@@ -162,6 +165,7 @@ fun ChatHost(
             ChatOverlays.Layer.ChatRecord -> recordNav.pop()
             ChatOverlays.Layer.FriendPicker -> pickingFriend = null
             ChatOverlays.Layer.MediaPicker -> picking = false
+            ChatOverlays.Layer.FavoritePicker -> pickingFavorites = false
             ChatOverlays.Layer.Forward -> forwarding = null
             ChatOverlays.Layer.ContextMenu -> menuFor = null
             // 没有覆盖层时：**多选态 → 搜索态 → 离开会话**，一层一层退。
@@ -367,8 +371,8 @@ fun ChatHost(
                 }
                 // 与 iOS 一致：整个功能三端都没做
                 AttachItems.Kind.AudioVideo -> toast = "音视频通话还没做"
-                // 能收藏（多选底栏），但还没有收藏列表页，无从挑一条发出去
-                AttachItems.Kind.Favorite -> toast = "收藏还没做"
+                // 收藏页的选择模式（iOS `openFavoritesPicker`），发送见下方 ChatPickerLayers 的 onFavoritesPicked
+                AttachItems.Kind.Favorite -> pickingFavorites = true
             }
         },
         onLoadOlder = {
@@ -481,6 +485,13 @@ fun ChatHost(
             scope.launch { mediaSend.send(items, sendOriginal) { toast = it } }
         },
         onDismissPicker = { picking = false },
+        pickingFavorites = pickingFavorites,
+        onCancelFavorites = { pickingFavorites = false },
+        onFavoritesPicked = { msgs ->
+            pickingFavorites = false
+            // 挂宿主作用域：选择页先关掉自己，挂在它身上的协程会当场被取消
+            scope.launch { toast = sendFavoritesTo(client, msgs, conv).ifEmpty { null } }
+        },
         onToast = { toast = it },
     )
 

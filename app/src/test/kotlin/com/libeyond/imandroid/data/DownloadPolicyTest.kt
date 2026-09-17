@@ -100,6 +100,30 @@ class DownloadPolicyTest {
         assertTrue(DownloadPolicy.isDefault(d))
         assertFalse(DownloadPolicy.isDefault(d.copy(wifi = d.wifi.copy(enabled = false))))
     }
+
+    // ————————————————— 归档 / 收藏宫格的放行（iOS `stateForMessage:` 返回 nil 的几种情况）—————————————————
+
+    @Test
+    fun `宫格里自己发的不门控，图片视频都一样`() {
+        assertTrue(DownloadPolicy.archiveTileUngated(isVideo = false, mine = true, phase = DownloadPhase.NotStarted, imageAutoAllowed = false))
+        assertTrue(DownloadPolicy.archiveTileUngated(isVideo = true, mine = true, phase = DownloadPhase.NotStarted, imageAutoAllowed = false))
+    }
+
+    @Test
+    fun `别人发的图片按策略放行，视频恒由用户点`() {
+        assertTrue(DownloadPolicy.archiveTileUngated(isVideo = false, mine = false, phase = DownloadPhase.NotStarted, imageAutoAllowed = true))
+        // 用户把图片设成手动：宫格要老老实实显磨砂 + ↓，不能偷偷按地址把原图拉下来
+        assertFalse(DownloadPolicy.archiveTileUngated(isVideo = false, mine = false, phase = DownloadPhase.NotStarted, imageAutoAllowed = false))
+        // 视频一格显示的是封面，门控在视频本体上，策略放行也不替用户下（autoPrefetch = NO）
+        assertFalse(DownloadPolicy.archiveTileUngated(isVideo = true, mine = false, phase = DownloadPhase.NotStarted, imageAutoAllowed = true))
+    }
+
+    @Test
+    fun `已失效一律不豁免——自己发的也要显失效层`() {
+        for (mine in listOf(true, false)) for (video in listOf(true, false)) {
+            assertFalse(DownloadPolicy.archiveTileUngated(isVideo = video, mine = mine, phase = DownloadPhase.Expired, imageAutoAllowed = true))
+        }
+    }
 }
 
 /** 下载状态机：五态各自该显示什么、点一下该做什么。 */

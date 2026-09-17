@@ -154,7 +154,10 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                         bottomBar = bottomBar,
                     )
                     Tab.Contacts -> ContactsHost(client = client, onOpenChat = { openConv = it }, bottomBar = bottomBar)
-                    Tab.Me -> MeHost(client = client, onLogout = onLogout, bottomBar = bottomBar)
+                    Tab.Me -> MeHost(
+                        client = client, onLogout = onLogout, bottomBar = bottomBar,
+                        onOpenChat = { openConv = it },
+                    )
                 }
                 menuFor?.let { target ->
                     ConversationMenu(client, target, menuAnchor, scope, onDismiss = { menuFor = null })

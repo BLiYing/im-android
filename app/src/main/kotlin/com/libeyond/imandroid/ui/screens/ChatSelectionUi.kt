@@ -44,14 +44,33 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  * 不是同一个控件（`SYMMETRY.md`）。判据全在 `data/ChatSelection.kt` 与 `data/SelectionActions.kt`。
  */
 
-/** 行左侧的勾选圈。不可勾的行**整个不画**（同 iOS：`canEditRow=NO` 的行系统不画圈）。 */
+/**
+ * 行左侧的勾选圈。不可勾的行**整个不画**（同 iOS：`canEditRow=NO` 的行系统不画圈）。
+ *
+ * @param overMedia 盖在图片上（「从收藏发送」宫格右上角）：未选中画**半透明黑底白圈**，
+ *   否则灰圈落在浅色图上看不见（iOS `IMMediaTileCell.setPickMode:` 同理加了衬底）。
+ */
 @Composable
-internal fun SelectionCheck(selected: Boolean, modifier: Modifier = Modifier) {
+internal fun SelectionCheck(selected: Boolean, modifier: Modifier = Modifier, overMedia: Boolean = false) {
     val c = IMTheme.colors
     Box(
         modifier = modifier.size(22.dp).clip(CircleShape)
-            .background(if (selected) c.accent else Color.Transparent)
-            .border(1.5.dp, if (selected) c.accent else c.textTertiary, CircleShape),
+            .background(
+                when {
+                    selected -> c.accent
+                    overMedia -> Color.Black.copy(alpha = 0.3f)
+                    else -> Color.Transparent
+                },
+            )
+            .border(
+                1.5.dp,
+                when {
+                    selected -> c.accent
+                    overMedia -> Color.White
+                    else -> c.textTertiary
+                },
+                CircleShape,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         if (selected) Text("✓", color = c.onAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold)

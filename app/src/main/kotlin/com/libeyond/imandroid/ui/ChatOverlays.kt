@@ -33,6 +33,12 @@ internal object ChatOverlays {
         /** 自建相册选图页。 */
         MediaPicker,
 
+        /**
+         * 「从收藏发送」选择页。它自己里面还有查看器 / 资料页 / 聊天记录页，那几层由它自己的返回键先关，
+         * 轮到这里时就是关掉整个选择页（= 取消）。
+         */
+        FavoritePicker,
+
         /** 转发目标选择页。 */
         Forward,
 

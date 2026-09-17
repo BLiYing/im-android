@@ -46,7 +46,7 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 // 该显什么字、画哪个图标全在 `data/DownloadLabels.kt`（已单测），这里只管画。
 // **这几个组件都不接点击**：点这条媒体的哪儿都算点它，由外层整块接——
 // 此前只有中间那枚徽标能点，点旁边的空白却落到气泡上直接打开了（#8 前半条）。
-// 旧的 [DownloadBadge] 留给详情页归档（那里是另一套排版）。
+// 详情页 / 收藏页的宫格与文件行**也画这几个**（2026-09-17 起；此前那两处是另一套半透明圆徽标，已删）。
 
 /** 图片/视频中心圆钮外那圈环的外接边长（iOS `kIMDownloadRingSide`）。 */
 private val MEDIA_RING_SIDE = 56.dp
@@ -148,44 +148,78 @@ fun BoxScope.AlbumTileGate(state: DownloadState, sizeBytes: Long) {
 private val TILE_RING_SIDE = 36.dp
 
 /**
- * 文件气泡左侧 44dp 的图标位（iOS `IMBubbleCell` 的 `_fileIconWrap`）。
+ * 文件图标位（iOS `IMBubbleCell` 的 `_fileIconWrap`，气泡里 44dp）。
  * **只有就绪才显类型图标**（#8 后半条）；其余态画下载状态，口径见 [DownloadLabels.fileSlotOf]。
+ *
+ * **详情页 / 收藏页的文件行也用它**（[side] 传 36dp，iOS `IMDetailFileCell` 的图标位）：
+ * iOS 那一行的圆底 / 进度环 / ↓⏸↻ 注释里写明「与聊天页文件气泡同款」。本端此前那一行是
+ * 类型图标上再压一枚半透明徽标（另一套画法），与气泡两样（2026-09-17 用户报）。
+ * 环、圆底、字形一律按 [side] 等比缩放，两处只有大小不同。
  */
 @Composable
-fun FileGateSlot(state: DownloadState, sizeBytes: Long, fileName: String) {
+fun FileGateSlot(state: DownloadState, sizeBytes: Long, fileName: String, side: Dp = 44.dp) {
     val c = IMTheme.colors
     val slot = DownloadLabels.fileSlotOf(state.phase)
-    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+    val k = side / 44.dp
+    val ringRadius = FILE_RING_RADIUS * k
+    Box(Modifier.size(side), contentAlignment = Alignment.Center) {
         when (slot) {
-            FileSlot.TypeIcon -> FileTypeIcon(fileName, size = 44.dp)
+            FileSlot.TypeIcon -> FileTypeIcon(fileName, size = side)
             FileSlot.StartDisc -> Box(
-                Modifier.size(FILE_RING_RADIUS * 2).clip(CircleShape).background(c.accent),
+                Modifier.size(ringRadius * 2).clip(CircleShape).background(c.accent),
                 contentAlignment = Alignment.Center,
             ) {
-                Image(Lucide.ArrowDown, "下载", Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.onAccent))
+                Image(Lucide.ArrowDown, "下载", Modifier.size(18.dp * k), colorFilter = ColorFilter.tint(c.onAccent))
             }
             FileSlot.RingPause, FileSlot.RingResume -> {
                 DownloadRing(
                     fraction = DownloadLabels.ringFraction(state, sizeBytes),
-                    radius = FILE_RING_RADIUS,
+                    radius = ringRadius,
                     track = c.textSecondary.copy(alpha = 0.25f),
                     progress = c.accent,
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier.size(side),
                 )
                 val pause = slot == FileSlot.RingPause
                 Image(
                     if (pause) Lucide.Pause else Lucide.ArrowDown, if (pause) "暂停" else "继续下载",
-                    Modifier.size(16.dp), colorFilter = ColorFilter.tint(c.accent),
+                    Modifier.size(16.dp * k), colorFilter = ColorFilter.tint(c.accent),
                 )
             }
-            FileSlot.Retry -> Image(Lucide.RotateCw, "重试", Modifier.size(20.dp), colorFilter = ColorFilter.tint(c.danger))
-            FileSlot.Expired -> Image(Lucide.OctagonX, "文件已失效", Modifier.size(22.dp), colorFilter = ColorFilter.tint(c.danger))
+            FileSlot.Retry -> Image(
+                Lucide.RotateCw, "重试", Modifier.size(20.dp * k), colorFilter = ColorFilter.tint(c.danger),
+            )
+            FileSlot.Expired -> Image(
+                Lucide.OctagonX, "文件已失效", Modifier.size(22.dp * k), colorFilter = ColorFilter.tint(c.danger),
+            )
         }
     }
 }
 
 /** iOS 文件图标位的环半径 19.5pt（线宽 3）。 */
 private val FILE_RING_RADIUS = 19.5.dp
+
+/**
+ * 宫格一格左上角的视频时长角标（iOS `IMAlbumTileView` 的时长角标）。
+ *
+ * **聊天页相册宫格、详情页 / 收藏页的媒体宫格共用这一枚**：此前详情页那一格自己画了一个
+ * 右下角、另一种圆角的版本，与聊天页宫格两样。**只在就绪（或豁免门控）时画**——
+ * 没下下来时左上角让给 [AlbumTileGate] 的大小角标，格子窄，容不下两项（iOS 同）。
+ */
+@Composable
+fun BoxScope.TileDurationChip(durationMs: Int?) {
+    val c = IMTheme.colors
+    if ((durationMs ?: 0) <= 0) return
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .padding(4.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(c.overlay)
+            .padding(horizontal = 4.dp, vertical = 1.dp),
+    ) {
+        Text(com.libeyond.imandroid.data.MediaUrl.formatDuration(durationMs), color = c.onMedia, fontSize = 9.sp)
+    }
+}
 
 /** 失效覆盖层：整块压暗 + ⊘ + 一行文案，**不可点**（终态，点了也是 404）。 */
 @Composable

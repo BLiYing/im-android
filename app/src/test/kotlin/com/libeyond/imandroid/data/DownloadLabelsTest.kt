@@ -100,4 +100,30 @@ class DownloadLabelsTest {
         assertNull(DownloadLabels.tileCaption(st(DownloadPhase.Expired), mb2))
         assertNull(DownloadLabels.tileCaption(st(DownloadPhase.Ready), mb2))
     }
+
+    // ————————————————— 详情页 / 收藏页文件行（iOS `IMDetailFileCell`）—————————————————
+
+    @Test
+    fun `详情文件行未下载与已下载都带大小，与气泡那行是两张表`() {
+        assertEquals("${MediaUrl.formatSize(mb2)} · 未下载", DownloadLabels.archiveFileLine(st(DownloadPhase.NotStarted), mb2))
+        assertEquals("${MediaUrl.formatSize(mb2)} · 已下载", DownloadLabels.archiveFileLine(st(DownloadPhase.Ready), mb2))
+        // 大小未知就只说状态，不留一个悬空的「 · 」
+        assertEquals("未下载", DownloadLabels.archiveFileLine(st(DownloadPhase.NotStarted), 0))
+        assertEquals("已下载", DownloadLabels.archiveFileLine(st(DownloadPhase.Ready), 0))
+        // 气泡那行未下载写的是「点击下载」——两处刻意不同（iOS 同）
+        assertTrue(DownloadLabels.fileStatusLine(st(DownloadPhase.NotStarted), mb2).contains("点击下载"))
+    }
+
+    @Test
+    fun `详情文件行下载中显进度、与气泡同一份进度文案`() {
+        val s = st(DownloadPhase.Downloading, received = mb2 / 2, total = mb2)
+        assertEquals(DownloadLabels.progressText(s, mb2), DownloadLabels.archiveFileLine(s, mb2))
+        assertTrue(DownloadLabels.archiveFileLine(s, mb2).contains("/"))
+    }
+
+    @Test
+    fun `详情文件行失败可重试、失效不可，文案要体现`() {
+        assertTrue(DownloadLabels.archiveFileLine(st(DownloadPhase.Failed), mb2).contains("重试"))
+        assertEquals("文件已失效", DownloadLabels.archiveFileLine(st(DownloadPhase.Expired), mb2))
+    }
 }

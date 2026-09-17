@@ -43,6 +43,15 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  */
 @Composable
 internal fun DetailTabBar(tabs: List<DetailTab>, current: DetailTab, onSelect: (DetailTab) -> Unit) {
+    SegTabBar(tabs.map { DetailTabs.title(it) }, tabs.indexOf(current)) { i -> onSelect(tabs[i]) }
+}
+
+/**
+ * 页签条本体（底轨 + 药丸）。详情页、群资料、**收藏页**共用——三页的页签必须长得一样，
+ * 最可靠的保证是同一段代码画的（iOS 三处同为 `IMLiquidSegmentedControl`）。
+ */
+@Composable
+internal fun SegTabBar(titles: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     val c = IMTheme.colors
     // **底轨 + 药丸**（对齐 iOS `IMLiquidSegmentedControl`：track 玻璃、pill 浮在上面）。
     // 起初这里只有一排裸按钮、选中态是 12% 绿底 + 绿字：深色模式下几乎看不出选了哪个
@@ -56,7 +65,7 @@ internal fun DetailTabBar(tabs: List<DetailTab>, current: DetailTab, onSelect: (
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        tabs.forEach { t -> MediaSeg(DetailTabs.title(t), t == current) { onSelect(t) } }
+        titles.forEachIndexed { i, t -> MediaSeg(t, i == selected) { onSelect(i) } }
     }
 }
 
@@ -175,16 +184,18 @@ internal fun LazyListScope.archiveTab(
             item { Footnote(VOICE_TAB_NOTE) }
             archiveList(archive, loading, hasMore, tab, onLoadMore) { item ->
                 val wave = waveformOf(item.convSeq)
-                VoiceRow(item, senderName = senderNameOf(item.sender), waveform = wave) { r ->
+                VoiceRow(
+                    item, senderName = senderNameOf(item.sender), waveform = wave,
                     // 波形一并带进菜单目标：从这一格转发出去的语音才不会丢波形
-                    onLongPressArchive(item.toArchiveTarget().copy(waveform = wave), r)
-                }
+                    onLongPress = { r -> onLongPressArchive(item.toArchiveTarget().copy(waveform = wave), r) },
+                )
             }
         }
         DetailTab.Files -> archiveList(archive, loading, hasMore, tab, onLoadMore) { item ->
-            FileRow(item, isGroup = isGroup, onOpen = onOpenArchive) { r ->
-                onLongPressArchive(item.toArchiveTarget(), r)
-            }
+            FileRow(
+                item, isGroup = isGroup, onOpen = onOpenArchive,
+                onLongPress = { r -> onLongPressArchive(item.toArchiveTarget(), r) },
+            )
         }
         DetailTab.Media -> {
             if (loading && archive.isEmpty()) {
@@ -192,7 +203,10 @@ internal fun LazyListScope.archiveTab(
             } else if (archive.isEmpty()) {
                 item { Hint(DetailTabs.emptyText(tab)) }
             } else {
-                mediaGrid(archive, host, useTls, isGroup, onOpenArchive, onLongPressArchive)
+                mediaGrid(
+                    archive, host, useTls, isGroupOf = { isGroup }, onOpenArchive = onOpenArchive,
+                    onLongPressItem = { item, r -> onLongPressArchive(item.toArchiveTarget(), r) },
+                )
                 if (hasMore) item { LoadMore(onLoadMore) }
             }
         }
@@ -201,7 +215,8 @@ internal fun LazyListScope.archiveTab(
 
 /**
  * 媒体宫格：**由外层列表逐行渲染**，本身不是一个会滚动的容器。
- * 详情页「媒体」页签与会话媒体库页共用这一份。
+ * 详情页「媒体」页签、会话媒体库页、**收藏页「媒体」签**共用这一份（iOS 收藏页同样直接复用
+ * 详情页的 `IMDetailMediaContainerCell`）。
  *
  * ### 为什么不能用 LazyVerticalGrid（2026-09-16 用户报了两条，都是它）
  * 此前是把 `LazyVerticalGrid` 塞进 `LazyColumn` 的一个 `item {}` 里，
@@ -219,9 +234,14 @@ internal fun LazyListScope.mediaGrid(
     archive: List<ConvMediaItem>,
     host: String,
     useTls: Boolean,
-    isGroup: Boolean,
+    /** 这一格按单聊还是群聊的自动下载策略判（详情页整页同一个值；收藏页按每条的来源会话）。 */
+    isGroupOf: (ConvMediaItem) -> Boolean,
     onOpenArchive: (ConvMediaItem) -> Unit,
-    onLongPressArchive: (ArchiveTarget, Rect) -> Unit,
+    /** 长按一格。交回条目本身而不是 [ArchiveTarget]：收藏页复用这份宫格，它的菜单作用在收藏上。null = 不响应长按。 */
+    onLongPressItem: ((ConvMediaItem, Rect) -> Unit)?,
+    /** 「从收藏发送」：这一格勾没勾；null = 不在选择模式（详情页、媒体库、收藏浏览），不画勾选框。 */
+    pickedOf: ((ConvMediaItem) -> Boolean)? = null,
+    onTogglePick: (ConvMediaItem) -> Unit = {},
 ) {
     val rows = MediaGrid.rows(archive)
     itemsIndexed(rows, key = { _, row -> row.first().convSeq }) { idx, row ->
@@ -232,8 +252,10 @@ internal fun LazyListScope.mediaGrid(
             row.forEach { item ->
                 Box(Modifier.weight(1f)) {
                     ArchiveTile(
-                        item, host, useTls, isGroup = isGroup, onOpen = onOpenArchive,
-                        onLongPress = { r -> onLongPressArchive(item.toArchiveTarget(), r) },
+                        item, host, useTls, isGroup = isGroupOf(item), onOpen = onOpenArchive,
+                        onLongPress = onLongPressItem?.let { cb -> { r -> cb(item, r) } },
+                        picked = pickedOf?.invoke(item),
+                        onTogglePick = { onTogglePick(item) },
                     )
                 }
             }

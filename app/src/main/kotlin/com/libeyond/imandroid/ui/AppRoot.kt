@@ -157,6 +157,7 @@ fun AppRoot(client: IMClient) {
                     downloads = client.downloads,
                     settings = { client.downloadSettings },
                     onWifi = rememberOnWifi(),
+                    myUid = { client.uid.orEmpty() },
                 ),
             ) {
                 // 应用内浏览器盖在整个主界面之上：聊天 / 详情 / 群资料 / 聊天记录里点开的链接都走它

@@ -82,7 +82,7 @@ class IMClient(context: Context) {
     val devices = DevicesApi(http)
     val conversationsApi = ConversationsApi(http)
     val contacts = ContactApi(http)
-    /** 收藏（M4-4）。目前只有多选底栏在用，列表页未做。 */
+    /** 收藏（M4-4）：加（长按菜单 / 多选底栏 / 查看器「更多」）、列表与删除（「我 ▸ 收藏消息」）。 */
     val favorites = FavoriteApi(http)
     val groups = GroupApi(http)
     val profile = ProfileApi(http)

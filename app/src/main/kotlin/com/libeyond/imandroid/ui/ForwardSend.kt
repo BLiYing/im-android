@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.ui
 
+import com.libeyond.imandroid.data.DownloadPhase
+import com.libeyond.imandroid.data.FavoritePick
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.SelectionActions
 import com.libeyond.imandroid.data.db.ConversationEntity
@@ -12,7 +14,8 @@ import java.util.UUID
  *
  * **逐条、逐会话串行发**：服务端对 `send_msg` 有限流，9 个会话 × 100 条并发打过去必然撞墙。
  *
- * 抽出来是因为它有三个调用方（聊天页长按转发 / 多选「逐条转发」/ 详情页归档长按转发）。各写一遍的代价不是
+ * 抽出来是因为它有好几个调用方（聊天页长按转发 / 多选「逐条转发」/ 详情页归档长按转发 / 收藏长按转发；
+ * 「从收藏发送」走下面的 [sendFavoritesTo]，同一个 `MessageService.forward`）。各写一遍的代价不是
  * 重复代码，是**限流纪律与 `forwardFrom` 口径会分叉**——而分叉的表现是"从某个入口转发出去的
  * 消息少了『转发自 X』"，编译与测试都看不出来。
  *
@@ -42,4 +45,24 @@ internal suspend fun forwardMessages(
         }
     }
     return SelectionActions.forwardDoneText(targets.size, expiredSkipped)
+}
+
+/**
+ * 「从收藏发送」：把选中的收藏发进**当前会话**，回一句回执（iOS `sendPickedFavorite:` 逐条 `forwardEchoContent:`）。
+ *
+ * 与上面那条同一个 `MessageService.forward`：媒体复用原 URL、元数据与「转发自」口径只有一份。
+ * **失效媒体跳过**（同收藏页「转发」的拦截，发出去对端必 404），跳过几条如实写进回执。
+ * 收藏之间没有相册关系，不重新分组。
+ */
+internal suspend fun sendFavoritesTo(client: IMClient, msgs: List<MessageEntity>, conv: ConversationEntity): String {
+    val owner = client.uid.orEmpty()
+    val myName = client.myPublicName()
+    val to = if (conv.isGroup) "" else conv.peerUid
+    val live = msgs.filterNot { m ->
+        SelectionActions.isExpiredMedia(m) { url, v -> client.downloads.stateOf(url, v).phase == DownloadPhase.Expired }
+    }
+    for (m in live) {
+        client.messages.forward(msg = m, toConvId = conv.convId, to = to, origin = Forward.originOf(m, owner, myName))
+    }
+    return FavoritePick.sentText(live.size, msgs.size - live.size)
 }

@@ -24,7 +24,13 @@ import com.libeyond.imandroid.ui.screens.MeScreen
  * @param bottomBar 底部 Tab 栏，**只在根页画**；二级页整屏铺满（判据 `PushNav.showsTabBar`，外壳 [TabRoot]）。
  */
 @Composable
-fun MeHost(client: IMClient, onLogout: () -> Unit, bottomBar: @Composable () -> Unit) {
+fun MeHost(
+    client: IMClient,
+    onLogout: () -> Unit,
+    bottomBar: @Composable () -> Unit,
+    /** 收藏里的名片 → 资料页 →「发消息」：交给外壳进聊天页（与通讯录那条同一个出口）。 */
+    onOpenChat: (com.libeyond.imandroid.data.db.ConversationEntity) -> Unit = {},
+) {
     var page by remember { mutableStateOf(MePage.List) }
     var me by remember { mutableStateOf<UserCard?>(null) }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -44,6 +50,11 @@ fun MeHost(client: IMClient, onLogout: () -> Unit, bottomBar: @Composable () -> 
 
     PushTransition(targetState = page, depthOf = { it.depth }) { p ->
         when (p) {
+            MePage.Favorites -> FavoritesHost(
+                client = client,
+                onOpenChat = onOpenChat,
+                onBack = { page = MePage.List },
+            )
             MePage.Devices -> DevicesHost(client = client, onBack = { page = MePage.List })
             MePage.DataStorage -> DataStorageHost(client = client, onBack = { page = MePage.List })
             MePage.Privacy -> PrivacySecurityHost(client = client, onBack = { page = MePage.List })
@@ -64,6 +75,7 @@ fun MeHost(client: IMClient, onLogout: () -> Unit, bottomBar: @Composable () -> 
                     onOpenDevices = { page = MePage.Devices },
                     onOpenDataStorage = { page = MePage.DataStorage },
                     onOpenPrivacy = { page = MePage.Privacy },
+                    onOpenFavorites = { page = MePage.Favorites },
                     onComingSoon = { toast = "「$it」还没做" },
                     onLogout = { confirmLogout = true },
                 )

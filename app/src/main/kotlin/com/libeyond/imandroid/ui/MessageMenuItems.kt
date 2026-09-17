@@ -16,6 +16,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import coil.compose.AsyncImage
+import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.CornerUpLeft
 import com.composables.icons.lucide.Forward
@@ -106,13 +107,14 @@ internal fun buildArchiveMenu(
 
 /**
  * 消息菜单项图标。**逐项对齐 iOS `messageActionsForMessage:` 里的 SF Symbol**
- * （doc.on.doc / arrowshape.turn.up.left / arrowshape.turn.up.right /
+ * （doc.on.doc / arrowshape.turn.up.left / arrowshape.turn.up.right / bookmark /
  * arrow.uturn.backward / trash），用 Lucide 里语义最近的一枚。
  */
 internal fun messageActionIcon(a: MessageAction) = when (a) {
     MessageAction.Copy -> Lucide.Copy
     MessageAction.Reply -> Lucide.CornerUpLeft
     MessageAction.Forward -> Lucide.Forward
+    MessageAction.Favorite -> Lucide.Bookmark
     MessageAction.MultiSelect -> Lucide.ListChecks
     MessageAction.Recall -> Lucide.Undo2
     MessageAction.DeleteForEveryone -> Lucide.Users
@@ -255,6 +257,13 @@ internal fun ChatMessageMenu(
                 }
                 MessageAction.Reply -> onReply(target)
                 MessageAction.Forward -> onForward(target)
+                // 挂宿主作用域（本函数 KDoc 的 scope 那条）：菜单一关，挂菜单自己身上的请求会被取消。
+                // 快照字段与多选底栏同一份 FavoriteDraft.of（宽高/时长/波形/文件名大小都带上）
+                MessageAction.Favorite -> scope.launch {
+                    runCatchingCancellable { client.favorites.add(com.libeyond.imandroid.sdk.api.FavoriteDraft.of(target)) }
+                        .onSuccess { onToast("已收藏") }
+                        .onFailure { onToast(it.userMessage("收藏失败")) }
+                }
                 // 进多选态：**默认把触发的那条勾上**（同 iOS enterSelectionWithMessage:）
                 MessageAction.MultiSelect -> onMultiSelect(target)
                 MessageAction.Recall ->

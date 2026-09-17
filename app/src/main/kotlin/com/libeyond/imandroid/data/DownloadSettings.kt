@@ -131,4 +131,29 @@ object DownloadPolicy {
 
     /** 规整：负数上限视为 0（手动），超上限截断。与服务端 `clampBytes` 同。 */
     fun clampBytes(n: Long): Long = n.coerceIn(0, MAX_AUTO_BYTES)
+
+    /**
+     * **归档宫格 / 收藏宫格**里的一格要不要**绕过门控直接显示**（不画压暗 + ↓ 那一层）。
+     *
+     * 逐条对齐 iOS `IMMediaDownloadCoordinator.stateForMessage:`——详情页与收藏页的宫格都走它，
+     * 返回 nil（= 就绪）的三种情况：
+     * 1. **自己发的**（`isOutOfScope`：myUserID 那条）——门控挡的是"别人发来的、我还没决定要不要下"；
+     * 2. **图片且策略放行**（`shouldAutoDownload → return nil`）——图片没有分片进度，
+     *    放行时直接交给图片加载器按地址拉。**这一条与 `autoPrefetchEnabled = NO` 无关**：
+     *    后者只管"不替用户整包预取视频/文件"，不是"不显示这张图"；
+     * 3. 已在本机（由调用方的 `phase == Ready` 覆盖，这里不重复判）。
+     *
+     * **「已失效」一律不豁免**：服务端清理过的媒体，自己发的一样打不开，豁免掉会装作正常、
+     * 点进去是空查看器（聊天气泡 `ungated` 那条 `/code-review` 抓出过一次）。
+     *
+     * 视频不享受第 2 条：视频一格显示的是封面，门控作用在视频本体上，放行与否由用户点。
+     *
+     * 2026-09-17 之前本端这里是「图片一律按地址直出 + 盖一枚徽标」：图清清楚楚地显示着，
+     * 上面却压着「↓ 下载」，两层信息互相矛盾。
+     */
+    fun archiveTileUngated(isVideo: Boolean, mine: Boolean, phase: DownloadPhase, imageAutoAllowed: Boolean): Boolean {
+        if (phase == DownloadPhase.Expired) return false
+        if (mine) return true
+        return !isVideo && imageAutoAllowed
+    }
 }

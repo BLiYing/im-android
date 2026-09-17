@@ -62,6 +62,38 @@ class MessageActionsTest {
     }
 
     /** 撤回仅本人、且在 2 分钟窗内（服务端超窗回 300008，端上先挡一道）。 */
+    /**
+     * 长按「收藏」（2026-09-17 用户报：本端长按菜单没有这一项）。**逐类对齐 iOS `messageActionsForMessage:`**：
+     * `convSeq > 0 && content 非空 && 未撤回 && 非 system`——文本/图片/视频/文件/语音/名片/聊天记录都给，
+     * 与多选底栏「收藏」同一份判据（`SelectionActions.favoritable`）。
+     */
+    @Test
+    fun `收藏对已发出的各类内容都给，排在转发之后`() {
+        val kinds = listOf(
+            ContentType.TEXT to "hi",
+            ContentType.IMAGE to "/uploads/x.jpg",
+            ContentType.VIDEO to "/uploads/x.mp4",
+            ContentType.FILE to "/uploads/x.pdf",
+            ContentType.VOICE to "/uploads/x.m4a",
+            ContentType.CONTACT to """{"u":"1003","n":"小王"}""",
+            ContentType.CHAT_RECORD to """{"t":"聊天记录","items":[]}""",
+        )
+        for ((type, content) in kinds) {
+            for (sender in listOf(ME, OTHER)) {
+                val a = actions(msg(sender = sender, type = type, content = content))
+                assertTrue("$type/$sender 应能收藏", MessageAction.Favorite in a)
+                assertEquals("$type：收藏紧跟在转发之后（iOS 顺序）", a.indexOf(MessageAction.Forward) + 1, a.indexOf(MessageAction.Favorite))
+            }
+        }
+    }
+
+    @Test
+    fun `系统消息与空内容不给收藏`() {
+        assertFalse(MessageAction.Favorite in actions(msg(type = ContentType.SYSTEM, content = "xx 加入了群聊")))
+        // 空内容收藏下来是一条点不开的空快照
+        assertFalse(MessageAction.Favorite in actions(msg(content = "")))
+    }
+
     @Test
     fun `撤回仅本人且在时间窗内`() {
         assertTrue(MessageAction.Recall in actions(msg(ts = NOW - 60_000)))

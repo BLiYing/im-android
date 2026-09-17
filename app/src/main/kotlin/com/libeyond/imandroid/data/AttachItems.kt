@@ -23,7 +23,7 @@ object AttachItems {
         /** 音视频通话。**iOS 也是占位**——整个功能三端都没做。 */
         AudioVideo,
 
-        /** 从收藏里选。本端能**加**收藏（多选底栏），但还没有收藏列表页，无从挑选，故占位。 */
+        /** 从收藏里选（收藏页的选择模式，iOS `initInPickModeWithDone:`），选中项发进当前会话。 */
         Favorite,
 
         /** 个人名片：选好友 → 发 `contact` 卡片。 */

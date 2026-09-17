@@ -8,6 +8,8 @@ enum class MessageAction(val label: String, val destructive: Boolean = false) {
     Copy("复制"),
     Reply("引用"),
     Forward("转发"),
+    /** 收藏（M4-4）：内容快照存到服务端，原消息撤回/删除后仍在。 */
+    Favorite("收藏"),
     /** 进入多选态（判据在 [ChatSelection]）。 */
     MultiSelect("多选"),
     Recall("撤回", destructive = true),
@@ -59,6 +61,12 @@ object MessageActions {
         // 转发 / 多选：条件与 Forward.canForward 同源——**别在这里重写一遍判据**，
         // 两处判据分叉会让菜单里有「转发」但点了没反应（或反过来）。
         if (Forward.canForward(msg)) out += MessageAction.Forward
+
+        // 收藏：**文本/图片/视频/文件/语音/链接/名片/聊天记录都给**（快照存 content + content_type，后端通用），
+        // 顺序照 iOS `messageActionsForMessage:` 排在转发之后。判据与多选底栏「收藏」同一份
+        // [SelectionActions.favoritable]——两个入口各判一遍的话，迟早出现"长按能收藏、多选里收不了"。
+        // 此前本端长按菜单没有这一项（2026-09-17 用户报），只能先进多选再收藏。
+        if (SelectionActions.favoritable(listOf(msg)).isNotEmpty()) out += MessageAction.Favorite
 
         // 多选：判据比转发**宽一档**（走 ChatSelection.selectable），因为进多选后还能勾上
         // 空内容/已删除那些"能勾但转不出去"的条目——它们由发送前的复核滤掉并如实提示。

@@ -1,15 +1,20 @@
 package com.libeyond.imandroid.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.UserCard
+import com.libeyond.imandroid.ui.components.blockPointerInput
 import com.libeyond.imandroid.ui.screens.FriendPickerScreen
 import com.libeyond.mediapicker.MediaPickerHost
 import com.libeyond.mediapicker.PickedMedia
 
 /**
- * 聊天页的三层「覆盖在聊天页之上的整页」：用户资料 / 选联系人发名片 / 相册选择页。
+ * 聊天页的四层「覆盖在聊天页之上的整页」：用户资料 / 选联系人发名片 / 相册选择页 / 从收藏发送。
  *
  * 从 `ChatHost` 拆出（2026-09-16，那个文件到 587/600 行；套路同 `ChatViewerLayer` 与
  * `ChatRecordLayer`）。这三层的共同点是**整页盖住聊天页、各自只有一个开关状态、关掉就没了**，
@@ -34,6 +39,11 @@ internal fun ChatPickerLayers(
     onPickFriend: (FriendEntry) -> Unit,
     onPicked: (List<PickedMedia>, Boolean) -> Unit,
     onDismissPicker: () -> Unit,
+    /** 「从收藏发送」选择页开着。 */
+    pickingFavorites: Boolean,
+    onCancelFavorites: () -> Unit,
+    /** 选好了：交回已换成消息的收藏（按收藏列表顺序），由聊天页发进本会话。 */
+    onFavoritesPicked: (List<MessageEntity>) -> Unit,
     onToast: (String) -> Unit,
 ) {
     // —— 点系统消息里的名字 → 用户资料页 ——
@@ -73,5 +83,19 @@ internal fun ChatPickerLayers(
             onToast = onToast,
             log = PickerLog,
         )
+    }
+
+    // —— 从收藏发送：收藏页本身的选择模式（iOS 模态呈现同一个 `IMFavoritesViewController`）——
+    // 占住命中测试：收藏页的空白处不能把点击漏给下面的聊天页
+    if (pickingFavorites) {
+        Box(Modifier.fillMaxSize().blockPointerInput()) {
+            FavoritesHost(
+                client = client,
+                // 名片进的资料页点「发消息」：本页没法换会话，先回到聊天页（同上面资料页的 onSendMessage）
+                onOpenChat = { onCancelFavorites() },
+                onBack = onCancelFavorites,
+                onPicked = onFavoritesPicked,
+            )
+        }
     }
 }

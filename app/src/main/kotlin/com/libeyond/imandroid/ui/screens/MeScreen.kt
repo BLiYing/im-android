@@ -77,6 +77,7 @@ fun MeScreen(
     onOpenDevices: () -> Unit,
     onOpenDataStorage: () -> Unit,
     onOpenPrivacy: () -> Unit,
+    onOpenFavorites: () -> Unit,
     onComingSoon: (String) -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -86,7 +87,7 @@ fun MeScreen(
 
     val groups = listOf(
         listOf(
-            MeRow("收藏消息", Lucide.Bookmark, ic.blue) { onComingSoon("收藏消息") },
+            MeRow("收藏消息", Lucide.Bookmark, ic.blue, onClick = onOpenFavorites),
             MeRow("最近通话", Lucide.Phone, ic.green) { onComingSoon("最近通话") },
             MeRow("已登录设备", Lucide.Laptop, ic.orange, onClick = onOpenDevices),
             MeRow("聊天文件夹", Lucide.Folder, ic.blue) { onComingSoon("聊天文件夹") },

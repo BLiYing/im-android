@@ -101,6 +101,25 @@ object DownloadLabels {
         }
     }
 
+    /**
+     * **详情页 / 收藏页**文件行的状态副行（iOS `IMDetailFileCell.renderDownload:`），与聊天气泡那行
+     * [fileStatusLine] **刻意是两张表**：iOS 两处本就不同——行上写「240 KB · 未下载」「1.3 MB · 已下载」，
+     * 气泡上写「点击下载」。图标位与进度文案两处共用（[fileSlotOf] / [progressText]），只有这一行分开。
+     *
+     * 此前本端详情行是一张自造的表（「· 下载中」「· 已暂停，点继续」），下载中不显进度、
+     * 与气泡那侧的状态字也对不上（2026-09-17 用户报：详情页的下载示意要复用聊天页那一套）。
+     */
+    fun archiveFileLine(state: DownloadState, sizeBytes: Long): String {
+        val size = MediaUrl.formatSize(sizeBytes)
+        return when (state.phase) {
+            DownloadPhase.NotStarted -> if (size.isEmpty()) "未下载" else "$size · 未下载"
+            DownloadPhase.Ready -> if (size.isEmpty()) "已下载" else "$size · 已下载"
+            DownloadPhase.Downloading, DownloadPhase.Paused -> progressText(state, sizeBytes)
+            DownloadPhase.Failed -> "下载失败，点击重试"
+            DownloadPhase.Expired -> "文件已失效"
+        }
+    }
+
     /** 文件状态行标红：失败与失效（iOS 的失效是「失败 + expired」，同一个判据）。 */
     fun fileStatusIsDanger(phase: DownloadPhase): Boolean =
         phase == DownloadPhase.Failed || phase == DownloadPhase.Expired

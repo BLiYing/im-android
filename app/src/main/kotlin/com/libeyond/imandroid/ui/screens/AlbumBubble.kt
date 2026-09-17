@@ -35,6 +35,7 @@ import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.ui.rememberFrostedPainter
 import com.libeyond.imandroid.ui.components.AlbumTileGate
+import com.libeyond.imandroid.ui.components.TileDurationChip
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.rememberGate
 import com.libeyond.imandroid.data.MediaUrl
@@ -299,17 +300,9 @@ private fun AlbumTileView(
         }
         // 视频格左上角显时长（服务端给了才显，**不为拿它去下载视频**）。
         // 没下下来时左上角让给门控角标——格子窄，容不下两项，时长等就绪再回来（iOS 同）
-        if (m.contentType == ContentType.VIDEO && (m.durationMs ?: 0) > 0 && (ungated || gate?.ready == true)) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(4.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(c.overlay)
-                    .padding(horizontal = 4.dp, vertical = 1.dp),
-            ) {
-                Text(MediaUrl.formatDuration(m.durationMs), color = c.onMedia, fontSize = 9.sp)
-            }
+        // （与详情页 / 收藏页宫格共用同一枚角标）
+        if (m.contentType == ContentType.VIDEO && (ungated || gate?.ready == true)) {
+            TileDurationChip(m.durationMs)
         }
     }
 }

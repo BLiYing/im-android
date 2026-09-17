@@ -5,6 +5,55 @@
 
 ## 历史焦点（新 → 旧）
 
+> ⬇ 以下两块 2026-09-17 从活快照原样转入（详情页划不动真因 + 七条用户报告）。
+
+> **「聊天信息 / 群聊信息页划不动、很卡」真因找到并修掉 ✅（2026-09-17；`./scripts/test.sh` 781 例绿 +
+> 真机仪器测试 2/2 绿，已先看它红过；**用户真机手测通过**）**。上一轮 ② 的结论「实测能滚、是空页错觉」**是错的**：
+> - **根因**：`MainScreen` 给覆盖页包的触摸屏蔽层在 **Main 阶段 consume 全部事件**。列表的拖动检测在位移
+>   未过 touch slop 时会再等 Final 阶段查"有没有被别人消费"——被屏蔽层吞了就判手势被抢、整次拖动作废。
+>   所以**甩得快（首帧过 slop）能滚，慢推 / 按住再划纹丝不动**，头部卡片上、宫格上一样。上一轮真机测是快甩，没撞上。
+>   修法：屏蔽层只占命中测试、不消费（`ui/components/TouchShield.kt`），下层聊天页仍点不到（测试覆盖）。
+> - **顺带收的卡顿**：① 链接 / 波形 / 发送者名三份本地扫描**只在对应页签订阅**且扫描移出主线程
+>   （`rememberLocalScan`；此前详情页一开就挂 3 个 500 行 Room 查询，任何会话来消息都在主线程重扫 URL 正则）；
+>   ② 两页头部从「一个巨型 item」拆成多个 item；③ 归档格长按矩形改为长按时才算（此前每格每帧 `boundsInWindow`）。
+>
+> **七条用户报告 + 详情页各页签对齐 iOS ✅（2026-09-17；纯客户端、后端零改动；`./scripts/test.sh` 781 例绿，
+> 逐条真机验过）**。⚠️ **有四条的根因与报告时的猜测不同**，按实测改的：
+>
+> ① **「媒体库/详情页宫格看不到图」**——真因不是滚动：宫格未就绪时喂给 Coil 的是 `gate.model`（门控未
+>    就绪即 `null`），于是整页只剩磨砂底 + 一排 ↓，看着像页面死了。iOS 两处宫格
+>    （`IMConversationMediaViewController` / `IMDetailMediaContainerCell` 里的 `IMMediaTileCell`）
+>    **都是直接按 URL 加载缩略，门控只作盖在上面的状态层**（`autoPrefetchEnabled = NO` 管的是
+>    "不自动整包预取原件"，不是"不显示这张图"）。已改成按地址直出；**聊天气泡那侧仍守门控**。
+>    列数 **4 → 3**（原注释声称"与 iOS 同为 4"是错的），媒体库标题改 **「图片与视频」**（逐字取 iOS）。
+> ② **「详情页划不动 / 有时能划」**——当时判为①造成的空页错觉，**判错了**，真因见本节顶部（触摸屏蔽层）。顺手删掉 `AlbumBubble` 里一处没有任何读取方的每帧状态写。
+> ③ **「转发的图片消息看不到」**——转发本身正常（服务端落库带 `media_w/h`/`thumb`/`file_size`/`forward_from`）。
+>    真因是**自己转发出去的图在自己这一侧被门控挡成空盒**：转发透传的是原图 URL，本机并没有那些字节。
+>    门控是挡"别人发来的、我还没决定要不要下"的，对自己发出去的内容没有意义 → **`mine` 一律不门控**
+>    （单图 `MediaContent.mine` + 宫格 `AlbumTileView`）。
+> ④ **「复制图片后长按输入框没反应」**——**两个根因**：(a) `ClipData.newUri` 只声明图片 MIME、**不含
+>    `text/plain`**，而 Compose `BasicTextField` 的"能不能粘贴"走 `ClipboardManager.hasText()` → 菜单里
+>    根本不出现「粘贴」；(b) 更要命的是**复制协程挂在长按菜单自己的 `rememberCoroutineScope()` 上**，
+>    菜单一关就取消，真机日志是 `image_copy_failed {err=LeftCompositionCancellationException}`
+>    ——图片压根没进剪贴板。已改：剪贴项同时带 URI + 纯文本两种表示；`ChatMessageMenu` / `ArchiveActionsHost`
+>    改由**宿主传 scope**（同 `ArchiveViewer.kt` 文件头那条 ⚠️），顺带救了「仅删除自己」同一条线。
+> ⑤ **「视频下完点播放只有声音没画面」**——`AndroidView` 没有 `update` 块：`player` 是 `remember(absolute)` 的，
+>    下完切本地那一刻换了实例，而 `PlayerView` 还挂着**已被 onDispose release 的旧 player**（没有输出 surface
+>    → 有声无画，退出重进才好）。补 `update = { it.player = player }`。
+> ⑥ **查看器**：顶部改**两行**（会话名 17/semibold + `i / N` 13/次要灰），逐条对齐 iOS
+>    `IMMediaPagerViewController` 的 `IMLiquidNavigationBar`；图片补**磨砂占位**（原图现拉那几秒原先是纯黑，
+>    像图没了，iOS 是 `showThumbPlaceholder`）。**翻页与远端加载实测本来就正常**，未下载的图也能看。
+> ⑦ **各页签对齐 `IMChatDetailViewController`**：语音行改三行（发送者名 / **真波形**（复用聊天页
+>    `VoiceContent`，同 iOS 复用 `IMVoiceMiniPlayerView`）/ 完整年月日时分）；文件行、链接行同改三行；
+>    时间一律改 `TimeFormat.fileDateTime`（同 iOS `IMFormatFileDateTime`）；空态文案逐字改成
+>    「暂无媒体 / 暂无文件 / 暂无语音 / 暂无链接」。**波形与发送者名服务端归档接口都不回带**，
+>    由本地消息表按 `conv_seq` / `uid` 兜底（`rememberVoiceWaveforms` / `rememberLocalSenderNames`）——
+>    顺带**修掉了「从语音页签转发出去的语音丢波形」那条老限制**。
+>
+> **真机逐条验过**（user1002 真机 ↔ 服务端库核对）：宫格 3 列真图 / 语音行波形+1:34+完整时间 /
+> 查看器两行标题 + 21→19 翻页 / 转发落库字段齐 + 自己这侧可见 / 复制→粘贴出现粘贴条与缩略图 /
+> 原视频下完胶囊消失且播放有画面（00:09 在走）。
+
 > ⬇ 以下几块 2026-09-16 从活快照原样转入（第二～四批用户报告、聊天页三条、隐私与安全、数据和存储）。
 
 > **第四批用户报告（Android 部分）✅ 2026-09-15（用户自测通过，已提交）**：① 名片 / 聊天记录卡时间并进脚注行（`CardBubbles.kt` 的 `CardFooter`）；
