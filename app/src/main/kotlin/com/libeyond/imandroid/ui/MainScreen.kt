@@ -27,7 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.input.pointer.pointerInput
+import com.libeyond.imandroid.ui.components.blockPointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Bell
@@ -297,16 +297,6 @@ private fun InfoPage(
             galleryOnly = galleryOnly,
             onBack = onBack,
         )
-    }
-}
-
-/**
- * 吞掉落在这一层的全部触摸。覆盖页底下的聊天页还在组合里，Compose 的命中测试会把
- * 上层没接住的触摸（详情页的留白处）继续交给下层兄弟——不拦的话，点详情页空白会点到看不见的气泡上。
- */
-private fun Modifier.blockPointerInput(): Modifier = pointerInput(Unit) {
-    awaitPointerEventScope {
-        while (true) awaitPointerEvent().changes.forEach { it.consume() }
     }
 }
 

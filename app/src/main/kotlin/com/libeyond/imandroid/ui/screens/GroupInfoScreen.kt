@@ -83,7 +83,7 @@ fun GroupInfoScreen(
     /** 当前页签的归档数据（成员/链接页签走各自的来源，这里为空）。 */
     archive: List<ConvMediaItem>,
     /** 链接页签：本地已加载的消息，由调用方扫出 URL。 */
-    linkMessages: List<Pair<MessageEntity, String>>,
+    linkMessages: List<Pair<MessageEntity, String>>?,
     archiveLoading: Boolean,
     archiveHasMore: Boolean,
     onLoadMoreArchive: () -> Unit,
@@ -114,8 +114,9 @@ fun GroupInfoScreen(
         // 媒体库标题逐字对齐 iOS（理由见 `ChatDetailScreen` 同一行）
         IMTopBar(title = if (galleryOnly) GALLERY_TITLE else "群聊信息", onLeft = onBack)
 
+        // 头部拆成几个独立 item，别再合回一个大 item（理由见 `ChatDetailScreen` 同一处）
         LazyColumn(Modifier.fillMaxSize()) {
-            if (!galleryOnly) item {
+            if (!galleryOnly) item(key = "header") {
                 // —— 群头部 ——
                 Column(
                     modifier = Modifier.fillMaxWidth().background(c.pageBackground)
@@ -139,100 +140,102 @@ fun GroupInfoScreen(
                         }
                     }
                 }
-
+            }
+            if (!galleryOnly) item(key = "actions") {
                 // —— 操作排（对齐 iOS 头部的 pills：群聊是「搜索 / 更多」）——
                 Spacer(Modifier.height(d.cardGap))
                 DetailActionBar(actions, moreItems, onAction, onMore)
+            }
 
-                // —— 大群说明行 ——
-                // **恒显**：既没公告也没简介的大群恰恰最需要这句解释。
-                // 副标题的「· 大群」只让人察觉，这一行才解释。
-                if (info.isSuper) {
-                    Spacer(Modifier.height(d.cardGap))
-                    Box(
-                        Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
-                            .padding(d.space4),
-                    ) {
-                        Text(
-                            "大群 · 已关闭 3 项能力：不显示「正在输入」、不显示已读双勾、" +
-                                "不显示成员在线态。这些能力在两万人规模下会产生海量无效推送。",
-                            color = c.textSecondary,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+            // —— 大群说明行 ——
+            // **恒显**：既没公告也没简介的大群恰恰最需要这句解释。
+            // 副标题的「· 大群」只让人察觉，这一行才解释。
+            if (!galleryOnly && info.isSuper) item(key = "super-note") {
+                Spacer(Modifier.height(d.cardGap))
+                Box(
+                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
+                        .padding(d.space4),
+                ) {
+                    Text(
+                        "大群 · 已关闭 3 项能力：不显示「正在输入」、不显示已读双勾、" +
+                            "不显示成员在线态。这些能力在两万人规模下会产生海量无效推送。",
+                        color = c.textSecondary,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+
+            if (!galleryOnly && (info.announcement.isNotBlank() || info.intro.isNotBlank())) item(key = "notice") {
+                Spacer(Modifier.height(d.cardGap))
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
+                        .padding(d.space4),
+                ) {
+                    if (info.announcement.isNotBlank()) {
+                        Text("群公告", color = c.textTertiary, fontSize = 11.sp)
+                        Text(info.announcement, color = c.textPrimary,
+                            style = MaterialTheme.typography.bodyLarge)
+                    }
+                    if (info.intro.isNotBlank()) {
+                        if (info.announcement.isNotBlank()) Spacer(Modifier.height(8.dp))
+                        Text("群简介", color = c.textTertiary, fontSize = 11.sp)
+                        Text(info.intro, color = c.textPrimary,
+                            style = MaterialTheme.typography.bodyLarge)
                     }
                 }
+            }
 
-                if (info.announcement.isNotBlank() || info.intro.isNotBlank()) {
-                    Spacer(Modifier.height(d.cardGap))
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
-                            .padding(d.space4),
+            // 「聊天媒体」那一行没有了——归档已经是下面的内联页签（对齐 iOS）。
+            // 同一件事留两个入口，其中一个还要跳出去，是本端此前与 iOS 差得最远的一处。
+            if (!galleryOnly && GroupPermissions.canInvite(info)) item(key = "invite") {
+                Spacer(Modifier.height(d.cardGap))
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onInvite() }
+                            .padding(horizontal = d.space4, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (info.announcement.isNotBlank()) {
-                            Text("群公告", color = c.textTertiary, fontSize = 11.sp)
-                            Text(info.announcement, color = c.textPrimary,
-                                style = MaterialTheme.typography.bodyLarge)
-                        }
-                        if (info.intro.isNotBlank()) {
-                            if (info.announcement.isNotBlank()) Spacer(Modifier.height(8.dp))
-                            Text("群简介", color = c.textTertiary, fontSize = 11.sp)
-                            Text(info.intro, color = c.textPrimary,
-                                style = MaterialTheme.typography.bodyLarge)
-                        }
+                        Text("邀请好友入群", color = c.textPrimary,
+                            style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        Text("›", color = c.textTertiary)
                     }
                 }
+            }
 
-                // 「聊天媒体」那一行没有了——归档已经是下面的内联页签（对齐 iOS）。
-                // 同一件事留两个入口，其中一个还要跳出去，是本端此前与 iOS 差得最远的一处。
-                if (GroupPermissions.canInvite(info)) {
-                    Spacer(Modifier.height(d.cardGap))
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().clickable { onInvite() }
-                                .padding(horizontal = d.space4, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("邀请好友入群", color = c.textPrimary,
-                                style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                            Text("›", color = c.textTertiary)
-                        }
-                    }
-                }
-
+            if (!galleryOnly && GroupPermissions.canEditSettings(info)) item(key = "manage") {
                 // —— 群管理入口（仅群主/管理员）——
                 // **管理项不再摊在这一页上**：详情页是"看"的（群资料、公告、成员），
                 // 管理页是"改"的。摊在一起时这一页有 12 个可点的东西，
                 // 而其中一半是普通成员根本看不到的——对齐 iOS：
                 // `IMChatDetailViewController` 的「群管理」行 push 出
                 // `IMGroupManageViewController`，im-web 的 `GroupManagePanel` 亦为二级视图。
-                if (GroupPermissions.canEditSettings(info)) {
-                    Spacer(Modifier.height(d.cardGap))
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
+                Spacer(Modifier.height(d.cardGap))
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onOpenManage() }
+                            .padding(horizontal = d.space4, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
-                            Modifier.fillMaxWidth().clickable { onOpenManage() }
-                                .padding(horizontal = d.space4, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("群管理", color = c.textPrimary,
-                                style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                            // 有人在等审批就把数字摆到入口上——否则要点进两层才知道
-                            if (info.pendingCount > 0) {
-                                Text("${info.pendingCount} 待处理", color = c.accent,
-                                    style = MaterialTheme.typography.bodyMedium)
-                            }
-                            Text("  ›", color = c.textTertiary)
+                        Text("群管理", color = c.textPrimary,
+                            style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        // 有人在等审批就把数字摆到入口上——否则要点进两层才知道
+                        if (info.pendingCount > 0) {
+                            Text("${info.pendingCount} 待处理", color = c.accent,
+                                style = MaterialTheme.typography.bodyMedium)
                         }
+                        Text("  ›", color = c.textTertiary)
                     }
                 }
-
+            }
+            if (!galleryOnly) item(key = "tabs") {
                 Spacer(Modifier.height(d.cardGap))
                 DetailTabBar(DetailTabs.visible(isGroup = true), tab) { onTabChange(it) }
             }

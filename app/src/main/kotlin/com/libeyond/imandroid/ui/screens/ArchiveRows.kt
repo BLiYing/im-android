@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,8 +75,6 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  *
  * **不用 `mutableStateOf`**：`onGloballyPositioned` 在滚动时每一帧都回调，
  * 而这个矩形没有任何**组合期**读取方（只在长按回调里读），进快照系统纯属白开销。
- * （注：它也**不是**「详情页划不动」的原因——那条实测下来是宫格里的图全被门控挡成了空格子，
- * 见 [MediaTile] 的注释；这里只是顺手把无谓的每帧状态写去掉。）
  */
 internal class RectHolder {
     var value: Rect = Rect.Zero
@@ -87,12 +86,17 @@ internal fun Modifier.archiveItemGestures(
     onClick: () -> Unit,
     onLongPress: ((Rect) -> Unit)?,
 ): Modifier {
-    val rect = remember { RectHolder() }
+    // **只记坐标对象、长按那一刻才换算矩形**（2026-09-17「详情页很卡」一并收的）：
+    // `onGloballyPositioned` 在滚动时对屏上每一格每帧都回调，此前在回调里就地 `boundsInWindow()`
+    // ——一屏十几格、每格每帧沿祖先链做一遍坐标变换，算出来的矩形绝大多数永远没人读。
+    val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
     return this
-        .onGloballyPositioned { rect.value = it.boundsInWindow() }
+        .onGloballyPositioned { coords[0] = it }
         .combinedClickable(
             onClick = onClick,
-            onLongClick = onLongPress?.let { cb -> { cb(rect.value) } },
+            onLongClick = onLongPress?.let { cb ->
+                { cb(coords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero) }
+            },
         )
 }
 

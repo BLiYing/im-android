@@ -89,7 +89,8 @@ fun GroupInfoHost(
     // 归档已并进内联页签（2026-09-09），只剩「点开一张图/视频」还是独立的一层
     var tab by remember(convId) { mutableStateOf(initialTab) }
     val archive = rememberConvArchive(client, convId, tab)
-    val linkMessages = rememberLinkMessages(client, convId)
+    // 只在「链接」页签上订阅本地消息表（理由见 rememberLocalScan）
+    val linkMessages = rememberLinkMessages(client, convId, active = tab == DetailTab.Links)
     var viewing by remember(convId) { mutableStateOf<ConvMediaItem?>(null) }
     var archiveMenuFor by remember(convId) { mutableStateOf<ArchiveTarget?>(null) }
     var archiveMenuAnchor by remember(convId) { mutableStateOf(Rect.Zero) }
@@ -362,7 +363,7 @@ fun GroupInfoHost(
         // 语音行的发送者名：我自己显「你自己」（同 iOS）→ 成员表 → **本地消息里的昵称快照**。
         // 最后那一档是为超级群准备的：那里成员表只回我自己，不兜底的话 1997 人的群里
         // 每条语音都没有名字（见 rememberLocalSenderNames）。三档都空才整行不画，**不落内部 uid**。
-        senderNameOf = rememberLocalSenderNames(client, convId).let { localNames ->
+        senderNameOf = rememberLocalSenderNames(client, convId, active = tab == DetailTab.Voice).let { localNames ->
             { uid: String ->
                 if (uid == client.uid) {
                     "你自己"
@@ -372,7 +373,7 @@ fun GroupInfoHost(
             }
         },
         // 波形：服务端归档接口不回带，从本地消息表按 conv_seq 兜底（见 rememberVoiceWaveforms）
-        waveformOf = rememberVoiceWaveforms(client, convId)::get,
+        waveformOf = rememberVoiceWaveforms(client, convId, active = tab == DetailTab.Voice)::get,
         hasMoreMembers = hasMore,
         onLoadMoreMembers = {
             // 在途守卫：滚到底会连续触发，不守的话同一页会被追加两次——

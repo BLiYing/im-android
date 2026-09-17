@@ -130,7 +130,8 @@ internal fun LoadMore(onLoadMore: () -> Unit) {
 internal fun LazyListScope.archiveTab(
     tab: DetailTab,
     archive: List<ConvMediaItem>,
-    linkMessages: List<Pair<MessageEntity, String>>,
+    /** `null` = 本地还没扫完。 */
+    linkMessages: List<Pair<MessageEntity, String>>?,
     loading: Boolean,
     hasMore: Boolean,
     onLoadMore: () -> Unit,
@@ -157,7 +158,9 @@ internal fun LazyListScope.archiveTab(
         DetailTab.Members -> Unit // 不是消息，见 KDoc
         DetailTab.Links -> {
             item { Footnote(LINK_TAB_NOTE) }
-            if (linkMessages.isEmpty()) {
+            if (linkMessages == null) {
+                item { Hint("加载中…") }
+            } else if (linkMessages.isEmpty()) {
                 item { Hint(DetailTabs.emptyText(tab)) }
             } else {
                 items(linkMessages, key = { it.first.convSeq }) { (m, url) ->

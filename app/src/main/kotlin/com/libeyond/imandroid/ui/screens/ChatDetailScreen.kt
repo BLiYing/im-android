@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -68,7 +65,7 @@ internal fun ChatDetailScreen(
     /** 当前页签的归档数据（链接页签走 [linkMessages]，这里为空）。 */
     archive: List<ConvMediaItem>,
     /** 链接页签：本地已加载的消息，由调用方扫出 URL。 */
-    linkMessages: List<Pair<MessageEntity, String>>,
+    linkMessages: List<Pair<MessageEntity, String>>?,
     loading: Boolean,
     hasMore: Boolean,
     onLoadMore: () -> Unit,
@@ -116,8 +113,12 @@ internal fun ChatDetailScreen(
 
         // 页签内容是可滚动的长列表，头部/卡片作为它的头几项 —— 整页一条滚动轴，
         // 与 iOS 的 tableHeaderView + sections 同构（不是"上面固定、下面单独滚"）。
+        //
+        // **头部拆成几个独立 item，别再合回一个大 item**（2026-09-17「详情页很卡」一并收的）：
+        // 合在一起时头像 + 操作排 + 两张卡 + 页签条是同一个 item，往回滚到它露出一个像素，
+        // 整块就得在同一帧里重新组合、测量——那一帧正好卡在手指下。拆开后每次只进来一小块。
         LazyColumn(Modifier.fillMaxSize()) {
-            if (!galleryOnly) item {
+            if (!galleryOnly) item(key = "header") {
                 // —— 大头像头部（对齐 iOS 的 300pt tableHeaderView）——
                 Column(
                     Modifier.fillMaxWidth().background(c.pageBackground)
@@ -132,11 +133,13 @@ internal fun ChatDetailScreen(
                         Text(handle, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
                     }
                 }
-
+            }
+            if (!galleryOnly) item(key = "actions") {
                 // —— 操作排（对齐 iOS 头部的 pills）——
                 Spacer(Modifier.height(d.cardGap))
                 DetailActionBar(actions, moreItems, onAction, onMore)
-
+            }
+            if (!galleryOnly) item(key = "info") {
                 // —— 信息（对齐 iOS 的 IMDetailSectionInfo：备注名 + 用户名）——
                 Spacer(Modifier.height(d.cardGap))
                 Card {
@@ -146,7 +149,8 @@ internal fun ChatDetailScreen(
                         Row2("用户名", handle)
                     }
                 }
-
+            }
+            if (!galleryOnly) item(key = "settings") {
                 // —— 设置 ——
                 Spacer(Modifier.height(d.cardGap))
                 Card {
@@ -159,7 +163,8 @@ internal fun ChatDetailScreen(
                     // 操作排的「搜索」与「更多 → 清空聊天记录」里。摆两处等于同一件事有两个入口，
                     // 而其中一个还写着"还没做"。
                 }
-
+            }
+            if (!galleryOnly) item(key = "tabs") {
                 Spacer(Modifier.height(d.cardGap))
                 DetailTabBar(tabs, tab) { onTabChange(it) }
             }

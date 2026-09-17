@@ -99,9 +99,10 @@ fun ChatDetailHost(
     var tab by remember(conv.convId) { mutableStateOf(initialTab) }
     // 归档取数与「链接」本地扫都收在这两个 helper 里（群资料那侧共用同一份）
     val archive = rememberConvArchive(client, conv.convId, tab)
-    val linkMessages = rememberLinkMessages(client, conv.convId)
+    // 这两份只在各自页签上订阅本地消息表（理由见 rememberLocalScan）
+    val linkMessages = rememberLinkMessages(client, conv.convId, active = tab == DetailTab.Links)
     // 语音页签的波形：服务端归档接口不回带，从本地消息表按 conv_seq 兜底（见 rememberVoiceWaveforms）
-    val voiceWaveforms = rememberVoiceWaveforms(client, conv.convId)
+    val voiceWaveforms = rememberVoiceWaveforms(client, conv.convId, active = tab == DetailTab.Voice)
 
     val page = ChatDetailNav.current(mediaOpen = viewing != null, profileOpen = profile)
     // 返回键一处派发（同 GroupInfoHost；理由见 ChatDetailPage 的注释）

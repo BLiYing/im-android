@@ -7,6 +7,16 @@
 
 ## 当前焦点
 
+> **「聊天信息 / 群聊信息页划不动、很卡」真因找到并修掉 ✅（2026-09-17；`./scripts/test.sh` 781 例绿 +
+> 真机仪器测试 2/2 绿，已先看它红过；**用户真机手测通过**）**。上一轮 ② 的结论「实测能滚、是空页错觉」**是错的**：
+> - **根因**：`MainScreen` 给覆盖页包的触摸屏蔽层在 **Main 阶段 consume 全部事件**。列表的拖动检测在位移
+>   未过 touch slop 时会再等 Final 阶段查"有没有被别人消费"——被屏蔽层吞了就判手势被抢、整次拖动作废。
+>   所以**甩得快（首帧过 slop）能滚，慢推 / 按住再划纹丝不动**，头部卡片上、宫格上一样。上一轮真机测是快甩，没撞上。
+>   修法：屏蔽层只占命中测试、不消费（`ui/components/TouchShield.kt`），下层聊天页仍点不到（测试覆盖）。
+> - **顺带收的卡顿**：① 链接 / 波形 / 发送者名三份本地扫描**只在对应页签订阅**且扫描移出主线程
+>   （`rememberLocalScan`；此前详情页一开就挂 3 个 500 行 Room 查询，任何会话来消息都在主线程重扫 URL 正则）；
+>   ② 两页头部从「一个巨型 item」拆成多个 item；③ 归档格长按矩形改为长按时才算（此前每格每帧 `boundsInWindow`）。
+>
 > **七条用户报告 + 详情页各页签对齐 iOS ✅（2026-09-17；纯客户端、后端零改动；`./scripts/test.sh` 781 例绿，
 > 逐条真机验过）**。⚠️ **有四条的根因与报告时的猜测不同**，按实测改的：
 >
@@ -16,8 +26,7 @@
 >    **都是直接按 URL 加载缩略，门控只作盖在上面的状态层**（`autoPrefetchEnabled = NO` 管的是
 >    "不自动整包预取原件"，不是"不显示这张图"）。已改成按地址直出；**聊天气泡那侧仍守门控**。
 >    列数 **4 → 3**（原注释声称"与 iOS 同为 4"是错的），媒体库标题改 **「图片与视频」**（逐字取 iOS）。
-> ② **「详情页划不动 / 有时能划」**——实测**能滚**（21 条媒体那个群滚动正常），"划不动"是①造成的空页错觉；
->    只有 1 条媒体时更是本来就没得滚。顺手删掉 `AlbumBubble` 里一处没有任何读取方的每帧状态写。
+> ② **「详情页划不动 / 有时能划」**——当时判为①造成的空页错觉，**判错了**，真因见本节顶部（触摸屏蔽层）。顺手删掉 `AlbumBubble` 里一处没有任何读取方的每帧状态写。
 > ③ **「转发的图片消息看不到」**——转发本身正常（服务端落库带 `media_w/h`/`thumb`/`file_size`/`forward_from`）。
 >    真因是**自己转发出去的图在自己这一侧被门控挡成空盒**：转发透传的是原图 URL，本机并没有那些字节。
 >    门控是挡"别人发来的、我还没决定要不要下"的，对自己发出去的内容没有意义 → **`mine` 一律不门控**
@@ -98,7 +107,12 @@
 - **应用内浏览器**：release 包不放行明文 http，debug 变体整个放开，所以 debug 真机看不出来。
 - **`ONLY=X ./scripts/test.sh` 跑不了**（`:media-picker` 报 "No tests found"）：改用
   `./gradlew :app:testDebugUnitTest --tests '*A*'`。**JVM 单测里 `android.util.Log` 是桩**，先 `IMLog.useSinksForTest()`。
-- **没有 instrumented 测试**：布局/滚动/手势/输入法全靠真机截图核对
+- **覆盖页的触摸屏蔽层绝不能 consume**（`ui/components/TouchShield.kt` 文件头）：父级在 Main 阶段吞事件
+  会让子列表的慢速拖动整次作废，症状是「有时能划有时划不动」。要屏蔽下层兄弟，占住命中测试就够了。
+- **instrumented 测试只有 `TouchShieldTest` 一个，test.sh 不跑它**（要真机）。别用 `connectedAndroidTest`
+  （跑完会卸载 App、丢登录态），用：`assembleDebug assembleDebugAndroidTest` → 两个 APK 各 `adb install -r` →
+  `adb shell am instrument -w -e class com.libeyond.imandroid.ui.components.TouchShieldTest com.libeyond.imandroid.test/androidx.test.runner.AndroidJUnitRunner`。
+  其余布局/滚动/手势/输入法仍靠真机截图核对
   （`adb exec-out screencap`；用 `uiautomator dump` 找控件坐标比按像素猜可靠）。
 - **视频不转码**、**分片上传不跨进程续传**、**视频没有本地缓存**、**图片不压缩**（只挡 20MB）、**无断点续传**。
 - **查看器翻页只能往更旧续拉**（服务端媒体接口是 `conv_seq < cursor` 倒序分页），本地一次最多取 300 条。

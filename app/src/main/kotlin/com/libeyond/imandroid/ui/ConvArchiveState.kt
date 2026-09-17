@@ -16,7 +16,10 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.screens.linkUrlOf
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** 「链接」页签扫多少条本地消息。与聊天页的渲染窗口同量级，再多也只是扫更旧的已加载记录。 */
@@ -119,19 +122,16 @@ internal fun rememberConvArchive(client: IMClient, convId: String, tab: DetailTa
  *
  * 只覆盖**本地已加载**的那一段，与链接页签同一语义；拿不到就退回等高条纹，
  * 那是协议允许的合法状态（见 `data/Waveform.kt`），不是错误。
+ *
+ * @param active 只在「语音」页签上为 true，理由见 [rememberLocalScan]。
  */
 @Composable
-internal fun rememberVoiceWaveforms(client: IMClient, convId: String): Map<Long, String> {
-    val owner = client.uid.orEmpty()
-    val local by remember(convId, owner) {
-        if (owner.isEmpty()) emptyFlow() else client.repo.observeMessages(owner, convId, LINK_SCAN_LIMIT)
-    }.collectAsState(initial = emptyList<MessageEntity>())
-    return remember(local) {
+internal fun rememberVoiceWaveforms(client: IMClient, convId: String, active: Boolean): Map<Long, String> =
+    rememberLocalScan(client, convId, active) { local ->
         local.asSequence()
             .filter { it.contentType == "voice" && !it.waveform.isNullOrBlank() }
             .associate { it.convSeq to it.waveform.orEmpty() }
-    }
-}
+    } ?: emptyMap()
 
 /**
  * `uid → 公开显示名`，**从本地消息里的 `from_nickname` 快照取**。
@@ -143,19 +143,16 @@ internal fun rememberVoiceWaveforms(client: IMClient, convId: String): Map<Long,
  * 10 位随机数字对人没有意义）。
  *
  * 与波形兜底同一条路子：只覆盖本地已加载的那一段，拿不到不是错误。
+ *
+ * @param active 只在「语音」页签上为 true，理由见 [rememberLocalScan]。
  */
 @Composable
-internal fun rememberLocalSenderNames(client: IMClient, convId: String): Map<String, String> {
-    val owner = client.uid.orEmpty()
-    val local by remember(convId, owner) {
-        if (owner.isEmpty()) emptyFlow() else client.repo.observeMessages(owner, convId, LINK_SCAN_LIMIT)
-    }.collectAsState(initial = emptyList<MessageEntity>())
-    return remember(local) {
+internal fun rememberLocalSenderNames(client: IMClient, convId: String, active: Boolean): Map<String, String> =
+    rememberLocalScan(client, convId, active) { local ->
         local.asSequence()
             .filter { !it.fromNickname.isNullOrBlank() }
             .associate { it.sender to it.fromNickname.orEmpty() }
-    }
-}
+    } ?: emptyMap()
 
 /**
  * 「链接」页签的数据：**本地扫**。
@@ -163,15 +160,49 @@ internal fun rememberLocalSenderNames(client: IMClient, convId: String): Map<Str
  * 服务端归档接口不覆盖这一格——链接不是独立的 `content_type`，没有可索引的列
  * （`internal/conversation/media.go` 开头写明）。iOS 同样是本地扫（`IMFirstURLInText`），
  * 所以这一格天然只覆盖已加载的那一段，界面上要说清楚（`LINK_TAB_NOTE`）。
+ *
+ * @param active 只在「链接」页签上为 true，理由见 [rememberLocalScan]。
+ * @return `null` = 还没扫完（页签显「加载中…」，别先闪一下「暂无链接」）。
  */
 @Composable
-internal fun rememberLinkMessages(client: IMClient, convId: String): List<Pair<MessageEntity, String>> {
-    val owner = client.uid.orEmpty()
-    val local by remember(convId, owner) {
-        if (owner.isEmpty()) emptyFlow() else client.repo.observeMessages(owner, convId, LINK_SCAN_LIMIT)
-    }.collectAsState(initial = emptyList<MessageEntity>())
-    return remember(local) {
+internal fun rememberLinkMessages(
+    client: IMClient,
+    convId: String,
+    active: Boolean,
+): List<Pair<MessageEntity, String>>? =
+    rememberLocalScan(client, convId, active) { local ->
         local.mapNotNull { m -> linkUrlOf(m.contentType, m.content, m.convSeq)?.let { m to it } }
             .sortedByDescending { it.first.convSeq }
     }
+
+/**
+ * 订阅本会话最近 [LINK_SCAN_LIMIT] 条本地消息并扫出一个结果；`null` = 未激活或还没扫完。
+ *
+ * ### 两条约束（2026-09-17「详情页很卡」一并收的）
+ * 1. **只在对应页签上订阅**（[active]）。Room 的失效粒度是**整张表**：任何会话来一条消息、
+ *    改一个已读回执，这里就重查 500 行。此前详情页一打开就挂着三份（链接 / 波形 / 发送者名），
+ *    而用户在「媒体」页签上滚图时，它们一份都用不到。
+ * 2. **扫描不在主线程**（`flowOn(Default)`）。此前是 `remember(local) { … }` 在组合里跑——
+ *    链接那份要对 500 条正文跑 URL 正则，活跃账号里每来一条消息就在主线程上扫一遍，
+ *    正好撞在滚动帧上。
+ */
+@Composable
+private fun <T : Any> rememberLocalScan(
+    client: IMClient,
+    convId: String,
+    active: Boolean,
+    scan: (List<MessageEntity>) -> T,
+): T? {
+    val owner = client.uid.orEmpty()
+    val flow = remember(convId, owner, active) {
+        if (owner.isEmpty() || !active) {
+            emptyFlow()
+        } else {
+            client.repo.observeMessages(owner, convId, LINK_SCAN_LIMIT)
+                .map { scan(it) }
+                .flowOn(Dispatchers.Default)
+        }
+    }
+    val result by flow.collectAsState(initial = null)
+    return result
 }
