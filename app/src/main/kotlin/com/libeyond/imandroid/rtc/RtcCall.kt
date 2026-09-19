@@ -33,6 +33,7 @@ object RtcCall {
     private var engine: IMCallEngine? = null
     private var uid: String = ""
     private var deviceId: String = ""
+    private var profileResolver: RtcProfileResolver? = null
 
     /** 每次 start/stop 加一：旧引擎迟到的回调（stale）一律不算数，别改动新一代的状态。 */
     private var generation = 0L
@@ -46,7 +47,13 @@ object RtcCall {
      * **同一账号同一设备重复调用是空操作**：宿主 Activity 重建（转屏 / 被系统回收再起）时界面状态会重跑一遍
      * 「进入主界面」，这时不能把正在进行的通话连引擎一起销毁。
      */
-    fun start(context: Context, uid: String, deviceId: String, config: RtcConfig = RtcConfig.fromBuild()) {
+    fun start(
+        context: Context,
+        uid: String,
+        deviceId: String,
+        profiles: RtcProfileResolver? = null,
+        config: RtcConfig = RtcConfig.fromBuild(),
+    ) {
         if (engine != null && this.uid == uid && this.deviceId == deviceId) return
         stop()
         if (!config.isUsable) {
@@ -71,7 +78,9 @@ object RtcCall {
         )
         engine = instance
         // IMCallKit.start 必须在 login 之前。
-        IMCallKit.start(ctx, instance, IMCallKitConfig())
+        profileResolver = profiles
+        // 名字与头像由宿主注入（im-rtc 只认 uid）；没注入就退化成显示 uid。
+        IMCallKit.start(ctx, instance, IMCallKitConfig().apply { profileResolver = profiles })
         val token = signToken(config)
         log.i("rtc_start", "uid" to uid, "app" to config.appId, "url" to config.wsUrl)
         instance.login(token) { _, error ->
@@ -93,6 +102,7 @@ object RtcCall {
     fun placeSingle(peerUid: String, video: Boolean): String? {
         unavailableReason()?.let { return it }
         RtcIds.problem("对方 id", peerUid)?.let { return it }
+        profileResolver?.prefetch(listOf(peerUid))
         IMCallKit.placeCall(listOf(peerUid), mediaType(video), isGroup = false)
         return null
     }
@@ -105,6 +115,7 @@ object RtcCall {
         unavailableReason()?.let { return it }
         RtcIds.problem("群号", chatGroupId)?.let { return it }
         if (calleeUids.isEmpty()) return "请选择要呼叫的成员"
+        profileResolver?.prefetch(calleeUids)
         IMCallKit.placeCall(
             calleeUids, mediaType(video = true),
             IMCallOptions(isGroup = true, chatGroupId = chatGroupId),
@@ -161,7 +172,7 @@ object RtcCall {
             val ctx = appContext ?: return
             when (reason) {
                 // 票不好使：本机再签一张重来，用户无感。
-                IMKickedOutReason.AUTH_EXPIRED -> main.post { start(ctx, uid, deviceId, config) }
+                IMKickedOutReason.AUTH_EXPIRED -> main.post { start(ctx, uid, deviceId, profileResolver, config) }
                 // 别处登录 / 被吊销 / 参数被拒：换票救不了，也不自动重连，停下来等人看日志。
                 IMKickedOutReason.TAKEN_OVER, IMKickedOutReason.CONFIG_REJECTED -> main.post { stop() }
             }

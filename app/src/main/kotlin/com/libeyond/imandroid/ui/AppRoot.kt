@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.BuildConfig
 import com.libeyond.imandroid.rtc.RtcCall
+import com.libeyond.imandroid.rtc.RtcProfileResolver
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.session.DeviceIdentity
 import com.libeyond.imandroid.sdk.http.ApiException
@@ -101,7 +102,10 @@ fun AppRoot(client: IMClient) {
     val appContext = LocalContext.current.applicationContext
     LaunchedEffect(phase) {
         when (phase) {
-            Phase.Main -> RtcCall.start(appContext, client.uid.orEmpty(), DeviceIdentity(appContext).deviceId)
+            Phase.Main -> RtcCall.start(
+                appContext, client.uid.orEmpty(), DeviceIdentity(appContext).deviceId,
+                profiles = RtcProfileResolver.forClient(appContext, client),
+            )
             Phase.Login -> RtcCall.stop()
             Phase.Restoring -> Unit
         }
