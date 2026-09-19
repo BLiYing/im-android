@@ -4,6 +4,8 @@ import android.app.Application
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.NetworkMonitor
 import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.sdk.logging.RemoteLogSink
+import com.libeyond.imandroid.sdk.session.DeviceIdentity
 
 class IMApp : Application(), coil.ImageLoaderFactory {
 
@@ -16,6 +18,17 @@ class IMApp : Application(), coil.ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         client = IMClient(this)
+        // 开发期日志回传到 IMServer 的 /__devlog（与 iOS / Web 同一条通道）。**仅 Debug 构建**；
+        // 服务端没开 -dev-logsink 时路由不存在，请求失败就丢，不影响任何功能。
+        if (BuildConfig.DEBUG) {
+            IMLog.addSink(
+                RemoteLogSink(
+                    host = { client.host },
+                    useTls = BuildConfig.USE_TLS,
+                    deviceTag = DeviceIdentity(this).deviceId.take(8),
+                ),
+            )
+        }
         network = NetworkMonitor(this) { client.wake("network_available") }
         network.start()
         IMLog.tag("IM.App").i("app_start", "versionName" to BuildConfig.VERSION_NAME)
