@@ -34,6 +34,7 @@ object RtcCall {
     private var uid: String = ""
     private var deviceId: String = ""
     private var profileResolver: RtcProfileResolver? = null
+    private var inviteProvider: com.imrtc.uikit.IMInviteMemberProvider? = null
 
     /** 每次 start/stop 加一：旧引擎迟到的回调（stale）一律不算数，别改动新一代的状态。 */
     private var generation = 0L
@@ -52,6 +53,7 @@ object RtcCall {
         uid: String,
         deviceId: String,
         profiles: RtcProfileResolver? = null,
+        invites: com.imrtc.uikit.IMInviteMemberProvider? = null,
         config: RtcConfig = RtcConfig.fromBuild(),
     ) {
         if (engine != null && this.uid == uid && this.deviceId == deviceId) return
@@ -79,9 +81,13 @@ object RtcCall {
         engine = instance
         // IMCallKit.start 必须在 login 之前。
         profileResolver = profiles
+        inviteProvider = invites
         profiles?.open()
         // 名字与头像由宿主注入（im-rtc 只认 uid）；没注入就退化成显示 uid。
-        IMCallKit.start(ctx, instance, IMCallKitConfig().apply { profileResolver = profiles })
+        IMCallKit.start(ctx, instance, IMCallKitConfig().apply {
+            profileResolver = profiles
+            inviteMemberProvider = invites
+        })
         val token = signToken(config)
         log.i("rtc_start", "uid" to uid, "app" to config.appId, "url" to config.wsUrl)
         instance.login(token) { _, error ->
@@ -190,7 +196,7 @@ object RtcCall {
             val ctx = appContext ?: return
             when (reason) {
                 // 票不好使：本机再签一张重来，用户无感。
-                IMKickedOutReason.AUTH_EXPIRED -> main.post { start(ctx, uid, deviceId, profileResolver, config) }
+                IMKickedOutReason.AUTH_EXPIRED -> main.post { start(ctx, uid, deviceId, profileResolver, inviteProvider, config) }
                 // 别处登录 / 被吊销 / 参数被拒：换票救不了，也不自动重连，停下来等人看日志。
                 IMKickedOutReason.TAKEN_OVER, IMKickedOutReason.CONFIG_REJECTED -> main.post { stop() }
             }

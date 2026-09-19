@@ -102,10 +102,14 @@ fun AppRoot(client: IMClient) {
     val appContext = LocalContext.current.applicationContext
     LaunchedEffect(phase) {
         when (phase) {
-            Phase.Main -> RtcCall.start(
-                appContext, client.uid.orEmpty(), DeviceIdentity(appContext).deviceId,
-                profiles = RtcProfileResolver.forClient(appContext, client),
-            )
+            Phase.Main -> {
+                val profiles = RtcProfileResolver.forClient(appContext, client)
+                RtcCall.start(
+                    appContext, client.uid.orEmpty(), DeviceIdentity(appContext).deviceId,
+                    profiles = profiles,
+                    invites = RtcProfileResolver.inviteProviderFor(client, profiles),
+                )
+            }
             Phase.Login -> RtcCall.stop()
             Phase.Restoring -> Unit
         }

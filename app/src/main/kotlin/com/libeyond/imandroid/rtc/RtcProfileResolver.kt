@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap
 class RtcProfileResolver(
     private val context: Context,
     private val scope: CoroutineScope,
-    private val sources: RtcProfileSources,
+    val sources: RtcProfileSources,
     private val peerRows: Flow<List<RtcProfileSources.PeerRow>>,
     private val lookup: suspend (String) -> UserCard,
     private val absolute: (String) -> String,
@@ -131,5 +131,9 @@ class RtcProfileResolver(
                 onResolved = { IMCallKit.reloadProfiles(it) },
             )
         }
+
+        /** 与 [forClient] 配套：群通话「添加成员」的候选人，和通话界面共用同一份 [sources]。 */
+        fun inviteProviderFor(client: IMClient, resolver: RtcProfileResolver) =
+            RtcInviteProvider.forClient(client, resolver.sources) { MediaUrl.absolute(it, client.host, BuildConfig.USE_TLS) }
     }
 }
