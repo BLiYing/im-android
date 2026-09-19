@@ -79,6 +79,7 @@ object RtcCall {
         engine = instance
         // IMCallKit.start 必须在 login 之前。
         profileResolver = profiles
+        profiles?.open()
         // 名字与头像由宿主注入（im-rtc 只认 uid）；没注入就退化成显示 uid。
         IMCallKit.start(ctx, instance, IMCallKitConfig().apply { profileResolver = profiles })
         val token = signToken(config)
@@ -88,9 +89,17 @@ object RtcCall {
         }
     }
 
+    /** 群资料页加载成员时顺手喂给通话（群通话按群成员表取名字与头像）；通话服务没起来时是空操作。 */
+    fun onGroupMembers(convId: String, members: List<com.libeyond.imandroid.sdk.api.GroupMember>) {
+        profileResolver?.putMembers(convId, members.map {
+            RtcProfileSources.MemberRow(it.userId, it.groupNickname, it.nickname, it.username, it.avatarUrl)
+        })
+    }
+
     /** 离开主界面调用。幂等。 */
     fun stop() {
         generation++
+        profileResolver?.close()
         val old = engine ?: return
         engine = null
         old.destroy()
@@ -102,7 +111,7 @@ object RtcCall {
     fun placeSingle(peerUid: String, video: Boolean): String? {
         unavailableReason()?.let { return it }
         RtcIds.problem("对方 id", peerUid)?.let { return it }
-        profileResolver?.prefetch(listOf(peerUid))
+        profileResolver?.groupId = ""
         IMCallKit.placeCall(listOf(peerUid), mediaType(video), isGroup = false)
         return null
     }
@@ -115,7 +124,7 @@ object RtcCall {
         unavailableReason()?.let { return it }
         RtcIds.problem("群号", chatGroupId)?.let { return it }
         if (calleeUids.isEmpty()) return "请选择要呼叫的成员"
-        profileResolver?.prefetch(calleeUids)
+        profileResolver?.groupId = chatGroupId
         IMCallKit.placeCall(
             calleeUids, mediaType(video = true),
             IMCallOptions(isGroup = true, chatGroupId = chatGroupId),
@@ -160,6 +169,15 @@ object RtcCall {
 
         override fun onConnected(sessionId: String, resumed: Boolean) {
             if (!stale) log.i("rtc_connected", "session" to sessionId, "resumed" to resumed)
+        }
+
+        /** 来电：只记下这通是不是群通话、哪个群，好让解析器读对的成员表（不发任何请求）。 */
+        override fun onCallReceived(
+            callId: String, caller: String, inviter: String, calleeIds: List<String>,
+            mediaType: String, isGroup: Boolean, chatGroupId: String, userData: String,
+        ) {
+            if (stale) return
+            profileResolver?.groupId = if (isGroup) chatGroupId else ""
         }
 
         override fun onDisconnected(code: Int, willReconnect: Boolean) {

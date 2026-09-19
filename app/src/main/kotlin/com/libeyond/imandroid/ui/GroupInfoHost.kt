@@ -137,6 +137,7 @@ fun GroupInfoHost(
         runCatching { info = client.groups.info(convId) }
             .onFailure { IMLog.tag("IM.Group").w("group_info_failed") }
         loadMore(client, convId, cursor) { page ->
+            com.libeyond.imandroid.rtc.RtcCall.onGroupMembers(convId, page.items)
             members = page.items
             cursor = page.nextCursor
             hasMore = page.hasMore

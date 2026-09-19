@@ -13,24 +13,26 @@ import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 把 IM 的名字与头像注入通话界面（im-rtc 的 [IMProfileResolver]）。
  *
- * **im-rtc 只认 uid**：不注入的话对方显示成 10 位内部 ID。这里按 uid 取用户名片
- * （`GET /api/v1/users/{id}`，本机显示名 = 备注 → 昵称 → @句柄 → 「未命名用户」，末级绝不是 uid），
- * 取回来后通知 Kit 重画（[onResolved] → `IMCallKit.reloadProfiles`）。
- *
- * - Kit 同步来问、名字要走网络：**未缓存时先答 null（Kit 退化成显示 uid），后台取，取到再重画**；
- * - 头像取的是名片里的 `avatar_url`，经 Coil 拉成 [Drawable] 缓存（问一次拿一份新副本，各个 View 不共用同一个实例）；
- * - 备注只在**本机渲染**里出现，不会发给任何人（通话界面不是发出去的内容）。
+ * **通话界面显示的就是 IM 自己的数据**（[RtcProfileSources]：会话行 / 当前群的成员表），
+ * 每次 Kit 重画都重新读，IM 变了通话界面就跟着变；**不自己刷新、不在拨号 / 来电时发请求**。
+ * 只有 IM 本地一个名字都没有的 uid，才取一次名片兜底（[book]），取回后通知 Kit 补画这一格。
+ * 备注只在本机渲染里出现，不会发给任何人。
  */
 class RtcProfileResolver(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val sources: RtcProfileSources,
+    private val peerRows: Flow<List<RtcProfileSources.PeerRow>>,
     private val lookup: suspend (String) -> UserCard,
     private val absolute: (String) -> String,
     private val onResolved: (List<String>) -> Unit,
@@ -39,61 +41,95 @@ class RtcProfileResolver(
 ) : IMProfileResolver {
 
     private val log = IMLog.tag("IM.Rtc")
-    private val avatars = ConcurrentHashMap<String, Drawable>()
+    private val drawables = ConcurrentHashMap<String, Drawable>()
+    private val loading = ConcurrentHashMap.newKeySet<String>()
+    private var feed: Job? = null
+
+    /** 当前这通是群通话时的群号（群成员表按它取）；单聊为空串。由 [RtcCall] 在拨号 / 来电时设。 */
+    @Volatile var groupId: String = ""
+
+    /** 开始跟着 IM 的会话数据走。幂等。 */
+    fun open() {
+        if (feed != null) return
+        feed = scope.launch { peerRows.collect { sources.setPeers(it) } }
+    }
+
+    fun close() {
+        feed?.cancel()
+        feed = null
+    }
+
+    /** 群资料页加载成员时顺手留一份（不增加请求）。 */
+    fun putMembers(convId: String, rows: List<RtcProfileSources.MemberRow>) = sources.putMembers(convId, rows)
 
     override fun displayName(uid: String): String? {
-        prefetch(listOf(uid))
+        sources.name(uid, groupId)?.let { return it }
+        // IM 本地一个名字都没有：兜底取一次，取回后补画；取回之前先答 null（Kit 显示 uid）。
+        fetchFallback(uid)
         return book.name(uid)
     }
 
-    override fun avatar(uid: String): Drawable? = avatars[uid]?.constantState?.newDrawable()?.mutate()
+    override fun avatar(uid: String): Drawable? {
+        val raw = sources.avatarUrl(uid, groupId) ?: book.avatarUrl(uid).takeIf { it.isNotBlank() } ?: return null
+        val url = absolute(raw)
+        if (url.isBlank()) return null
+        drawables[url]?.let { return it.constantState?.newDrawable()?.mutate() }
+        loadAvatar(uid, url)
+        return null
+    }
 
-    /** 提前取（拨号时对方 uid 已知），别等界面画出来才发现只有 uid。 */
-    fun prefetch(uids: List<String>) {
-        uids.forEach { uid ->
-            if (!book.claim(uid, now())) return@forEach
-            scope.launch {
-                runCatching { lookup(uid) }
-                    .onSuccess { card ->
-                        val avatarChanged = book.avatarUrl(uid) != card.avatarUrl || !avatars.containsKey(uid)
-                        book.put(uid, card.displayName, card.avatarUrl, now())
-                        if (avatarChanged) loadAvatar(uid, card.avatarUrl)
-                        onResolved(listOf(uid))
-                    }
-                    .onFailure {
-                        book.fail(uid, now())
-                        log.w("rtc_profile_failed", "err" to it.javaClass.simpleName)
-                    }
-            }
+    private fun fetchFallback(uid: String) {
+        if (!book.claim(uid, now())) return
+        scope.launch {
+            runCatching { lookup(uid) }
+                .onSuccess { card ->
+                    book.put(uid, card.displayName, card.avatarUrl)
+                    onResolved(listOf(uid))
+                }
+                .onFailure {
+                    book.fail(uid, now())
+                    log.w("rtc_profile_failed", "err" to it.javaClass.simpleName)
+                }
         }
     }
 
-    private fun loadAvatar(uid: String, avatarUrl: String) {
-        val url = absolute(avatarUrl)
-        if (url.isBlank()) {
-            avatars.remove(uid)
-            return
-        }
+    private fun loadAvatar(uid: String, url: String) {
+        if (!loading.add(url)) return
         val request = ImageRequest.Builder(context)
             .data(url)
             .allowHardware(false)
-            .target(onSuccess = { drawable ->
-                avatars[uid] = drawable
-                log.d("rtc_avatar_loaded", "uid" to uid)
-                onResolved(listOf(uid))
-            }, onError = { _ -> log.w("rtc_avatar_failed", "uid" to uid, "url" to url) })
+            .target(
+                onSuccess = { drawable ->
+                    drawables[url] = drawable
+                    loading.remove(url)
+                    log.d("rtc_avatar_loaded", "uid" to uid)
+                    onResolved(listOf(uid))
+                },
+                onError = { _ ->
+                    loading.remove(url)
+                    log.w("rtc_avatar_failed", "uid" to uid, "url" to url)
+                },
+            )
             .build()
         Coil.imageLoader(context).enqueue(request)
     }
 
     companion object {
-        /** 接到 IM 客户端上：名片走 `client.contacts.card`，头像地址按当前服务器补全，取到后让 Kit 重画。 */
-        fun forClient(context: Context, client: IMClient) = RtcProfileResolver(
-            context = context.applicationContext,
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-            lookup = { client.contacts.card(it) },
-            absolute = { MediaUrl.absolute(it, client.host, BuildConfig.USE_TLS) },
-            onResolved = { IMCallKit.reloadProfiles(it) },
-        )
+        /** 接到 IM 客户端上：会话行取自本机会话表，群成员由群资料页喂，兜底走 `client.contacts.card`。 */
+        fun forClient(context: Context, client: IMClient): RtcProfileResolver {
+            val owner = client.uid.orEmpty()
+            return RtcProfileResolver(
+                context = context.applicationContext,
+                scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+                sources = RtcProfileSources(),
+                peerRows = client.repo.observeConversations(owner).map { rows ->
+                    rows.filter { !it.isGroup && it.peerUid.isNotEmpty() }
+                        .map { RtcProfileSources.PeerRow(it.peerUid, it.title, it.avatarUrl, it.peerRemark) }
+                },
+                lookup = { client.contacts.card(it) },
+                absolute = { MediaUrl.absolute(it, client.host, BuildConfig.USE_TLS) },
+                onResolved = { IMCallKit.reloadProfiles(it) },
+            )
+        }
     }
 }

@@ -15,21 +15,17 @@ class RtcProfileBookTest {
         assertNull(book.name("u1"))
         assertTrue(book.claim("u1", 0))
         assertFalse("在途中不重复取", book.claim("u1", 1))
-        book.put("u1", "小明", "/a.png", 0)
+        book.put("u1", "小明", "/a.png")
         assertEquals("小明", book.name("u1"))
         assertEquals("/a.png", book.avatarUrl("u1"))
         assertFalse("取到了就不再取", book.claim("u1", 2))
     }
 
     @Test
-    fun cached_entry_is_refreshed_once_stale_but_still_served() {
-        val book = RtcProfileBook(staleAfterMs = 1000)
-        book.put("u1", "小明", "", 0)
-        assertFalse("没到期不刷新", book.claim("u1", 999))
-        assertTrue("到期后再问要刷新", book.claim("u1", 1000))
-        assertEquals("刷新期间旧值照常答", "小明", book.name("u1"))
-        book.put("u1", "小明", "/new.png", 1000)
-        assertEquals("/new.png", book.avatarUrl("u1"))
+    fun cached_entry_is_never_refetched_by_time() {
+        val book = RtcProfileBook()
+        book.put("u1", "小明", "")
+        assertFalse("不按时间过期：通话界面跟着 IM 走，兜底缓存不自己刷新", book.claim("u1", 24 * 3600_000L))
     }
 
     @Test
