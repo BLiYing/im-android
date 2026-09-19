@@ -83,6 +83,16 @@ fun ChatDetailHost(
                 .onSuccess { list -> friend = list.firstOrNull { it.userId == conv.peerUid } }
         }
     }
+    // 对端权威名片：进页拉一次，并回会话行（对方改了昵称 / 头像，信息页与会话列表都跟着新；
+    // 与 IMProgram `loadPeerProfile`、im-web `loadPeerCard` 同口径）。单聊才有；自己 / 空 uid 不拉；
+    // 不限好友（非好友也能开这一页）；失败静默，保持旧值。
+    LaunchedEffect(conv.convId, conv.peerUid) {
+        if (!conv.isGroup && conv.peerUid.isNotEmpty() && conv.peerUid != owner) {
+            runCatchingCancellable { client.contacts.card(conv.peerUid) }
+                .onSuccess { client.messages.applyPeerCard(conv.peerUid, it) }
+                .onFailure { IMLog.tag("IM.Detail").w("peer_card_failed") }
+        }
+    }
     // 「更多」里那几件要二次确认 / 要填一句话的事
     var confirm by remember(conv.convId) { mutableStateOf<DetailMoreAction?>(null) }
     var reporting by remember(conv.convId) { mutableStateOf(false) }

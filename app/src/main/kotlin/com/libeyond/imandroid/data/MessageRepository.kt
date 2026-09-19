@@ -79,6 +79,13 @@ class MessageRepository(
     suspend fun conversation(owner: String, convId: String): ConversationEntity? =
         conversations.byId(owner, convId)
 
+    /** 把对端权威名片并回单聊会话行（规则见 [PeerCardMerge]）；本机没有这个会话就不动。 */
+    suspend fun applyPeerCard(owner: String, peerUid: String, card: com.libeyond.imandroid.sdk.api.UserCard) {
+        val row = conversations.byPeer(owner, peerUid) ?: return
+        val m = PeerCardMerge.merge(row, card)
+        conversations.updatePeerProfile(owner, row.convId, m.title, m.avatarUrl, m.peerRemark)
+    }
+
     /**
      * 观察一个会话的**最近 [limit] 条**消息，返回显示序（旧→新）。
      *

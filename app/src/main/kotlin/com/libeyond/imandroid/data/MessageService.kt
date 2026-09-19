@@ -470,6 +470,12 @@ class MessageService(
 
     // ————————————————— 连接与同步 —————————————————
 
+    /** 进单聊信息页拉到的对端名片，并回会话行（信息页头部 / 会话列表随之更新）。 */
+    suspend fun applyPeerCard(peerUid: String, card: com.libeyond.imandroid.sdk.api.UserCard) {
+        val owner = ownerProvider() ?: return
+        repo.applyPeerCard(owner, peerUid, card)
+    }
+
     /** 拉会话列表（权威快照）。 */
     suspend fun refreshConversations() {
         val owner = ownerProvider() ?: return

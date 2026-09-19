@@ -243,6 +243,14 @@ interface ConversationDao {
     @Query("SELECT * FROM conversation WHERE ownerUid = :owner AND convId = :convId")
     suspend fun byId(owner: String, convId: String): ConversationEntity?
 
+    /** 单聊按对端 uid 找会话行（名片并回用）；群聊行 peerUid 为空，不会命中。 */
+    @Query("SELECT * FROM conversation WHERE ownerUid = :owner AND peerUid = :peer AND isGroup = 0 LIMIT 1")
+    suspend fun byPeer(owner: String, peer: String): ConversationEntity?
+
+    /** 只改对端资料三列，不动未读 / 游标 / 置顶等别的列（读-改-写整行会盖掉并发的同步进度）。 */
+    @Query("UPDATE conversation SET title = :title, avatarUrl = :avatarUrl, peerRemark = :peerRemark WHERE ownerUid = :owner AND convId = :convId")
+    suspend fun updatePeerProfile(owner: String, convId: String, title: String, avatarUrl: String, peerRemark: String)
+
     @Query("SELECT * FROM conversation WHERE ownerUid = :owner")
     suspend fun all(owner: String): List<ConversationEntity>
 
