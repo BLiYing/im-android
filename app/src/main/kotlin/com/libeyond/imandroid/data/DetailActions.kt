@@ -14,7 +14,7 @@ package com.libeyond.imandroid.data
  * - 单聊好友：消息（仅从外部入口进来时）/ 呼叫 / 视频 / 搜索 / 更多；
  * - 群聊：搜索 / 更多。
  */
-enum class DetailAction { AddFriend, Message, Call, Video, Search, More }
+enum class DetailAction { AddFriend, Message, Call, Video, GroupCall, Search, More }
 
 /** 「更多」菜单项（对齐 iOS `moreTapped:`）。破坏性最重的排末位。 */
 enum class DetailMoreAction {
@@ -41,6 +41,8 @@ object DetailActions {
         isSystemPeer: Boolean,
         peerIsFriend: Boolean,
         showsMessagePill: Boolean,
+        /** 群聊要不要出「语音 / 视频」pill（群通话接入后为 true）。单聊不看它。 */
+        groupCallEnabled: Boolean = false,
     ): List<DetailAction> {
         if (!isGroup && isSystemPeer) return listOf(DetailAction.More)
         val out = mutableListOf<DetailAction>()
@@ -49,6 +51,10 @@ object DetailActions {
             if (showsMessagePill) out += DetailAction.Message
             out += DetailAction.Call
             out += DetailAction.Video
+        } else if (groupCallEnabled) {
+            // 群里只有一个「群通话」入口（不分语音 / 视频）：以视频通话发起、摄像头默认关，
+            // 通话中随时可开——语音通话里没有摄像头按钮，所以不能以语音发起。
+            out += DetailAction.GroupCall
         }
         out += DetailAction.Search
         out += DetailAction.More
@@ -85,6 +91,7 @@ object DetailActions {
         DetailAction.Message -> "消息"
         DetailAction.Call -> "呼叫"
         DetailAction.Video -> "视频"
+        DetailAction.GroupCall -> "群通话"
         DetailAction.Search -> "搜索"
         DetailAction.More -> "更多"
     }

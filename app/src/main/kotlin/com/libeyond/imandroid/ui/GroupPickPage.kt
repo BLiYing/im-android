@@ -46,7 +46,7 @@ internal fun GroupPickPage(
             when (purpose) {
                 PickPurpose.AddAdmin -> onAddAdmin(row.id)
                 PickPurpose.Transfer -> onTransferTo(row.id)
-                PickPurpose.Invite -> Unit
+                PickPurpose.Invite, PickPurpose.Call -> Unit
             }
         },
         onConfirm = { onConfirmInvite(picked.toList()) },

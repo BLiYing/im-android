@@ -63,4 +63,4 @@ object GroupInfoNav {
 }
 
 /** 群这条链上「选人页是为了做什么」。三种用途共用一个选择页（见 `PickListScreen`）。 */
-enum class PickPurpose { AddAdmin, Transfer, Invite }
+enum class PickPurpose { AddAdmin, Transfer, Invite, Call }

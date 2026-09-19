@@ -126,4 +126,17 @@ class DetailActionsTest {
         )
         assertEquals(DetailMoreAction.RemoveFriend, full.last())
     }
+
+    @Test
+    fun `群聊默认不出通话入口，接入后只出一个群通话，在搜索前面`() {
+        val off = DetailActions.pillsFor(
+            isGroup = true, isSystemPeer = false, peerIsFriend = false, showsMessagePill = false,
+        )
+        assertEquals(listOf(DetailAction.Search, DetailAction.More), off)
+        val on = DetailActions.pillsFor(
+            isGroup = true, isSystemPeer = false, peerIsFriend = false, showsMessagePill = false,
+            groupCallEnabled = true,
+        )
+        assertEquals(listOf(DetailAction.GroupCall, DetailAction.Search, DetailAction.More), on)
+    }
 }

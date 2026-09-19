@@ -22,7 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.BuildConfig
+import com.libeyond.imandroid.rtc.RtcCall
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.session.DeviceIdentity
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.session.RestoreOutcome
 import com.libeyond.imandroid.sdk.ws.SessionEndReason
@@ -91,6 +93,17 @@ fun AppRoot(client: IMClient) {
                 SessionEndReason.Banned -> "账号已被封禁"
             }
             phase = Phase.Login
+        }
+    }
+
+    // im-rtc 通话的生命周期跟着 IM 登录态走：进主界面上线，回登录页（退出 / 被踢 / 被封）下线。
+    // 只在 Login 停、Restoring 不动：Activity 重建时 phase 会回到 Restoring，那不是退出，不能挂掉在途通话。
+    val appContext = LocalContext.current.applicationContext
+    LaunchedEffect(phase) {
+        when (phase) {
+            Phase.Main -> RtcCall.start(appContext, client.uid.orEmpty(), DeviceIdentity(appContext).deviceId)
+            Phase.Login -> RtcCall.stop()
+            Phase.Restoring -> Unit
         }
     }
 

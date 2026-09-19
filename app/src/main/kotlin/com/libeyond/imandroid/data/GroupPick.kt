@@ -37,7 +37,8 @@ object GroupPick {
         PickPurpose.AddAdmin -> members
             .filter { it.role == GroupMember.ROLE_MEMBER }
             .map { it.toCandidate() }
-        PickPurpose.Transfer -> members
+        // 群通话：除自己外都能选。不筛角色 / 是否好友——通话对象是「群成员」，不是「我的好友」。
+        PickPurpose.Transfer, PickPurpose.Call -> members
             .filter { it.userId != myUid }
             .map { it.toCandidate() }
         PickPurpose.Invite -> {
@@ -50,16 +51,31 @@ object GroupPick {
         PickPurpose.AddAdmin -> "添加管理员"
         PickPurpose.Transfer -> "选择新群主"
         PickPurpose.Invite -> "邀请入群"
+        PickPurpose.Call -> "选择通话成员"
     }
 
     fun emptyText(purpose: PickPurpose): String = when (purpose) {
         PickPurpose.AddAdmin -> "没有可设为管理员的普通成员"
         PickPurpose.Transfer -> "群里还没有别人"
         PickPurpose.Invite -> "好友都已在群里"
+        PickPurpose.Call -> "群里还没有别人"
     }
 
-    /** 只有邀请是多选（攒够了按右上角确认）；另两件事都是**选中即执行**。 */
-    fun isMultiSelect(purpose: PickPurpose): Boolean = purpose == PickPurpose.Invite
+    /** 邀请与群通话是多选（攒够了按右上角确认）；另两件事都是**选中即执行**。 */
+    fun isMultiSelect(purpose: PickPurpose): Boolean = purpose == PickPurpose.Invite || purpose == PickPurpose.Call
+
+    /** 群通话房内含主叫最多 9 人（im-rtc 协议上限），所以被叫最多选 8 个。 */
+    const val MAX_CALL_PICK = 8
+
+    /**
+     * 勾选 / 取消勾选一个人。已选的永远能取消；群通话满 [MAX_CALL_PICK] 个后**不再加**（返回原集合，
+     * 调用方比较前后是否相等来决定要不要提示）。其余用途不设上限。
+     */
+    fun toggle(purpose: PickPurpose, picked: Set<String>, id: String): Set<String> = when {
+        id in picked -> picked - id
+        purpose == PickPurpose.Call && picked.size >= MAX_CALL_PICK -> picked
+        else -> picked + id
+    }
 }
 
 private fun GroupMember.toCandidate() = GroupPickCandidate(userId, displayName, avatarUrl, handle)

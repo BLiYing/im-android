@@ -17,6 +17,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // im-rtc SDK 联调期的本机包（在 im-rtc-android 里 `./gradlew publishToMavenLocal`）。
+        // **只让这一个 group 走 mavenLocal**：别的依赖从本机缓存拉到，排查起来是另一场灾难。
+        mavenLocal { content { includeGroup("com.github.BLiYing.im-rtc-android") } }
     }
 }
 

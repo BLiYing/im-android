@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,14 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
+
+// im-rtc 联调配置：只读 local.properties（已被 .gitignore 忽略），缺了就是空串，
+// 此时 RtcConfig.isUsable=false、通话入口给出提示，不影响其他功能。
+val localProps = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+fun rtcProp(name: String): String =
+    (localProps.getProperty(name) ?: "").trim().replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace = "com.libeyond.imandroid"
@@ -19,6 +29,12 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // im-rtc 联调配置（值来自 local.properties，见上）。**secret 不进源码。**
+        buildConfigField("String", "RTC_WS_URL", "\"${rtcProp("rtc.wsUrl")}\"")
+        buildConfigField("String", "RTC_APP_ID", "\"${rtcProp("rtc.appId")}\"")
+        buildConfigField("String", "RTC_KEY_ID", "\"${rtcProp("rtc.keyId")}\"")
+        buildConfigField("String", "RTC_DEBUG_SECRET", "\"${rtcProp("rtc.debugSecret")}\"")
     }
 
     buildTypes {
@@ -91,6 +107,9 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.okhttp)
+    // im-rtc 通话 SDK：Kit 接管整套通话界面，webrtc 是媒体实现。
+    implementation(libs.imrtc.uikit)
+    implementation(libs.imrtc.webrtc)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.datastore.prefs)

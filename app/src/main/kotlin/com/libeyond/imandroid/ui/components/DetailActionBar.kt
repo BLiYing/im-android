@@ -42,6 +42,7 @@ import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.UserMinus
 import com.composables.icons.lucide.UserPlus
+import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.Video
 import com.libeyond.imandroid.data.DetailAction
 import com.libeyond.imandroid.data.DetailActions
@@ -145,6 +146,7 @@ private fun iconFor(a: DetailAction): ImageVector = when (a) {
     DetailAction.Message -> Lucide.MessageCircle    // bubble.right.fill
     DetailAction.Call -> Lucide.Phone               // phone.fill
     DetailAction.Video -> Lucide.Video              // video.fill
+    DetailAction.GroupCall -> Lucide.Users          // person.3.fill
     DetailAction.Search -> Lucide.Search            // magnifyingglass
     DetailAction.More -> Lucide.Ellipsis            // ellipsis
 }

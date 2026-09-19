@@ -7,6 +7,15 @@
 
 ## 当前焦点
 
+> **im-rtc 通话接入（2026-09-19，联调期；单聊 1v1 + 群通话；单测绿、未提交、未真机）**：
+> SDK 走本机 Maven（先在 `../im-rtc/im-rtc-android` 跑 `./gradlew publishToMavenLocal`，`settings.gradle.kts` 只对该 group 开 `mavenLocal()`），
+> 版本坐标在 `libs.versions.toml` 的 `imrtc`。**票用调试密钥在本机签**（`rtc/RtcCall.signToken` 是票的唯一来源，以后换后台接口只改这里）。
+> 配置写 `local.properties`（已忽略）：`rtc.wsUrl` / `rtc.appId` / `rtc.keyId` / `rtc.debugSecret`，缺项则入口提示、其余功能不受影响。
+> 生命周期：`AppRoot` 进主界面 `RtcCall.start`、回登录页 `stop`（Restoring 不动，Activity 重建不挂在途通话；同账号重复 start 是空操作）。
+> 入口：单聊详情页语音 / 视频 pill；群资料页新增语音 / 视频 pill → 选成员（`PickPurpose.Call`，最多 8 人）→ `placeGroup`。附件面板「音视频」不接（后面会去掉）。
+> ⚠️ 服务端地址联调时是 Mac 的局域网 IP（`ws://<Mac IP>:8787/v1/ws`），换网络要改 `rtc.wsUrl` 重新打包；Kit 里对方显示 uid（还没接 `profileResolver`）。
+> 未做：设置页「后台接口 / 调试」开关（等 IMServer 换票接口）、IMServer 侧换票、`profileResolver`、群成员超一页时选人页只列已加载的。
+
 > **收藏页 + 长按「收藏」+ 详情页下载示意复用聊天页组件 + 从收藏发送（2026-09-17 第二、三批；纯客户端、后端零改动；
 > `./scripts/test.sh` 807 例绿，新测试均先看红过；⚠️ 用户要求**不装真机**，布局/手势未实测；未提交）**。
 > 逐条状态见 `../IMServer/docs/CLIENT_PARITY.md` 顶部「2026-09-17 第二批 / 第三批」，SYMMETRY 新登记 3 行。

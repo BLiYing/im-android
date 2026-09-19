@@ -23,6 +23,7 @@ import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.rtc.RtcCall
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
@@ -204,8 +205,10 @@ fun ChatDetailHost(
                 when (a) {
                     // 与 iOS 同：pill 点了回聊天页进搜索态（SEARCH_DESIGN §4）
                     DetailAction.Search -> onSearchInChat()
-                    DetailAction.Call -> toast = "语音通话即将上线"
-                    DetailAction.Video -> toast = "视频通话即将上线"
+                    // 通话界面整套由 im-rtc 的 Kit 接管；拨不出去（没配置 / 没上线）才回一句原因。
+                    DetailAction.Call -> RtcCall.placeSingle(conv.peerUid, video = false)?.let { toast = it }
+                    DetailAction.Video -> RtcCall.placeSingle(conv.peerUid, video = true)?.let { toast = it }
+                    DetailAction.GroupCall -> Unit // 单聊不会出这个 pill
                     DetailAction.AddFriend -> scope.launch {
                         runCatching { client.contacts.request(conv.peerUid) }
                             .onSuccess { toast = "好友申请已发出" }

@@ -75,4 +75,29 @@ class GroupPickTest {
         assertEquals("选择新群主", GroupPick.title(PickPurpose.Transfer))
         assertEquals("邀请入群", GroupPick.title(PickPurpose.Invite))
     }
+
+    @Test
+    fun call_lists_everyone_but_me_regardless_of_role() {
+        val ids = GroupPick.candidates(PickPurpose.Call, members, emptyList(), "owner1").map { it.id }
+        assertEquals(listOf("admin1", "m1", "m2"), ids)
+    }
+
+    @Test
+    fun call_is_multi_select_and_caps_at_eight() {
+        assertTrue(GroupPick.isMultiSelect(PickPurpose.Call))
+        var picked = emptySet<String>()
+        for (i in 1..GroupPick.MAX_CALL_PICK) picked = GroupPick.toggle(PickPurpose.Call, picked, "u$i")
+        assertEquals(GroupPick.MAX_CALL_PICK, picked.size)
+        // 满了再加：原样返回（调用方靠「没变」判断要提示）
+        assertEquals(picked, GroupPick.toggle(PickPurpose.Call, picked, "u9"))
+        // 已选的永远能取消
+        assertFalse("u1" in GroupPick.toggle(PickPurpose.Call, picked, "u1"))
+    }
+
+    @Test
+    fun invite_has_no_cap() {
+        var picked = emptySet<String>()
+        for (i in 1..20) picked = GroupPick.toggle(PickPurpose.Invite, picked, "u$i")
+        assertEquals(20, picked.size)
+    }
 }

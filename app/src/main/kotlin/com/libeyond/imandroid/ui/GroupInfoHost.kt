@@ -11,6 +11,8 @@ import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.GroupInfoNav
 import com.libeyond.imandroid.data.GroupInfoPage
 import com.libeyond.imandroid.data.PickPurpose
+import com.libeyond.imandroid.data.GroupPick
+import com.libeyond.imandroid.rtc.RtcCall
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailAction
@@ -206,7 +208,11 @@ fun GroupInfoHost(
             friends = friends,
             picked = picked,
             myUid = myUid,
-            onToggle = { id -> picked = if (id in picked) picked - id else picked + id },
+            onToggle = { id ->
+                val next = GroupPick.toggle(pk, picked, id)
+                if (next == picked && id !in picked) toast = "群通话最多选择 ${GroupPick.MAX_CALL_PICK} 人"
+                picked = next
+            },
             // 设管理员是可撤销的，直接做；转让不可逆，先二次确认
             onAddAdmin = { id ->
                 pick = null
@@ -216,7 +222,10 @@ fun GroupInfoHost(
             onConfirmInvite = { ids ->
                 pick = null
                 picked = emptySet()
-                if (ids.isNotEmpty()) runManage("邀请入群") { client.groups.invite(convId, ids) }
+                if (pk == PickPurpose.Call) {
+                    // 通话界面由 im-rtc 的 Kit 接管；拨不出去才回一句原因
+                    if (ids.isNotEmpty()) RtcCall.placeGroup(convId, ids)?.let { toast = it }
+                } else if (ids.isNotEmpty()) runManage("邀请入群") { client.groups.invite(convId, ids) }
             },
             onBack = { pick = null; picked = emptySet() },
         )
@@ -408,6 +417,7 @@ fun GroupInfoHost(
             },
         actions = DetailActions.pillsFor(
             isGroup = true, isSystemPeer = false, peerIsFriend = false, showsMessagePill = false,
+            groupCallEnabled = true,
         ),
         moreItems = DetailActions.moreFor(
             isGroup = true, isSystemPeer = false,
@@ -415,8 +425,15 @@ fun GroupInfoHost(
             peerBlocked = false, peerIsFriend = false,
         ),
         onAction = { a ->
-            // 群这一侧 pills 只有「搜索 / 更多」，更多由 onMore 走
-            if (a == DetailAction.Search) onSearchInChat()
+            // 群这一侧 pills 是「群通话 / 搜索 / 更多」，更多由 onMore 走；群通话先选成员再拨
+            when (a) {
+                DetailAction.Search -> onSearchInChat()
+                DetailAction.GroupCall -> {
+                    picked = emptySet()
+                    pick = PickPurpose.Call
+                }
+                else -> Unit
+            }
         },
         onMore = { m -> confirmMore = m },
         onMemberLongPress = { m -> memberMenu = m },

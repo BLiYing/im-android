@@ -9,6 +9,8 @@ lifecycle = "2.8.7"
 activityCompose = "1.9.3"
 composeBom = "2024.10.01"
 okhttp = "4.12.0"
+# im-rtc SDK（通话）。联调期取本机 mavenLocal（见 settings.gradle.kts），发布后改回公网版本。
+imrtc = "1.0.0"
 serialization = "1.7.3"
 coroutines = "1.9.0"
 datastore = "1.1.1"
@@ -83,6 +85,8 @@ androidx-junit              = { group = "androidx.test.ext",         name = "jun
 espresso-core               = { group = "androidx.test.espresso",    name = "espresso-core",            version.ref = "espresso" }
 compose-ui-test-junit4      = { group = "androidx.compose.ui",       name = "ui-test-junit4" }
 compose-ui-test-manifest    = { group = "androidx.compose.ui",       name = "ui-test-manifest" }
+imrtc-uikit                 = { group = "com.github.BLiYing.im-rtc-android", name = "call-uikit",          version.ref = "imrtc" }
+imrtc-webrtc                = { group = "com.github.BLiYing.im-rtc-android", name = "call-engine-webrtc",   version.ref = "imrtc" }
 
 [plugins]
 android-application  = { id = "com.android.application",                  version.ref = "agp" }
