@@ -179,7 +179,7 @@ object RtcCall {
 
         /** 来电：只记下这通是不是群通话、哪个群，好让解析器读对的成员表（不发任何请求）。 */
         override fun onCallReceived(
-            callId: String, caller: String, inviter: String, calleeIds: List<String>,
+            callId: String, caller: String, inviter: String, calleeIds: List<String>, joinedIds: List<String>,
             mediaType: String, isGroup: Boolean, chatGroupId: String, userData: String,
         ) {
             if (stale) return
