@@ -14,6 +14,9 @@ object ContentType {
     const val CHAT_RECORD = "chat_record"
     const val CONTACT = "contact"
 
+    /** 通话记录（`{"cid","m","r","d"[,"g"]}`，设计见 IMServer `docs/design/CALL_RECORD_DESIGN.md`）。 */
+    const val CALL = "call"
+
     /**
      * `msg_op` **事件行**（PROTOCOL §6.7）。不是聊天内容，是协议管道：
      * `content` 是自描述 JSON（= `msg_op` 上行负载），供离线端据此收敛撤回/编辑/置顶/删除。

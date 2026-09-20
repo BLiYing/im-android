@@ -40,7 +40,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
+import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.ConversationListPhase
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMTopBar
@@ -163,7 +165,8 @@ private fun ConversationRow(
                 }
                 Text(
                     text = conv.lastContent,
-                    color = c.textSecondary,
+                    // 被叫侧「未接来电」整行预览标红（danger，不随主题变）
+                    color = if (conv.lastContentType == ContentType.CALL && CallRecord.isMissedPreview(conv.lastContent)) c.danger else c.textSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

@@ -35,6 +35,7 @@ import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.ws.ConnState
+import com.libeyond.imandroid.rtc.RtcCall
 import com.libeyond.imandroid.ui.screens.ChatScreen
 import com.libeyond.imandroid.ui.screens.buildChatRows
 import kotlinx.coroutines.launch
@@ -433,6 +434,8 @@ fun ChatHost(
         remarkOf = { uid -> friendsByUid[uid]?.remark?.takeIf { it.isNotBlank() } },
         latestNicknameOf = { uid -> latestNicks[uid] },
         onOpenRecord = { recordNav.push(it) },
+        // 点通话记录回拨：与详情页「语音 / 视频」pill 同一入口（RtcCall.placeSingle），忙线 / 权限全由 Kit 守门，宿主不判
+        onCallBack = { video -> RtcCall.placeSingle(conv.peerUid, video)?.let { toast = it } },
         searchHighlight = search.needle,
         rowsReady = rowsReady,
         // **自己发消息必须回到最新**：停在历史时发出去的那条在锚点窗里看不见，用户会以为没发出去。

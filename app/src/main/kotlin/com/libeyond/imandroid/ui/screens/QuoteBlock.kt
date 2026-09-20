@@ -183,6 +183,7 @@ internal fun replyPreviewOf(
     ContentType.FILE -> "[文件] " + MediaUrl.displayFileName(content, fileName.orEmpty())
     ContentType.CONTACT -> "[个人名片]"
     ContentType.CHAT_RECORD -> "[聊天记录]"
+    ContentType.CALL -> "[音视频通话]"
     else -> content
 }
 

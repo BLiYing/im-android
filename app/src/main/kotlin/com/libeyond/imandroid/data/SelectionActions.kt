@@ -117,6 +117,7 @@ object SelectionActions {
             (it.recalledAt ?: 0) <= 0 &&
                 (it.deletedAt ?: 0) <= 0 &&
                 it.contentType != ContentType.SYSTEM &&
+                it.contentType != ContentType.CALL &&
                 it.content.isNotBlank() &&
                 it.convSeq > 0 &&
                 !isExpired(it)
@@ -240,6 +241,7 @@ object SelectionActions {
             it.convSeq > 0 &&
                 (it.recalledAt ?: 0) <= 0 &&
                 it.contentType != ContentType.SYSTEM &&
+                it.contentType != ContentType.CALL &&
                 it.content.isNotBlank()
         }
 

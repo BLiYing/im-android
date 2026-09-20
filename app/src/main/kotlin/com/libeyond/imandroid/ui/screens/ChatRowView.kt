@@ -3,6 +3,7 @@ package com.libeyond.imandroid.ui.screens
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.geometry.Rect
+import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.ReplyNames
 import com.libeyond.imandroid.data.SenderNames
@@ -87,6 +88,8 @@ internal fun ChatRowView(
     onJumpToSeq: (Long) -> Unit = {},
     /** 点合并转发卡 → 聊天记录详情页（参数是那条的 content）。 */
     onOpenRecord: (String) -> Unit = {},
+    /** 点单聊通话记录回拨（是否视频）。 */
+    onCallBack: (Boolean) -> Unit = {},
     hiddenTile: Long = 0L,
 ) {
     val myUid = style.myUid
@@ -161,7 +164,11 @@ internal fun ChatRowView(
         }
         // 系统消息走居中灰字，不进气泡分支（iOS IMSystemCell / Web .sys-note）。
         // 不用 `when` 卫语句（Kotlin 2.0 仍是实验特性），在分支内早退。
-        is ChatRow.Confirmed -> if (r.msg.contentType == ContentType.SYSTEM) {
+        is ChatRow.Confirmed -> if (r.msg.contentType == ContentType.CALL && CallRecord.parse(r.msg.content)?.isGroup == true) {
+            // 群通话记录：居中系统条（不可点、无时间无勾）。发起人 = 消息发送者，名字走与群消息同一条解析链，本人写「你」
+            val mine = r.msg.sender == myUid
+            SystemNote(text = CallRecord.renderRaw(r.msg.content, mine, if (mine) "" else style.senderNameOf(r.msg).orEmpty()).text)
+        } else if (r.msg.contentType == ContentType.SYSTEM) {
             SystemNote(
                 text = r.msg.content,
                 sysSegments = r.msg.sysSegments,
@@ -181,6 +188,7 @@ internal fun ChatRowView(
             onLongPress = { rect -> onLongPress(m, rect) },
             onOpenMedia = onOpenMedia,
             onOpenRecord = onOpenRecord,
+            onCallBack = onCallBack,
             host = host,
             useTls = useTls,
             mine = m.sender == myUid,
@@ -239,7 +247,9 @@ internal fun ChatRowView(
             val isVideo = r.msg.contentType == ContentType.VIDEO
             val isFile = r.msg.contentType == ContentType.FILE
             val pct = uploadProgress[r.msg.clientMsgId]
-            if (isImage || isVideo) {
+            if (r.msg.contentType == ContentType.CALL && CallRecord.parse(r.msg.content)?.isGroup == true) {
+                SystemNote(text = CallRecord.renderRaw(r.msg.content, viewerIsSender = true).text)
+            } else if (isImage || isVideo) {
                 PendingMediaBubble(
                     localUri = r.msg.content,
                     isVideo = isVideo,
@@ -265,6 +275,7 @@ internal fun ChatRowView(
                 Bubble(
                     text = r.msg.content,
                     mine = true,
+                    pendingType = r.msg.contentType,
                     // 待发气泡的片段只能从待发行取（此时还没有正式消息行）
                     mentionSpansJson = r.msg.mentionSpans,
                     mentionNames = style.mentionNames,

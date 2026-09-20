@@ -6,6 +6,7 @@ import android.os.Looper
 import com.imrtc.engine.IMCallEngine
 import com.imrtc.engine.IMCallEngineListener
 import com.imrtc.engine.IMCallOptions
+import com.imrtc.engine.IMCallSummary
 import com.imrtc.engine.IMDebugTokenGenerator
 import com.imrtc.engine.IMKickedOutReason
 import com.imrtc.engine.log.IMRTCLog
@@ -38,6 +39,12 @@ object RtcCall {
 
     /** 每次 start/stop 加一：旧引擎迟到的回调（stale）一律不算数，别改动新一代的状态。 */
     private var generation = 0L
+
+    /**
+     * 通话结束后该落一条通话记录时的回调（只对**主叫**触发，见 [RtcCallRecords]）。
+     * 由拿得到 IM 客户端的地方（AppRoot）接线；没接线 = 不发，只写日志。主线程。
+     */
+    @Volatile var onCallRecord: ((CallRecordPlan) -> Unit)? = null
 
     /** 引擎已建好（不代表握手已成功，连接态看日志）。 */
     val isStarted: Boolean get() = engine != null
@@ -184,6 +191,18 @@ object RtcCall {
         ) {
             if (stale) return
             profileResolver?.groupId = if (isGroup) chatGroupId else ""
+        }
+
+        /** 每通电话恰好一次、晚于 onCallEnd。宿主只在 role==caller 时发记录，别的都不用管。 */
+        override fun onCallSummary(summary: IMCallSummary) {
+            if (stale) return
+            val plan = RtcCallRecords.planFor(summary)
+            log.i(
+                "rtc_call_summary",
+                "cid" to summary.callId, "role" to summary.role, "reason" to summary.reason.wire,
+                "d" to summary.durationSec, "record" to (plan != null),
+            )
+            if (plan != null) onCallRecord?.invoke(plan)
         }
 
         override fun onDisconnected(code: Int, willReconnect: Boolean) {

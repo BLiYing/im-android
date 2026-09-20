@@ -49,6 +49,9 @@ object MessageActions {
         // 待确认的消息（还没 conv_seq）不能做任何服务端操作
         if (msg.convSeq <= 0) return emptyList()
 
+        // 通话记录是系统事实不是「说过的话」：长按只有「仅删除自己」（无复制 / 引用 / 转发 / 收藏 / 撤回 / 多选）
+        if (msg.contentType == ContentType.CALL) return listOf(MessageAction.HideForMe)
+
         val mine = msg.sender == myUid
         val out = mutableListOf<MessageAction>()
 

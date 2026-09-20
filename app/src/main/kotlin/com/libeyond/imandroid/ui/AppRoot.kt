@@ -104,13 +104,24 @@ fun AppRoot(client: IMClient) {
         when (phase) {
             Phase.Main -> {
                 val profiles = RtcProfileResolver.forClient(appContext, client)
+                // 通话记录：主叫端在 SDK 的 callSummary 到达时发一条 `call` 消息（id 固定 call-<call_id>）。
+                // 失败只写日志，不影响通话；被拉黑（200102）由仓库层吞掉。
+                RtcCall.onCallRecord = { plan ->
+                    scope.launch {
+                        runCatching {
+                            val convId = if (plan.isGroup) plan.chatGroupId
+                            else client.conversationStubFor(plan.peerUid, "", "").convId
+                            client.messages.sendCallRecord(convId, if (plan.isGroup) plan.chatGroupId else plan.peerUid, plan.callId, plan.json)
+                        }.onFailure { com.libeyond.imandroid.sdk.logging.IMLog.tag("IM.RTC").w("call_record_send_failed", "cid" to plan.callId, "err" to it.javaClass.simpleName) }
+                    }
+                }
                 RtcCall.start(
                     appContext, client.uid.orEmpty(), DeviceIdentity(appContext).deviceId,
                     profiles = profiles,
                     invites = RtcProfileResolver.inviteProviderFor(client, profiles),
                 )
             }
-            Phase.Login -> RtcCall.stop()
+            Phase.Login -> { RtcCall.onCallRecord = null; RtcCall.stop() }
             Phase.Restoring -> Unit
         }
     }

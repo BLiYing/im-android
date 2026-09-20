@@ -190,6 +190,8 @@ fun ChatScreen(
     latestNicknameOf: (String) -> String? = { null }, // 同上，见 ChatRowStyle.latestNicknameOf
     /** 点合并转发卡 → 聊天记录详情页。 */
     onOpenRecord: (String) -> Unit = {},
+    /** 点单聊通话记录 → 按原类型回拨（是否视频）。 */
+    onCallBack: (Boolean) -> Unit = {},
     /**
      * 多选态：`conv_seq → 消息`；**null = 不在多选态**。
      * 判据与写入口在 `data/ChatSelection.kt`（按 conv_seq 记且连消息一起存，理由见那里）。
@@ -407,6 +409,7 @@ fun ChatScreen(
                     onRetry = onRetry,
                     onJumpToSeq = onJumpToSeq,
                     onOpenRecord = onOpenRecord,
+                    onCallBack = onCallBack,
                     // 宫格：长按的那一格自己隐形（整行不隐，其余格仍在原位）
                     hiddenTile = if (r0 is ChatRow.Album) menuForSeq else 0L,
                 )

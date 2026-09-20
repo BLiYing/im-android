@@ -247,6 +247,16 @@ class MessageService(
     }
 
     /**
+     * 发一条通话记录（`call`）。**`client_msg_id` 固定为 `call-<call_id>`**：主叫两台设备都收到结束事件、
+     * 断线重发，服务端都凭它去重只落一条（设计 §2）。发送失败不影响通话，只留待发行 / 日志。
+     */
+    suspend fun sendCallRecord(convId: String, to: String, callId: String, json: String) {
+        val owner = ownerProvider() ?: return
+        val p = repo.createPending(owner, convId, to, json, ContentType.CALL, clientMsgId = CALL_CID_PREFIX + callId)
+        transmit(p.clientMsgId, convId, to, ContentType.CALL, json, null)
+    }
+
+    /**
      * 转发一条消息到另一个会话（M4-3，PROTOCOL §4.3 `forward_from`）。
      *
      * **不是"复制文本再发一遍"**：要带上 `forward_from`，收端才显示「转发自 X」。

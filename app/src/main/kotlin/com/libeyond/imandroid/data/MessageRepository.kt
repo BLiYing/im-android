@@ -12,6 +12,7 @@ import com.libeyond.imandroid.sdk.api.ConversationSummary
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.sdk.protocol.ErrCode
 import com.libeyond.imandroid.sdk.protocol.ErrorData
 import com.libeyond.imandroid.sdk.protocol.ConvUpdateData
 import com.libeyond.imandroid.sdk.protocol.MessageData
@@ -30,6 +31,9 @@ import java.util.UUID
  * 会话进查看器就要把几万行构造成对象——与 `observeWindow` 那条教训同源。
  */
 internal const val MEDIA_TIMELINE_LIMIT = 300
+
+/** 通话记录的 client_msg_id 前缀：`call-<call_id>`（服务端凭它去重，见 [MessageService.sendCallRecord]）。 */
+internal const val CALL_CID_PREFIX = "call-"
 
 /**
  * 消息收发与落库。
@@ -154,10 +158,12 @@ class MessageRepository(
         mentionSpans: String? = null,
         /** 被 @ 的 uid 列表 JSON（见 [PendingMessageEntity.mentions]，重名成员反推不出来）。 */
         mentions: String? = null,
+        /** 固定的幂等键。只有通话记录用（`call-<call_id>`，服务端凭它去重）；其余都是随机 UUID。 */
+        clientMsgId: String = UUID.randomUUID().toString(),
     ): PendingMessageEntity {
         val p = PendingMessageEntity(
             ownerUid = owner,
-            clientMsgId = UUID.randomUUID().toString(),
+            clientMsgId = clientMsgId,
             convId = convId,
             to = to,
             contentType = contentType,
@@ -269,6 +275,12 @@ class MessageRepository(
      */
     suspend fun onSendRejected(owner: String, err: ErrorData) {
         val cid = err.clientMsgId ?: return
+        // 通话记录被拉黑（200102）：主叫端**吞掉**，只写日志——不留红色「未发送」，更不弹提示（设计 §1）。
+        if (cid.startsWith(CALL_CID_PREFIX) && err.code == ErrCode.FRIEND_BLOCKED) {
+            pending.remove(owner, cid)
+            log.w("msg_call_record_blocked", "cid" to cid)
+            return
+        }
         pending.markState(owner, cid, SendState.Failed.name, err.code)
         log.w("msg_send_rejected", "cid" to cid, "code" to err.code)
     }
@@ -388,7 +400,7 @@ class MessageRepository(
                 avatarUrl = if (s.isGroup) s.avatarUrl else s.peerAvatarUrl,
                 peerRemark = s.peerRemark,
                 lastContent = s.lastMessage
-                    ?.let { MessagePreview.of(it.contentType, it.content, it.caption) } ?: "",
+                    ?.let { MessagePreview.of(it.contentType, it.content, it.caption, viewerIsSender = it.from == owner) } ?: "",
                 lastContentType = s.lastMessage?.contentType ?: ContentType.TEXT,
                 lastTimestamp = s.lastMessage?.timestamp ?: 0,
                 lastConvSeq = s.latestConvSeq,
@@ -515,7 +527,7 @@ class MessageRepository(
         )
         conversations.upsert(
             c.copy(
-                lastContent = MessagePreview.of(row.contentType, row.content, row.caption),
+                lastContent = MessagePreview.of(row.contentType, row.content, row.caption, viewerIsSender = row.sender == owner),
                 lastContentType = row.contentType,
                 lastTimestamp = maxOf(c.lastTimestamp, row.timestamp),
                 lastConvSeq = maxOf(c.lastConvSeq, row.convSeq),

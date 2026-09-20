@@ -88,6 +88,14 @@ class MessageActionsTest {
     }
 
     @Test
+    fun `通话记录长按只剩仅删除自己`() {
+        for (sender in listOf(ME, OTHER)) {
+            val a = actions(msg(sender = sender, type = ContentType.CALL, content = """{"cid":"c1","m":"audio","r":"hangup","d":5}"""))
+            assertEquals(listOf(MessageAction.HideForMe), a)
+        }
+    }
+
+    @Test
     fun `系统消息与空内容不给收藏`() {
         assertFalse(MessageAction.Favorite in actions(msg(type = ContentType.SYSTEM, content = "xx 加入了群聊")))
         // 空内容收藏下来是一条点不开的空快照

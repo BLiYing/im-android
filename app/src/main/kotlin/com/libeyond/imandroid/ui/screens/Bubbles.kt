@@ -4,6 +4,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.data.BubbleCaption
 import com.libeyond.imandroid.data.CaptionPlacement
+import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.LinkDetect
 import com.libeyond.imandroid.data.Mention
@@ -60,6 +64,10 @@ internal fun Bubble(
     onOpenMedia: ((MessageEntity) -> Unit)? = null,
     /** 点合并转发卡 → 聊天记录详情页，参数是这条的 content（十七条对齐 #17）。 */
     onOpenRecord: ((String) -> Unit)? = null,
+    /** 点单聊通话记录 → 按原类型回拨（参数：是否视频）。宿主不判忙，走与顶栏「语音 / 视频」同一入口。 */
+    onCallBack: ((Boolean) -> Unit)? = null,
+    /** 待发气泡没有 [MessageEntity]，类型要显式传（目前只有通话记录用到）。 */
+    pendingType: String? = null,
     /** 媒体地址补全用的当前 host。 */
     host: String = "",
     useTls: Boolean = false,
@@ -184,17 +192,24 @@ internal fun Bubble(
                     modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
                 )
             }
+            // 通话记录：整个气泡可点，按下 alpha 0.7、不做涟漪（UX 稿 §03）
+            val isCall = (msg?.contentType ?: pendingType) == ContentType.CALL
+            val pressSource = remember { MutableInteractionSource() }
+            val pressed by pressSource.collectIsPressedAsState()
             Box(
                 modifier = Modifier
                     .widthIn(max = bubbleMax)
+                    .then(if (isCall && pressed) Modifier.alpha(0.7f) else Modifier)
                     .clip(RoundedCornerShape(appearance.bubbleRadius))
                     .background(if (mine) c.bubbleMe else c.bubbleThem)
                     .then(
                         if (onLongPress != null && !recalled) {
                             Modifier.combinedClickable(
+                                interactionSource = pressSource,
+                                indication = null,
                                 // 合并转发卡点开详情页；其余类型点击**不做事**——文本气泡点一下就跳走是很怪的交互。
                                 // 图/视频由媒体块自己接（得先看下没下下来，见 MediaContent 的 onOpenMedia）
-                                onClick = { msg?.let { onTapBubble(it, onOpenRecord) } },
+                                onClick = { msg?.let { onTapBubble(it, onOpenRecord, onCallBack) } },
                                 onLongClick = { onLongPress(bubbleRect) },
                             )
                         } else Modifier
@@ -236,9 +251,10 @@ internal fun Bubble(
                         )
                     }
                     val isMedia = msg != null && msg.contentType in MEDIA_TYPES
-                    // 名片 / 聊天记录卡的时间并进卡片脚注那一行，不在下面另起一行（iOS/Web 同）
+                    // 名片 / 聊天记录卡 / 通话记录的时间并进卡片脚注那一行，不在下面另起一行（iOS/Web 同）
                     val isCard = !recalled && !isMedia &&
-                        (msg?.contentType == ContentType.CONTACT || msg?.contentType == ContentType.CHAT_RECORD)
+                        (msg?.contentType == ContentType.CONTACT || msg?.contentType == ContentType.CHAT_RECORD ||
+                            (msg?.contentType ?: pendingType) == ContentType.CALL)
                     val timeMeta: @Composable () -> Unit = {
                         BubbleTimeMeta(timestamp, mine, sending = sending, delivered = delivered, read = read)
                     }
@@ -272,6 +288,9 @@ internal fun Bubble(
                         // 于是聊天页里直接显示裸 JSON**（实体机实测发现）。
                         msg?.contentType == ContentType.CONTACT -> ContactCardContent(text, footerTrailing = timeMeta)
                         msg?.contentType == ContentType.CHAT_RECORD -> ChatRecordCardContent(text, footerTrailing = timeMeta)
+                        // 通话记录（单聊）：图标 + 一句话 + 时间勾；群记录不走气泡（ChatRowView 里是系统条）
+                        (msg?.contentType ?: pendingType) == ContentType.CALL ->
+                            CallRecordContent(text, viewerIsSender = mine, footerTrailing = timeMeta)
                         else -> Text(
                             // @提及高亮、链接、搜索命中底色是同一次遍历铺的几层（见 chatBodyText）
                             text = chatBodyText(
@@ -375,7 +394,11 @@ private fun BubbleTimeMeta(timestamp: Long, mine: Boolean, sending: Boolean, del
  * **图/视频不在这里开**：这里不知道它下没下下来。此前在这里无条件打开，
  * 于是点未下载视频的徽标旁边空白就把它打开了（2026-09-10 用户报 #8）。
  */
-private fun onTapBubble(m: MessageEntity, onOpenRecord: ((String) -> Unit)?) {
+private fun onTapBubble(m: MessageEntity, onOpenRecord: ((String) -> Unit)?, onCallBack: ((Boolean) -> Unit)?) {
+    if (m.contentType == ContentType.CALL) {
+        CallRecord.parse(m.content)?.takeIf { !it.isGroup }?.let { onCallBack?.invoke(it.video) }
+        return
+    }
     // 坏数据不开（iOS `IMLooksLikeChatRecordJSON` 同一道守卫）：否则推出一页空白的「聊天记录」
     if (m.contentType == ContentType.CHAT_RECORD && CardContent.looksLikeRecord(m.content)) onOpenRecord?.invoke(m.content)
 }
@@ -390,6 +413,7 @@ private fun onTapBubble(m: MessageEntity, onOpenRecord: ((String) -> Unit)?) {
 internal fun localizeReplySnapshot(raw: String): String = when {
     raw == "[chat_record]" -> "[聊天记录]"
     raw == "[contact]" -> "[个人名片]"
+    raw == "[call]" -> "[音视频通话]"
     raw.startsWith("[image]") -> raw.replaceFirst("[image]", "[图片]")
     raw.startsWith("[video]") -> raw.replaceFirst("[video]", "[视频]")
     raw.startsWith("[file]") -> raw.replaceFirst("[file]", "[文件]")

@@ -16,7 +16,8 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
  */
 object MessagePreview {
 
-    fun of(contentType: String, content: String, caption: String?): String = when (contentType) {
+    /** @param viewerIsSender 通话记录的预览按「看的人」出两套文案；其它类型用不到。 */
+    fun of(contentType: String, content: String, caption: String?, viewerIsSender: Boolean = false): String = when (contentType) {
         ContentType.TEXT -> content
         ContentType.IMAGE -> caption?.takeIf { it.isNotBlank() } ?: "[图片]"
         ContentType.VIDEO -> caption?.takeIf { it.isNotBlank() } ?: "[视频]"
@@ -24,6 +25,7 @@ object MessagePreview {
         ContentType.FILE -> caption?.takeIf { it.isNotBlank() } ?: "[文件]"
         ContentType.CONTACT -> "[个人名片]"
         ContentType.CHAT_RECORD -> "[聊天记录]"
+        ContentType.CALL -> CallRecord.preview(content, viewerIsSender)
         // system 与未知类型都回正文：未知类型多半是**新版本加的**消息，
         // 正文至少还能看出个大概，显示成空白才是真的丢信息（PROTOCOL §2「未知要忍」）。
         else -> content

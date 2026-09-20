@@ -46,7 +46,8 @@ object ChatSelection {
     fun selectable(msg: MessageEntity): Boolean =
         msg.convSeq > 0 &&
             (msg.recalledAt ?: 0L) <= 0L &&
-            msg.contentType != ContentType.SYSTEM
+            msg.contentType != ContentType.SYSTEM &&
+            msg.contentType != ContentType.CALL   // 通话记录不可勾选（不可转发 / 收藏）
 
     /**
      * 勾选 / 取消勾选的**唯一写入口**。到上限就拒（返回 null），由调用方吐司说明——

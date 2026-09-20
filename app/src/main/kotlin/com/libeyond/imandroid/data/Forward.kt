@@ -142,5 +142,6 @@ object Forward {
             msg.content.isNotBlank() &&
             (msg.recalledAt ?: 0) <= 0 &&
             (msg.deletedAt ?: 0) <= 0 &&
-            msg.contentType != com.libeyond.imandroid.sdk.protocol.ContentType.SYSTEM
+            msg.contentType != com.libeyond.imandroid.sdk.protocol.ContentType.SYSTEM &&
+            msg.contentType != com.libeyond.imandroid.sdk.protocol.ContentType.CALL
 }
