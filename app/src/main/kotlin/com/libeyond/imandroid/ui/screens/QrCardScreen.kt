@@ -33,23 +33,27 @@ import com.libeyond.imandroid.ui.components.QrCodeView
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
- * 我的二维码（对齐 iOS `IMQRCardViewController` 的名片码分支）。
+ * 一枚码的展示页——名片码 / 群二维码 / 群邀请链接三种共用（对齐 iOS `IMQRCardViewController`：
+ * 一个 VC、`asLink` 只改标题文案；群二维码与群邀请链接同源同权限，此处对应 [title] 不同）。
  *
- * 副标题显示**公开句柄**而不是 uid：这张卡是给别人看的，一串 10 位随机数字对方认不出是谁。
- * 没有句柄就留空——不显示「未设置」，更不回退内部 ID。
+ * 副标题（[subtitle]）显示**公开信息**而不是内部 ID：名片码是公开句柄，群码是「XX 人」——
+ * 都不落 uid/群内部 ID。没有就留空，不显示「未设置」。
  */
 @Composable
 fun QrCardScreen(
     card: QrCard?,
+    title: String,
     displayName: String,
-    handle: String,
+    subtitle: String,
     avatarUrl: String,
     seed: String,
     error: String,
+    hint: String,
     onCopyLink: () -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
-    onReset: () -> Unit,
+    /** null＝不显示「重置」（群码非群主/管理员时——对齐 iOS `resetButton.hidden`）。 */
+    onReset: (() -> Unit)?,
     onBack: () -> Unit,
 ) {
     val c = IMTheme.colors
@@ -60,7 +64,7 @@ fun QrCardScreen(
     val ready = matrix != null
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
-        IMTopBar(title = "我的二维码", onLeft = onBack)
+        IMTopBar(title = title, onLeft = onBack)
 
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -85,9 +89,9 @@ fun QrCardScreen(
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
                 )
-                if (handle.isNotEmpty()) {
+                if (subtitle.isNotEmpty()) {
                     Spacer(Modifier.height(2.dp))
-                    Text(handle, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
+                    Text(subtitle, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Spacer(Modifier.height(20.dp))
                 QrCodeView(
@@ -97,7 +101,7 @@ fun QrCardScreen(
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    text = if (error.isNotEmpty()) error else HINT,
+                    text = error.ifEmpty { hint },
                     color = if (error.isNotEmpty()) c.danger else c.textSecondary,
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
@@ -121,20 +125,19 @@ fun QrCardScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.clickable(enabled = ready, onClick = onCopyLink).padding(6.dp),
             )
-            Spacer(Modifier.height(d.space2))
-            Text(
-                text = "重置二维码",
-                color = c.textSecondary,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.clickable(onClick = onReset).padding(6.dp),
-            )
+            if (onReset != null) {
+                Spacer(Modifier.height(d.space2))
+                Text(
+                    text = "重置二维码",
+                    color = c.textSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.clickable(onClick = onReset).padding(6.dp),
+                )
+            }
             Spacer(Modifier.height(d.sectionGap))
         }
     }
 }
-
-/** 名片码长期有效，所以文案里写死「长期有效」；群码那套有效期文案等接群码时再说。 */
-private const val HINT = "扫描二维码，加我为朋友\n该码长期有效，重置后旧码立即失效"
 
 @Composable
 private fun CardButton(

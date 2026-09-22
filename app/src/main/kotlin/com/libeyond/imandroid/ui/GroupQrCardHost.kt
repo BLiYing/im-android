@@ -22,7 +22,6 @@ import androidx.core.content.ContextCompat
 import com.libeyond.imandroid.data.QrEncode
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.QrCard
-import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.qrToBitmap
@@ -32,35 +31,43 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 我的二维码（名片码）。取码 / 重置 / 复制链接 / 存相册 / 分享。
+ * 群二维码 / 群邀请链接（对齐 iOS `pushGroupCardAsLink:`：同一份数据、同一套动作，
+ * [asLink] 只切标题文案——两个入口点开的是同一枚 `/q/g/<token>`）。
  *
- * 服务端**懒生成**：没有码就建一枚长期有效的，有就复用——所以反复进页拿到的是同一张，
- * 不必在本地缓存它。
+ * 与 [QrCardHost]（名片码）几乎同构，唯独：取码/重置码走群接口、[canReset] 由调用方按
+ * 群主/管理员判定传入（服务端仍会二次校验，这里只决定按钮显不显）。**只接「出示」这一半**——
+ * 扫码识别 / 点链接跳转解析加群的接收方流程未接，见 `QrApi.kt` 顶部注释。
  */
 @Composable
-fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
+fun GroupQrCardHost(
+    client: IMClient,
+    convId: String,
+    groupName: String,
+    avatarUrl: String,
+    memberCount: Int,
+    asLink: Boolean,
+    canReset: Boolean,
+    onBack: () -> Unit,
+) {
     BackHandler(onBack = onBack)
 
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
 
-    var card by remember { mutableStateOf<QrCard?>(null) }
-    var error by remember { mutableStateOf("") }
-    var toast by remember { mutableStateOf<String?>(null) }
-    var confirmReset by remember { mutableStateOf(false) }
-    /** true = 权限拿到后立刻继续保存（Android 9 及更早才会走到）。 */
-    var pendingSave by remember { mutableStateOf(false) }
+    var card by remember(convId) { mutableStateOf<QrCard?>(null) }
+    var error by remember(convId) { mutableStateOf("") }
+    var toast by remember(convId) { mutableStateOf<String?>(null) }
+    var confirmReset by remember(convId) { mutableStateOf(false) }
+    var pendingSave by remember(convId) { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        runCatchingCancellable { client.qr.myCard() }
+    LaunchedEffect(convId) {
+        runCatchingCancellable { client.qr.groupQR(convId) }
             .onSuccess { card = it; error = "" }
             .onFailure { error = it.userMessage("获取二维码失败") }
     }
 
-    // 展示页要给别人扫：临时拉满屏幕亮度，离开页面还原（对齐 iOS boostBrightness）。
-    // 用 DisposableEffect 而不是在回调里还原——用户按返回、被来电打断、进程切后台，
-    // 任何一条退出路径都必须还原，否则手机会一直停在满亮度。
+    // 展示页要给别人扫：临时拉满屏幕亮度，离开还原（同 QrCardHost）。
     val activity = context as? Activity
     DisposableEffect(activity) {
         val window = activity?.window
@@ -82,12 +89,11 @@ fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
         }
         scope.launch {
             toast = withContext(Dispatchers.IO) {
-                ImageExport.saveToGallery(context, qrToBitmap(matrix), "im_qr_${System.currentTimeMillis()}.png")
+                ImageExport.saveToGallery(context, qrToBitmap(matrix), "im_group_qr_${System.currentTimeMillis()}.png")
             }
         }
     }
 
-    // Android 9 及更早保存到相册要 WRITE_EXTERNAL_STORAGE；Q 起不需要，压根不会走这条。
     val requestWrite = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -98,13 +104,14 @@ fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
 
     QrCardScreen(
         card = card,
-        title = "我的二维码",
-        displayName = me?.displayName.orEmpty().ifBlank { client.myPublicName() },
-        subtitle = me?.handle.orEmpty(),
-        avatarUrl = me?.avatarUrl.orEmpty(),
-        seed = client.uid.orEmpty(),
+        title = if (asLink) "群邀请链接" else "群二维码",
+        displayName = groupName,
+        subtitle = "$memberCount 人", // 与详情页头部人数文案一致（GroupInfoScreen.kt）
+        avatarUrl = avatarUrl,
+        seed = convId,
         error = error,
-        hint = "扫描二维码，加我为朋友\n该码长期有效，重置后旧码立即失效",
+        hint = if (asLink) "复制链接分享给好友，扫描/点击即可加入本群\n该链接 7 天内有效，重置后旧链接立即失效"
+        else "邀请好友扫描二维码加入本群\n该码 7 天内有效，重置后旧码立即失效",
         onCopyLink = {
             val code = card?.codeString.orEmpty()
             if (code.isEmpty()) {
@@ -132,30 +139,26 @@ fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
                 toast = "二维码还没准备好"
             } else {
                 scope.launch {
-                    // 出图 **和写文件** 都在 IO 上：shareImage 会压一张 PNG 落到 cacheDir，
-                    // 留在主线程是实打实的磁盘写（存相册那条路本来就在 IO，两条要一致）。
-                    // startActivity 本身不限线程。
                     val err = withContext(Dispatchers.IO) {
-                        ImageExport.shareImage(context, qrToBitmap(matrix), code, "im_qr.png")
+                        ImageExport.shareImage(context, qrToBitmap(matrix), code, "im_group_qr.png")
                     }
                     err?.let { toast = it }
                 }
             }
         },
-        onReset = { confirmReset = true },
+        onReset = if (canReset) { { confirmReset = true } } else null,
         onBack = onBack,
     )
 
     if (confirmReset) {
         IMConfirmDialog(
             title = "重置二维码？",
-            // 重置不可撤销且**影响外部世界**（旧码可能已经发出去了），所以强制二次确认
-            message = "重置后旧二维码立即失效，已经把码发出去的人将无法通过它加你。",
+            message = "重置后旧二维码/旧链接立即失效，已经把它发出去的人将无法通过它加群。",
             confirmText = "确认重置",
             onConfirm = {
                 scope.launch {
-                    runCatchingCancellable { client.qr.resetMyCard() }
-                        .onSuccess { card = it; error = ""; toast = "已重置，旧二维码已失效" }
+                    runCatchingCancellable { client.qr.resetGroupQR(convId) }
+                        .onSuccess { card = it; error = ""; toast = "已重置，旧码已失效" }
                         .onFailure { toast = it.userMessage("重置失败") }
                 }
             },

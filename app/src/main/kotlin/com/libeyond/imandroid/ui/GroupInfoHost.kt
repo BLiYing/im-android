@@ -23,6 +23,7 @@ import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.data.GroupSettings
 import com.libeyond.imandroid.data.MemberProfile
+import com.libeyond.imandroid.data.groupVoiceSenderNameOf
 import com.libeyond.imandroid.ui.screens.GroupManageAction
 import com.libeyond.imandroid.ui.components.ActionSheet
 import com.libeyond.imandroid.ui.components.SheetItem
@@ -86,6 +87,8 @@ fun GroupInfoHost(
     var deciding by remember(convId) { mutableStateOf("") }
     // 群管理二级页（仅群主/管理员能进）
     var managing by remember(convId) { mutableStateOf(false) }
+    // 群二维码/群邀请链接页：null=关闭，false=二维码，true=邀请链接（同一份数据，见 GroupQrCardHost）
+    var qrCardAsLink by remember(convId) { mutableStateOf<Boolean?>(null) }
     // 会话媒体归档（详情页的「聊天媒体」，与单聊那侧同一个组件）
     // 归档已并进内联页签（2026-09-09），只剩「点开一张图/视频」还是独立的一层
     var tab by remember(convId) { mutableStateOf(initialTab) }
@@ -118,6 +121,7 @@ fun GroupInfoHost(
         memberProfileOpen = memberProfile != null,
         mediaOpen = viewing != null,
         managing = managing,
+        qrOpen = qrCardAsLink != null,
     )
     BackHandler {
         when (page) {
@@ -128,6 +132,7 @@ fun GroupInfoHost(
             GroupInfoPage.MemberProfile -> memberProfile = null
             GroupInfoPage.Media -> viewing = null
             GroupInfoPage.Manage -> managing = false
+            GroupInfoPage.Qr -> qrCardAsLink = null
             GroupInfoPage.Detail -> onBack()
         }
     }
@@ -381,6 +386,12 @@ fun GroupInfoHost(
             onPickAvatar = if (GroupPermissions.canEditInfo(g)) pickGroupAvatar else null,
             onBack = { managing = false },
         )
+    } else if (qrCardAsLink != null) {
+        GroupQrCardHost(
+            client = client, convId = convId, groupName = g.name, avatarUrl = g.avatarUrl,
+            memberCount = g.memberCount, asLink = qrCardAsLink == true, canReset = g.iAmManager,
+            onBack = { qrCardAsLink = null },
+        )
     } else {
         // **整页替换而不是叠一层**：`GroupInfoHost` 的内容不在自己的 Box 里，
         // 父布局是谁由调用方决定，叠出来可能是竖排而不是覆盖。替换还顺带让
@@ -388,18 +399,11 @@ fun GroupInfoHost(
         GroupInfoScreen(
         info = g,
         members = members,
-        // 语音行的发送者名：我自己显「你自己」（同 iOS）→ 成员表 → **本地消息里的昵称快照**。
-        // 最后那一档是为超级群准备的：那里成员表只回我自己，不兜底的话 1997 人的群里
-        // 每条语音都没有名字（见 rememberLocalSenderNames）。三档都空才整行不画，**不落内部 uid**。
-        senderNameOf = rememberLocalSenderNames(client, convId, active = tab == DetailTab.Voice).let { localNames ->
-            { uid: String ->
-                if (uid == client.uid) {
-                    "你自己"
-                } else {
-                    members.firstOrNull { it.userId == uid }?.displayName ?: localNames[uid].orEmpty()
-                }
-            }
-        },
+        // 语音行发送者名（判据在 data/SenderNames.kt 的 groupVoiceSenderNameOf）
+        senderNameOf = groupVoiceSenderNameOf(
+            client.uid, members,
+            rememberLocalSenderNames(client, convId, active = tab == DetailTab.Voice),
+        ),
         // 波形：服务端归档接口不回带，从本地消息表按 conv_seq 兜底（见 rememberVoiceWaveforms）
         waveformOf = rememberVoiceWaveforms(client, convId, active = tab == DetailTab.Voice)::get,
         hasMoreMembers = hasMore,
@@ -432,6 +436,8 @@ fun GroupInfoHost(
         remark = settings.remark,
         onEditRemark = settings::openRemarkEditor,
         onOpenNotice = settings::openNotice,
+        onOpenGroupQR = { qrCardAsLink = false },
+        onOpenGroupInviteLink = { qrCardAsLink = true },
 
             onInvite = {
                 pick = PickPurpose.Invite
@@ -585,15 +591,4 @@ fun GroupInfoHost(
     }
 
     toast?.let { t -> IMToast(t) { toast = null } }
-}
-
-private suspend inline fun loadMore(
-    client: IMClient,
-    convId: String,
-    cursor: String,
-    onPage: (com.libeyond.imandroid.sdk.api.GroupMembersPage) -> Unit,
-) {
-    runCatching { client.groups.members(convId, cursor) }
-        .onSuccess(onPage)
-        .onFailure { IMLog.tag("IM.Group").w("group_members_failed") }
 }

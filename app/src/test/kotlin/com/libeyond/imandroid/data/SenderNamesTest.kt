@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.sdk.api.GroupMember
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -46,5 +47,22 @@ class SenderNamesTest {
         assertFalse(SenderNames.memberNameStale(null, "新昵称"))
         assertFalse(SenderNames.memberNameStale("旧昵称", null))
         assertFalse(SenderNames.memberNameStale("旧昵称", ""))
+    }
+
+    @Test
+    fun `群资料页语音页签发送者名——自己 大于 成员表 大于 本地昵称快照`() {
+        val members = listOf(GroupMember(userId = "a", nickname = "老王", groupNickname = "群昵称"))
+        val nameOf = groupVoiceSenderNameOf("me", members, mapOf("b" to "本地快照昵称"))
+        assertEquals("你自己", nameOf("me"))
+        assertEquals("群昵称", nameOf("a"))       // 成员表：群昵称压过全局昵称
+        assertEquals("本地快照昵称", nameOf("b")) // 成员表查不到（超级群只回自己）才兜底本地快照
+        assertEquals("", nameOf("c"))            // 三档都空——整行不画，不落内部 uid
+    }
+
+    /** [myUid] 可空且不做 `.orEmpty()`：未登录（uid 尚未取到）时不该把空串误判成「我自己」发的。 */
+    @Test
+    fun `myUid 为空时不误判为自己`() {
+        val nameOf = groupVoiceSenderNameOf(null, emptyList(), emptyMap())
+        assertEquals("", nameOf(""))
     }
 }

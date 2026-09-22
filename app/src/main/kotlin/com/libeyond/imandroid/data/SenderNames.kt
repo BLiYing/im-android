@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.sdk.api.GroupMember
 
 /**
  * 群聊气泡**发送者名字**取哪一份（2026-09-15，用户报：A 改了昵称，A 以前发的消息仍显示旧昵称，
@@ -42,4 +43,21 @@ object SenderNames {
      */
     fun memberNameStale(memberName: String?, inboundNickname: String?): Boolean =
         !memberName.isNullOrBlank() && !inboundNickname.isNullOrBlank() && memberName != inboundNickname
+}
+
+/**
+ * 群资料页语音页签的发送者名：我自己显「你自己」（同 iOS）→ 成员表 → 本地消息里的昵称快照
+ * （超级群成员表只回自己时的兜底，见 `rememberLocalSenderNames`）。三档都空才整行不画，**不落内部 uid**。
+ *
+ * [myUid] 特意留 `String?`（不在这里 `.orEmpty()`）：与从 `GroupInfoHost` 抽出前的内联版本逐字等价——
+ * `client.uid` 本就可空，提前收窄成 `String` 会在「未登录且消息 uid 恰好是空串」这个不可达但
+ * 理论存在的边界上悄悄改变行为（`/code-review` 抓出）。
+ */
+fun groupVoiceSenderNameOf(
+    myUid: String?,
+    members: List<GroupMember>,
+    localNames: Map<String, String>,
+): (String) -> String = { uid ->
+    if (uid == myUid) "你自己"
+    else members.firstOrNull { it.userId == uid }?.displayName ?: localNames[uid].orEmpty()
 }

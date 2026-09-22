@@ -40,6 +40,23 @@ class GroupInfoNavTest {
     }
 
     /**
+     * 群二维码/邀请链接页排在「管理页」之后、「详情」之前——`managing` 与 `qrOpen`
+     * 结构上互斥（渲染层同一时刻只出一个整页替换分支），但 `current()` 的优先级
+     * 仍要显式钉住：`managing=true` 时哪怕 `qrOpen` 也是 true，也该出 `Manage`。
+     */
+    @Test
+    fun `二维码页排在管理页之后、详情之前`() {
+        assertEquals(
+            GroupInfoPage.Qr,
+            GroupInfoNav.current(pickOpen = false, joinRequestsOpen = false, bansOpen = false, adminsOpen = false, memberProfileOpen = false, mediaOpen = false, managing = false, qrOpen = true),
+        )
+        assertEquals(
+            GroupInfoPage.Manage,
+            GroupInfoNav.current(pickOpen = false, joinRequestsOpen = false, bansOpen = false, adminsOpen = false, memberProfileOpen = false, mediaOpen = false, managing = true, qrOpen = true),
+        )
+    }
+
+    /**
      * **待审申请退回的是管理页，不是详情页**——它是从管理页点进去的。
      * 退错一层的表现很隐蔽：用户按返回，界面确实变了，但少了一层，
      * 再按一次就退出了整条链，像是"返回键有时候要按两下有时候一下"。
@@ -57,6 +74,7 @@ class GroupInfoNavTest {
         assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.MemberProfile))
         assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.Media))
         assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.Manage))
+        assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.Qr))
     }
 
     /** 详情页是这条链的最外层，再返回就该整条退出（交回调用方）。 */

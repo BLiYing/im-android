@@ -21,8 +21,27 @@
 > `GroupApi.setMyNickname`）、群备注（新增 `ConversationsApi.setRemark`，`PUT /conversations/{id}/remark`——后端早有、
 > 本端一直没调），状态持有者拆进 `GroupInfoSettings.kt`（贴 600 行硬闸，拆法见 CODING_STYLE §7②）；
 > ⑤ 群公告/群简介从合并卡片拆成两个独立行，各自非空才显示、摘要 3 行、点开弹 `GroupTextViewDialog` 看全文。
-> **仍留着**：群二维码/群邀请链接入口（`QrCardScreen` 只挂在「我的」页签，没有群卡片模式，改动量最大，用户明确没选）；
-> 群简介/公告编辑页 iOS 是带字数计数的全屏专属页，本端仍是无计数的对话框（优先级低）。详见 `UI_PARITY_IOS.md`。
+> **第三批**（用户随后要求补齐前两批留下的两个口子，2026-09-22 同日；`test.sh` 845 例绿；未真机）：
+> ⑥ 群简介/群公告编辑框的 `multiline` 参数此前是死代码——`IMTextPrompt` 从未把它接到底层 `IMTextField`，
+> 200/500 字的编辑框实际一直是单行框；`IMTextField` 补 `singleLine` 开关（多行 3~8 行）修复，同时给
+> `IMTextPrompt` 加 `clearActionText`，群公告用它对齐 iOS 的独立「撤下公告」按钮（此前只能靠清空文本框）。
+> 字数上限/计数器本就已对齐（30/200/500），容器仍保留弹窗、不做 iOS 那种全屏专属页（功能已对齐，体量不值当）。
+> ⑦ **群二维码/群邀请链接入口补齐**：`QrApi` 新增 `groupQR`/`resetGroupQR`（对接现成的
+> `GET/POST /api/v1/groups/{id}/qr[/reset]`），`QrCardScreen` 从「只服务个人名片码」泛化为名片码/群码共用
+> （`title`/`subtitle`/`hint`/`onReset` 全参数化），新增 `GroupQrCardHost` 复用个人码那套亮度提升/存相册/
+> 分享/复制链接/重置二次确认；群资料页 Settings 卡新增两行，门控用 `GroupPermissions.canInvite`（与
+> 「邀请好友入群」卡片同一份判据，对齐 iOS `inviteEntriesVisible`）。**仅接「出示」这一半**——扫码识别/
+> 点击邀请链接后的接收方解析加群流程（iOS `IMQRResultRouter`/`IMGroupJoinPreviewViewController`）需要相机
+> 权限 + App Links 深链接入，工作量显著更大，明确未接，留作下一批。
+> 为不撞 `GroupInfoHost.kt` 600 行硬闸，顺手把 `loadMore` 挪到 `GroupMembersPaging.kt`、语音页签发送者名
+> 逻辑挪到 `data/SenderNames.kt` 的 `groupVoiceSenderNameOf`（594/600，留了 6 行余量，下次加东西前建议先规划
+> 再拆一块，比如把治理三页 Pick/Bans/Admins 收进 `GroupGovernanceHost.kt`）。
+> `/code-review` 复查无 correctness 级问题，按其建议补了 `GroupInfoNavTest`/`SenderNamesTest` 两条用例
+> （新增测试先红后绿验证过）、修正 `groupVoiceSenderNameOf` 的 `myUid` 类型（`String?` 保持与被替换的内联
+> lambda 逐字等价）、统一了群码副标题文案（"位成员"→"人"，与详情页头部一致）。
+> **已知差异（低优先级，未处理）**：iOS 点击「群二维码/群邀请链接」行时会二次判权限、不满足直接吐司拦截，
+> 本端只有行级门控——权限过期的边界情况会先进页面再看到服务端 403 报错，不算 bug（服务端仍是唯一权威闸门）。
+> 详见 `UI_PARITY_IOS.md`。
 
 > **im-rtc 通话接入（2026-09-19，联调期；单聊 1v1 + 群通话；单测绿、未提交、未真机）**：
 > SDK 走本机 Maven（先在 `../im-rtc/im-rtc-android` 跑 `./gradlew publishToMavenLocal`，`settings.gradle.kts` 只对该 group 开 `mavenLocal()`），

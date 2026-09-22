@@ -12,7 +12,7 @@ package com.libeyond.imandroid.data
  * **一个按当前页派发的 `when`**：枚举加一个值，`when` 就编译不过，漏不掉。
  * 同 `ChatOverlays.topmost` 的思路。
  */
-enum class GroupInfoPage { Pick, JoinRequests, Bans, Admins, MemberProfile, Media, Manage, Detail }
+enum class GroupInfoPage { Pick, JoinRequests, Bans, Admins, MemberProfile, Media, Manage, Qr, Detail }
 
 object GroupInfoNav {
 
@@ -30,6 +30,8 @@ object GroupInfoNav {
         /** 媒体**查看器**开着（不是归档页——2026-09-09 起归档是详情页里的内联页签，不再是独立一页）。 */
         mediaOpen: Boolean,
         managing: Boolean,
+        /** 群二维码 / 群邀请链接页开着（同 `managing`，从详情页 Settings 区一行进）。 */
+        qrOpen: Boolean = false,
     ): GroupInfoPage = when {
         pickOpen -> GroupInfoPage.Pick
         joinRequestsOpen -> GroupInfoPage.JoinRequests
@@ -38,6 +40,7 @@ object GroupInfoNav {
         memberProfileOpen -> GroupInfoPage.MemberProfile
         mediaOpen -> GroupInfoPage.Media
         managing -> GroupInfoPage.Manage
+        qrOpen -> GroupInfoPage.Qr
         else -> GroupInfoPage.Detail
     }
 
@@ -58,6 +61,7 @@ object GroupInfoNav {
         GroupInfoPage.MemberProfile -> GroupInfoPage.Detail
         GroupInfoPage.Media -> GroupInfoPage.Detail
         GroupInfoPage.Manage -> GroupInfoPage.Detail
+        GroupInfoPage.Qr -> GroupInfoPage.Detail
         GroupInfoPage.Detail -> null
     }
 }

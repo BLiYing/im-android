@@ -91,6 +91,13 @@ fun GroupInfoScreen(
     onEditRemark: () -> Unit,
     /** 点开「群公告」/「群简介」看全文（各自独立、可展开，对齐 iOS 两个独立行各自 push 只读页）。 */
     onOpenNotice: (title: String, content: String) -> Unit,
+    /**
+     * 群二维码 / 群邀请链接。行本身按 [GroupPermissions.canInvite] 门控——与「邀请好友入群」
+     * 卡片同一份判据（`perm_invite=1` 时对非管理员隐藏，对齐 iOS `inviteEntriesVisible`：
+     * 无邀请权者不给死胡同入口，点了也只会被服务端拒）。
+     */
+    onOpenGroupQR: () -> Unit,
+    onOpenGroupInviteLink: () -> Unit,
     // —— 内联页签（成员 / 媒体 / 文件 / 语音 / 链接）——
     tab: DetailTab,
     onTabChange: (DetailTab) -> Unit,
@@ -207,6 +214,12 @@ fun GroupInfoScreen(
                     SettingsChevronRow("我在本群的昵称", info.myNickname.ifBlank { "未设置" }, onEditMyNickname)
                     SettingsDivider()
                     SettingsChevronRow("群备注", remark.ifBlank { "未设置" }, onEditRemark)
+                    if (GroupPermissions.canInvite(info)) {
+                        SettingsDivider()
+                        SettingsChevronRow("群二维码", "", onOpenGroupQR)
+                        SettingsDivider()
+                        SettingsChevronRow("群邀请链接", "", onOpenGroupInviteLink)
+                    }
                 }
             }
 
