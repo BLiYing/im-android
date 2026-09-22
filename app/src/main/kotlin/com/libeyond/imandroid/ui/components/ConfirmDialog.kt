@@ -66,6 +66,11 @@ fun IMTextPrompt(
     hint: String = "",
     /** 确认钮文案。举报这类「提交出去就收不回」的动作写清动词，别只写「确定」。 */
     confirmText: String = "确定",
+    /**
+     * 撤下类二级动作按钮文案（对齐 iOS 群公告页独立的红色「撤下公告」按钮）。
+     * 非空且当前已有内容时才显示，点击直接以空值确认——不必先手动清空文本框再点确定。
+     */
+    clearActionText: String? = null,
 ) {
     val c = IMTheme.colors
     var value by remember { mutableStateOf(initial) }
@@ -82,6 +87,7 @@ fun IMTextPrompt(
                     value = value,
                     onValueChange = { if (it.length <= maxLen) value = it },
                     label = title,
+                    singleLine = !multiline,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -89,6 +95,11 @@ fun IMTextPrompt(
                     color = c.textTertiary,
                     style = MaterialTheme.typography.bodySmall,
                 )
+                if (clearActionText != null && initial.isNotBlank()) {
+                    TextButton(onClick = { onConfirm("") }) {
+                        Text(clearActionText, color = c.danger)
+                    }
+                }
             }
         },
         confirmButton = {

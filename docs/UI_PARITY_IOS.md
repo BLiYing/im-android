@@ -215,7 +215,7 @@ Profile     （无标题）群名称 / 简介 / 群公告        footer：简介
 | 每节 footer 说明 | 已补 | ✅ |
 | 黑名单 / 管理员 / 转让群组 三节 | 已补 | ✅ |
 | 群名称 / 群简介 / 群公告三行**右侧直接预览当前值**（`cell.detailTextLabel`） | 已补（2026-09-22）：此前 `ChevronRow` 不传 `value`，编辑之前完全看不到已填了什么——现三行都带预览，公告/简介按单行省略号截断（最长 500 字，换行折成空格） | ✅ |
-| 群简介/群公告编辑页 | iOS 是全屏专属编辑页 `IMGroupTextEditViewController`（带 `n/200` 实时计数、公告独有「撤下」按钮）；Android 是内联对话框 `IMTextPrompt`，无字数计数、公告撤下靠清空文本框 | 🔴 欠账（体验落差中等，非本轮范围） |
+| 群简介/群公告编辑页 | iOS 是全屏专属编辑页 `IMGroupTextEditViewController`（多行 `UITextView`、`n/200` 实时计数、公告独有「撤下」按钮）；Android 是内联对话框 `IMTextPrompt`，字数上限/计数器本就有（30/200/500，与 iOS 数值一致），但 `multiline` 参数此前是死代码——实际渲染的是单行框，200/500 字长文本根本打不下。已修（2026-09-22）：`IMTextField` 补 `singleLine` 开关（多行时 3~8 行），`IMTextPrompt` 补独立「撤下公告」按钮（对齐 iOS `allowRetract`：当前公告非空才显示，点击直接清空确认，不必先手动删完文本框）。**容器形态仍是弹窗而非全屏页**（刻意从简，功能已对齐，不再是欠账） | 🟡 部分（容器形态刻意差异） |
 
 **图标为什么不逐一对上**：SF Symbol 是 Apple 私有字体，Android 上不存在。本端用 Lucide 里
 语义最近的一枚（`lock.shield`→`ShieldCheck`、`mic.slash`→`MicOff`、`nosign`→`Ban`、

@@ -178,6 +178,7 @@ internal fun GroupManagePrompts(
         GroupManageAction.EditAnnouncement -> IMTextPrompt(
             title = "群公告", initial = g.announcement, maxLen = 500, multiline = true,
             hint = "留空即撤下公告。发布会在群里落一条系统消息。",
+            clearActionText = "撤下公告",
             onDismiss = { onDismiss() },
             onConfirm = { v ->
                 onDismiss()

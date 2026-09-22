@@ -103,13 +103,17 @@ fun IMTextField(
     enabled: Boolean = true,
     /** 键盘类型/大小写策略。用户名那种 ASCII 小写字段必须传，否则输入法会自动首字母大写。 */
     keyboard: KeyboardOptions = KeyboardOptions.Default,
+    /** false＝多行（群简介/群公告这类长文本），撑到 [minLines]~[maxLines] 行、允许换行。 */
+    singleLine: Boolean = true,
 ) {
     val c = IMTheme.colors
     TextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label, color = c.textSecondary) },
-        singleLine = true,
+        singleLine = singleLine,
+        minLines = if (singleLine) 1 else 3,
+        maxLines = if (singleLine) 1 else 8,
         enabled = enabled,
         keyboardOptions = keyboard,
         visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
