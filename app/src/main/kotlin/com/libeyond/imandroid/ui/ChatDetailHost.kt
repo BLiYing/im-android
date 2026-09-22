@@ -100,6 +100,8 @@ fun ChatDetailHost(
 
     var pinned by remember(conv.convId) { mutableStateOf(conv.pinnedAt > 0) }
     var muted by remember(conv.convId) { mutableStateOf(conv.muted) }
+    var remark by remember(conv.convId) { mutableStateOf(conv.peerRemark) }
+    var editingRemark by remember(conv.convId) { mutableStateOf(false) }
 
     // 归档长按菜单（媒体/文件/语音/链接四格共用；接线在 ArchiveActionsHost）
     var archiveMenuFor by remember(conv.convId) { mutableStateOf<ArchiveTarget?>(null) }
@@ -166,7 +168,7 @@ fun ChatDetailHost(
                     userId = conv.peerUid,
                     nickname = conv.title,
                     avatarUrl = conv.avatarUrl,
-                    remark = conv.peerRemark,
+                    remark = remark,
                 ),
                 onSendMessage = { profile = false },
                 onBack = { profile = false },
@@ -176,7 +178,7 @@ fun ChatDetailHost(
             conv = conv,
             title = conv.title.ifBlank { conv.peerUid },
             handle = knownFriends[conv.peerUid]?.handle.orEmpty(),
-            remark = conv.peerRemark,
+            remark = remark,
             pinned = pinned,
             muted = muted,
             tab = tab,
@@ -193,8 +195,8 @@ fun ChatDetailHost(
             onOpenLink = { url -> openLink?.invoke(url) },
             onTogglePinned = { v -> pinned = v; pushSettings(v, muted) },
             onToggleMuted = { v -> muted = v; pushSettings(pinned, v) },
-            // 备注名改在用户资料页里（那里已有输入框与 setRemark 接线），不在这里重复一套
-            onSetRemark = { profile = true },
+            // 页内弹窗编辑，不跳页（对齐 iOS `editRemark`；弹窗组件与用户资料页共用，见 RemarkEditDialog）
+            onSetRemark = { editingRemark = true },
             onOpenProfile = { profile = true },
             actions = DetailActions.pillsFor(
                 isGroup = false,
@@ -244,15 +246,31 @@ fun ChatDetailHost(
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
             // 语音行的发送者名。单聊只有两个人：我自己显「你自己」（同 iOS），对方显本机显示名
-            senderNameOf = { uid -> if (uid == owner) "你自己" else conv.peerRemark.ifBlank { conv.title } },
+            senderNameOf = { uid -> if (uid == owner) "你自己" else remark.ifBlank { conv.title } },
             waveformOf = { seq -> voiceWaveforms[seq] },
             galleryOnly = galleryOnly,
             onBack = onBack,
         )
     }
 
+    if (editingRemark) {
+        RemarkEditDialog(
+            current = remark,
+            placeholderNickname = conv.title,
+            onDismiss = { editingRemark = false },
+            onConfirm = { v ->
+                editingRemark = false
+                scope.launch {
+                    runCatching { client.contacts.setRemark(conv.peerUid, v) }
+                    client.messages.refreshConversations()
+                    remark = v
+                }
+            },
+        )
+    }
+
     // —— 「更多」的二次确认 / 填理由 / 选会话 ——
-    val peerName = conv.peerRemark.ifBlank { conv.title }
+    val peerName = remark.ifBlank { conv.title }
     when (confirm) {
         DetailMoreAction.Block -> IMConfirmDialog(
             title = "拉黑「$peerName」？",

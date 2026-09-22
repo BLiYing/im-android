@@ -69,6 +69,10 @@ Tabs      —— 内联页签：成员 / 媒体 / 文件 / 语音 / 链接 / 名
 | 归档的位置 | **内联页签**（详情页内切 tab） | 已改为内联页签（单聊）| ✅ 已对齐 |
 | 大头像头部（100pt 居中 + 名字 + 副标题） | 有 | 有（无形变，见 §1） | ✅ 结构对齐 |
 | 单聊 Info 区（备注名 / 用户名） | 有 | 有 | ✅ |
+| 「备注名」行点开的编辑交互 | 页内 `UIAlertController` 弹窗，不跳页（`editRemark`） | 已改（2026-09-22）：`ChatDetailScreen` 的「备注名」行以前先跳整页 `UserProfileHost`、要在那页里再点一次才弹出编辑框，现改为详情页内直接弹 `RemarkEditDialog`（与用户资料页共用同一个弹窗组件，两处各自持有状态） | ✅ |
+| **群资料 Settings 区**（置顶聊天 / 消息免打扰 / 我在本群的昵称 / 群备注 / 群二维码 / 群邀请链接） | 六行都在（部分是单聊详情页的对应行） | **整段缺失**：`GroupInfoScreen`/`GroupInfoHost` 没有这一区；置顶/免打扰只能从会话列表长按菜单操作，群资料页内没有入口；「我在本群的昵称」「群备注」两行完全没做（`GroupApi.setMyNickname` 是孤儿 API，无任何 UI 调用点；`ConversationsApi` 只读群备注、没有 setter）；群二维码/邀请链接入口也没有（`QrCardScreen` 只挂在「我的」页签，没有群卡片模式） | 🔴 欠账 |
+| 群聊 About 区（群简介 / 群公告） | 两个独立行，各自 tap 展开只读全屏页（`IMGroupTextViewController`） | `GroupInfoScreen` 合并成一张卡片纯文本展示，不能展开看全文（公告最长 500 字，长公告会被卡片挤住） | 🔴 欠账 |
+| 群成员长按（禁言/解除禁言 · 设/撤管理员 · 转让群主 · 移出群聊）执行后列表即时刷新 | 有（每个动作后都调 `loadGroupInfo`，含成员分页重置） | 已改（2026-09-22）：此前 `GroupInfoHost.runManage` 只刷 `info`、不刷 `members`——四项动作后角色徽标/🔇不更新、被移出的成员还留在列表里，都要退出重进才看得到新状态。现 `runManage` 成功/失败后统一重拉成员首页，对齐 iOS 语义。顺带修了 `MemberRow` 的禁言徽标判据（`m.muteUntil != 0L` → `GroupPermissions.isMuteActive(m.muteUntil)`：过期的历史禁言时间戳此前会被误显示成「仍在禁言」） | ✅ |
 | **群聊详情**也用内联页签 | 有（成员也是一个 tab） | 已改（2026-09-09）：成员 / 媒体 / 文件 / 语音 / 链接五格，**页签内容与单聊那侧是同一段渲染**（`DetailArchive.archiveTab`）。「聊天媒体」入口行与整页 `ConvMediaScreen` 一并删掉 | ✅ |
 | 页签选中态 | 底轨 + 药丸；**选中/未选中同为主文字色，只差字重**（`IMLiquidSegmentedControl`） | 同（2026-09-08 前是「12% 主色底 + 主色字」，深色下几乎看不出选中） | ✅ |
 | 归档内长按菜单 / 定位到聊天 | 有 | 已补（2026-09-09，见 §2.2） | ✅ |
@@ -210,6 +214,8 @@ Profile     （无标题）群名称 / 简介 / 群公告        footer：简介
 | 行图标 | 已补（Lucide 近义图标，非 SF Symbol） | 🟢 刻意差异 |
 | 每节 footer 说明 | 已补 | ✅ |
 | 黑名单 / 管理员 / 转让群组 三节 | 已补 | ✅ |
+| 群名称 / 群简介 / 群公告三行**右侧直接预览当前值**（`cell.detailTextLabel`） | 已补（2026-09-22）：此前 `ChevronRow` 不传 `value`，编辑之前完全看不到已填了什么——现三行都带预览，公告/简介按单行省略号截断（最长 500 字，换行折成空格） | ✅ |
+| 群简介/群公告编辑页 | iOS 是全屏专属编辑页 `IMGroupTextEditViewController`（带 `n/200` 实时计数、公告独有「撤下」按钮）；Android 是内联对话框 `IMTextPrompt`，无字数计数、公告撤下靠清空文本框 | 🔴 欠账（体验落差中等，非本轮范围） |
 
 **图标为什么不逐一对上**：SF Symbol 是 Apple 私有字体，Android 上不存在。本端用 Lucide 里
 语义最近的一枚（`lock.shield`→`ShieldCheck`、`mic.slash`→`MicOff`、`nosign`→`Ban`、

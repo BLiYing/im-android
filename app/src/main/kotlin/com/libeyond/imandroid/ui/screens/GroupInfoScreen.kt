@@ -302,7 +302,9 @@ private fun MemberRow(m: GroupMember, onClick: () -> Unit, onLongClick: () -> Un
                     Spacer(Modifier.width(6.dp))
                     RoleBadge(if (m.isOwner) "群主" else "管理员", m.isOwner)
                 }
-                if (m.muteUntil != 0L) {
+                // 判据须与 GroupPermissions.isMuteActive 同口径：0=没禁/到期的历史时间戳不算禁言中
+                // （此前用 != 0L 判定，过期的禁言时间戳会被误显示成"仍在禁言"）。
+                if (GroupPermissions.isMuteActive(m.muteUntil)) {
                     Spacer(Modifier.width(4.dp))
                     Text("🔇", fontSize = 11.sp)
                 }

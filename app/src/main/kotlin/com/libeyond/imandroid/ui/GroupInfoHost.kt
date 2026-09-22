@@ -153,7 +153,17 @@ fun GroupInfoHost(
     val saveMedia = rememberMediaSaver { toast = it }
     val myUid = client.uid.orEmpty()
 
-    /** 调完写接口统一刷一次群资料——服务端是权威，别本地猜新状态。 */
+    /**
+     * 调完写接口统一刷一次群资料——服务端是权威，别本地猜新状态。
+     *
+     * **同时重拉成员首页**（对齐 iOS `IMChatDetailViewController` 每个可变更动作后都调
+     * `loadGroupInfo`，它会连带 `resetSuperMemberPaging` 从第一页重拉）：设/撤管理员、
+     * 禁言/解除禁言、转让群主、移出群聊这四项长按菜单动作此前只刷了 `info`，`members`
+     * 列表原样不动——角色徽标/🔇标记不会当场更新、被移出的人还留在列表里，
+     * 都要退出重进这一页才看得到新状态。与成员无关的动作（改群名/简介/公告、换头像、
+     * 治理开关）顺带也会重刷一次成员首页，代价是一次轻量分页请求，换来行为统一、
+     * 不必对每种动作单独判断要不要刷成员。
+     */
     fun runManage(label: String, block: suspend () -> Unit) {
         scope.launch {
             val r = runCatching { block() }
@@ -165,6 +175,11 @@ fun GroupInfoHost(
             }
             if (r.isSuccess) toast = "${label}成功"
             runCatching { client.groups.info(convId) }.onSuccess { info = it }
+            loadMore(client, convId, "") { pg ->
+                members = pg.items
+                cursor = pg.nextCursor
+                hasMore = pg.hasMore
+            }
         }
     }
 

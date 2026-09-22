@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -52,6 +53,14 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 
 /** 群管理页上的编辑项。由 Host 决定弹什么框、调什么接口。 */
 enum class GroupManageAction { EditName, EditIntro, EditAnnouncement, ToggleMuteAll }
+
+/** 资料区一行：动作 + 文案 + 图标 + 当前值预览（换行会被 [ChevronRow] 压成单行省略号）。 */
+private data class EditRow(
+    val action: GroupManageAction,
+    val label: String,
+    val icon: ImageVector,
+    val value: String,
+)
 
 /**
  * 群管理（二级页，仅群主/管理员）。
@@ -125,21 +134,26 @@ internal fun GroupManageScreen(
             // —— 资料（无分区标题，同 iOS）——
             // 每一项的显隐都走 GroupPermissions，**不在这里各判各的**：与成员长按菜单、
             // 成员详情页同一份判据，分叉了会出现「按钮亮着但点了报 300204」或反过来。
+            // **行右侧直接预览当前值**（对齐 iOS `IMGroupManageViewController`：
+            // `cell.detailTextLabel.text` 恒显内容或占位文案）。此前这里不传 value，
+            // 群简介编辑之前完全看不到已经填了什么，要点进去才知道。
             val editItems = buildList {
                 if (GroupPermissions.canEditInfo(info)) {
-                    add(Triple(GroupManageAction.EditName, "群名称", Lucide.Tag))
-                    add(Triple(GroupManageAction.EditIntro, "群简介", Lucide.AlignLeft))
+                    add(EditRow(GroupManageAction.EditName, "群名称", Lucide.Tag, info.name))
+                    add(EditRow(GroupManageAction.EditIntro, "群简介", Lucide.AlignLeft,
+                        info.intro.ifBlank { "未填写" }))
                 }
                 if (GroupPermissions.canEditAnnouncement(info)) {
-                    add(Triple(GroupManageAction.EditAnnouncement, "群公告", Lucide.Megaphone))
+                    add(EditRow(GroupManageAction.EditAnnouncement, "群公告", Lucide.Megaphone,
+                        info.announcement.ifBlank { "未发布" }))
                 }
             }
             if (editItems.isNotEmpty()) {
                 Spacer(Modifier.height(d.cardGap))
                 Card {
-                    editItems.forEachIndexed { i, (action, label, icon) ->
+                    editItems.forEachIndexed { i, row ->
                         if (i > 0) CardDivider()
-                        ChevronRow(label, icon) { onManage(action) }
+                        ChevronRow(row.label, row.icon, value = row.value) { onManage(row.action) }
                     }
                 }
                 Footnote("简介与公告展示给全体成员；公告发布后会通知所有人。")
@@ -297,8 +311,15 @@ private fun ChevronRow(
         Spacer(Modifier.width(12.dp))
         Text(label, color = fg, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         if (value.isNotEmpty()) {
-            Text(value, color = if (valueAccent) c.accent else c.textSecondary,
-                style = MaterialTheme.typography.bodyMedium)
+            // 群公告最长 500 字——单行省略号截断，换行折成空格（否则一条多行公告会把整行撑爆）
+            Text(
+                value.replace('\n', ' '),
+                color = if (valueAccent) c.accent else c.textSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 140.dp),
+            )
         }
         Text("  ›", color = c.textTertiary)
     }

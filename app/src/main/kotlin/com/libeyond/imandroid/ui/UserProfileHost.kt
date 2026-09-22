@@ -3,10 +3,6 @@ package com.libeyond.imandroid.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,7 +40,6 @@ fun UserProfileHost(
     var card by remember(userId) { mutableStateOf(seed) }
     var relation by remember(userId) { mutableStateOf(knownRelation) }
     var editingRemark by remember(userId) { mutableStateOf(false) }
-    var remarkDraft by remember(userId) { mutableStateOf("") }
 
     BackHandler(onBack = onBack)
 
@@ -71,7 +66,7 @@ fun UserProfileHost(
                     relation = if (relation == FriendEntry.PENDING) FriendEntry.ACCEPTED else FriendEntry.REQUESTED
                 }
             },
-            onSetRemark = { remarkDraft = card.remark; editingRemark = true },
+            onSetRemark = { editingRemark = true },
             onRemoveFriend = {
                 scope.launch {
                     runCatching { client.contacts.remove(userId) }
@@ -83,30 +78,19 @@ fun UserProfileHost(
     }
 
     if (editingRemark) {
-        AlertDialog(
-            onDismissRequest = { editingRemark = false },
-            title = { Text("设置备注名") },
-            text = {
-                OutlinedTextField(
-                    value = remarkDraft,
-                    onValueChange = { remarkDraft = it },
-                    singleLine = true,
-                    // 占位符用对方**真实昵称**，让用户知道不设备注时会显示什么
-                    placeholder = { Text(card.nickname) },
-                )
+        RemarkEditDialog(
+            current = card.remark,
+            placeholderNickname = card.nickname,
+            onDismiss = { editingRemark = false },
+            onConfirm = { v ->
+                editingRemark = false
+                scope.launch {
+                    runCatching { client.contacts.setRemark(userId, v) }
+                    // 备注只在本机渲染生效，刷一次会话列表让标题跟着变
+                    client.messages.refreshConversations()
+                    card = card.copy(remark = v)
+                }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    editingRemark = false
-                    scope.launch {
-                        runCatching { client.contacts.setRemark(userId, remarkDraft.trim()) }
-                        // 备注只在本机渲染生效，刷一次会话列表让标题跟着变
-                        client.messages.refreshConversations()
-                        card = card.copy(remark = remarkDraft.trim())
-                    }
-                }) { Text("保存") }
-            },
-            dismissButton = { TextButton(onClick = { editingRemark = false }) { Text("取消") } },
         )
     }
 }
