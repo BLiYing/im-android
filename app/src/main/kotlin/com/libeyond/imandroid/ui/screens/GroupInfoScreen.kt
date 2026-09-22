@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
@@ -77,6 +78,19 @@ fun GroupInfoScreen(
     onMemberLongPress: (GroupMember) -> Unit,
     /** 进「群管理」二级页（仅群主/管理员看得到这个入口）。 */
     onOpenManage: () -> Unit,
+    // —— 设置区（对齐 iOS `IMChatDetailViewController` 的 Settings 分区，2026-09-22 补）——
+    /** 置顶聊天 / 消息免打扰：与单聊那侧同一套会话设置接口，全体成员可自己拨。 */
+    pinned: Boolean,
+    muted: Boolean,
+    onTogglePinned: (Boolean) -> Unit,
+    onToggleMuted: (Boolean) -> Unit,
+    /** 我在本群的昵称（仅本人可见，覆盖全局昵称）。 */
+    onEditMyNickname: () -> Unit,
+    /** 群备注（G1，仅本人可见，与单聊「备注名」同一套接口、多端同步）。 */
+    remark: String,
+    onEditRemark: () -> Unit,
+    /** 点开「群公告」/「群简介」看全文（各自独立、可展开，对齐 iOS 两个独立行各自 push 只读页）。 */
+    onOpenNotice: (title: String, content: String) -> Unit,
     // —— 内联页签（成员 / 媒体 / 文件 / 语音 / 链接）——
     tab: DetailTab,
     onTabChange: (DetailTab) -> Unit,
@@ -166,24 +180,33 @@ fun GroupInfoScreen(
                 }
             }
 
-            if (!galleryOnly && (info.announcement.isNotBlank() || info.intro.isNotBlank())) item(key = "notice") {
+            // **两个独立行**，不再合成一张卡（2026-09-22 对齐 iOS：群公告/群简介各自
+            // 独立展示、各自可点开看全文）。公告最长 500 字，卡片里只露 3 行摘要，
+            // 点开走 [onOpenNotice] 弹只读全文（`GroupTextViewDialog`，对齐 iOS
+            // `IMGroupTextViewController` 的只读全屏页，本端用弹窗而非整页）。
+            if (!galleryOnly && info.announcement.isNotBlank()) item(key = "announcement") {
+                Spacer(Modifier.height(d.cardGap))
+                NoticeCard("群公告", info.announcement) { onOpenNotice("群公告", info.announcement) }
+            }
+            if (!galleryOnly && info.intro.isNotBlank()) item(key = "intro") {
+                Spacer(Modifier.height(d.cardGap))
+                NoticeCard("群简介", info.intro) { onOpenNotice("群简介", info.intro) }
+            }
+
+            // —— 设置区（对齐 iOS Settings 分区）——
+            if (!galleryOnly) item(key = "settings") {
                 Spacer(Modifier.height(d.cardGap))
                 Column(
                     Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
-                        .padding(d.space4),
+                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
                 ) {
-                    if (info.announcement.isNotBlank()) {
-                        Text("群公告", color = c.textTertiary, fontSize = 11.sp)
-                        Text(info.announcement, color = c.textPrimary,
-                            style = MaterialTheme.typography.bodyLarge)
-                    }
-                    if (info.intro.isNotBlank()) {
-                        if (info.announcement.isNotBlank()) Spacer(Modifier.height(8.dp))
-                        Text("群简介", color = c.textTertiary, fontSize = 11.sp)
-                        Text(info.intro, color = c.textPrimary,
-                            style = MaterialTheme.typography.bodyLarge)
-                    }
+                    SettingsSwitchRow("置顶聊天", pinned, onTogglePinned)
+                    SettingsDivider()
+                    SettingsSwitchRow("消息免打扰", muted, onToggleMuted)
+                    SettingsDivider()
+                    SettingsChevronRow("我在本群的昵称", info.myNickname.ifBlank { "未设置" }, onEditMyNickname)
+                    SettingsDivider()
+                    SettingsChevronRow("群备注", remark.ifBlank { "未设置" }, onEditRemark)
                 }
             }
 
@@ -315,6 +338,61 @@ private fun MemberRow(m: GroupMember, onClick: () -> Unit, onLongClick: () -> Un
         }
     }
     Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
+}
+
+/** 群公告 / 群简介卡片：摘要最多 3 行，点开看全文（见 `onOpenNotice`）。 */
+@Composable
+private fun NoticeCard(label: String, content: String, onClick: () -> Unit) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = d.space4)
+            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
+            .clickable(onClick = onClick).padding(d.space4),
+    ) {
+        Text(label, color = c.textTertiary, fontSize = 11.sp)
+        Text(
+            content, color = c.textPrimary, style = MaterialTheme.typography.bodyLarge,
+            maxLines = 3, overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** 设置区的开关行（置顶聊天 / 消息免打扰）。 */
+@Composable
+private fun SettingsSwitchRow(label: String, on: Boolean, onToggle: (Boolean) -> Unit) {
+    val c = IMTheme.colors
+    Row(
+        Modifier.fillMaxWidth()
+            .padding(start = IMTheme.dimens.space4, end = IMTheme.dimens.space3, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = c.textPrimary, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = onToggle)
+    }
+}
+
+/** 设置区的可点行（我在本群的昵称 / 群备注），右侧带当前值预览。 */
+@Composable
+private fun SettingsChevronRow(label: String, value: String, onClick: () -> Unit) {
+    val c = IMTheme.colors
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick)
+            .padding(horizontal = IMTheme.dimens.space4, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = c.textPrimary, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Text(value, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
+        Text("  ›", color = c.textTertiary)
+    }
+}
+
+@Composable
+private fun SettingsDivider() {
+    Box(
+        Modifier.fillMaxWidth().padding(start = IMTheme.dimens.space4)
+            .height(0.5.dp).background(IMTheme.colors.separator),
+    )
 }
 
 /** 群主/管理员胶囊徽标——群主主色实底、管理员次要灰（与 iOS/Web 同一表意）。 */

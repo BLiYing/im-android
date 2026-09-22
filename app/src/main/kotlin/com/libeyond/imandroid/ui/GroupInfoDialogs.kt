@@ -6,7 +6,16 @@ import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMTextPrompt
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 
@@ -75,6 +84,55 @@ internal fun GroupTransferConfirmDialog(
         onDismiss = onDismiss,
         onConfirm = { onConfirm(member) },
     )
+}
+
+/**
+ * 群公告 / 群简介只读全文（对齐 iOS `IMGroupTextViewController`：独立只读页，
+ * 本端用弹窗而不是整页——两处内容都不长到需要单独一层导航状态，`GroupInfoScreen`
+ * 的卡片只摘 3 行，点开这个弹窗看全部）。
+ */
+@Composable
+internal fun GroupTextViewDialog(title: String, content: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Box(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                Text(content)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+    )
+}
+
+/**
+ * 群资料页设置区的两个编辑弹窗（我在本群的昵称 / 群备注）+ 群公告·群简介只读全文。
+ * 从 `GroupInfoHost` 拆出（同上、CODING_STYLE §7②）：这几个弹层只认「开不开、初始值、
+ * 确认后回调什么」，不需要知道调用方怎么落地。
+ */
+@Composable
+internal fun GroupInfoSettingsDialogs(
+    settings: GroupInfoSettingsState,
+    myNickname: String,
+    onConfirmMyNickname: (String) -> Unit,
+) {
+    if (settings.editingMyNickname) {
+        IMTextPrompt(
+            title = "我在本群的昵称", initial = myNickname, maxLen = 30,
+            hint = "留空即清除，显示你的全局昵称。",
+            onDismiss = settings::dismissMyNicknameEditor,
+            onConfirm = { v -> settings.dismissMyNicknameEditor(); onConfirmMyNickname(v) },
+        )
+    }
+    if (settings.editingRemark) {
+        IMTextPrompt(
+            title = "群备注", initial = settings.remark, maxLen = 30,
+            hint = "仅你自己可见，用于区分同名群聊，不会通知其他成员。",
+            onDismiss = settings::dismissRemarkEditor,
+            onConfirm = { v -> settings.setRemark(v); settings.dismissRemarkEditor() },
+        )
+    }
+    settings.notice?.let { (t, txt) -> GroupTextViewDialog(t, txt, onDismiss = settings::dismissNotice) }
 }
 
 /**

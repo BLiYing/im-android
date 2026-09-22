@@ -70,8 +70,8 @@ Tabs      —— 内联页签：成员 / 媒体 / 文件 / 语音 / 链接 / 名
 | 大头像头部（100pt 居中 + 名字 + 副标题） | 有 | 有（无形变，见 §1） | ✅ 结构对齐 |
 | 单聊 Info 区（备注名 / 用户名） | 有 | 有 | ✅ |
 | 「备注名」行点开的编辑交互 | 页内 `UIAlertController` 弹窗，不跳页（`editRemark`） | 已改（2026-09-22）：`ChatDetailScreen` 的「备注名」行以前先跳整页 `UserProfileHost`、要在那页里再点一次才弹出编辑框，现改为详情页内直接弹 `RemarkEditDialog`（与用户资料页共用同一个弹窗组件，两处各自持有状态） | ✅ |
-| **群资料 Settings 区**（置顶聊天 / 消息免打扰 / 我在本群的昵称 / 群备注 / 群二维码 / 群邀请链接） | 六行都在（部分是单聊详情页的对应行） | **整段缺失**：`GroupInfoScreen`/`GroupInfoHost` 没有这一区；置顶/免打扰只能从会话列表长按菜单操作，群资料页内没有入口；「我在本群的昵称」「群备注」两行完全没做（`GroupApi.setMyNickname` 是孤儿 API，无任何 UI 调用点；`ConversationsApi` 只读群备注、没有 setter）；群二维码/邀请链接入口也没有（`QrCardScreen` 只挂在「我的」页签，没有群卡片模式） | 🔴 欠账 |
-| 群聊 About 区（群简介 / 群公告） | 两个独立行，各自 tap 展开只读全屏页（`IMGroupTextViewController`） | `GroupInfoScreen` 合并成一张卡片纯文本展示，不能展开看全文（公告最长 500 字，长公告会被卡片挤住） | 🔴 欠账 |
+| **群资料 Settings 区**（置顶聊天 / 消息免打扰 / 我在本群的昵称 / 群备注 / 群二维码 / 群邀请链接） | 六行都在（部分是单聊详情页的对应行） | 已补前四行（2026-09-22）：`GroupInfoScreen` 新增设置卡，置顶/免打扰复用 `ConversationsApi.updateSettings`（新增 `GET .../settings` 对称读接口，状态持有者 `GroupInfoSettings.kt`）；「我在本群的昵称」接回此前的孤儿 API `GroupApi.setMyNickname`；「群备注」新增 `ConversationsApi.setRemark`（`PUT /conversations/{id}/remark`，后端早就有、本端一直没调）。**群二维码/群邀请链接仍缺**（`QrCardScreen` 只挂在「我的」页签，没有群卡片模式，改动量更大，本轮未做） | 🟡 部分（后两行仍 🔴） |
+| 群聊 About 区（群简介 / 群公告） | 两个独立行，各自 tap 展开只读全屏页（`IMGroupTextViewController`） | 已改（2026-09-22）：拆成两个独立卡片（各自非空才显示），摘要 3 行 + 省略号，点开弹 `GroupTextViewDialog` 看全文——本端用弹窗而非整页（内容量级够小，没必要占一层导航状态） | ✅ |
 | 群成员长按（禁言/解除禁言 · 设/撤管理员 · 转让群主 · 移出群聊）执行后列表即时刷新 | 有（每个动作后都调 `loadGroupInfo`，含成员分页重置） | 已改（2026-09-22）：此前 `GroupInfoHost.runManage` 只刷 `info`、不刷 `members`——四项动作后角色徽标/🔇不更新、被移出的成员还留在列表里，都要退出重进才看得到新状态。现 `runManage` 成功/失败后统一重拉成员首页，对齐 iOS 语义。顺带修了 `MemberRow` 的禁言徽标判据（`m.muteUntil != 0L` → `GroupPermissions.isMuteActive(m.muteUntil)`：过期的历史禁言时间戳此前会被误显示成「仍在禁言」） | ✅ |
 | **群聊详情**也用内联页签 | 有（成员也是一个 tab） | 已改（2026-09-09）：成员 / 媒体 / 文件 / 语音 / 链接五格，**页签内容与单聊那侧是同一段渲染**（`DetailArchive.archiveTab`）。「聊天媒体」入口行与整页 `ConvMediaScreen` 一并删掉 | ✅ |
 | 页签选中态 | 底轨 + 药丸；**选中/未选中同为主文字色，只差字重**（`IMLiquidSegmentedControl`） | 同（2026-09-08 前是「12% 主色底 + 主色字」，深色下几乎看不出选中） | ✅ |

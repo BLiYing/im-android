@@ -62,6 +62,15 @@ private data class ConversationsResp(
     val conversations: List<ConversationSummary> = emptyList(),
 )
 
+/** `GET /conversations/{id}/settings` 的响应——对称于 [ConversationsApi.updateSettings]。 */
+@Serializable
+data class ConversationSettings(
+    @SerialName("pinned_at") val pinnedAt: Long = 0,
+    val muted: Boolean = false,
+    @SerialName("marked_unread") val markedUnread: Boolean = false,
+    val remark: String = "",
+)
+
 class ConversationsApi(private val http: HttpClient) {
 
     /**
@@ -78,6 +87,16 @@ class ConversationsApi(private val http: HttpClient) {
 
     suspend fun list(): List<ConversationSummary> =
         decode(http.call("GET", "/api/v1/conversations"), ConversationsResp.serializer()).conversations
+
+    /**
+     * 读取本人对某会话的会话级设置（对称于 [updateSettings]，`GET` 版）。
+     *
+     * **群资料页专用**：本地 `ConversationEntity` 只落了 `pinnedAt`/`muted`/`markedUnread`
+     * 三项，没有落 `remark`（那是给单聊 `peerRemark` 留的位置，两者是两个字段），
+     * 群资料页的「置顶聊天/消息免打扰/群备注」三行进页时都从这里现拉，不读本地缓存。
+     */
+    suspend fun settings(convId: String): ConversationSettings =
+        decode(http.call("GET", "/api/v1/conversations/$convId/settings"), ConversationSettings.serializer())
 
     /**
      * 会话设置（§6.8）。**整体替换**三项——不是增量，漏传一项等于把它清零。
@@ -145,6 +164,18 @@ class ConversationsApi(private val http: HttpClient) {
             http.call("GET", "/api/v1/conversations/$convId/messages/search", query = query),
             ConvSearchPage.serializer(),
         )
+    }
+
+    /**
+     * 会话备注（G1，仅本人可见、多端同步）。与 [updateSettings] 解耦——PUT 是各自独立的
+     * 接口，改备注不动置顶/免打扰三开关，拨开关也不清备注（服务端把当前 remark 原样带回）。
+     * 留空即清除备注，恢复显示真实群名 / 对端昵称。单聊群聊都适用（不是好友备注，
+     * 好友备注走 `ContactsApi.setRemark` 的 `POST /friends/remark`，两者是两回事）。
+     */
+    suspend fun setRemark(convId: String, remark: String) {
+        http.call("PUT", "/api/v1/conversations/$convId/remark", buildJsonObject {
+            put("remark", remark)
+        })
     }
 
     suspend fun delete(convId: String) {

@@ -7,19 +7,22 @@
 
 ## 当前焦点
 
-> **群聊信息页 / 群管理页与 iOS 对齐，第一批（2026-09-22；纯客户端、后端零改动；`./scripts/test.sh` 842 例绿；未真机）**：
+> **群聊信息页 / 群管理页与 iOS 对齐，第一、二批（2026-09-22；纯客户端、后端零改动；`./scripts/test.sh` 842 例绿；未真机）**：
 > 用户报告「群资料/群管理与 iOS 差得多」四点，先审计（全文对比 iOS `IMChatDetailViewController`/`IMGroupManageViewController`
 > 与本端 `GroupInfoScreen`/`GroupInfoHost`/`GroupManageScreen` 等全部相关文件，结论与仍开着的口子见
-> [`docs/UI_PARITY_IOS.md`](docs/UI_PARITY_IOS.md) §2/§3 新增行），本批修掉四项真 bug/体验落差：
-> ① 单聊「备注名」行此前先跳整页 `UserProfileHost` 才能编辑，现改页内弹窗直接编辑（`RemarkEditDialog`，
-> 与用户资料页共用）；② 群成员长按（禁言/解除禁言/设撤管理员/转让群主/移出群聊）**执行后成员列表不刷新**
-> （角色徽标、🔇 标记、被移出的人都要退出重进才更新）——对齐 iOS 每个动作后都重拉一次，`GroupInfoHost.runManage`
+> [`docs/UI_PARITY_IOS.md`](docs/UI_PARITY_IOS.md) §2/§3 新增行）。
+> **第一批**（三项真 bug/体验落差）：① 单聊「备注名」行此前先跳整页 `UserProfileHost` 才能编辑，现改页内弹窗直接编辑
+> （`RemarkEditDialog`，与用户资料页共用）；② 群成员长按（禁言/解除禁言/设撤管理员/转让群主/移出群聊）**执行后成员
+> 列表不刷新**（角色徽标、🔇 标记、被移出的人都要退出重进才更新）——对齐 iOS 每个动作后都重拉一次，`GroupInfoHost.runManage`
 > 现在统一重拉成员首页；顺带修了禁言徽标判据（`!= 0L` → `GroupPermissions.isMuteActive`，过期时间戳误判为禁言中）；
-> ③ 群管理页群名称/简介/公告三行现在右侧直接预览当前值（此前要点进去才知道填了什么）。
-> **本批没做、留给下一批（体量更大，涉及新功能/新 API，未与用户确认范围）**：
-> 群资料页整个 Settings 区缺失（置顶聊天/消息免打扰/我在本群的昵称/群备注/群二维码/群邀请链接，
-> 后两项 API 都没调用点，群备注连 setter 都没有）；群简介与群公告合并展示成一张卡片、不能展开看全文；
-> 群简介/公告编辑页 iOS 是全屏专属页（带字数计数），本端是无计数的对话框。详见 `UI_PARITY_IOS.md` 新增行。
+> ③ 群管理页群名称/简介/公告三行现在右侧直接预览当前值。
+> **第二批**（用户从审计清单里选了这三项，跳过群二维码/邀请链接）：④ 群资料页新增 Settings 卡——置顶聊天/消息免打扰
+> （复用会话设置接口，新增 `ConversationsApi.settings` 对称 GET）、我在本群的昵称（接回此前的孤儿 API
+> `GroupApi.setMyNickname`）、群备注（新增 `ConversationsApi.setRemark`，`PUT /conversations/{id}/remark`——后端早有、
+> 本端一直没调），状态持有者拆进 `GroupInfoSettings.kt`（贴 600 行硬闸，拆法见 CODING_STYLE §7②）；
+> ⑤ 群公告/群简介从合并卡片拆成两个独立行，各自非空才显示、摘要 3 行、点开弹 `GroupTextViewDialog` 看全文。
+> **仍留着**：群二维码/群邀请链接入口（`QrCardScreen` 只挂在「我的」页签，没有群卡片模式，改动量最大，用户明确没选）；
+> 群简介/公告编辑页 iOS 是带字数计数的全屏专属页，本端仍是无计数的对话框（优先级低）。详见 `UI_PARITY_IOS.md`。
 
 > **im-rtc 通话接入（2026-09-19，联调期；单聊 1v1 + 群通话；单测绿、未提交、未真机）**：
 > SDK 走本机 Maven（先在 `../im-rtc/im-rtc-android` 跑 `./gradlew publishToMavenLocal`，`settings.gradle.kts` 只对该 group 开 `mavenLocal()`），

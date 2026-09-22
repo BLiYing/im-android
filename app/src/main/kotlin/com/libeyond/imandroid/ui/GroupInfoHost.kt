@@ -27,7 +27,6 @@ import com.libeyond.imandroid.ui.screens.GroupManageAction
 import com.libeyond.imandroid.ui.components.ActionSheet
 import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.ui.components.IMToast
-import com.libeyond.imandroid.ui.components.IMTextPrompt
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.GroupInfo
@@ -133,6 +132,9 @@ fun GroupInfoHost(
         }
     }
 
+    // 置顶/免打扰/群昵称/群备注（对齐 iOS Settings 区）+ 公告/简介全文，状态见 GroupInfoSettings.kt
+    val settings = rememberGroupInfoSettings(client, convId, scope)
+
     LaunchedEffect(convId) {
         runCatching { info = client.groups.info(convId) }
             .onFailure { IMLog.tag("IM.Group").w("group_info_failed") }
@@ -142,6 +144,7 @@ fun GroupInfoHost(
             cursor = page.nextCursor
             hasMore = page.hasMore
         }
+        settings.load()
     }
 
     val g = info ?: return
@@ -154,15 +157,10 @@ fun GroupInfoHost(
     val myUid = client.uid.orEmpty()
 
     /**
-     * 调完写接口统一刷一次群资料——服务端是权威，别本地猜新状态。
-     *
-     * **同时重拉成员首页**（对齐 iOS `IMChatDetailViewController` 每个可变更动作后都调
-     * `loadGroupInfo`，它会连带 `resetSuperMemberPaging` 从第一页重拉）：设/撤管理员、
-     * 禁言/解除禁言、转让群主、移出群聊这四项长按菜单动作此前只刷了 `info`，`members`
-     * 列表原样不动——角色徽标/🔇标记不会当场更新、被移出的人还留在列表里，
-     * 都要退出重进这一页才看得到新状态。与成员无关的动作（改群名/简介/公告、换头像、
-     * 治理开关）顺带也会重刷一次成员首页，代价是一次轻量分页请求，换来行为统一、
-     * 不必对每种动作单独判断要不要刷成员。
+     * 调完写接口统一刷一次群资料 + 成员首页——服务端是权威，别本地猜新状态。
+     * 对齐 iOS 每个可变更动作后都调 `loadGroupInfo`（含 `resetSuperMemberPaging`）：
+     * 此前只刷 `info`，成员长按四项动作（设/撤管理员、禁言、转让、移出）后角色徽标/
+     * 🔇/被移出的人都要退出重进才更新；代价是无关动作也多一次轻量分页请求，换行为统一。
      */
     fun runManage(label: String, block: suspend () -> Unit) {
         scope.launch {
@@ -421,6 +419,14 @@ fun GroupInfoHost(
         onOpenMember = { m -> memberProfile = m },
         myUid = client.uid.orEmpty(),
         onOpenManage = { managing = true },
+        pinned = settings.pinned,
+        muted = settings.muted,
+        onTogglePinned = settings::togglePinned,
+        onToggleMuted = settings::toggleMuted,
+        onEditMyNickname = settings::openMyNicknameEditor,
+        remark = settings.remark,
+        onEditRemark = settings::openRemarkEditor,
+        onOpenNotice = settings::openNotice,
 
             onInvite = {
                 pick = PickPurpose.Invite
@@ -528,6 +534,13 @@ fun GroupInfoHost(
             onDismiss = { memberMenu = null },
         )
     }
+
+    // 设置区弹窗 + 公告/简介全文（拼装在 GroupInfoDialogs.kt）
+    GroupInfoSettingsDialogs(
+        settings = settings,
+        myNickname = g.myNickname,
+        onConfirmMyNickname = { v -> runManage("修改群昵称") { client.groups.setMyNickname(convId, v) } },
+    )
 
     // 转让的二次确认（文案在 GroupInfoDialogs.kt，与「更多」那三个确认框同住）
     GroupTransferConfirmDialog(
