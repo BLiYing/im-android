@@ -171,6 +171,9 @@ fun ChatDetailHost(
                     remark = remark,
                 ),
                 onSendMessage = { profile = false },
+                // 在资料页里改的备注也要回填详情页自己的 `remark` state，否则退回来后
+                // 标题/语音发送者名/拉黑确认框标题仍显编辑前的旧值（`/code-review` 抓出）
+                onRemarkChanged = { v -> remark = v },
                 onBack = { profile = false },
             )
         }

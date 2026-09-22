@@ -34,6 +34,13 @@ fun UserProfileHost(
     /** 本地已知的名片（来自会话/好友列表），先拿它渲染。 */
     seed: UserCard,
     onSendMessage: (UserCard) -> Unit,
+    /**
+     * 备注改成功后回调新值（`/code-review` 抓出：不接的话，从 `ChatDetailHost` 下钻到
+     * 本页改备注，退回去详情页顶部标题/语音发送者名/拉黑确认框标题仍显编辑前的旧值，
+     * 因为两处各自持有一份 `remark` 状态、互不同步；反方向——详情页内弹窗改——是同步的，
+     * 因为下钻时 `seed.remark` 取的就是详情页当时的最新值，容易让人误以为已经双向同步）。
+     */
+    onRemarkChanged: (String) -> Unit = {},
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -89,6 +96,7 @@ fun UserProfileHost(
                     // 备注只在本机渲染生效，刷一次会话列表让标题跟着变
                     client.messages.refreshConversations()
                     card = card.copy(remark = v)
+                    onRemarkChanged(v)
                 }
             },
         )

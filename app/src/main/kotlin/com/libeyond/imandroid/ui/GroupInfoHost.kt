@@ -157,10 +157,11 @@ fun GroupInfoHost(
     val myUid = client.uid.orEmpty()
 
     /**
-     * 调完写接口统一刷一次群资料 + 成员首页——服务端是权威，别本地猜新状态。
-     * 对齐 iOS 每个可变更动作后都调 `loadGroupInfo`（含 `resetSuperMemberPaging`）：
-     * 此前只刷 `info`，成员长按四项动作（设/撤管理员、禁言、转让、移出）后角色徽标/
-     * 🔇/被移出的人都要退出重进才更新；代价是无关动作也多一次轻量分页请求，换行为统一。
+     * 调完写接口统一刷一次群资料 + 成员首页——服务端是权威，别本地猜新状态。对齐 iOS
+     * 每个动作后都调 `loadGroupInfo`（含 `resetSuperMemberPaging`，同样重置到第一页，
+     * 代价是丢弃已滚动加载的更深几页，两端同一取舍）。**与 `onLoadMoreMembers` 共享
+     * `loading` 标志**：避免深分页时"触底加载更多"与"长按管理动作"并发写
+     * `members`/`cursor`/`hasMore`，旧游标数据拼接出成员区间空洞（`/code-review` 抓出）。
      */
     fun runManage(label: String, block: suspend () -> Unit) {
         scope.launch {
@@ -173,10 +174,14 @@ fun GroupInfoHost(
             }
             if (r.isSuccess) toast = "${label}成功"
             runCatching { client.groups.info(convId) }.onSuccess { info = it }
-            loadMore(client, convId, "") { pg ->
-                members = pg.items
-                cursor = pg.nextCursor
-                hasMore = pg.hasMore
+            if (!loading) {
+                loading = true
+                loadMore(client, convId, "") { pg ->
+                    members = pg.items
+                    cursor = pg.nextCursor
+                    hasMore = pg.hasMore
+                }
+                loading = false
             }
         }
     }
