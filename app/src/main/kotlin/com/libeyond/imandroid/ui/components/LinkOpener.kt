@@ -12,3 +12,12 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * null = 这棵树里没有宿主（预览 / 登录页），调用方就只高亮、不可点。
  */
 val LocalOpenLink = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+/**
+ * 打开扫一扫取景页（QRCODE P0 接收方半）。由 [com.libeyond.imandroid.ui.QrRouteHost] 提供。
+ *
+ * 目前只有会话列表 ＋ 菜单一处调用点，本可以直接传参；仍走 CompositionLocal 是为了与
+ * [LocalOpenLink] 同一套路由宿主共用同一份状态机——两者命中同一个「解析→路由」出口
+ * （见 `QrRouteHost.kt`），分开管反而要维护两份同构状态。
+ */
+val LocalOpenQrScan = staticCompositionLocalOf<(() -> Unit)?> { null }

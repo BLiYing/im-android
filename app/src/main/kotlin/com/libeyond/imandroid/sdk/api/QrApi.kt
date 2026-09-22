@@ -1,8 +1,13 @@
 package com.libeyond.imandroid.sdk.api
 
+import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.http.HttpClient
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 /**
  * 一枚码（对齐后端 `internal/qrcode.Card`）。
@@ -24,9 +29,48 @@ data class QrCard(
 }
 
 /**
- * 二维码体系（QRCODE P0）。名片码 + 群码（出示这一半）已接；
- * **扫码解析 / 点链接加群这一半仍未接**（`resolve`/`join` 需要相机权限 + 深链接接入，
- * 另立一批，见 `docs/UI_PARITY_IOS.md`）。
+ * 名片码扫后展示的对方资料（对齐后端 `internal/qrcode.UserCard`）。
+ * **绝不显示 [userId]**（10 位随机内部 ID）——公开句柄用 [username]。
+ */
+@Serializable
+data class QrUserCard(
+    @SerialName("user_id") val userId: String = "",
+    val username: String = "",
+    val nickname: String = "",
+    @SerialName("avatar_url") val avatarUrl: String = "",
+    /** stranger | friend | self | blocked */
+    val relation: String = "",
+)
+
+/** 群码扫后的群预览 + 准入判定（对齐后端 `internal/qrcode.GroupCard`）。 */
+@Serializable
+data class QrGroupCard(
+    @SerialName("group_id") val groupId: String = "",
+    val name: String = "",
+    @SerialName("avatar_url") val avatarUrl: String = "",
+    /** 群简介（未入群也可见，G3）。 */
+    val intro: String = "",
+    @SerialName("member_count") val memberCount: Int = 0,
+    @SerialName("inviter_nickname") val inviterNickname: String = "",
+    val joined: Boolean = false,
+    val joinable: Boolean = false,
+    /** "" 可加入 | approval 需审批 | full 已满 | banned 被拉黑 | invite_revoked 邀请权已收回 */
+    val reason: String = "",
+)
+
+/** `POST /qr/resolve` 的 `{kind,data}`——kind 决定 data 的形状，本端手动按 kind 分支解码。 */
+sealed interface QrResolved {
+    data class User(val card: QrUserCard) : QrResolved
+    data class Group(val card: QrGroupCard) : QrResolved
+    /** 扫码登录码（QR P1）。Android 端**扫描本身**未接，命中即回退成不支持提示。 */
+    data object Login : QrResolved
+    /** 非本站码：原样回显，不查库（不给爆破者反馈，也不自动跳转）。 */
+    data class Unknown(val text: String) : QrResolved
+}
+
+/**
+ * 二维码体系（QRCODE P0）。名片码 + 群码（出示这一半）+ 扫码解析/凭码入群（接收方这一半）已接；
+ * **扫码登录（QR P1）的登录码分支仍未接**，见 [QrResolved.Login]。
  */
 class QrApi(private val http: HttpClient) {
 
@@ -49,4 +93,30 @@ class QrApi(private val http: HttpClient) {
     /** 重置群码：**旧码/旧链接立即失效**，仅群主/管理员可调（服务端二次校验，端上只隐藏入口）。 */
     suspend fun resetGroupQR(convId: String): QrCard =
         decode(http.call("POST", "/api/v1/groups/$convId/qr/reset"), QrCard.serializer())
+
+    /**
+     * 扫码/点链接解析管道：端只识别出一串字符（完整链接或裸 token），语义全部由服务端判定。
+     * [raw] 原样透传——服务端 `parseRaw` 自己从字符串里摘 `/q/<u|g|l>/<token>` 段，不用端上先拆。
+     */
+    suspend fun resolve(raw: String): QrResolved {
+        val root = http.call("POST", "/api/v1/qr/resolve", buildJsonObject { put("raw", raw) })
+            ?: throw ApiException(ApiException.TRANSPORT, "服务端未返回 data")
+        val obj = try {
+            root.jsonObject
+        } catch (e: Exception) {
+            throw ApiException(ApiException.TRANSPORT, "data 结构不符：${e.message}", cause = e)
+        }
+        val kind = obj["kind"]?.jsonPrimitive?.content.orEmpty()
+        val data = obj["data"]
+        return when (kind) {
+            "user" -> QrResolved.User(decode(data, QrUserCard.serializer()))
+            "group" -> QrResolved.Group(decode(data, QrGroupCard.serializer()))
+            "login" -> QrResolved.Login
+            else -> QrResolved.Unknown(decodeOrNull(data, QrUnknownData.serializer())?.text.orEmpty())
+        }
+    }
 }
+
+/** kind=unknown 时 data 的形状：`{"text": "<原文>"}`。 */
+@Serializable
+private data class QrUnknownData(val text: String = "")

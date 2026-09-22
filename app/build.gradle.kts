@@ -104,6 +104,11 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.zxing.core)
+    // 扫一扫取景：预览+分析用 CameraX，解码仍用上面的 zxing-core（PlanarYUVLuminanceSource 直接吃 Y 平面）。
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.okhttp)

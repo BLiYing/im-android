@@ -18,6 +18,7 @@ import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.LocalOpenQrScan
 import com.libeyond.imandroid.ui.components.MessageContextMenu
 import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.components.SheetItem
@@ -27,9 +28,8 @@ import com.libeyond.imandroid.ui.screens.ConversationListScreen
  * 「消息」Tab：会话列表 + 右上角 ＋ 推出去的「添加朋友」「新建群聊」两页。
  *
  * 结构对齐 iOS `IMConversationListViewController` 的 `plusTapped:`：锚在 ＋ 上的菜单三项
- * 扫一扫 / 新建群聊 / 添加好友，后两页在**本 Tab 内** push，返回回到会话列表。
- * **扫一扫本端还没做**（读码半边未接），入口先在、点了提示——同通讯录里公众号/服务号的做法，
- * 两端的菜单一眼就该是同一个 App。
+ * 扫一扫 / 新建群聊 / 添加好友，后两页在**本 Tab 内** push，返回回到会话列表；扫一扫是全屏取景页，
+ * 挂在更外层的 [QrRouteHost]（点 [LocalOpenQrScan] 打开），不在本 Tab 内 push。
  *
  * @param conversations 本地库这一份；null = 库还没回第一份（空态判据见 [ConversationListPhase]）。
  */
@@ -47,6 +47,7 @@ fun ChatsHost(
     var page by remember { mutableStateOf(ChatsPage.List) }
     var plusAnchor by remember { mutableStateOf<Rect?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
+    val openScan = LocalOpenQrScan.current
     val listed by client.messages.listedConversations.collectAsState()
     val phase = ConversationListPhase.of(
         localCount = conversations?.size,
@@ -93,7 +94,9 @@ fun ChatsHost(
             // ＋ 在右上角：菜单靠右、贴在按钮下方
             mine = true,
             items = listOf(
-                SheetItem("扫一扫", icon = Lucide.ScanQrCode) { toast = "扫一扫还没做" },
+                SheetItem("扫一扫", icon = Lucide.ScanQrCode) {
+                    openScan?.invoke() ?: run { toast = "扫一扫暂不可用" }
+                },
                 SheetItem("新建群聊", icon = Lucide.Users) { page = ChatsPage.CreateGroup },
                 SheetItem("添加好友", icon = Lucide.UserPlus) { page = ChatsPage.AddFriend },
             ),

@@ -7,7 +7,7 @@
 
 ## 当前焦点
 
-> **群聊信息页 / 群管理页与 iOS 对齐，第一、二批（2026-09-22；纯客户端、后端零改动；`./scripts/test.sh` 842 例绿；未真机）**：
+> **群聊信息页 / 群管理页与 iOS 对齐，共四批（2026-09-22；纯客户端为主、第四批服务端零改动；`./scripts/test.sh` 852 例绿；未真机）**：
 > 用户报告「群资料/群管理与 iOS 差得多」四点，先审计（全文对比 iOS `IMChatDetailViewController`/`IMGroupManageViewController`
 > 与本端 `GroupInfoScreen`/`GroupInfoHost`/`GroupManageScreen` 等全部相关文件，结论与仍开着的口子见
 > [`docs/UI_PARITY_IOS.md`](docs/UI_PARITY_IOS.md) §2/§3 新增行）。
@@ -42,6 +42,32 @@
 > **已知差异（低优先级，未处理）**：iOS 点击「群二维码/群邀请链接」行时会二次判权限、不满足直接吐司拦截，
 > 本端只有行级门控——权限过期的边界情况会先进页面再看到服务端 403 报错，不算 bug（服务端仍是唯一权威闸门）。
 > 详见 `UI_PARITY_IOS.md`。
+>
+> **第四批：扫码/点链接加群——接收方这一半补齐（2026-09-22 同日；纯客户端、`./scripts/test.sh` 852 例绿，
+> 新测试均先看红过；未提交、未真机）**：服务端 QRCODE P0/G3 早就全量落地（`/qr/resolve`、`POST /groups/join`
+> 等接口 2026-08-13 起就在），此前只有 Android 客户端没接扫码/点链接这一侧。全文核对 iOS 真正生效路径
+> （`IMQRResultRouter.m`/`IMQRScannerViewController.m`/`IMGroupJoinPreviewViewController.m`/`IMQRModels.m`）后发现
+> **iOS 也没有 OS 级深链接（App Links）**——它只在 App 内已经打开的链接（聊天气泡、群资料/收藏里点开的链接）
+> 里拦截本站邀请链接，不是靠系统把外部浏览器打开的链接拉起 App；范围据此收敛，不用碰 AndroidManifest 的
+> deep link 配置。落地：① `QrApi.resolve()` 手动解 `{kind,data}`（新增 `QrUserCard`/`QrGroupCard`/`QrResolved`
+> 密封类），`GroupApi.join(token, hello)` 接 `POST /groups/join`；② `data/QrActions.kt` 纯映射函数（relation/
+> joinable/reason → 按钮态，对齐 iOS `IMQRModels.m`/Web `qr.ts` 同一张判据表，全部单测覆盖）；③ `data/WebLinks.kt`
+> 新增 `isOwnInviteLink`（host+端口匹配 + dev 回环例外 + 路径命中 `/q/u|g/`，对齐 iOS `routeInviteLinkIfOwn:`）；
+> ④ 新增 `ui/QrRouteHost.kt`：挂在 `MainScreen` 内部（不是更外层的 `AppRoot`）——它要改 `openConv` 才能进群聊/
+> 单聊，那份状态是 `MainScreen` 的私有变量。**覆盖**外层 `WebLinkHost` 提供的 `LocalOpenLink`：点一条链接先判
+> 是不是本站邀请链接，是就 `resolve`+路由，不是就退回原来那份（真正的浏览器打开）；另提供新 CompositionLocal
+> `LocalOpenQrScan` 给会话列表 ＋ 菜单的「扫一扫」用（此前是 `toast = "扫一扫还没做"` 的占位）；⑤ `ui/QrScanHost.kt`：
+> CameraX 出帧 + zxing-core（`QRCodeReader`，出示码那半已引入的同一个依赖，未叠 ML Kit）解码，只吃 Y 平面、
+> 手动处理 rowStride/pixelStride 避免部分机型图像被拉斜；新增 `CAMERA` 权限 + `uses-feature required=false`；
+> ⑥ `ui/GroupJoinPreviewHost.kt`+`screens/GroupJoinPreviewScreen.kt`：对齐 `IMGroupJoinPreviewViewController`
+> （头像/人数/邀请人/简介 + 需审批时附言框 + 按准入态变文案/可用态的主按钮）；提交回调**先把预览页从组合里摘掉、
+> 再异步发 join 请求**（对齐 iOS `submitTapped` 的 pop 在前、回调在后——本页自己的协程作用域会在摘掉那一刻被
+> 取消，逻辑放在 `QrRouteHost` 持有的外层 scope 里）。**仍未接**：相册选图识码、一图多码候选、扫码登录（QR P1，
+> 命中即提示不支持）。`/code-review` 复查抓到一条高严重度：关闭扫码页后 CameraX 从未 `unbindAll()`
+> （单 Activity 架构下 `bindToLifecycle` 挂的是 Activity 级生命周期，Compose 把页面摘出树不会自动解绑）——
+> 相机占用指示灯不灭、持续耗电，已修（`DisposableEffect` 里补 `provider?.unbindAll()`）；顺带修了一条中等：
+> 从「去设置开启」跳系统设置页回来后权限状态不会自动刷新，加了 `LifecycleEventObserver` 在 `ON_RESUME`
+> 重查一次。测试补了两个纯文案函数的遗漏覆盖。`test.sh` **854 例绿**。
 
 > **im-rtc 通话接入（2026-09-19，联调期；单聊 1v1 + 群通话；单测绿、未提交、未真机）**：
 > SDK 走本机 Maven（先在 `../im-rtc/im-rtc-android` 跑 `./gradlew publishToMavenLocal`，`settings.gradle.kts` 只对该 group 开 `mavenLocal()`），

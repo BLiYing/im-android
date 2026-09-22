@@ -28,6 +28,15 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
+    <!--
+      扫一扫（QRCODE P0 接收方半，2026-09-22）。required=false：没有摄像头的设备
+      （极少数平板/模拟器）仍可安装，扫码页自己按权限/硬件缺失分别给页面内提示，
+      不像 iOS 那样另备「从相册识别」兜底（未接，见 docs/UI_PARITY_IOS.md）。
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
     <application
         android:name=".IMApp"
         android:allowBackup="false"

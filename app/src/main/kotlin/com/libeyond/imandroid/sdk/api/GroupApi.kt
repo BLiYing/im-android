@@ -189,6 +189,20 @@ class GroupApi(private val http: HttpClient) {
         )
 
     /**
+     * 凭群码/邀请链接入群（G3，接收方半）。[token] 可以是完整链接或裸 token——服务端自己摘。
+     * 需审批时服务端回 `300210`（[com.libeyond.imandroid.sdk.protocol.ErrCode.GROUP_JOIN_PENDING]），
+     * **不是失败**：申请已落库，等 `join_result` 帧回来；调用方按码分支，别当异常兜底处理。
+     */
+    suspend fun join(token: String, hello: String = ""): GroupInfo =
+        decode(
+            http.call("POST", "/api/v1/groups/join", buildJsonObject {
+                put("token", token)
+                put("hello", hello)
+            }),
+            GroupInfo.serializer(),
+        )
+
+    /**
      * 解散群（**仅群主**）。服务端向全体广播 dissolve，各端据此移除会话。
      * 与 [leave] 是两件事：退群只影响我自己，解散是把群本身删掉，不可撤销。
      */

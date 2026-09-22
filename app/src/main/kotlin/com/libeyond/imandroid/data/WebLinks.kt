@@ -48,6 +48,27 @@ object WebLinks {
     fun isCleartext(url: String): Boolean = url.trim().lowercase().startsWith("http://")
 
     /**
+     * 本站邀请链接判定（对齐 iOS `IMQRResultRouter routeInviteLinkIfOwn:`）：点开的这条链接是不是
+     * 我们自己发的名片/群邀请链接——是就该走 `/qr/resolve` 原生加群/名片流程，不该跳浏览器。
+     *
+     * http(s) + host 与当前连接的服务器一致（或是 dev 场景的 localhost/127.0.0.1 回环——
+     * `resolve` 走的是本机配置的 host，能通；真机连局域网 IP 时精确比对必失败，拦下来走站内
+     * 流程好过跳一个打不开的浏览器）+ 路径命中 `/q/u/` 或 `/q/g/`（登录码 `/q/l/` 与其它路径
+     * 放行走浏览器落地页承接，同 iOS）。
+     */
+    fun isOwnInviteLink(raw: String, host: String): Boolean {
+        val uri = runCatching { java.net.URI(raw.trim()) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return false
+        if (uri.host.isNullOrEmpty()) return false
+        val urlHost = if (uri.port > 0) "${uri.host}:${uri.port}" else uri.host
+        val isDevLoopback = uri.host == "localhost" || uri.host == "127.0.0.1"
+        if (urlHost != host && !isDevLoopback) return false
+        val path = uri.path ?: ""
+        return path.startsWith("/q/u/") || path.startsWith("/q/g/")
+    }
+
+    /**
      * 主页面加载失败时的说明。未加密的 http 单独说：release 包的网络安全配置不放行明文
      * （PROTOCOL §0.1，`res/xml/network_security_config.xml`），这类页面在 App 内必然打不开，
      * 只说「检查网络」会让人对着好好的网络反复重试。

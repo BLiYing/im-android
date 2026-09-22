@@ -54,4 +54,27 @@ class WebLinksTest {
         assertTrue(WebLinks.failureText("http://a.com").contains("http"))
         assertFalse(WebLinks.failureText("https://a.com").contains("http"))
     }
+
+    // 本站邀请链接判定（对齐 iOS routeInviteLinkIfOwn:）：host 一致 + 路径命中 /q/u|g/ 才拦下来
+    // 走原生 resolve 流程，不是随手一条含相似路径的外链就拦。
+    @Test
+    fun `host 与路径都命中才算本站邀请链接`() {
+        val host = "10.0.2.2:8080"
+        assertTrue(WebLinks.isOwnInviteLink("https://10.0.2.2:8080/q/u/abc123", host))
+        assertTrue(WebLinks.isOwnInviteLink("http://10.0.2.2:8080/q/g/xyz", host))
+        // 登录码 /q/l/ 与其它路径放行走浏览器（iOS 同）
+        assertFalse(WebLinks.isOwnInviteLink("https://10.0.2.2:8080/q/l/tk", host))
+        assertFalse(WebLinks.isOwnInviteLink("https://10.0.2.2:8080/other", host))
+        // host 不一致——即便路径像也不拦，别把任意外链都当自家码转发去 resolve
+        assertFalse(WebLinks.isOwnInviteLink("https://evil.com/q/g/xyz", host))
+        // 非 http(s)
+        assertFalse(WebLinks.isOwnInviteLink("weixin://q/g/xyz", host))
+    }
+
+    @Test
+    fun `真机连局域网 IP 时 dev 回环 host 也放行——resolve 走本机配置的 host，能通`() {
+        val host = "192.168.1.12:8080"
+        assertTrue(WebLinks.isOwnInviteLink("http://localhost:8080/q/u/abc", host))
+        assertTrue(WebLinks.isOwnInviteLink("http://127.0.0.1:8080/q/g/abc", host))
+    }
 }

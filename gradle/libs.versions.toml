@@ -18,6 +18,8 @@ room = "2.6.1"
 lucide = "1.1.0"
 coil = "2.7.0"
 zxing = "3.5.3"
+# CameraX：扫一扫取景（QRCODE P0 接收方半）。解码仍用 zxing-core（已引入），不叠 ML Kit。
+camerax = "1.4.1"
 ksp = "2.0.21-1.0.28"
 junit = "4.13.2"
 androidxJunit = "1.2.1"
@@ -68,8 +70,15 @@ coil-video                  = { group = "io.coil-kt",              name = "coil-
 # --- 二维码编码（「我」页名片码）---
 # zxing core 是**纯 JVM**、无 Android 依赖：只要它把串编成 BitMatrix，画布交给 Compose 自己画。
 # 因此编码那一步能进普通单测（不需要 Robolectric/仪器测试）。
-# 只取 core，不取 android-core / android-integration——后两个带 Activity 与相机扫码，本页用不到。
+# 只取 core，不取 android-core / android-integration——后两个带 Activity 与相机扫码，改用 CameraX 自己接。
 zxing-core                  = { group = "com.google.zxing",           name = "core",                     version.ref = "zxing" }
+
+# --- 相机取景（扫一扫，QRCODE P0 接收方半）---
+# 只取预览+分析所需的四个模块；解码复用上面的 zxing-core（纯 JVM，对着 ImageAnalysis 的 Y 平面算）。
+camerax-core                = { group = "androidx.camera",            name = "camera-core",              version.ref = "camerax" }
+camerax-camera2              = { group = "androidx.camera",            name = "camera-camera2",           version.ref = "camerax" }
+camerax-lifecycle           = { group = "androidx.camera",            name = "camera-lifecycle",         version.ref = "camerax" }
+camerax-view                = { group = "androidx.camera",            name = "camera-view",              version.ref = "camerax" }
 
 # --- 本地存储（对应 iOS 的 SQLite/FMDB、Web 的 IndexedDB）---
 androidx-datastore-prefs    = { group = "androidx.datastore",        name = "datastore-preferences",    version.ref = "datastore" }
