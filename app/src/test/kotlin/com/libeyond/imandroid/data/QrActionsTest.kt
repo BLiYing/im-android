@@ -73,6 +73,18 @@ class QrActionsTest {
     }
 
     @Test
+    fun `一图多码候选列表摘要`() {
+        assertEquals("名片码（本应用）", qrScanLabelFor("http://a.com/q/u/tok"))
+        assertEquals("群二维码（本应用）", qrScanLabelFor("http://a.com/q/g/tok"))
+        assertEquals("登录码（本应用）", qrScanLabelFor("http://a.com/q/l/tok"))
+        assertEquals("网址 · evil.com", qrScanLabelFor("https://evil.com/x"))
+        assertEquals("（空）", qrScanLabelFor("   "))
+        val long = "一段很长很长很长很长很长很长很长很长的纯文本内容超过二十个字符"
+        val label = qrScanLabelFor(long)
+        assertEquals(long.take(20) + "…", label)
+    }
+
+    @Test
     fun `外来码域名判定——只认 http(s)，供二次确认高亮`() {
         assertEquals("evil.com", qrUnknownDomain("https://evil.com/path?x=1"))
         assertEquals("a.com", qrUnknownDomain("  HTTP://a.com "))

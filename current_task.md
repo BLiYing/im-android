@@ -44,7 +44,7 @@
 > 详见 `UI_PARITY_IOS.md`。
 >
 > **第四批：扫码/点链接加群——接收方这一半补齐（2026-09-22 同日；纯客户端、`./scripts/test.sh` 852 例绿，
-> 新测试均先看红过；未提交、未真机）**：服务端 QRCODE P0/G3 早就全量落地（`/qr/resolve`、`POST /groups/join`
+> 新测试均先看红过；已提交 `2853a52`、未真机）**：服务端 QRCODE P0/G3 早就全量落地（`/qr/resolve`、`POST /groups/join`
 > 等接口 2026-08-13 起就在），此前只有 Android 客户端没接扫码/点链接这一侧。全文核对 iOS 真正生效路径
 > （`IMQRResultRouter.m`/`IMQRScannerViewController.m`/`IMGroupJoinPreviewViewController.m`/`IMQRModels.m`）后发现
 > **iOS 也没有 OS 级深链接（App Links）**——它只在 App 内已经打开的链接（聊天气泡、群资料/收藏里点开的链接）
@@ -68,6 +68,34 @@
 > 相机占用指示灯不灭、持续耗电，已修（`DisposableEffect` 里补 `provider?.unbindAll()`）；顺带修了一条中等：
 > 从「去设置开启」跳系统设置页回来后权限状态不会自动刷新，加了 `LifecycleEventObserver` 在 `ON_RESUME`
 > 重查一次。测试补了两个纯文案函数的遗漏覆盖。`test.sh` **854 例绿**。
+>
+> **第五批：接着补齐第四批留下的三项（2026-09-22 同日；纯客户端、`./scripts/test.sh` 860 例绿，
+> 新测试均先看红过——除一处如实记录「没能造出红」，见下；未提交、未真机）**：
+> ⑧ **相册选图识码**：`ui/QrScanHost.kt` 加「从相册选择」（`PickVisualMedia`，不需要相机权限，两种权限态
+> 都露出，对齐 iOS 即便相机被拒也留着这条路）→ `decodeQrImage` 读 bounds 后按 `inSampleSize` 降采样
+> （目标边长 2000px，避免大图直接摊平成 IntArray OOM）→ 摘像素喂给新文件 `data/QrImageDecode.kt`
+> （纯逻辑，入参是 ARGB 像素数组不是 `Bitmap`，本仓没有 Robolectric 但照样能单测——`QrEncode` 那半同一个
+> 理由；用 zxing `QRCodeMultiReader`，未叠 ML Kit）。
+> ⑨ **一图多码候选**：0/1/N 三态——识别不到提示、一枚直接当结果、多枚弹 `ActionSheet`（复用「收藏发送」
+> 那批已有的组件），候选摘要用新函数 `data/QrActions.kt#qrScanLabelFor`（本站码按路径前缀标 名片/群/
+> 登录码，外来码给域名或文本首段，对齐 iOS `labelForRaw:`），按包围盒面积降序排（面积大的通常是用户想扫
+> 的主码，对齐 iOS `IMQRImage` 按 `CIFeature.bounds` 排序）。
+> ⑩ **扫码登录（QR P1）手机侧**：`QrApi` 新增 `loginScan`/`loginConfirm`/`loginReject` 接 `/qr/login/
+> {scan,confirm,reject}`；`QrResolved.Login` 从占位 `data object` 改成带 `ticket` 的 `data class`；新增
+> `ui/QrLoginConfirmHost.kt`+`screens/QrLoginConfirmScreen.kt`（设备/IP/位置/扫码时间四行信息卡 + 红色安全
+> 提示条 + 确认/拒绝两按钮，对齐 `IMQRLoginConfirmViewController`）；`QrRouteHost` 的 `Login` 分支从
+> 「提示不支持」改成真正 `loginScan` 再开确认页。
+> `/code-review` 两轮：高严重度——相册 I/O（`openInputStream` 对 content URI 可抛
+> `FileNotFoundException`/`SecurityException`）此前没包 try/catch，会让协程直接崩掉整个 App 而不是走
+> 「没识别到」这条路，已修（对齐已有 `AvatarPrepare.decodeSampled` 同一处理）；中高——相机识别（后台
+> `executor` 线程）与相册识别（主线程协程）共用同一个 `handled` 守卫，`mutableStateOf` 的读写不是原子的，
+> 理论上能让两条路径都判定自己是第一个、各调一次 `onResult`（重复路由/双开预览页）——改用
+> `AtomicBoolean.compareAndSet`；低——候选面积排序、`qrScanLabelFor` 漏了登录码 `/q/l/` 分支，均已补。
+> **验证纪律的诚实记录**：面积排序那处临时去掉排序代码单测仍然绿——`QRCodeMultiReader` 内部按模块尺寸
+> 聚类，实测输出本就已经是大码在前，没能真正造出「红」；显式排序留着是不依赖 zxing 未文档化的内部实现
+> 顺序，单测锁的是**输出契约**，不是这行代码有没有生效，已在代码注释里如实记这一条。
+> **仍不做**：App Links 深链接（iOS 也没有，两端此处本就同构，非缺口）。至此扫码/点链接加群这条线全部
+> 补齐。
 
 > **im-rtc 通话接入（2026-09-19，联调期；单聊 1v1 + 群通话；单测绿、未提交、未真机）**：
 > SDK 走本机 Maven（先在 `../im-rtc/im-rtc-android` 跑 `./gradlew publishToMavenLocal`，`settings.gradle.kts` 只对该 group 开 `mavenLocal()`），

@@ -21,6 +21,7 @@ import com.libeyond.imandroid.data.qrUnknownDomain
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.QrGroupCard
+import com.libeyond.imandroid.sdk.api.QrLoginScanInfo
 import com.libeyond.imandroid.sdk.api.QrResolved
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.ApiException
@@ -59,6 +60,7 @@ internal fun QrRouteHost(
     var scanning by remember { mutableStateOf(false) }
     var groupPreview by remember { mutableStateOf<Pair<QrGroupCard, String>?>(null) }
     var profile by remember { mutableStateOf<QrProfileSeed?>(null) }
+    var loginConfirm by remember { mutableStateOf<QrLoginScanInfo?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
     var expiredAlert by remember { mutableStateOf(false) }
     var unknownText by remember { mutableStateOf<String?>(null) }
@@ -88,7 +90,22 @@ internal fun QrRouteHost(
                 if (resolved.card.groupId.isEmpty()) toast = "二维码内容有误"
                 else groupPreview = resolved.card to raw
             }
-            is QrResolved.Login -> toast = "该二维码是网页版登录码，暂不支持在此处理"
+            is QrResolved.Login -> {
+                if (resolved.ticket.isEmpty()) {
+                    toast = "二维码内容有误"
+                } else {
+                    // 先 /qr/login/scan 拿 Web 端设备/IP/位置，再进确认页——对齐 iOS `routeLogin:`。
+                    // resolve 已校验票据可用；scan 若并发过期/被抢会回 200110，走统一失效弹窗。
+                    scope.launch {
+                        runCatchingCancellable { client.qr.loginScan(resolved.ticket) }
+                            .onSuccess { loginConfirm = it }
+                            .onFailure { e ->
+                                if (e is ApiException && e.code == ErrCode.QR_EXPIRED) expiredAlert = true
+                                else toast = e.userMessage("识别登录码失败")
+                            }
+                    }
+                }
+            }
             is QrResolved.Unknown -> unknownText = resolved.text.ifEmpty { "未能识别该二维码" }
         }
     }
@@ -163,6 +180,18 @@ internal fun QrRouteHost(
                     onOpenChat(client.conversationStubFor(u.userId, u.displayName, u.avatarUrl))
                 },
                 onBack = { profile = null },
+            )
+        }
+
+        loginConfirm?.let { info ->
+            QrLoginConfirmHost(
+                client = client,
+                ticket = info.ticket,
+                device = info.device,
+                ip = info.ip,
+                location = info.location,
+                onDone = { toast = it },
+                onBack = { loginConfirm = null },
             )
         }
 

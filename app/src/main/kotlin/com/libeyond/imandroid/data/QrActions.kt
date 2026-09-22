@@ -83,3 +83,19 @@ fun qrUnknownDomain(text: String): String? {
     if (!t.startsWith("http://", ignoreCase = true) && !t.startsWith("https://", ignoreCase = true)) return null
     return runCatching { java.net.URI(t).host }.getOrNull()?.takeIf { it.isNotBlank() }
 }
+
+/**
+ * 一图多码候选列表的可读摘要（对齐 iOS `IMQRScannerViewController.labelForRaw:`）。
+ * 本站码按路径前缀标注，其余给域名或文本首段——只为让用户分得清选哪一枚，不做语义判定
+ * （语义判定在 `/qr/resolve`，选完之后才查）。
+ */
+fun qrScanLabelFor(raw: String): String {
+    val t = raw.trim()
+    return when {
+        t.isEmpty() -> "（空）"
+        t.contains("/q/u/") -> "名片码（本应用）"
+        t.contains("/q/g/") -> "群二维码（本应用）"
+        t.contains("/q/l/") -> "登录码（本应用）"
+        else -> qrUnknownDomain(t)?.let { "网址 · $it" } ?: (if (t.length > 20) t.take(20) + "…" else t)
+    }
+}

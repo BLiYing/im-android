@@ -1,12 +1,15 @@
 package com.libeyond.imandroid.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -39,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +60,12 @@ import com.composables.icons.lucide.Flashlight
 import com.composables.icons.lucide.FlashlightOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
+import com.libeyond.imandroid.data.QrImageDecode
+import com.libeyond.imandroid.data.qrScanLabelFor
+import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.ui.components.ActionSheet
+import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.SheetItem
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
@@ -63,23 +73,29 @@ import com.google.zxing.NotFoundException
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 
 /**
  * 扫一扫取景页（QRCODE P0 接收方半，对齐 iOS `IMQRScannerViewController` 的取景页）。
  *
- * CameraX 出帧 + zxing-core（`QRCodeReader`，出示码那半已在用的同一个依赖）解码——不叠 ML Kit /
- * zxing-android-embedded。**未接**：相册选图识码、一图多码候选、与「我的二维码」的页签组合
- * （本端「我的二维码」另有独立入口，不需要在这里重复），见 `docs/UI_PARITY_IOS.md`。
+ * CameraX 出帧 + zxing-core（`QRCodeReader`/`QRCodeMultiReader`，出示码那半已在用的同一个依赖）
+ * 解码——不叠 ML Kit / zxing-android-embedded。**未接**：与「我的二维码」的页签组合（本端「我的
+ * 二维码」另有独立入口，不需要在这里重复），见 `docs/UI_PARITY_IOS.md`。
  *
  * 命中一枚码就回调 [onResult] 一次并停止分析；页面本身何时关闭由调用方决定
  * （[QrRouteHost] 会先关本页再异步 resolve，对齐 iOS `handleRaw:` 先停帧、后解析的顺序）。
+ * 「从相册选择」同一条出口：识别到一枚直接当结果，识别到多枚弹候选列表选一枚（对齐 iOS
+ * `pickFromAlbum`/`handleDecodedCodes:`——群公告截图常同时有群码与客服码，不默认取第一个）。
  */
 @Composable
 internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
 
     var hasPermission by remember {
         mutableStateOf(
@@ -112,9 +128,32 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
     var torchOn by remember { mutableStateOf(false) }
     var camera by remember { mutableStateOf<Camera?>(null) }
     // 命中一枚就锁死，忽略同一批还没关掉的后续帧——避免同一次扫描回调两次。
-    var handled by remember { mutableStateOf(false) }
+    // **用 AtomicBoolean 而不是 Compose 的 mutableStateOf**：相机命中来自 CameraX 后台分析线程
+    // （`QrFrameAnalyzer` 跑在独立 executor 上），相册命中来自主线程协程，两条路径「先读再写」的
+    // check-then-act 必须是原子的，否则用户扫的那张码同时也在相册里选中时，两条路可能都判定
+    // 自己是第一个、各调一次 [onResult]（`/code-review` 抓出）——`compareAndSet` 保证谁先到谁赢。
+    val handled = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     LaunchedEffect(camera, torchOn) {
         camera?.takeIf { it.cameraInfo.hasFlashUnit() }?.cameraControl?.enableTorch(torchOn)
+    }
+
+    var pickerBusy by remember { mutableStateOf(false) }
+    var candidates by remember { mutableStateOf<List<String>?>(null) }
+    var toast by remember { mutableStateOf<String?>(null) }
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null || handled.get()) return@rememberLauncherForActivityResult
+        pickerBusy = true
+        scope.launch {
+            val codes = withContext(Dispatchers.IO) { decodeQrImage(context, uri) }
+            pickerBusy = false
+            when {
+                codes.isEmpty() -> toast = "这张图片里没有识别到二维码，换一张试试"
+                codes.size == 1 -> { if (handled.compareAndSet(false, true)) onResult(codes.first()) }
+                else -> candidates = codes
+            }
+        }
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -123,12 +162,7 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
                 CameraPreview(
                     lifecycleOwner = lifecycleOwner,
                     onCameraReady = { camera = it },
-                    onDecoded = { raw ->
-                        if (!handled) {
-                            handled = true
-                            onResult(raw)
-                        }
-                    },
+                    onDecoded = { raw -> if (handled.compareAndSet(false, true)) onResult(raw) },
                 )
                 ScanReticle(Modifier.align(Alignment.Center))
                 Text(
@@ -148,6 +182,20 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
                         ),
                     )
                 },
+            )
+        }
+
+        // 「从相册选择」不需要相机权限，两种权限态都露出——对齐 iOS 即便相机被拒也留着这条路。
+        Box(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp)
+                .clickable(enabled = !pickerBusy) {
+                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                },
+        ) {
+            Text(
+                if (pickerBusy) "识别中…" else "从相册选择",
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
 
@@ -171,7 +219,67 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
             }
         }
     }
+
+    candidates?.let { list ->
+        ActionSheet(
+            title = "这张图里有多个二维码",
+            items = list.map { code ->
+                SheetItem(qrScanLabelFor(code)) {
+                    if (handled.compareAndSet(false, true)) onResult(code)
+                }
+            },
+            onDismiss = { candidates = null },
+        )
+    }
+
+    toast?.let { t -> IMToast(t) { toast = null } }
 }
+
+/**
+ * 从相册图片里识别二维码：读流 → 按目标边长降采样（原图可能几千像素，直接摊平成 IntArray 会 OOM）→
+ * 摘像素喂给纯逻辑层。**整段包 try/catch**（对齐 `AvatarPrepare.decodeSampled` 同一处理）：
+ * `openInputStream` 对 content URI 可能抛 `FileNotFoundException`/`SecurityException`
+ * （临时读权限在进程被回收后失效、云端占位图未下载完成等），不接住会让协程直接崩掉整个 App
+ * 而不是按设计走「没有识别到二维码」这条路（`/code-review` 抓出）。
+ */
+private suspend fun decodeQrImage(context: Context, uri: Uri): List<String> = try {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    val w0 = bounds.outWidth
+    val h0 = bounds.outHeight
+    if (w0 <= 0 || h0 <= 0) {
+        emptyList()
+    } else {
+        var sample = 1
+        while (w0 / sample > MAX_DECODE_SIDE || h0 / sample > MAX_DECODE_SIDE) sample *= 2
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+        if (bitmap == null || bitmap.width <= 0 || bitmap.height <= 0) {
+            bitmap?.recycle()
+            emptyList()
+        } else {
+            val w = bitmap.width
+            val h = bitmap.height
+            val pixels = IntArray(w * h)
+            bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+            bitmap.recycle()
+            QrImageDecode.decode(w, h, pixels)
+        }
+    }
+} catch (e: Exception) {
+    qrScanLog.w("qr_album_decode_failed", "err" to e.javaClass.simpleName)
+    emptyList()
+}
+
+private val qrScanLog = IMLog.tag("IM.Qr")
+
+/**
+ * 降采样目标边长——够扫码识别用，又不至于摊出一张几十 MB 的 IntArray（2000×2000×4B≈16MB，
+ * 现代机型可接受）。iOS `CIDetector` 是按原始分辨率识别、不降采样；本端为避免 OOM 做了这层
+ * 折中，**未在真机上用「大截图里嵌一枚很小的客服码」这类极端场景验证过是否会漏检**
+ * （`/code-review` 提醒）——常见的「群码占大半屏」场景不受影响，真遇到漏检再按需调大或提示裁剪。
+ */
+private const val MAX_DECODE_SIDE = 2000
 
 @Composable
 private fun CameraPreview(

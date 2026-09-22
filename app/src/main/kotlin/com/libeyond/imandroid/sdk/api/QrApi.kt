@@ -62,15 +62,26 @@ data class QrGroupCard(
 sealed interface QrResolved {
     data class User(val card: QrUserCard) : QrResolved
     data class Group(val card: QrGroupCard) : QrResolved
-    /** 扫码登录码（QR P1）。Android 端**扫描本身**未接，命中即回退成不支持提示。 */
-    data object Login : QrResolved
+    /** 扫码登录码（QR P1）：resolve 只回 ticket，设备/IP/位置由 [QrApi.loginScan] 返回给确认页。 */
+    data class Login(val ticket: String) : QrResolved
     /** 非本站码：原样回显，不查库（不给爆破者反馈，也不自动跳转）。 */
     data class Unknown(val text: String) : QrResolved
 }
 
 /**
- * 二维码体系（QRCODE P0）。名片码 + 群码（出示这一半）+ 扫码解析/凭码入群（接收方这一半）已接；
- * **扫码登录（QR P1）的登录码分支仍未接**，见 [QrResolved.Login]。
+ * 手机端已扫网页版登录码（QR P1）：`POST /qr/login/scan` 的返回，供确认页展示
+ * （对齐后端 `webDeviceName`/`internal/qrcode.login.go`）。
+ */
+@Serializable
+data class QrLoginScanInfo(
+    val ticket: String = "",
+    val device: String = "",
+    val ip: String = "",
+    val location: String = "",
+)
+
+/**
+ * 二维码体系（QRCODE P0 出示/接收方半 + QR P1 扫码登录·手机侧）全部已接。
  */
 class QrApi(private val http: HttpClient) {
 
@@ -111,11 +122,35 @@ class QrApi(private val http: HttpClient) {
         return when (kind) {
             "user" -> QrResolved.User(decode(data, QrUserCard.serializer()))
             "group" -> QrResolved.Group(decode(data, QrGroupCard.serializer()))
-            "login" -> QrResolved.Login
+            "login" -> QrResolved.Login(decodeOrNull(data, QrLoginTicketData.serializer())?.ticket.orEmpty())
             else -> QrResolved.Unknown(decodeOrNull(data, QrUnknownData.serializer())?.text.orEmpty())
         }
     }
+
+    /**
+     * 手机端已扫（QR P1）：拿 Web 端设备/IP/位置供确认页展示。resolve 已校验票据可用；
+     * 这里若并发过期/被抢会回 [com.libeyond.imandroid.sdk.protocol.ErrCode.QR_EXPIRED]。
+     */
+    suspend fun loginScan(ticket: String): QrLoginScanInfo =
+        decode(
+            http.call("POST", "/api/v1/qr/login/scan", buildJsonObject { put("ticket", ticket) }),
+            QrLoginScanInfo.serializer(),
+        )
+
+    /** 手机端确认登录：Web 端换 JWT 登录。非 scanned/非本人回 `200110`。 */
+    suspend fun loginConfirm(ticket: String) {
+        http.call("POST", "/api/v1/qr/login/confirm", buildJsonObject { put("ticket", ticket) })
+    }
+
+    /** 手机端拒绝登录（终态）。 */
+    suspend fun loginReject(ticket: String) {
+        http.call("POST", "/api/v1/qr/login/reject", buildJsonObject { put("ticket", ticket) })
+    }
 }
+
+/** kind=login 时 data 的形状：`{"ticket": "<票据>"}`。 */
+@Serializable
+private data class QrLoginTicketData(val ticket: String = "")
 
 /** kind=unknown 时 data 的形状：`{"text": "<原文>"}`。 */
 @Serializable
