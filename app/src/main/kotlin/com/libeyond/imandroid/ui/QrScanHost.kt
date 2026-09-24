@@ -11,6 +11,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -20,13 +26,12 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -49,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -199,23 +205,29 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
             )
         }
 
-        Row(
+        Box(
             Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            IconButton(onClick = onClose) {
+            IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart)) {
                 Icon(Lucide.X, contentDescription = "关闭", tint = Color.White)
             }
+            // 标题贴屏幕中线（对齐 iOS `title.centerXAnchor == view.centerXAnchor`），不随左右按钮
+            // 宽度是否对称漂移——此前用 Row+SpaceBetween 只放了两颗按钮，漏了这行标题。
+            Text(
+                "扫一扫",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.align(Alignment.Center),
+            )
             if (hasPermission) {
-                IconButton(onClick = { torchOn = !torchOn }) {
+                IconButton(onClick = { torchOn = !torchOn }, modifier = Modifier.align(Alignment.CenterEnd)) {
                     Icon(
                         if (torchOn) Lucide.Flashlight else Lucide.FlashlightOff,
                         contentDescription = "手电筒",
                         tint = Color.White,
                     )
                 }
-            } else {
-                Box(Modifier.size(48.dp)) // 占位，保持关闭按钮不因缺右侧按钮而跑偏
             }
         }
     }
@@ -377,12 +389,28 @@ private class QrFrameAnalyzer(private val onDecoded: (String) -> Unit) : ImageAn
     }
 }
 
-/** 取景框：四角描边，比整屏遮罩直观——对齐 iOS 的 L 形四角。 */
+/**
+ * 取景框：四角描边，比整屏遮罩直观——对齐 iOS 的 L 形四角。
+ *
+ * 扫描线对齐 iOS `startScanLineAnimation`：框内左右各留 8dp，顶部起 10dp，2.2s 循环上下平移
+ * `side - 20dp`，ease-in-out——此前本端只有静止取景框，漏了这条动画（用户报的第 4 条真机对比发现）。
+ */
 @Composable
 private fun ScanReticle(modifier: Modifier = Modifier) {
     val side = 220.dp
     val stroke = 3.dp
     val corner = 26.dp
+    val lineTravel = 200.dp // side(220) - 20dp，对齐 iOS kIMReticleSide - 20
+    val transition = rememberInfiniteTransition(label = "qr_scan_line")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "qr_scan_line_progress",
+    )
     Box(modifier.size(side)) {
         val color = Color.White
         // 四角各两条短边，Compose 用四个小方块拼角比自绘 Canvas 路径简单，够用。
@@ -394,6 +422,14 @@ private fun ScanReticle(modifier: Modifier = Modifier) {
         Box(Modifier.align(Alignment.BottomStart).size(stroke, corner).background(color))
         Box(Modifier.align(Alignment.BottomEnd).size(corner, stroke).background(color))
         Box(Modifier.align(Alignment.BottomEnd).size(stroke, corner).background(color))
+        Box(
+            Modifier.align(Alignment.TopStart)
+                .padding(horizontal = 8.dp)
+                .offset(y = 10.dp + lineTravel * progress)
+                .width(side - 16.dp)
+                .height(2.dp)
+                .background(Color(0xFF5CC7FF)),
+        )
     }
 }
 

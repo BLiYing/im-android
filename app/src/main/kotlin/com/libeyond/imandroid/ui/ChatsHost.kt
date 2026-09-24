@@ -64,6 +64,10 @@ fun ChatsHost(
                 ConversationListScreen(
                     conversations = conversations.orEmpty(),
                     phase = phase,
+                    myUid = owner,
+                    // 会话列表只有全局好友表可用，没有群成员表（那是群资料里的东西）——
+                    // 与 iOS 列表 cell 的 `lastPreviewTextForSelfUID:` 同一条退化路径（群昵称传 nil）。
+                    localNameOf = { uid -> knownFriends[uid]?.displayName },
                     onOpen = onOpenChat,
                     onLongPress = onLongPress,
                     onPlus = { plusAnchor = it },

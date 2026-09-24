@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -10,12 +11,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.DetailActions
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.ui.theme.LocalMediaHost
@@ -52,6 +56,10 @@ fun avatarColorForSeed(seed: String): Color {
  * 头像。有 `avatarUrl` 时显示图片（P7 接图片加载），否则回退**首字母圈**。
  *
  * 首字母取显示名**末两位**——三端同口径（`docs/UI.md`）。
+ *
+ * 系统通知会话（`seed == DetailActions.SYSTEM_UID`）：一律显示应用 logo，不发网络请求、
+ * 不落首字母/取色兜底——服务端 `avatar_url` 恒空（`SystemUserAvatarURL=""`），与 iOS
+ * `UILabel+IMAvatar.m`（`LaunchLogo`）/ Web `Avatar.tsx`（`/im-logo.png`）同一契约。
  */
 @Composable
 fun IMAvatar(
@@ -61,6 +69,15 @@ fun IMAvatar(
     size: Dp = 48.dp,
     avatarUrl: String = "",
 ) {
+    if (DetailActions.isSystemPeer(seed)) {
+        Image(
+            painter = painterResource(R.drawable.im_system_logo),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.size(size).clip(CircleShape),
+        )
+        return
+    }
     Box(
         modifier = modifier
             .size(size)

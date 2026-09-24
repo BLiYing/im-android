@@ -5,6 +5,190 @@
 
 ## 历史焦点（新 → 旧）
 
+> ⬇ 以下一块 2026-09-23 从活快照原样转入（会话列表副标题 + 转发提及 + 日历/来自筛选）。
+
+> **会话列表副标题 + 图片/视频转发提及 + 会话内搜索日历/来自筛选，三项对齐 iOS（2026-09-23；纯客户端、
+> 后端零改动；`./scripts/test.sh` 879 例绿，新测试均先看红过；**真机 `GMGY7XF6LBJB6PFU` 已回归日历/来自
+> 两项，抓到并修了 2 处只有真机才炸的 bug，见下**）**：用户按顺序报了 5 条，1/2 两条
+> 核实后确认现状已对，未改代码（宫格门控图片有进度环/暂停/重试比 iOS 丰富，用户拍板保留；九宫格翻页
+> 装的是旧包，装最新包后确认无问题）。3/4/5 三条落地：
+>
+> ⚠️ **真机抓到的 2 处 bug（单测全绿但没测出来，Room 生成的真实 SQL 本仓没有任何测试跑过）**：
+> ① `ChatCalendarDialog` 的「最早/今天」快捷行被 `DatePicker` 整个盖住、连无障碍树都摸不到——
+> 根因是 Material3 `DatePickerDialog` 内部用 `Box` 装 `content()`，多个直接子项会互相叠放而不是纵向
+> 排列（`content: ColumnScope.() -> Unit` 只是给了 `Modifier.weight()` 用的接收者类型，不代表真的按
+> Column 布局），显式套一层 `Column` 修复；② `MessageDao.search()` 的 SQL 里，关键词 LIKE 那组 `OR` 
+> 子句原来是**无条件 AND** 的——纯「来自」筛选（空关键词）时 `:like=''` 会让整组 OR 恒假，「来自」
+> 恒 0 命中，补一条 `:like = '' OR (...)` 短路分支。两处都已修复、重装真机复验通过（「最早」跳到群
+> 创建那条、「来自」筛选出 2/2 命中并跳转、清除胶囊无崩溃）。
+>
+> ⚠️ **真机继续验的 3 项结果（同日第二轮）**：① 撤回实时刷新——群聊/单聊各自撤回一条自测通过，
+> 列表行不重进就跟着换成"你撤回了一条消息"；**对方撤回的两种文案（"XX/对方撤回了一条消息"）没测到**，
+> 单设备单账号模拟不出"对方"视角，留着等第二台设备/账号；② 非 UTC+8 时区的日历换算——把设备时区切到
+> `America/Los_Angeles`（UTC-7）复验，"今天"指示器正确显示本地日期（22 号而非 UTC+8 的 23 号）、
+> 「今天」快捷跳转精确落在本地日期分界线上、昨天/今天分组随时区重算，**换算是对的**；③ 转发带 @ 到群——
+> **真机 UI 没跑通**：图片选择器是系统多级页面（选图→分享目标选择→疑似另一条转发链路），盲点坐标几次
+> 踩偏（意外把测试字符串当消息发出、意外打开系统文件选择器），继续磨真机 UI 投入产出比不划算，改用文本
+> 消息里插入 @ 提及验证了"提及渲染成可点高亮 + 点开对方资料页"这条基础设施是通的；`mentions`/
+> `mentionSpans` 随转发存活这条**只有单测覆盖**（`ForwardAttributesTest.kt` 两个新例，红绿都验证过），
+> 没有"转发到另一群、别人视角点开被 @ 的名字"这一步的真机实测——如实记录，不算已完成。
+>
+> ⚠️ **"来自: 用户4984" 命中「群通话已结束」——查证不是 bug**：通话记录消息设计上"发起人 = 消息
+> 发送者"（不是系统消息），iOS `searchConvSeqsInConv:keyword:fromUID:` 的「来自」SQL 同样不排除通话
+> 记录，只排撤回与 `conv_seq<=0`——两端行为一致，是既有设计，不是这次对齐引入的偏差。如果要把通话记录
+> 从「来自」筛选里去掉，是一个产品层面的新决定，需要 iOS/Android 两端一起改，不在这次对齐范围内。
+>
+> ⚠️ **iOS 日历 730 天那个 bug 已代码核实为真**：`IMChatViewController+Search.m` 请求
+> `toMs - 730*24*3600*1000`（近两年），服务端 `MaxCalendarSpan=400*24h`，超限直接拒绝；iOS 收到失败后
+> 静默回退本地打点，用户感知不到。这是 iOS 既有 bug，与本次 Android 对齐无关，Android 未照抄（改用 390 天）。
+>
+> ③ **会话列表副标题**：`ConversationEntity` 加 `lastFrom`/`lastFromNickname`/`lastRecalled` 三列
+> （Room v9→v10 migration），新写 `data/ConversationPreview.kt` 在**渲染时现算**（不再是写库那一刻烤死的
+> `lastContent` 直接显示）——群聊文本/媒体一律带"昵称: "前缀（自己发的显"我"，系统消息与 `lastFrom` 为空的
+> 不加，对齐 iOS `lastPreviewTextForSelfUID:` + 列表 cell 的"who 解析不出来就不包前缀"退化路径）；本地收到
+> `msg_op RECALL` 时 `MessageRepository.applyMsgOp` 顺带把命中的会话行 `lastRecalled` 置 true，列表跟着
+> 实时换成"你/XX/对方撤回了一条消息"（此前撤回后列表停在撤回前的原文，不刷新）；`ConversationRow` 补上
+> 单聊已读双勾 ✓/✓✓（`peerReadSeq >= lastConvSeq`，此前这个字段存了但没画）。
+>
+> ④ **图片/视频转发**：审计发现 `Forward.attributesOf` 漏带图说（caption）里的 @ 提及——`mentions`/
+> `mentionSpans`，此前只带 poster/media_w/media_h/duration/waveform 五项。已补，**只在图片/视频上带**
+> （对齐 iOS `forwardAttributesForMessage:stripCaption:` 的 `isMedia` 判据，纯文本消息本就不转发提及）、
+> 不带 `mentionAll`。⚠️ **归档/收藏两个转发入口恒不带**——`ConvMediaItem`/收藏条目服务端本就不回带
+> `mentionSpans`，与已知的 `waveform` 缺口同一类结构性限制，不是这次漏改（SYMMETRY 已记）。顺手订正了
+> `Forward.kt` 里一句过时注释（`SendMsgData` 早就有 `waveform` 字段，注释还写"协议没有"）。
+>
+> ⑤ **会话内搜索 📅 日历跳转 + 👤 来自筛选**（`UI_PARITY_IOS.md` 里挂了很久的 🔴，本次一并收口）：
+> 新增 `data/ChatCalendar.kt`（本地日分桶公式逐字镜像后端 `ConvDayBuckets`）+ `ConversationsApi.calendar()`
+> （对接既有的 `GET /conversations/{id}/calendar`，⚠️ **没有照抄 iOS 的"近两年"跨度**——那会撞服务端
+> `MaxCalendarSpan`≈400 天的上限被拒，iOS 那个请求实际上一直失败，是 iOS 侧的既有欠账，本端改用 390 天）；
+> `ui/ChatCalendarState.kt` 三态判据复用既有 `ChatSearch.pickSource`（本地齐全只查本地／有缺口+在线问服务端／
+> 离线降级一次性提示）；UI 用 Material3 `DatePicker`（不画"有消息的天"装饰点——那只是锦上添花，核心是
+> "跳对不跳错"这条正确性，已经做对）；「最早」直接 `locate(1)`、「今天」查不到就退到会话最新一条并如实
+> 说退了。「来自」筛选：本地 DAO `search()` 加 `fromUid` 参数（空词+有筛选时仍成立，"与"关系）、服务端
+> `searchMessages(from=)` 参数原来就在但从没传过非空值；候选 = 本会话已发过消息的去重发件人（不是群成员表，
+> `MessageDao.distinctSenders`），面板贴在命中导航条上方。**均为纯客户端改动**，服务端两个接口都已就绪。
+
+> **群聊信息页 / 群管理页与 iOS 对齐，共四批（2026-09-22；纯客户端为主、第四批服务端零改动；`./scripts/test.sh` 852 例绿；未真机）**：
+> 用户报告「群资料/群管理与 iOS 差得多」四点，先审计（全文对比 iOS `IMChatDetailViewController`/`IMGroupManageViewController`
+> 与本端 `GroupInfoScreen`/`GroupInfoHost`/`GroupManageScreen` 等全部相关文件，结论与仍开着的口子见
+> [`docs/UI_PARITY_IOS.md`](docs/UI_PARITY_IOS.md) §2/§3 新增行）。
+> **第一批**（三项真 bug/体验落差）：① 单聊「备注名」行此前先跳整页 `UserProfileHost` 才能编辑，现改页内弹窗直接编辑
+> （`RemarkEditDialog`，与用户资料页共用）；② 群成员长按（禁言/解除禁言/设撤管理员/转让群主/移出群聊）**执行后成员
+> 列表不刷新**（角色徽标、🔇 标记、被移出的人都要退出重进才更新）——对齐 iOS 每个动作后都重拉一次，`GroupInfoHost.runManage`
+> 现在统一重拉成员首页；顺带修了禁言徽标判据（`!= 0L` → `GroupPermissions.isMuteActive`，过期时间戳误判为禁言中）；
+> ③ 群管理页群名称/简介/公告三行现在右侧直接预览当前值。
+> **第二批**（用户从审计清单里选了这三项，跳过群二维码/邀请链接）：④ 群资料页新增 Settings 卡——置顶聊天/消息免打扰
+> （复用会话设置接口，新增 `ConversationsApi.settings` 对称 GET）、我在本群的昵称（接回此前的孤儿 API
+> `GroupApi.setMyNickname`）、群备注（新增 `ConversationsApi.setRemark`，`PUT /conversations/{id}/remark`——后端早有、
+> 本端一直没调），状态持有者拆进 `GroupInfoSettings.kt`（贴 600 行硬闸，拆法见 CODING_STYLE §7②）；
+> ⑤ 群公告/群简介从合并卡片拆成两个独立行，各自非空才显示、摘要 3 行、点开弹 `GroupTextViewDialog` 看全文。
+> **第三批**（用户随后要求补齐前两批留下的两个口子，2026-09-22 同日；`test.sh` 845 例绿；未真机）：
+> ⑥ 群简介/群公告编辑框的 `multiline` 参数此前是死代码——`IMTextPrompt` 从未把它接到底层 `IMTextField`，
+> 200/500 字的编辑框实际一直是单行框；`IMTextField` 补 `singleLine` 开关（多行 3~8 行）修复，同时给
+> `IMTextPrompt` 加 `clearActionText`，群公告用它对齐 iOS 的独立「撤下公告」按钮（此前只能靠清空文本框）。
+> 字数上限/计数器本就已对齐（30/200/500），容器仍保留弹窗、不做 iOS 那种全屏专属页（功能已对齐，体量不值当）。
+> ⑦ **群二维码/群邀请链接入口补齐**：`QrApi` 新增 `groupQR`/`resetGroupQR`（对接现成的
+> `GET/POST /api/v1/groups/{id}/qr[/reset]`），`QrCardScreen` 从「只服务个人名片码」泛化为名片码/群码共用
+> （`title`/`subtitle`/`hint`/`onReset` 全参数化），新增 `GroupQrCardHost` 复用个人码那套亮度提升/存相册/
+> 分享/复制链接/重置二次确认；群资料页 Settings 卡新增两行，门控用 `GroupPermissions.canInvite`（与
+> 「邀请好友入群」卡片同一份判据，对齐 iOS `inviteEntriesVisible`）。**仅接「出示」这一半**——扫码识别/
+> 点击邀请链接后的接收方解析加群流程（iOS `IMQRResultRouter`/`IMGroupJoinPreviewViewController`）需要相机
+> 权限 + App Links 深链接入，工作量显著更大，明确未接，留作下一批。
+> 为不撞 `GroupInfoHost.kt` 600 行硬闸，顺手把 `loadMore` 挪到 `GroupMembersPaging.kt`、语音页签发送者名
+> 逻辑挪到 `data/SenderNames.kt` 的 `groupVoiceSenderNameOf`（594/600，留了 6 行余量，下次加东西前建议先规划
+> 再拆一块，比如把治理三页 Pick/Bans/Admins 收进 `GroupGovernanceHost.kt`）。
+> `/code-review` 复查无 correctness 级问题，按其建议补了 `GroupInfoNavTest`/`SenderNamesTest` 两条用例
+> （新增测试先红后绿验证过）、修正 `groupVoiceSenderNameOf` 的 `myUid` 类型（`String?` 保持与被替换的内联
+> lambda 逐字等价）、统一了群码副标题文案（"位成员"→"人"，与详情页头部一致）。
+> **已知差异（低优先级，未处理）**：iOS 点击「群二维码/群邀请链接」行时会二次判权限、不满足直接吐司拦截，
+> 本端只有行级门控——权限过期的边界情况会先进页面再看到服务端 403 报错，不算 bug（服务端仍是唯一权威闸门）。
+> 详见 `UI_PARITY_IOS.md`。
+>
+> **第四批：扫码/点链接加群——接收方这一半补齐（2026-09-22 同日；纯客户端、`./scripts/test.sh` 852 例绿，
+> 新测试均先看红过；已提交 `2853a52`、未真机）**：服务端 QRCODE P0/G3 早就全量落地（`/qr/resolve`、`POST /groups/join`
+> 等接口 2026-08-13 起就在），此前只有 Android 客户端没接扫码/点链接这一侧。全文核对 iOS 真正生效路径
+> （`IMQRResultRouter.m`/`IMQRScannerViewController.m`/`IMGroupJoinPreviewViewController.m`/`IMQRModels.m`）后发现
+> **iOS 也没有 OS 级深链接（App Links）**——它只在 App 内已经打开的链接（聊天气泡、群资料/收藏里点开的链接）
+> 里拦截本站邀请链接，不是靠系统把外部浏览器打开的链接拉起 App；范围据此收敛，不用碰 AndroidManifest 的
+> deep link 配置。落地：① `QrApi.resolve()` 手动解 `{kind,data}`（新增 `QrUserCard`/`QrGroupCard`/`QrResolved`
+> 密封类），`GroupApi.join(token, hello)` 接 `POST /groups/join`；② `data/QrActions.kt` 纯映射函数（relation/
+> joinable/reason → 按钮态，对齐 iOS `IMQRModels.m`/Web `qr.ts` 同一张判据表，全部单测覆盖）；③ `data/WebLinks.kt`
+> 新增 `isOwnInviteLink`（host+端口匹配 + dev 回环例外 + 路径命中 `/q/u|g/`，对齐 iOS `routeInviteLinkIfOwn:`）；
+> ④ 新增 `ui/QrRouteHost.kt`：挂在 `MainScreen` 内部（不是更外层的 `AppRoot`）——它要改 `openConv` 才能进群聊/
+> 单聊，那份状态是 `MainScreen` 的私有变量。**覆盖**外层 `WebLinkHost` 提供的 `LocalOpenLink`：点一条链接先判
+> 是不是本站邀请链接，是就 `resolve`+路由，不是就退回原来那份（真正的浏览器打开）；另提供新 CompositionLocal
+> `LocalOpenQrScan` 给会话列表 ＋ 菜单的「扫一扫」用（此前是 `toast = "扫一扫还没做"` 的占位）；⑤ `ui/QrScanHost.kt`：
+> CameraX 出帧 + zxing-core（`QRCodeReader`，出示码那半已引入的同一个依赖，未叠 ML Kit）解码，只吃 Y 平面、
+> 手动处理 rowStride/pixelStride 避免部分机型图像被拉斜；新增 `CAMERA` 权限 + `uses-feature required=false`；
+> ⑥ `ui/GroupJoinPreviewHost.kt`+`screens/GroupJoinPreviewScreen.kt`：对齐 `IMGroupJoinPreviewViewController`
+> （头像/人数/邀请人/简介 + 需审批时附言框 + 按准入态变文案/可用态的主按钮）；提交回调**先把预览页从组合里摘掉、
+> 再异步发 join 请求**（对齐 iOS `submitTapped` 的 pop 在前、回调在后——本页自己的协程作用域会在摘掉那一刻被
+> 取消，逻辑放在 `QrRouteHost` 持有的外层 scope 里）。**仍未接**：相册选图识码、一图多码候选、扫码登录（QR P1，
+> 命中即提示不支持）。`/code-review` 复查抓到一条高严重度：关闭扫码页后 CameraX 从未 `unbindAll()`
+> （单 Activity 架构下 `bindToLifecycle` 挂的是 Activity 级生命周期，Compose 把页面摘出树不会自动解绑）——
+> 相机占用指示灯不灭、持续耗电，已修（`DisposableEffect` 里补 `provider?.unbindAll()`）；顺带修了一条中等：
+> 从「去设置开启」跳系统设置页回来后权限状态不会自动刷新，加了 `LifecycleEventObserver` 在 `ON_RESUME`
+> 重查一次。测试补了两个纯文案函数的遗漏覆盖。`test.sh` **854 例绿**。
+>
+> **第五批：接着补齐第四批留下的三项（2026-09-22 同日；纯客户端、`./scripts/test.sh` 860 例绿，
+> 新测试均先看红过——除一处如实记录「没能造出红」，见下；未提交、未真机）**：
+> ⑧ **相册选图识码**：`ui/QrScanHost.kt` 加「从相册选择」（`PickVisualMedia`，不需要相机权限，两种权限态
+> 都露出，对齐 iOS 即便相机被拒也留着这条路）→ `decodeQrImage` 读 bounds 后按 `inSampleSize` 降采样
+> （目标边长 2000px，避免大图直接摊平成 IntArray OOM）→ 摘像素喂给新文件 `data/QrImageDecode.kt`
+> （纯逻辑，入参是 ARGB 像素数组不是 `Bitmap`，本仓没有 Robolectric 但照样能单测——`QrEncode` 那半同一个
+> 理由；用 zxing `QRCodeMultiReader`，未叠 ML Kit）。
+> ⑨ **一图多码候选**：0/1/N 三态——识别不到提示、一枚直接当结果、多枚弹 `ActionSheet`（复用「收藏发送」
+> 那批已有的组件），候选摘要用新函数 `data/QrActions.kt#qrScanLabelFor`（本站码按路径前缀标 名片/群/
+> 登录码，外来码给域名或文本首段，对齐 iOS `labelForRaw:`），按包围盒面积降序排（面积大的通常是用户想扫
+> 的主码，对齐 iOS `IMQRImage` 按 `CIFeature.bounds` 排序）。
+> ⑩ **扫码登录（QR P1）手机侧**：`QrApi` 新增 `loginScan`/`loginConfirm`/`loginReject` 接 `/qr/login/
+> {scan,confirm,reject}`；`QrResolved.Login` 从占位 `data object` 改成带 `ticket` 的 `data class`；新增
+> `ui/QrLoginConfirmHost.kt`+`screens/QrLoginConfirmScreen.kt`（设备/IP/位置/扫码时间四行信息卡 + 红色安全
+> 提示条 + 确认/拒绝两按钮，对齐 `IMQRLoginConfirmViewController`）；`QrRouteHost` 的 `Login` 分支从
+> 「提示不支持」改成真正 `loginScan` 再开确认页。
+> `/code-review` 两轮：高严重度——相册 I/O（`openInputStream` 对 content URI 可抛
+> `FileNotFoundException`/`SecurityException`）此前没包 try/catch，会让协程直接崩掉整个 App 而不是走
+> 「没识别到」这条路，已修（对齐已有 `AvatarPrepare.decodeSampled` 同一处理）；中高——相机识别（后台
+> `executor` 线程）与相册识别（主线程协程）共用同一个 `handled` 守卫，`mutableStateOf` 的读写不是原子的，
+> 理论上能让两条路径都判定自己是第一个、各调一次 `onResult`（重复路由/双开预览页）——改用
+> `AtomicBoolean.compareAndSet`；低——候选面积排序、`qrScanLabelFor` 漏了登录码 `/q/l/` 分支，均已补。
+> **验证纪律的诚实记录**：面积排序那处临时去掉排序代码单测仍然绿——`QRCodeMultiReader` 内部按模块尺寸
+> 聚类，实测输出本就已经是大码在前，没能真正造出「红」；显式排序留着是不依赖 zxing 未文档化的内部实现
+> 顺序，单测锁的是**输出契约**，不是这行代码有没有生效，已在代码注释里如实记这一条。
+> **仍不做**：App Links 深链接（iOS 也没有，两端此处本就同构，非缺口）。至此扫码/点链接加群这条线全部
+> 补齐。
+
+> **im-rtc 通话接入（2026-09-19，联调期；单聊 1v1 + 群通话；单测绿、未提交、未真机）**：
+> SDK 走本机 Maven（先在 `../im-rtc/im-rtc-android` 跑 `./gradlew publishToMavenLocal`，`settings.gradle.kts` 只对该 group 开 `mavenLocal()`），
+> 版本坐标在 `libs.versions.toml` 的 `imrtc`。**票用调试密钥在本机签**（`rtc/RtcCall.signToken` 是票的唯一来源，以后换后台接口只改这里）。
+> 配置写 `local.properties`（已忽略）：`rtc.wsUrl` / `rtc.appId` / `rtc.keyId` / `rtc.debugSecret`，缺项则入口提示、其余功能不受影响。
+> 生命周期：`AppRoot` 进主界面 `RtcCall.start`、回登录页 `stop`（Restoring 不动，Activity 重建不挂在途通话；同账号重复 start 是空操作）。
+> 入口：单聊详情页语音 / 视频 pill；群资料页新增语音 / 视频 pill → 选成员（`PickPurpose.Call`，最多 8 人）→ `placeGroup`。附件面板「音视频」不接（后面会去掉）。
+> ⚠️ 服务端地址联调时是 Mac 的局域网 IP（`ws://<Mac IP>:8787/v1/ws`），换网络要改 `rtc.wsUrl` 重新打包；名字与头像由 `rtc/RtcProfileResolver` 注入（按 uid 取名片：备注 → 昵称 → @句柄，未缓存时先显示 uid、取到再重画；单测绿、未真机）。
+> 未做：设置页「后台接口 / 调试」开关（等 IMServer 换票接口）、IMServer 侧换票、群成员超一页时选人页只列已加载的。
+
+> **收藏页 + 长按「收藏」+ 详情页下载示意复用聊天页组件 + 从收藏发送（2026-09-17 第二、三批；纯客户端、后端零改动；
+> `./scripts/test.sh` 807 例绿，新测试均先看红过；⚠️ 用户要求**不装真机**，布局/手势未实测；未提交）**。
+> 逐条状态见 `../IMServer/docs/CLIENT_PARITY.md` 顶部「2026-09-17 第二批 / 第三批」，SYMMETRY 新登记 3 行。
+>
+> ① **详情页宫格 / 文件行的门控外观 = 聊天页那几个组件**：宫格 `AlbumTileGate` + `TileDurationChip` + `VideoPlayBadge`
+>    （与聊天页相册格同一对），文件行图标位 `FileGateSlot(side = 36dp)`（与文件气泡同一个），副行 `DownloadLabels.archiveFileLine`
+>    （照 iOS `IMDetailFileCell`）。旧 `DownloadBadge` 与 `fileHint()` 已删。放行判据 `DownloadPolicy.archiveTileUngated`：
+>    自己发的 / 图片且策略放行 → 直接显示，**失效不豁免**；门控格点一下 = 下载，不打开（iOS 铁律①）。
+>    ⚠️ 这条**更正**了上一批「iOS 宫格直接按 URL 加载」的说法——iOS 是按策略放行，出厂默认图片恒自动所以看着像直出。
+> ② **收藏列表页**（「我 ▸ 收藏消息」= `ui/FavoritesHost.kt` + `ui/screens/FavoritesScreen.kt`，判据 `data/Favorites.kt`）：
+>    七签只列存在者；媒体/文件/语音/链接**直接复用 `ArchiveRows.kt` 的行**（收藏 → `ConvMediaItem`，key = 收藏 id，
+>    下载态按 URL 与聊天页共享——iOS「合成 `IMMessageModel` 喂共用编排器」的对应物）；名片/聊天记录复用 `CardBubbles.kt` 卡片内容。
+>    签内搜索、分页、来自X、长按 转发/复制/取消下载/删除、点开查看器/文件/浏览器/记录页/资料页/全文阅读页。
+> ③ **长按菜单「收藏」**（`MessageAction.Favorite`，判据 = 多选栏的 `SelectionActions.favoritable`），执行挂宿主 scope。
+> ④ **附件面板「从收藏发送」**（第三批）= `FavoritesHost(onPicked = …)` 的选择模式，由 `ChatPickerLayers` 盖在聊天页上
+>    （返回键层 `ChatOverlays.Layer.FavoritePicker`）。判据 `data/FavoritePick.kt`（上限 9、取消永远允许、按列表顺序发）；
+>    勾选框 `PickCheckButton`（行尾槽 `trailing` / 宫格 `picked`，复用多选圈 `SelectionCheck`），点行/点格仍是打开；
+>    发送 `ForwardSend.kt` 的 `sendFavoritesTo`（同一个 `MessageService.forward`，失效媒体跳过并写进回执）。
+>    ⚠️ 收藏发出去前 `FavoritesHost.toMessages` 先补齐来源名（好友表 / 名片），解析不出写「未命名用户」——
+>    此前名字没回来就发送会把对方内部 uid 写进「转发自」（复查抓出，长按转发同一条路）。
+
+
 > ⬇ 以下两块 2026-09-17 从活快照原样转入（详情页划不动真因 + 七条用户报告）。
 
 > **「聊天信息 / 群聊信息页划不动、很卡」真因找到并修掉 ✅（2026-09-17；`./scripts/test.sh` 781 例绿 +

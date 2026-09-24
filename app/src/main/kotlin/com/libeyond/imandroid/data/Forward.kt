@@ -2,6 +2,8 @@ package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.sdk.protocol.MentionSpan
 
 /**
  * 转发溯源名（M4-3，PROTOCOL §4.3 `forward_from`）。
@@ -100,9 +102,6 @@ object Forward {
      *
      * im-web 已经为此改过一轮（`useForward.ts` 里写着同一句理由），iOS 的 `forwardEchoContent:`
      * 也一直带着 attributes——**本端是这条对称链上唯一没跟的一端**（IMServer `docs/SYMMETRY.md`）。
-     *
-     * `waveform` **不在这里**：`SendMsgData` 没有这个字段（协议只在收帧侧有），
-     * 所以本端转发语音会丢波形，收端退化成等高条纹。iOS 带得上，这是一处真实的端差异。
      */
     data class Attributes(
         val mediaW: Int? = null,
@@ -113,9 +112,19 @@ object Forward {
         /**
          * 语音振幅指纹（仅 voice）。**不带就是转发出去的语音在收端只有等高条纹**——
          * 服务端一直收这个字段（`protocol.SanitizeVoiceWaveform`，`gateway/voice_flow_test.go` 钉着），
-         * iOS 也一直带，2026-09-16 本端才补上。
+         * iOS 也一直带，2026-09-16 本端补上（`SendMsgData` 早有这一列，不是协议限制）。
          */
         val waveform: String? = null,
+        /**
+         * 图说里的 @ 提及（对齐 iOS `forwardAttributesForMessage:stripCaption:` 的 `mentions`/`mentionSpans`）。
+         * **只在图片/视频这两种类型上带**——文本消息 iOS 走的是另一条不带 attrs 的路径，
+         * 本来就不转发提及，本端不该多做（`attributesOf` 里按 contentType 收窄）。
+         * 只带 [mentions]（谁收到强提醒），**不带 mentionAll**：@所有人需要目标群的群主/管理员权限，
+         * 转发不该在新会话里再次触发全员强提醒（与 iOS 同一条取舍）。
+         */
+        val mentions: List<String>? = null,
+        /** 与 [mentions] 同一份数据的位置信息，喂给收端做高亮（caption 原样转走，偏移仍对得上）。 */
+        val mentionSpans: List<MentionSpan>? = null,
     )
 
     /**
@@ -124,14 +133,23 @@ object Forward {
      * 空串一律归一成 `null`：协议按 `omitempty` 读，空串与缺省等价但会白占字节，
      * 而端上 `poster.isNullOrBlank()` 与 `poster == null` 两种判法并存时容易写岔。
      */
-    fun attributesOf(msg: MessageEntity): Attributes = Attributes(
-        mediaW = msg.mediaW?.takeIf { it > 0 },
-        mediaH = msg.mediaH?.takeIf { it > 0 },
-        duration = msg.duration?.takeIf { it > 0 },
-        poster = msg.poster?.takeIf { it.isNotBlank() },
-        thumb = msg.thumb?.takeIf { it.isNotBlank() },
-        waveform = msg.waveform?.takeIf { it.isNotBlank() },
-    )
+    fun attributesOf(msg: MessageEntity): Attributes {
+        val spans = if (msg.contentType == ContentType.IMAGE || msg.contentType == ContentType.VIDEO) {
+            Mention.parseSpans(msg.mentionSpans).takeIf { it.isNotEmpty() }
+        } else {
+            null
+        }
+        return Attributes(
+            mediaW = msg.mediaW?.takeIf { it > 0 },
+            mediaH = msg.mediaH?.takeIf { it > 0 },
+            duration = msg.duration?.takeIf { it > 0 },
+            poster = msg.poster?.takeIf { it.isNotBlank() },
+            thumb = msg.thumb?.takeIf { it.isNotBlank() },
+            waveform = msg.waveform?.takeIf { it.isNotBlank() },
+            mentionSpans = spans,
+            mentions = spans?.map { it.uid }?.distinct()?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() },
+        )
+    }
 
     /**
      * 能不能转发这一条。撤回/删除/系统消息不可转发（与 iOS/Web 同）；
@@ -142,6 +160,6 @@ object Forward {
             msg.content.isNotBlank() &&
             (msg.recalledAt ?: 0) <= 0 &&
             (msg.deletedAt ?: 0) <= 0 &&
-            msg.contentType != com.libeyond.imandroid.sdk.protocol.ContentType.SYSTEM &&
-            msg.contentType != com.libeyond.imandroid.sdk.protocol.ContentType.CALL
+            msg.contentType != ContentType.SYSTEM &&
+            msg.contentType != ContentType.CALL
 }

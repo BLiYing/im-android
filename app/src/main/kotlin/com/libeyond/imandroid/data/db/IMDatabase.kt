@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -131,6 +131,21 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /**
+         * v9 → v10：会话加 `lastFrom` / `lastFromNickname` / `lastRecalled`
+         * （会话列表副标题"谁发的"+撤回态，2026-09-22 用户报；对齐 iOS `lastFrom`/`lastFromNickname`）。
+         *
+         * 老行为：三列分别是空串/空串/false —— 群聊列表在升级完那一刻仍显示无前缀的老预览，
+         * 下一条消息（或下一次拉会话列表）进来就会自然补上，不必回填历史。
+         */
+        internal val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversation ADD COLUMN lastFrom TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE conversation ADD COLUMN lastFromNickname TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE conversation ADD COLUMN lastRecalled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): IMDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -142,6 +157,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                    MIGRATION_9_10,
                 )
                 .build().also { instance = it }
         }

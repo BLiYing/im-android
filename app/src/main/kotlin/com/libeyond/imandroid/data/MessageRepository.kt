@@ -402,6 +402,9 @@ class MessageRepository(
                 lastContent = s.lastMessage
                     ?.let { MessagePreview.of(it.contentType, it.content, it.caption, viewerIsSender = it.from == owner) } ?: "",
                 lastContentType = s.lastMessage?.contentType ?: ContentType.TEXT,
+                lastFrom = s.lastMessage?.from ?: "",
+                lastFromNickname = s.lastMessage?.fromNickname ?: "",
+                lastRecalled = (s.lastMessage?.recalledAt ?: 0L) > 0L,
                 lastTimestamp = s.lastMessage?.timestamp ?: 0,
                 lastConvSeq = s.latestConvSeq,
                 unread = s.unread,
@@ -447,6 +450,13 @@ class MessageRepository(
             MsgOp.RECALL -> {
                 if (target == null) return
                 messages.upsert(target.copy(recalledAt = op.timestamp.takeIf { it > 0 } ?: System.currentTimeMillis()))
+                // 撤回的恰好是会话列表当前指着的那条：翻 lastRecalled 位，副标题按 ConversationPreview
+                // 现算成"撤回了一条消息"——**只翻位，不改 lastContent**：正文烤在写库那一刻，
+                // 这里没有"谁发的显示名"这些上下文去重新烤一遍，也不需要（现算函数会绕过它）。
+                val conv = conversations.byId(owner, op.convId)
+                if (conv != null && conv.lastConvSeq == op.targetConvSeq && !conv.lastRecalled) {
+                    conversations.upsert(conv.copy(lastRecalled = true))
+                }
             }
             MsgOp.DELETE -> messages.delete(owner, op.convId, op.targetConvSeq)
             MsgOp.EDIT -> {
@@ -529,6 +539,10 @@ class MessageRepository(
             c.copy(
                 lastContent = MessagePreview.of(row.contentType, row.content, row.caption, viewerIsSender = row.sender == owner),
                 lastContentType = row.contentType,
+                lastFrom = row.sender,
+                lastFromNickname = row.fromNickname.orEmpty(),
+                // 新落的这一条必然不是撤回态——撤回是之后另一帧 msg_op 才会翻的位（见 applyMsgOp）
+                lastRecalled = false,
                 lastTimestamp = maxOf(c.lastTimestamp, row.timestamp),
                 lastConvSeq = maxOf(c.lastConvSeq, row.convSeq),
                 unread = if (incUnread) c.unread + 1 else c.unread,

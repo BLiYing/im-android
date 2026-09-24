@@ -180,6 +180,15 @@ fun ChatScreen(
     onSearchNext: () -> Unit = {},
     /** 命中词（已 trim）。空串 = 不高亮。 */
     searchHighlight: String = "",
+    /** 当前「来自」筛选的发件人显示名；null = 没在筛选（仅群聊有意义）。 */
+    searchFromLabel: String? = null,
+    onOpenSearchFrom: () -> Unit = {},
+    onClearSearchFrom: () -> Unit = {},
+    onOpenSearchCalendar: () -> Unit = {},
+    /** 👤 候选面板开着没有 + 候选列表——贴在命中导航条上方，见 [SearchFromPanel]。 */
+    searchFromPickerOpen: Boolean = false,
+    searchFromCandidates: List<SearchSenderCandidate> = emptyList(),
+    onPickSearchFrom: (SearchSenderCandidate) -> Unit = {},
     /** 本群成员显示名——只给没有 mention_spans 的老消息兜底（见 [ChatRowStyle.mentionNames]）。 */
     mentionNames: List<String> = emptyList(),
     /** 群成员角色 uid → owner/admin/member（发送者徽标）。见 [ChatRowStyle.roleOf]。 */
@@ -455,6 +464,10 @@ fun ChatScreen(
         // 搜索态：底部换成命中导航条（输入栏与引用条都让位——搜索时发不了消息，
         // 摆一个能打字的输入框只会让人以为搜的是"要发的内容"）。
         if (searchOpen) {
+            // 候选面板贴在导航条**上方**（同 iOS `searchFromPanel` 的位置），不是弹 sheet
+            if (searchFromPickerOpen) {
+                SearchFromPanel(candidates = searchFromCandidates, onPick = onPickSearchFrom)
+            }
             ChatSearchNavBar(
                 label = searchNavLabel,
                 notice = searchNotice,
@@ -462,6 +475,11 @@ fun ChatScreen(
                 canNext = searchCanNext,
                 onPrev = onSearchPrev,
                 onNext = onSearchNext,
+                showsFromFilter = isGroup,
+                fromLabel = searchFromLabel,
+                onOpenFrom = onOpenSearchFrom,
+                onClearFrom = onClearSearchFrom,
+                onOpenCalendar = onOpenSearchCalendar,
             )
             return@Column
         }

@@ -43,6 +43,22 @@ class ChatSearchController internal constructor() {
     var query by mutableStateOf("")
         internal set
 
+    /**
+     * 「来自」筛选的发件人 uid；`null` = 没在筛选。与关键词是**与**的关系、互不清空
+     * （对齐 iOS `searchState.searchFromUID`：选/清都会触发一次完整的命中集重算，
+     * 但不影响另一边的输入内容）。
+     */
+    var fromUid by mutableStateOf<String?>(null)
+        internal set
+
+    /** 筛选发件人的显示名快照——只为了在胶囊上画"来自: X"，不参与查询。 */
+    var fromName by mutableStateOf("")
+        internal set
+
+    /** 「来自」候选面板开着没有（点 👤 打开，选中或清除后收起）。 */
+    var fromPickerOpen by mutableStateOf(false)
+        internal set
+
     /** 命中集，**按 conv_seq 升序**（0 = 最早），与 im-web 同一朝向。 */
     var hits by mutableStateOf<List<SearchHit>>(emptyList())
         internal set
@@ -83,7 +99,9 @@ class ChatSearchController internal constructor() {
         hitIdx = if (found >= 0) found else ChatSearch.clampHitIndex(hitIdx, hits.size)
     }
 
-    val navLabel: String get() = ChatSearch.hitLabel(hitIdx, hits.size, truncated, hasQuery = needle.isNotEmpty())
+    /** 有没有"在搜"这件事——关键词或「来自」筛选任一非空都算，同 iOS `hasQuery` 的判据。 */
+    val hasQuery: Boolean get() = needle.isNotEmpty() || fromUid != null
+    val navLabel: String get() = ChatSearch.hitLabel(hitIdx, hits.size, truncated, hasQuery = hasQuery)
     val canPrev: Boolean get() = hits.isNotEmpty() && hitIdx > 0
     val canNext: Boolean get() = hits.isNotEmpty() && hitIdx < hits.size - 1
 
@@ -108,10 +126,36 @@ class ChatSearchController internal constructor() {
         truncated = false
         notice = ""
         jumpedSig = ""
+        fromUid = null
+        fromName = ""
+        fromPickerOpen = false
     }
 
     fun setQuery(v: String) {
         query = v
+    }
+
+    fun openFromPicker() {
+        fromPickerOpen = true
+    }
+
+    fun closeFromPicker() {
+        fromPickerOpen = false
+    }
+
+    /**
+     * 选定一个发件人筛选。**触发完整的命中集重算**（与改关键词同一条状态机，
+     * 见 [rememberChatSearch] 主取数 effect 的 key 列表里带了 `ctl.fromUid`）——不是另开一条逻辑。
+     */
+    fun setFrom(uid: String, name: String) {
+        fromUid = uid
+        fromName = name
+        fromPickerOpen = false
+    }
+
+    fun clearFrom() {
+        fromUid = null
+        fromName = ""
     }
 
     /** 定位被拒时把原因写在搜索条上方那一行（吐司在搜索态下会落在键盘背后）。 */
@@ -158,12 +202,13 @@ fun rememberChatSearch(
 
     val source = ChatSearch.pickSource(complete, online)
     val needle = ctl.needle
+    val fromUid = ctl.fromUid.orEmpty()
 
     // ===== ① 取命中集 =====
-    // key 里带 source：断线重连 / 同步追平都会换数据源，命中集要跟着重取。
+    // key 里带 source 与 fromUid：断线重连/同步追平换数据源、选或清「来自」都要重取。
     // **但这个 effect 只管数据，不碰 hitIdx、不主动跳** —— 见下面 ② 的注释。
-    LaunchedEffect(ctl.open, needle, convId, source, owner) {
-        if (!ctl.open || needle.isEmpty() || owner.isEmpty()) {
+    LaunchedEffect(ctl.open, needle, fromUid, convId, source, owner) {
+        if (!ctl.open || (needle.isEmpty() && fromUid.isEmpty()) || owner.isEmpty()) {
             ctl.applyHits(emptyList(), truncated = false, notice = "")
             return@LaunchedEffect
         }
@@ -171,7 +216,7 @@ fun rememberChatSearch(
         val log = IMLog.tag("IM.Search")
         when (source) {
             QuerySource.Local, QuerySource.LocalDegraded -> {
-                val page = client.repo.searchMessages(owner, convId, needle)
+                val page = client.repo.searchMessages(owner, convId, needle, fromUid)
                 ctl.applyHits(
                     // DAO 按显示序倒序回（新在前），命中集统一用升序
                     hits = page.rows.map { SearchHit(it.convSeq, it.timestamp) }.reversed(),
@@ -183,7 +228,7 @@ fun rememberChatSearch(
             QuerySource.Server -> {
                 runCatchingCancellable {
                     client.conversationsApi.searchMessages(
-                        convId = convId, q = needle, limit = ChatSearch.SERVER_PAGE_LIMIT,
+                        convId = convId, q = needle, from = fromUid, limit = ChatSearch.SERVER_PAGE_LIMIT,
                     )
                 }
                     .onSuccess { page ->
@@ -207,13 +252,13 @@ fun rememberChatSearch(
     // **刻意与①分开**，且 key 里**没有 source**。合成一个 effect 的话，一次断线重连
     //（Connected→Connecting→Connected）就会把用户翻到第 5 条的阅读位置抢回最新那条。
     // im-web 的 useChatSearch 用 searchSigRef 做的是同一件事（签名 = 会话|词），这里照它的口径：
-    // 只有"换会话 / 换词"才重跳；命中集为空时不锁签名（结果可能还在异步路上）。
-    LaunchedEffect(ctl.open, convId, needle, ctl.hits) {
+    // 只有"换会话 / 换词 / 换来自筛选"才重跳；命中集为空时不锁签名（结果可能还在异步路上）。
+    LaunchedEffect(ctl.open, convId, needle, fromUid, ctl.hits) {
         if (!ctl.open) {
             ctl.jumpedSig = ""
             return@LaunchedEffect
         }
-        val sig = "$convId|$needle"
+        val sig = "$convId|$needle|$fromUid"
         if (sig == ctl.jumpedSig || ctl.hits.isEmpty()) return@LaunchedEffect
         ctl.jumpedSig = sig
         ctl.hitIdx = ChatSearch.defaultHitIndex(ctl.hits.size)

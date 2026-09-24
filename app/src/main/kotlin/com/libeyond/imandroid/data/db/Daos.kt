@@ -112,15 +112,45 @@ interface MessageDao {
         SELECT * FROM message
         WHERE ownerUid = :owner AND convId = :convId
           AND recalledAt IS NULL AND deletedAt IS NULL AND contentType <> 'system'
+          AND (:fromUid = '' OR sender = :fromUid)
           AND (
-                (contentType = 'text' AND content LIKE :like ESCAPE '\')
+                :like = ''
+             OR (contentType = 'text' AND content LIKE :like ESCAPE '\')
              OR (caption IS NOT NULL AND caption <> '' AND caption LIKE :like ESCAPE '\')
              OR (fileName IS NOT NULL AND fileName <> '' AND fileName LIKE :like ESCAPE '\')
           )
         ORDER BY timestamp DESC, convSeq DESC
         LIMIT :limit
     """)
-    suspend fun search(owner: String, convId: String, like: String, limit: Int): List<MessageEntity>
+    suspend fun search(owner: String, convId: String, like: String, fromUid: String, limit: Int): List<MessageEntity>
+
+    /**
+     * 「来自」候选：本会话**已发过消息**的去重发件人（对齐 iOS `senderCandidatesForConv:`）。
+     * **不是群成员表**——没发过言的成员过滤后必 0 命中，列出无意义；系统消息没有真实发送者，排除。
+     * 按最后一次发言时间倒序：最近说过话的人排前面，找起来更快。
+     */
+    @Query("""
+        SELECT sender FROM message
+        WHERE ownerUid = :owner AND convId = :convId
+          AND recalledAt IS NULL AND deletedAt IS NULL AND contentType <> 'system' AND sender <> ''
+        GROUP BY sender
+        ORDER BY MAX(timestamp) DESC
+    """)
+    suspend fun distinctSenders(owner: String, convId: String): List<String>
+
+    /**
+     * 日历「跳到某天 / 今天」共用：从 [fromMs]（含）起本地第一条可见消息的 conv_seq。
+     * 目标那天没有消息时自然落到下一个有消息的日子；没有更晚的消息则回 null。
+     * **仅本地完整时可信**——见 [com.libeyond.imandroid.data.firstConvSeqAtOrAfter] 的用法说明。
+     */
+    @Query("""
+        SELECT convSeq FROM message
+        WHERE ownerUid = :owner AND convId = :convId AND timestamp >= :fromMs
+          AND recalledAt IS NULL AND deletedAt IS NULL AND contentType <> 'system' AND convSeq > 0
+        ORDER BY timestamp ASC, convSeq ASC
+        LIMIT 1
+    """)
+    suspend fun firstConvSeqAtOrAfter(owner: String, convId: String, fromMs: Long): Long?
 
     /**
      * 观察一段**锚点窗**（`ChatWindow.Anchored`），返回显示序（旧→新）。

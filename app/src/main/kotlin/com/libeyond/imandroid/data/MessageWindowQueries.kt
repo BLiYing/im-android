@@ -54,27 +54,53 @@ suspend fun MessageRepository.extendWindowOlder(
  * 会话内搜索（本地库，整个会话）。返回**显示序倒序**（新在前）的命中，最多 [limit] 条。
  *
  * DAO 那条 SQL 负责收窄，[ChatSearch.matches] 是权威判定——两层的理由见它的注释。
- * `keyword` 由调用方 trim；空词回空集（与后端 G4 一致：不报错，便于清空搜索框时复用同一条路）。
+ * `keyword` 由调用方 trim；空词回空集——**除非带着 [fromUid]**：「来自某人」过滤单独成立时
+ * 不要求关键词（对齐 iOS `searchState.searchFromUID` 与关键词是"与非必填"的关系）。
  */
 suspend fun MessageRepository.searchMessages(
     owner: String,
     convId: String,
     keyword: String,
+    fromUid: String = "",
     limit: Int = ChatSearch.LOCAL_PAGE_LIMIT,
 ): LocalSearchPage {
     val needle = keyword.trim()
-    if (needle.isEmpty()) return LocalSearchPage(emptyList(), truncated = false)
-    val like = "%" + ChatSearch.escapeLike(needle) + "%"
-    val lowered = needle.lowercase()
-    val raw = messages.search(owner, convId, like, limit)
+    if (needle.isEmpty() && fromUid.isEmpty()) return LocalSearchPage(emptyList(), truncated = false)
+    val like = if (needle.isEmpty()) "" else "%" + ChatSearch.escapeLike(needle) + "%"
+    val raw = messages.search(owner, convId, like, fromUid, limit)
+    // 复核过滤只在**有关键词**时跑——[ChatSearch.matches] 对空词恒回 false（它是关键词命中判据，
+    // 不是发件人判据），纯「来自」过滤没有关键词可复核，SQL 的 `sender = :fromUid` 就是权威判据。
+    val rows = if (needle.isEmpty()) {
+        raw
+    } else {
+        val lowered = needle.lowercase()
+        raw.filter { ChatSearch.matches(it.contentType, it.content, it.caption, it.fileName, lowered) }
+    }
     // **截断与否要看 SQL 取回多少条，不是过滤后剩多少**：只要复核过滤掉一条，
     // 过滤后的长度就够不到 limit，「还有更多」那个 `+` 会静默消失
     // ——正是 hitLabel 那条"不能悄悄显示成总共就这些"要防的事。
-    return LocalSearchPage(
-        rows = raw.filter { ChatSearch.matches(it.contentType, it.content, it.caption, it.fileName, lowered) },
-        truncated = raw.size >= limit,
-    )
+    return LocalSearchPage(rows = rows, truncated = raw.size >= limit)
 }
+
+/**
+ * 「来自」候选发件人 uid 列表（本会话已发过消息的去重集合，见 [com.libeyond.imandroid.data.db.MessageDao.distinctSenders]）。
+ * 只回 uid——名字/头像由调用方按本机显示名口径（备注 > 群昵称 > 昵称）现解析，这里不掺进来。
+ */
+suspend fun MessageRepository.distinctSenders(owner: String, convId: String): List<String> =
+    messages.distinctSenders(owner, convId)
+
+/**
+ * 从某个时间点起（含）本地库里第一条可见消息的 conv_seq；没有则 null。
+ *
+ * 日历「跳到某天」与「今天」共用这一条：不专门按天分桶——第一条 ≥ 目标时间点的消息，
+ * 落在目标那天就是那天的第一条，那天没有消息就自然落到下一个有消息的日子，
+ * 一条查询同时覆盖"精确落点"与"退到下一个有消息的日子"两种情形，不必分两步。
+ *
+ * **仅在本地完整时可信**：有缺口时目标那天的消息可能整段在缺口里，这条查询会跳过缺口
+ * 静默落到缺口之后的某条——那是错的。有缺口时改问服务端日历接口（`ConversationsApi.calendar`）。
+ */
+suspend fun MessageRepository.firstConvSeqAtOrAfter(owner: String, convId: String, fromMs: Long): Long? =
+    messages.firstConvSeqAtOrAfter(owner, convId, fromMs)
 
 /**
  * 本地一页搜索结果。

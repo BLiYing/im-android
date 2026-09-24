@@ -174,6 +174,22 @@ data class ConversationEntity(
     val lastContentType: String = "text",
     val lastTimestamp: Long = 0,
     val lastConvSeq: Long = 0,
+    /**
+     * 最后一条的发送者 uid（空 = 无发送者，如系统消息）。
+     * **副标题的"昵称: "前缀与撤回态都要靠它现算**（[com.libeyond.imandroid.data.ConversationPreview]）——
+     * 与 iOS `IMConversation.lastFrom`/Web `last_message.from` 同一职责，
+     * 此前本端没存这一列，群聊列表恒缺"谁发的"这层（2026-09-22 用户报）。
+     */
+    val lastFrom: String = "",
+    /** 最后一条发送者的公开昵称快照（备注取不到时的兜底，同 [peerRemark] 的口径）。 */
+    val lastFromNickname: String = "",
+    /**
+     * 最后一条此刻是否已撤回。**现算不烤字符串**：本地收到 `msg_op RECALL` 时只翻这一位
+     * （[com.libeyond.imandroid.data.MessageRepository.applyMsgOp]），撤回文案由
+     * [com.libeyond.imandroid.data.ConversationPreview] 在渲染时现拼，这样才能立刻生效
+     * ——与"写库时烤死 lastContent"那条老路径（本类头部注释）刻意不同。
+     */
+    val lastRecalled: Boolean = false,
     val unread: Int = 0,
     /**
      * 未读区间内有人 @我（含 @所有人），仅群聊有意义（M4-8）。

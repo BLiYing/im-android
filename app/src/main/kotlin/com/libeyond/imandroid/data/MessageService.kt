@@ -275,6 +275,10 @@ class MessageService(
         // 且这几个字段随消息落库，事后补不回来。iOS `forwardEchoContent:` 与 im-web
         // `useForward.ts` 一直带着，本端此前是这条对称链上唯一没跟的一端。
         val attrs = Forward.attributesOf(msg)
+        // 图说里的 @ 提及随转发跟随（图片/视频才有，见 Forward.attributesOf）——
+        // 待发行存 JSON（重发要原样重发谁被 @ 了，重名成员没法从片段反推），发帧用类型化列表。
+        val mentionSpansJson = Mention.encodeSpans(attrs.mentionSpans.orEmpty())
+        val mentionsJson = Mention.encodeMentions(attrs.mentions.orEmpty())
         val p = repo.createPending(
             owner = owner, convId = toConvId, to = to,
             content = msg.content, contentType = msg.contentType,
@@ -284,6 +288,7 @@ class MessageService(
             fileName = msg.fileName, fileSize = msg.fileSize, caption = msg.caption,
             mediaW = attrs.mediaW, mediaH = attrs.mediaH, duration = attrs.duration,
             poster = attrs.poster, thumb = attrs.thumb, waveform = attrs.waveform,
+            mentionSpans = mentionSpansJson, mentions = mentionsJson,
         )
         transmit(
             p.clientMsgId, toConvId, to, msg.contentType, msg.content,
@@ -292,6 +297,8 @@ class MessageService(
             forwardFrom = origin, groupId = groupId,
             mediaW = attrs.mediaW, mediaH = attrs.mediaH, duration = attrs.duration,
             poster = attrs.poster, thumb = attrs.thumb, waveform = attrs.waveform,
+            // 不带 mentionAll：@所有人要目标群群主/管理员权限，转发不该在新会话里再次全员强提醒（同 iOS）
+            mentions = attrs.mentions.orEmpty(), mentionSpans = attrs.mentionSpans.orEmpty(),
         )
         log.i("msg_forwarded", "from" to msg.convId, "to" to toConvId, "seq" to msg.convSeq)
     }

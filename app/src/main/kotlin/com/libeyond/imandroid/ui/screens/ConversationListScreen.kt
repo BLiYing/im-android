@@ -42,6 +42,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.ConversationListPhase
+import com.libeyond.imandroid.data.ConversationPreview
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -61,6 +62,10 @@ fun ConversationListScreen(
     conversations: List<ConversationEntity>,
     /** 画列表、空态还是什么都不画。判据在 [ConversationListPhase]——**别在这里拿 isEmpty 自己判**。 */
     phase: ConversationListPhase,
+    /** 我的 uid——副标题"我: "前缀、已读双勾都要判"是不是我发的"。 */
+    myUid: String,
+    /** 本机对某 uid 的显示名（备注 > 昵称）；取不到回 null，见 [ConversationPreview.of]。 */
+    localNameOf: (String) -> String?,
     onOpen: (ConversationEntity) -> Unit,
     /** 长按一行，带上它在窗口坐标系里的矩形——菜单要贴着这一行弹（对齐 iOS UIContextMenu）。 */
     onLongPress: (ConversationEntity, Rect) -> Unit,
@@ -98,7 +103,10 @@ fun ConversationListScreen(
             ConversationListPhase.Empty -> EmptyState()
             ConversationListPhase.List -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(conversations, key = { it.convId }) { conv ->
-                    ConversationRow(conv, onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) })
+                    ConversationRow(
+                        conv, myUid, localNameOf,
+                        onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) },
+                    )
                 }
             }
         }
@@ -109,6 +117,8 @@ fun ConversationListScreen(
 @Composable
 private fun ConversationRow(
     conv: ConversationEntity,
+    myUid: String,
+    localNameOf: (String) -> String?,
     onClick: () -> Unit,
     onLongClick: (Rect) -> Unit,
 ) {
@@ -116,6 +126,9 @@ private fun ConversationRow(
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val title = conv.title.ifBlank { conv.convId }
+    // 不用 remember：算的是字符串拼接，比记忆化本身还便宜；
+    // 记了反而会在 localNameOf 解析结果变化（改备注）时读到 (conv, myUid) 没变的旧值。
+    val preview = ConversationPreview.of(conv, myUid, localNameOf)
 
     Row(
         modifier = Modifier
@@ -163,10 +176,24 @@ private fun ConversationRow(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
+                // 单聊已读双勾：只有「我发的、对方已读」才画绿双勾，未读灰单勾——与聊天页气泡同一表意
+                // （对齐 iOS `showCheck`）。群聊没有对端已读位点这个概念，恒不画。
+                if (!conv.isGroup && conv.lastFrom == myUid && !conv.lastRecalled && conv.lastContent.isNotBlank()) {
+                    val read = conv.peerReadSeq >= conv.lastConvSeq
+                    Text(
+                        text = if (read) "✓✓ " else "✓ ",
+                        color = if (read) c.checkRead else c.textTertiary,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
                 Text(
-                    text = conv.lastContent,
-                    // 被叫侧「未接来电」整行预览标红（danger，不随主题变）
-                    color = if (conv.lastContentType == ContentType.CALL && CallRecord.isMissedPreview(conv.lastContent)) c.danger else c.textSecondary,
+                    text = preview,
+                    // 被叫侧「未接来电」整行预览标红（danger，不随主题变）；撤回态不再是通话消息，不标红
+                    color = if (!conv.lastRecalled && conv.lastContentType == ContentType.CALL && CallRecord.isMissedPreview(conv.lastContent)) {
+                        c.danger
+                    } else {
+                        c.textSecondary
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

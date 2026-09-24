@@ -179,10 +179,11 @@ class GroupApi(private val http: HttpClient) {
         )
     }
 
-    suspend fun create(name: String, memberIds: List<String>): GroupInfo =
+    suspend fun create(name: String, memberIds: List<String>, avatarUrl: String = ""): GroupInfo =
         decode(
             http.call("POST", "/api/v1/groups", buildJsonObject {
                 put("name", name)
+                put("avatar_url", avatarUrl)
                 putJsonArray("member_ids") { memberIds.forEach { add(it) } }
             }),
             GroupInfo.serializer(),

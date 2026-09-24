@@ -6,6 +6,7 @@ import com.libeyond.imandroid.data.sendTyping
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import com.libeyond.imandroid.data.distinctSenders
 import com.libeyond.imandroid.data.extendWindowOlder
 import com.libeyond.imandroid.data.observeWindow
 import com.libeyond.imandroid.ui.screens.ChatRowStyle
@@ -36,7 +37,9 @@ import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.rtc.RtcCall
+import com.libeyond.imandroid.ui.screens.ChatCalendarDialog
 import com.libeyond.imandroid.ui.screens.ChatScreen
+import com.libeyond.imandroid.ui.screens.SearchSenderCandidate
 import com.libeyond.imandroid.ui.screens.buildChatRows
 import kotlinx.coroutines.launch
 
@@ -136,6 +139,30 @@ fun ChatHost(
         // 吐司恰好落在键盘背后，等于没提示。
         onLocate = { seq, refuse -> locator.locate(seq, refuse) },
     )
+    // 📅 日历跳转：独立状态机（不影响搜索命中集），复用同一个 locator 出口
+    val calendar = rememberChatCalendar(
+        client = client,
+        convId = conv.convId,
+        online = connected,
+        onLocate = { seq, refuse -> locator.locate(seq, refuse) },
+        onToast = { toast = it },
+    )
+    // 👤「来自」候选：面板一开才查 uid 去重集（不是每次进搜索态都查一遍库）；
+    // 名字/头像**不进这个 effect**——单独 remember 派生，friendsByUid/memberNames 稍后才拉到时
+    // （群资料是异步的）面板还开着的话也能跟着刷新，不必再开一次面板重新查一遍库。
+    var searchFromUids by remember(conv.convId) { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(search.fromPickerOpen, conv.convId, owner) {
+        if (!search.fromPickerOpen || owner.isEmpty()) return@LaunchedEffect
+        searchFromUids = client.repo.distinctSenders(owner, conv.convId)
+    }
+    val searchFromCandidates = remember(searchFromUids, friendsByUid, memberNames, memberAvatars) {
+        searchFromUids.map { uid ->
+            val name = friendsByUid[uid]?.let { DisplayName.ofFriend(it) }
+                ?: memberNames[uid]
+                ?: uid
+            SearchSenderCandidate(uid, name, friendsByUid[uid]?.avatarUrl ?: memberAvatars[uid].orEmpty())
+        }
+    }
     // 详情页/群资料带回来的待办（见 ChatArm 的注释：那两页关掉之后才轮得到这里）
     LaunchedEffect(arm) {
         if (arm.isEmpty) return@LaunchedEffect
@@ -420,6 +447,13 @@ fun ChatHost(
         searchCanNext = search.canNext,
         onSearchPrev = { search.goto(search.hitIdx - 1) },
         onSearchNext = { search.goto(search.hitIdx + 1) },
+        searchFromLabel = search.fromName.takeIf { search.fromUid != null },
+        onOpenSearchFrom = { search.openFromPicker() },
+        onClearSearchFrom = { search.clearFrom() },
+        onOpenSearchCalendar = { calendar.show() },
+        searchFromPickerOpen = search.fromPickerOpen,
+        searchFromCandidates = searchFromCandidates,
+        onPickSearchFrom = { cand -> search.setFrom(cand.uid, cand.name) },
         selection = sel.selected,
         onToggleSelect = { m -> sel.toggle(m)?.let { toast = it } },
         onCancelSelection = { sel.cancel() },
@@ -468,6 +502,16 @@ fun ChatHost(
         onClose = { viewing = null },
         onToast = { toast = it },
     )
+
+    // 📅 日历跳转弹层：系统 Dialog 自带返回键处理，不必接进 ChatOverlays 的分层返回键
+    if (calendar.open) {
+        ChatCalendarDialog(
+            onDismiss = { calendar.dismiss() },
+            onPickDay = { calendar.pick(it) },
+            onEarliest = { calendar.earliest() },
+            onToday = { calendar.today() },
+        )
+    }
 
     // —— 三层「整页盖住聊天页」的覆盖层：用户资料 / 选联系人发名片 / 相册选择页 ——
     // 渲染顺序即层级，实现在 ChatPickerLayers.kt（返回键仍由上面那个 BackHandler 一处派发）

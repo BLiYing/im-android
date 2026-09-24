@@ -2,6 +2,7 @@ package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.sdk.protocol.MentionSpan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -88,6 +89,36 @@ class ForwardAttributesTest {
         assertNull(a.mediaW)
         assertNull(a.mediaH)
         assertNull(a.duration)
+    }
+
+    // 图说里的 @ 提及随转发跟随（iOS `forwardAttributesForMessage:stripCaption:` 的 `mentions`/`mentionSpans`，
+    // 2026-09-22 用户报「转发逻辑与 iOS 对齐」时发现本端一直没带）：不带的话被 @ 的人转发过去
+    // 收不到强提醒、caption 里的名字也不再可点高亮。
+    @Test
+    fun `图片图说里的 @ 提及随转发跟随`() {
+        val spans = listOf(MentionSpan(offset = 0, length = 3, uid = "u9"))
+        val img = MessageEntity(
+            ownerUid = "me", convId = "c1", convSeq = 12, sender = "u2",
+            contentType = ContentType.IMAGE, content = "/uploads/a.jpg",
+            caption = "@张三 看看这个", mentionSpans = Mention.encodeSpans(spans),
+        )
+        val a = Forward.attributesOf(img)
+        assertEquals(listOf("u9"), a.mentions)
+        assertEquals(spans, a.mentionSpans)
+    }
+
+    // 与 iOS 同一条取舍：纯文本消息走的是另一条不带 attrs 的转发路径，本就不转发提及，
+    // 本端不该在这里多做——只在图片/视频的图说上带。
+    @Test
+    fun `文本消息不带 @ 提及——同 iOS 只在图视频图说上带`() {
+        val spans = listOf(MentionSpan(offset = 0, length = 3, uid = "u9"))
+        val text = MessageEntity(
+            ownerUid = "me", convId = "c1", convSeq = 13, sender = "u2",
+            contentType = ContentType.TEXT, content = "@张三 你好", mentionSpans = Mention.encodeSpans(spans),
+        )
+        val a = Forward.attributesOf(text)
+        assertNull(a.mentions)
+        assertNull(a.mentionSpans)
     }
 
     @Test

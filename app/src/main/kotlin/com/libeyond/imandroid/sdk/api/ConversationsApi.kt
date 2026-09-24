@@ -167,6 +167,24 @@ class ConversationsApi(private val http: HttpClient) {
     }
 
     /**
+     * 会话日历（日历跳转，对齐 iOS `IMHTTPService convCalendarWithToken:`）：按「本地日」聚合
+     * `[fromMs, toMs)` 区间内的消息分布，`utcOffsetMs` 是端上的时区偏移（东八区 = 28800000）。
+     *
+     * **只在本地有缺口且在线时才用得上**：本地齐全时"哪些天有消息"直接查本地库更快
+     * （见 `data/MessageWindowQueries.firstConvSeqAtOrAfter` 的用法说明）；有缺口时目标那天的
+     * 消息可能整天都在缺口里，只有服务端能给出权威答案——**日历接口存在的唯一理由就是这个**。
+     * 服务端对跨度有上限（约 13 个月），端上一次性拉近两年会被拒；调用方按需求收窄区间。
+     */
+    suspend fun calendar(convId: String, fromMs: Long, toMs: Long, utcOffsetMs: Long): ConvCalendarResult =
+        decode(
+            http.call(
+                "GET", "/api/v1/conversations/$convId/calendar",
+                query = mapOf("from" to fromMs.toString(), "to" to toMs.toString(), "utc_offset_ms" to utcOffsetMs.toString()),
+            ),
+            ConvCalendarResult.serializer(),
+        )
+
+    /**
      * 会话备注（G1，仅本人可见、多端同步）。与 [updateSettings] 解耦——PUT 是各自独立的
      * 接口，改备注不动置顶/免打扰三开关，拨开关也不清备注（服务端把当前 remark 原样带回）。
      * 留空即清除备注，恢复显示真实群名 / 对端昵称。单聊群聊都适用（不是好友备注，
@@ -250,6 +268,21 @@ data class ConvSearchPage(
     val items: List<ConvSearchItem> = emptyList(),
     @SerialName("next_cursor") val nextCursor: Long = 0,
     @SerialName("has_more") val hasMore: Boolean = false,
+)
+
+/** 日历一格（`GET /conversations/{id}/calendar`）。无消息的天**不出现**——服务端按缺席表达灰格。 */
+@Serializable
+data class ConvCalendarDay(
+    @SerialName("day_start_ms") val dayStartMs: Long = 0,
+    val count: Int = 0,
+    @SerialName("first_conv_seq") val firstConvSeq: Long = 0,
+)
+
+@Serializable
+data class ConvCalendarResult(
+    @SerialName("conv_id") val convId: String = "",
+    /** 按日升序。 */
+    val days: List<ConvCalendarDay> = emptyList(),
 )
 
 @Serializable

@@ -34,10 +34,13 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.Calendar
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronUp
+import com.composables.icons.lucide.CircleUserRound
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.X
@@ -135,12 +138,15 @@ internal fun ChatSearchTopBar(
 }
 
 /**
- * **底部命中导航条**（替换输入栏）：计数 + ▲ 更旧 / ▼ 更新。
+ * **底部命中导航条**（替换输入栏）：计数 + 📅 日历 + 👤 来自（仅群聊）+ ▲ 更旧 / ▼ 更新。
  *
  * 位置照 iOS（`buildSearchNavBar` + `buildCountPill`）放底部而不是跟着搜索框——
  * 手指在底部，翻命中是高频动作。无命中时按钮置灰（`UI.md` 要求每个列表都有空态）。
+ * 📅/👤 两枚钮 iOS 也摆在这一条（不在顶部搜索框里），逐字对齐。
  *
  * @param notice 需要如实说的一句话（离线降级 / 搜索失败），空串则不占位。
+ * @param showsFromFilter 「来自」筛选是否可用——仅群聊（单聊没有多个发送者，筛选没有意义）。
+ * @param fromLabel 当前筛选的发件人显示名；`null` = 没在筛选，此时画 👤 入口而不是"来自: X ✕"胶囊。
  */
 @Composable
 internal fun ChatSearchNavBar(
@@ -150,6 +156,11 @@ internal fun ChatSearchNavBar(
     canNext: Boolean,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    showsFromFilter: Boolean,
+    fromLabel: String?,
+    onOpenFrom: () -> Unit,
+    onClearFrom: () -> Unit,
+    onOpenCalendar: () -> Unit,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -166,6 +177,29 @@ internal fun ChatSearchNavBar(
                     .padding(start = d.space4, end = d.space4, top = 6.dp),
             )
         }
+        if (fromLabel != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth().background(c.surface).padding(start = d.space4, end = d.space4, top = 6.dp),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(c.accentSoft)
+                        .clickable(onClick = onClearFrom)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("来自: $fromLabel", color = c.accent, fontSize = 12.sp)
+                    Spacer(Modifier.width(4.dp))
+                    Image(
+                        imageVector = Lucide.X,
+                        contentDescription = "清除发件人筛选",
+                        modifier = Modifier.size(12.dp),
+                        colorFilter = ColorFilter.tint(c.accent),
+                    )
+                }
+            }
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -175,8 +209,17 @@ internal fun ChatSearchNavBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(text = label, color = c.textSecondary, fontSize = 14.sp)
+            Text(
+                text = label, color = c.textSecondary, fontSize = 14.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
+                NavArrow(Lucide.Calendar, "按日期跳转", enabled = true, onOpenCalendar)
+                if (showsFromFilter && fromLabel == null) {
+                    Spacer(Modifier.width(d.space2))
+                    NavArrow(Lucide.CircleUserRound, "按发送者筛选", enabled = true, onOpenFrom)
+                }
+                Spacer(Modifier.width(d.space2))
                 NavArrow(Lucide.ChevronUp, "上一条（更旧）", canPrev, onPrev)
                 Spacer(Modifier.width(d.space2))
                 NavArrow(Lucide.ChevronDown, "下一条（更新）", canNext, onNext)

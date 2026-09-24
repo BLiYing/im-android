@@ -95,7 +95,7 @@ Tabs      —— 内联页签：成员 / 媒体 / 文件 / 语音 / 链接 / 名
 （`archiveTab` / `rememberConvArchive` / `ArchiveActionsHost`）：两页长得一样最可靠的保证不是
 各写一遍对着改，是同一段代码画的。共用的是有复用价值的那部分，这是本表的判断。
 
-### 2.1 会话内搜索（2026-09-09 落地并**真机验过**，缺两块）
+### 2.1 会话内搜索（2026-09-09 落地并**真机验过**；📅/👤 两块 2026-09-23 补齐、**未真机**）
 
 iOS：`Modules/Chat/IMChatViewController+Search.m`（741 行）+ 状态袋 `IMChatSearchState`。
 入口是详情页头部操作排的「搜索」pill，进去之后**聊天页顶栏变搜索框、底部出命中导航条**。
@@ -115,8 +115,8 @@ iOS：`Modules/Chat/IMChatViewController+Search.m`（741 行）+ 状态袋 `IMCh
 | 本地齐全走本地 / 有缺口在线问服务端 / 离线降级并标注 | `IMPickConvQuerySource` | 同（`ChatSearch.pickSource`，文案与 im-web 逐字一致） | ✅ |
 | 命中被单页上限截断时计数补 `+` | 有 | 有（本地 500 / 服务端 50） | ✅ |
 | **跳到窗口外的命中** | 按锚点开窗（`jumpToConvSeq:`） | 同（2026-09-09 改为锚点开窗，见 §2.3） | ✅ |
-| 📅 按日期跳转 / 日历 | 有（`IMChatDateJumpViewController` + 服务端 `/calendar`） | **没有** | 🔴 欠账 |
-| 👤「来自某人」发件人过滤 | 有（SEARCH_DESIGN §4.1） | **没有**（服务端 `?from=` 与本端接口都留着，缺的是成员下拉那层 UI） | 🔴 欠账 |
+| 📅 按日期跳转 / 日历 | 有（`IMChatDateJumpViewController` + 服务端 `/calendar`） | 已补（2026-09-23）：`ConversationsApi.calendar()` + `data/ChatCalendar.kt`（本地日分桶公式镜像后端）+ Material3 `DatePicker`；「最早」「今天」两个快捷项；**不画有消息的天的装饰点**（Material3 无现成钩子，核心是"跳对不跳错"而非装饰） | ✅ |
+| 👤「来自某人」发件人过滤 | 有（SEARCH_DESIGN §4.1） | 已补（2026-09-23）：候选 = 本会话已发过消息的去重发件人（`MessageDao.distinctSenders`，不是群成员表），本地 DAO `search()` 加 `fromUid`、服务端 `searchMessages(from=)` 首次真正传值；与关键词是"与"关系、空关键词也成立 | ✅ |
 | 「@我的消息」聚合 | **iOS 也没有**（服务端 `/mentions` 三端都没接） | 没有 | ✅ 三端一致地欠着 |
 
 ### 2.3 按锚点开窗（2026-09-09，`MESSAGE_WINDOW_DESIGN` 的 Android 那一期）
@@ -170,9 +170,10 @@ iOS：`IMChatDetailViewController` 的 `contentMenuConfigForMessage:`——那�
 返回键先退搜索态、再退会话。**没验**：离线降级那一档（要断网构造本地缺口）、服务端兜底那条路
 （本机这些会话本地都是齐的，走不到 `QuerySource.Server`）。
 
-**日历与「来自某人」为什么这轮不做**：SEARCH_DESIGN 自己把它们定在 **P1**
-（§8「P0 先把词命中导航跑顺」）。日历还要接服务端 `/conversations/{id}/calendar`
-与一整页月历，「来自某人」要复用群成员列表做下拉，各是独立一块。
+**日历与「来自某人」2026-09-23 补齐**：SEARCH_DESIGN 原把它们定在 P1（§8「P0 先把词命中导航跑顺」），
+当时先跳过；这轮用户按顺序核对与 iOS 的差异时一并做掉，见本仓 `current_task.md`「当前焦点」与
+`../IMServer/docs/SYMMETRY.md` 的登记。⚠️ **日历跨度没有照抄 iOS 的「近两年」**——那会撞服务端
+`MaxCalendarSpan`≈400 天上限被拒（iOS 那个请求实际上一直失败，是 iOS 侧既有欠账），本端改用 390 天。
 
 ---
 
