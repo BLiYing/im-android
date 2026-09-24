@@ -252,6 +252,7 @@ fun ChatDetailHost(
             senderNameOf = { uid -> if (uid == owner) "你自己" else remark.ifBlank { conv.title } },
             waveformOf = { seq -> voiceWaveforms[seq] },
             galleryOnly = galleryOnly,
+            isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
             onBack = onBack,
         )
     }

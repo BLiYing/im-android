@@ -99,11 +99,19 @@ internal fun ChatDetailScreen(
      * 转发选择页那整套接线都在宿主里，另写一页必然分叉（`ConvMediaScreen` 已经因此被并掉过一次）。
      */
     galleryOnly: Boolean = false,
+    /**
+     * 对端是系统通知账号（uid `777000`，[com.libeyond.imandroid.data.DetailActions.SYSTEM_UID]）。
+     * 对齐 Web `DetailPanel.tsx` 的 `isSystemPeer`/`showDetailBody`：备注名/设置卡/页签整段隐藏，
+     * 换成一段说明卡——系统通知会话没有"备注"这回事，也没有媒体/文件/链接可归档。
+     * `actions`/`moreItems` 已经在调用方经 `DetailActions.pillsFor/moreFor` 收窄，这里只补齐正文。
+     */
+    isSystemPeer: Boolean = false,
     onBack: () -> Unit,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val tabs = DetailTabs.visible(isGroup = false)
+    val showBody = !galleryOnly && !isSystemPeer
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         // 会话媒体库的标题是**「图片与视频」**，不是会话名——逐字对齐 iOS
@@ -139,7 +147,19 @@ internal fun ChatDetailScreen(
                 Spacer(Modifier.height(d.cardGap))
                 DetailActionBar(actions, moreItems, onAction, onMore)
             }
-            if (!galleryOnly) item(key = "info") {
+            if (!galleryOnly && isSystemPeer) item(key = "system_notice") {
+                // —— 系统通知会话说明卡（对齐 Web `isSystemPeer` 分支的 system_notice_* 文案）——
+                Spacer(Modifier.height(d.cardGap))
+                Card {
+                    Text(
+                        "这是官方通知会话，用于发送登录提醒、账号安全等系统事件。你不能回复此会话。",
+                        color = c.textSecondary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = IMTheme.dimens.space4, vertical = 14.dp),
+                    )
+                }
+            }
+            if (showBody) item(key = "info") {
                 // —— 信息（对齐 iOS 的 IMDetailSectionInfo：备注名 + 用户名）——
                 Spacer(Modifier.height(d.cardGap))
                 Card {
@@ -150,7 +170,7 @@ internal fun ChatDetailScreen(
                     }
                 }
             }
-            if (!galleryOnly) item(key = "settings") {
+            if (showBody) item(key = "settings") {
                 // —— 设置 ——
                 Spacer(Modifier.height(d.cardGap))
                 Card {
@@ -164,13 +184,14 @@ internal fun ChatDetailScreen(
                     // 而其中一个还写着"还没做"。
                 }
             }
-            if (!galleryOnly) item(key = "tabs") {
+            if (showBody) item(key = "tabs") {
                 Spacer(Modifier.height(d.cardGap))
                 DetailTabBar(tabs, tab) { onTabChange(it) }
             }
 
             // —— 页签内容（与群资料共用同一段渲染，见 DetailArchive.archiveTab）——
-            archiveTab(
+            // 系统通知会话没有可归档的媒体/文件/链接，整段不渲染（对齐 Web `showDetailBody`）。
+            if (!isSystemPeer) archiveTab(
                 tab = tab,
                 archive = archive,
                 linkMessages = linkMessages,
