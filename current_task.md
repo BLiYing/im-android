@@ -7,51 +7,46 @@
 
 ## 当前焦点
 
-> **App 启动图标 + 系统通知头像 logo + 新建群聊页面 + 扫码页面，四项对齐 iOS（2026-09-23，同日第二轮；
-> 纯客户端、后端零改动；`./scripts/test.sh` 886 例绿；四项均已装真机 `GMGY7XF6LBJB6PFU` 截图验证**）：
-> 用户按顺序报了 4 条。
+> **三项用户反馈处理完（2026-09-24）**：
 >
-> ① **App 启动图标**：此前是占位矢量（绿底白气泡，注释写着"正式图标待 UI 定稿后替换"），换成与 iOS
-> `AppIcon.appiconset/IMAppIcon.png` 同源的深蓝底彩色 logo——生成 `mipmap-{m,h,xh,xxh,xxxh}dpi/
-> ic_launcher_foreground.png`（背景色 `#000317` 采样自源图，居中留白避免被自适应图标遮罩裁边），
-> `ic_launcher.xml`/`_round.xml` 的 foreground/monochrome 改指向新 PNG，删掉旧占位矢量。真机桌面截图确认。
->
-> ② **系统通知会话头像**：`IMAvatar`（`ui/components/Avatar.kt`）此前没有 uid==system 特判，
-> 会跟其他账号一样落网络请求/首字母兜底；新增分支复用既有 `DetailActions.isSystemPeer`，直接显示
-> 新增的 `res/drawable-nodpi/im_system_logo.png`（同一份 logo 源，来自 `im-web/public/im-logo.png`），
-> 不发网络请求、不落首字母兜底——契约对齐 iOS `LaunchLogo`/Web `/im-logo.png`。真机会话列表截图确认。
->
-> ③ **新建群聊页面**：此前是单页「名字框 + 好友勾选列表」，缺头像圈、群名字数上限/计数、自动预填、
-> 搜索、A–Z 索引——都是 iOS `IMGroupCreateViewController` 有而本端缺的，且此前未登记进 SYMMETRY。
-> 新增 `data/GroupNameDefault.kt`（移植 iOS `IMGroupNameDefault.m` 的 rune 计数/截断/默认群名拼接，
-> +7 例单测先红后绿）；`GroupApi.create()` 补 `avatar_url`；`CreateGroupScreen.kt`/`CreateGroupHost.kt`
-> 加头像圈上传、n/30 计数、搜索框、复用 `ContactSection`/`ContactIndexBar` 做索引、已选人数副标题、
-> 按已选成员+本人昵称自动预填群名（手改过不再覆盖）。**刻意未对齐**：iOS 建群分两步（先选人页、再头像/
-> 群名页），本端保留单页——拆两步改动面和回归风险都更大，体验差异对用户不明显，理由写在 `CreateGroupHost.kt`
-> 头注释。真机走通「＋→新建群聊→勾好友（预填+截断正确）→建群→进新群聊」全流程。
->
-> ④ **扫码页面**：`QrScanHost.kt` 本就是较完整的 iOS `IMQRScannerViewController` 移植（L 形取景框/
-> 手电筒/相册识码一图多码候选/权限拒绝引导都已对齐），本次揪出两处真差：a) 顶栏标题此前用
-> `Row+SpaceBetween` 只摆了左右两颗按钮，没放"扫一扫"标题，导致标题不存在（不是没居中，是压根没画）——
-> 改 `Box+Alignment` 三点定位；b) 取景框此前是静止的，iOS `startScanLineAnimation` 有一条 2.2s 循环
-> 上下平移的蓝色扫描线（`#5CC7FF`），本端漏了，补上 `rememberInfiniteTransition` 版本。真机截图确认
-> 标题居中、扫描线动画在跑、手电筒图标能切换亮灭态（相机取景本身是纯黑——设备镜头当时朝向暗处，
-> 不是代码问题，手电筒切换生效证明相机管线是活的）。**刻意未对齐**：iOS 扫码页与「我的二维码」是
-> 同屏两个页签，本端「我的二维码」是独立入口——不重复做同一功能，见 `docs/UI_PARITY_IOS.md`。
->
-> **另外核实**：用户同时问的「图片/视频转发逻辑对齐」（原第 2 条）——审计后确认转发交互链路
-> （长按→菜单→选目标→单选/多选→发送→已转发回显）已经与 iOS 完全对齐，**未改代码**；唯一差异是
-> iOS 整页 push、Android 卡片式 `IMCardSheet`（实测视觉已铺满全屏），判定为既有平台设计差异非 bug。
+> 1. **系统通知会话「聊天信息」页对齐 iOS/Web**：用户报 tab 控件和备注名不该出现。根因是
+>    `ChatDetailScreen.kt` 的备注名卡/设置卡/页签条只受 `galleryOnly` 门控，没接 `isSystemPeer`——
+>    顶部操作排/更多菜单早就经 `DetailActions.pillsFor/moreFor` 收窄了，正文三块没跟上。参照 Web
+>    `DetailPanel.tsx` 的 `isSystemPeer`/`showDetailBody` 分支：新增 `isSystemPeer` 入参，备注名/
+>    设置/页签整段隐藏，换成一段说明卡（"这是官方通知会话，用于发送登录提醒、账号安全等系统事件。
+>    你不能回复此会话。"）；`ChatDetailHost.kt` 传入 `DetailActions.isSystemPeer(conv.peerUid)`。
+>    `./scripts/test.sh` 886/886 绿；真机（`GMGY7XF6LBJB6PFU`）验证：系统通知会话「聊天信息」页
+>    只剩头像/名字 + 「更多」+ 说明卡，备注名/设置卡/相册-文件-链接页签条均已不见。
+> 2. **日历圆点 + 「最早」跳转**：
+>    - **圆点变多不是 Android bug**——iOS `searchCalTapped` 请求 730 天日历窗口，超过服务端
+>      `MaxCalendarSpan`（约 400 天）硬上限，请求恒被拒绝、静默回退成"仅本地打点"，iOS 的圆点
+>      从来没真正包含过服务端补的历史；Android 用 390 天（刻意卡在限内）所以服务端合并总能成功，
+>      画出的反而是更完整正确的点。**这是 iOS 端的欠账，需另行找 iOS 端修，本端不用往回改**。
+>    - **「最早」点击没反应：真实 bug，已修**——`pickEarliest` 此前直接 `onLocate(1L,...)`，走的是
+>      "定位到具体某条"的通用路径，把服务端 `anchor_found=false` 当"消息真没了"直接拒答；但
+>      conv_seq=1 常常不是自己能看见的消息（系统事件/入群前历史），服务端答 `anchor_found=false`
+>      但仍带回"我能看见的最早一段"，通用路径误判成失败。新增 `ChatLocator.locateEarliest()`
+>      （镜像 iOS `requestServerWindowAnchor:isJump:earliest:`，忽略 `anchor_found`）：本地已握最早
+>      则直接开窗；没有则问服务端要一窗，**落库后重查本地最早、不看 anchor_found**，再开窗；离线/
+>      超时退化到本地已知最早并明确提示"网络未连接，已跳到已下载的最早一条"（`ChatWindows` 新增
+>      两条文案常量）。`./scripts/test.sh` 886/886 绿；真机（`GMGY7XF6LBJB6PFU`，"20000人大群"，
+>      conv_seq=1 是系统事件）验证：点「最早」能看到 `window_resp` 往返，落到真正的会话最早附近。
+> 3. **群成员搜索 / 日历消息搜索分页现状**——只调研未改代码（用户明确要求先不动）：
+>    - **群成员搜索是真实、未登记的功能缺口**：`GroupApi.members(convId, cursor, q, limit)` 早支持
+>      `q` 关键字分页搜索，但群资料页"成员"tab 从没调用带 `q` 的版本（只有 `MentionComposerState`/
+>      `RtcInviteProvider` 两处用了）——大群里成员 tab 没有搜索入口，只能滚动翻页找人；iOS 有专门的
+>      `IMGroupMemberSearchViewController`。已记入下一步 0d。
+>    - **日历不是分页缺口**：本地打点无界查全部历史，服务端固定开约 390 天窗口，两端都是"固定窗口"
+>      设计，不是"分页翻页"，属合理取舍、非缺陷，不需要新 TODO。
 
 ## 下一步
 
-0. **本批真机回归**（没装机）：详情页宫格门控层/点门控格是下载、文件行 36dp 图标位与进度环、收藏页七签与长按菜单、
-   名片进资料页「发消息」、收藏转发到会话后收端封面/尺寸、长按「收藏」后收藏页出现；
-   **从收藏发送**：勾选框点击不连带打开、宫格右上角勾选圈在浅色图上看得清、底栏不被导航栏压住、
-   发出后聊天页回到最新、返回键先关选择页内的查看器/资料页再关选择页。
+0d. **群资料页「成员」tab 缺搜索入口**（2026-09-24 用户报后调研发现，未改代码）：`GroupApi.members()`
+   已支持 `q` 参数、服务端本就能分页搜索，复用 `MentionComposerState`/`RtcInviteProvider` 的调用模式
+   即可实现；参照 iOS `IMGroupMemberSearchViewController`（搜索框 + 服务端分页 + 下拉加载更多）。
 0b. **上几批仍欠的真机回归**（这两轮没动到、也没回归）：归档查看器「更多」五项、合并转发记录页内翻页、
    长按预览里点图/点链接只关菜单、以及 2026-09-15/16 那两批的清单（见 `current_task.archive.md` 顶部）。
-0c. **本批（2026-09-23）真机回归**——📅/👤/撤回实时刷新/非 UTC+8 时区换算均已测过（见上「当前焦点」），
+0c. **本批（2026-09-23）真机回归**——📅/👤/撤回实时刷新/非 UTC+8 时区换算均已测过（见 archive），
    仍欠：**转发带 @ 图片到群里，"别人视角"点开被 @ 的名字、有没有收到强提醒**——真机 UI 这条链路没跑通
    （系统图片选择器多级页面盲点坐标屡次踩偏），也没有第二台设备/账号可以扮演"收端"；只验证到
    "提及渲染可点 + 点了跳资料页"这条基础设施是通的，`mentions` 随转发存活只有单测覆盖。
@@ -71,6 +66,10 @@
 
 ## 已知坑 / 限制
 
+- **合并转发记录里的名片 →「发消息」不能真正换会话**（2026-09-25 真机回归发现，未修）：`ChatHost.kt`
+  把 `ChatRecordLayer` 内名片卡片的「发消息」接到同一份 `openUser` 状态，点了只 `onCloseUser()`
+  关资料层、退回记录页，不会直接落回聊天——因为 `ChatHost` 绑死单一 `convId`，没法就地换会话。
+  名片指向的人恰好是当前会话对方时不明显（多按一次返回就到了），指向别人时发消息形同无效。
 - **App Links 系统级深链接：明确暂不做**（2026-09-22 用户拍板）。指从系统任意来源（短信/微信/邮件/
   系统相机扫码）点开邀请链接直接拉起 App、跳过浏览器——区别于已接的"App 内已打开的链接里拦截"
   （`QrRouteHost`/`isOwnInviteLink`）。卡点是基础设施而非代码量：Android 侧需在清单声明

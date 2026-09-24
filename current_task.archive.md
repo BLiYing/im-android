@@ -5,6 +5,66 @@
 
 ## 历史焦点（新 → 旧）
 
+> ⬇ 以下一块 2026-09-24 从活快照原样转入（日历圆点自绘网格 + 09-23 批真机回归清单）。
+
+> **搜索日历圆点标记补上 + 上一批（09-23）真机回归清单走完（2026-09-25）**：用户报「搜索时日历点开，
+> 有消息的日期下方缺圆点，iOS 有」——查 `ChatCalendarDialog.kt` 头注释，此前是刻意决定：Material3
+> `DatePicker`（1.3.x）没有逐日装饰的公开钩子，做圆点等于整块自绘一份日历，此前判定"圆点是锦上添花，
+> 核心正确性已经做对"没做。这次改判：自绘月历网格替换 `DatePicker`——新增
+> `MessageDao.activeLocalDayStarts`（镜像 iOS `activeLocalDayStartsInConv:utcOffsetMs:`，公式与
+> `ChatCalendar.dayStartMs` 逐字一致）；`ChatCalendarState.kt` 打开弹层时本地打点恒查一遍（离线/有缺口
+> 也能画部分点），有缺口且在线时再并入服务端打点；`ChatCalendarDialog.kt` 整个换成 `IMCalendarGrid`
+> 自绘（月份翻页 + 周日起头 7 列网格 + 选中圈 + 打点小圆点），查表 key 与跳转坐标共用同一份
+> `ChatCalendar.dayStartMs(noon, offset)`，三处不会错位。`./scripts/test.sh` 886 例绿；真机
+> （`libeyond群`）验证：星期对齐正确（9 月 1 日落在"二"列）、圆点位置对（5/10/11/13/16/17/20/21/23 号）、
+> 选中态圆点仍可见、点圆点日期正确跳转到那天、月份翻页正常。
+>
+> 随后按用户要求把 09-23 那批"没装机"的真机回归清单（详情页宫格门控点击下载、文件行图标位/进度环、
+> 收藏页页签与长按菜单、收藏转发到会话后收端封面/尺寸、长按「收藏」后收藏页出现、从收藏发送的勾选/
+> 底栏/回滚/返回键分层）逐条在真机走了一遍，**全部通过**。唯一发现的边界情况（非本轮改动引入，记入
+> 已知坑）：合并转发记录里的名片 → 资料页 →「发消息」，`ChatHost.kt` 把 `onOpenUser` 接到同一份
+> `openUser` 状态，「发消息」只 `onCloseUser()` 关资料层，退回到记录页而非直接落回聊天——名片指向的人
+> 恰好就是当前会话对方时不明显（多按一次返回就到了），指向别人时会更明显（发消息形同无效，因为
+> `ChatHost` 绑死单一 `convId`，没法就地换会话）。
+
+> ⬇ 以下一块 2026-09-25 从活快照原样转入（启动图标/通知头像/新建群聊/扫码页面对齐 iOS）。
+
+> **App 启动图标 + 系统通知头像 logo + 新建群聊页面 + 扫码页面，四项对齐 iOS（2026-09-23，同日第二轮；
+> 纯客户端、后端零改动；`./scripts/test.sh` 886 例绿；四项均已装真机 `GMGY7XF6LBJB6PFU` 截图验证**）：
+> 用户按顺序报了 4 条。
+>
+> ① **App 启动图标**：此前是占位矢量（绿底白气泡，注释写着"正式图标待 UI 定稿后替换"），换成与 iOS
+> `AppIcon.appiconset/IMAppIcon.png` 同源的深蓝底彩色 logo——生成 `mipmap-{m,h,xh,xxh,xxxh}dpi/
+> ic_launcher_foreground.png`（背景色 `#000317` 采样自源图，居中留白避免被自适应图标遮罩裁边），
+> `ic_launcher.xml`/`_round.xml` 的 foreground/monochrome 改指向新 PNG，删掉旧占位矢量。真机桌面截图确认。
+>
+> ② **系统通知会话头像**：`IMAvatar`（`ui/components/Avatar.kt`）此前没有 uid==system 特判，
+> 会跟其他账号一样落网络请求/首字母兜底；新增分支复用既有 `DetailActions.isSystemPeer`，直接显示
+> 新增的 `res/drawable-nodpi/im_system_logo.png`（同一份 logo 源，来自 `im-web/public/im-logo.png`），
+> 不发网络请求、不落首字母兜底——契约对齐 iOS `LaunchLogo`/Web `/im-logo.png`。真机会话列表截图确认。
+>
+> ③ **新建群聊页面**：此前是单页「名字框 + 好友勾选列表」，缺头像圈、群名字数上限/计数、自动预填、
+> 搜索、A–Z 索引——都是 iOS `IMGroupCreateViewController` 有而本端缺的，且此前未登记进 SYMMETRY。
+> 新增 `data/GroupNameDefault.kt`（移植 iOS `IMGroupNameDefault.m` 的 rune 计数/截断/默认群名拼接，
+> +7 例单测先红后绿）；`GroupApi.create()` 补 `avatar_url`；`CreateGroupScreen.kt`/`CreateGroupHost.kt`
+> 加头像圈上传、n/30 计数、搜索框、复用 `ContactSection`/`ContactIndexBar` 做索引、已选人数副标题、
+> 按已选成员+本人昵称自动预填群名（手改过不再覆盖）。**刻意未对齐**：iOS 建群分两步（先选人页、再头像/
+> 群名页），本端保留单页——拆两步改动面和回归风险都更大，体验差异对用户不明显，理由写在 `CreateGroupHost.kt`
+> 头注释。真机走通「＋→新建群聊→勾好友（预填+截断正确）→建群→进新群聊」全流程。
+>
+> ④ **扫码页面**：`QrScanHost.kt` 本就是较完整的 iOS `IMQRScannerViewController` 移植（L 形取景框/
+> 手电筒/相册识码一图多码候选/权限拒绝引导都已对齐），本次揪出两处真差：a) 顶栏标题此前用
+> `Row+SpaceBetween` 只摆了左右两颗按钮，没放"扫一扫"标题，导致标题不存在（不是没居中，是压根没画）——
+> 改 `Box+Alignment` 三点定位；b) 取景框此前是静止的，iOS `startScanLineAnimation` 有一条 2.2s 循环
+> 上下平移的蓝色扫描线（`#5CC7FF`），本端漏了，补上 `rememberInfiniteTransition` 版本。真机截图确认
+> 标题居中、扫描线动画在跑、手电筒图标能切换亮灭态（相机取景本身是纯黑——设备镜头当时朝向暗处，
+> 不是代码问题，手电筒切换生效证明相机管线是活的）。**刻意未对齐**：iOS 扫码页与「我的二维码」是
+> 同屏两个页签，本端「我的二维码」是独立入口——不重复做同一功能，见 `docs/UI_PARITY_IOS.md`。
+>
+> **另外核实**：用户同时问的「图片/视频转发逻辑对齐」（原第 2 条）——审计后确认转发交互链路
+> （长按→菜单→选目标→单选/多选→发送→已转发回显）已经与 iOS 完全对齐，**未改代码**；唯一差异是
+> iOS 整页 push、Android 卡片式 `IMCardSheet`（实测视觉已铺满全屏），判定为既有平台设计差异非 bug。
+
 > ⬇ 以下一块 2026-09-23 从活快照原样转入（会话列表副标题 + 转发提及 + 日历/来自筛选）。
 
 > **会话列表副标题 + 图片/视频转发提及 + 会话内搜索日历/来自筛选，三项对齐 iOS（2026-09-23；纯客户端、
