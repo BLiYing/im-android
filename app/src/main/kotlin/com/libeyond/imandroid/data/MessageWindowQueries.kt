@@ -103,6 +103,13 @@ suspend fun MessageRepository.firstConvSeqAtOrAfter(owner: String, convId: Strin
     messages.firstConvSeqAtOrAfter(owner, convId, fromMs)
 
 /**
+ * 日历弹层打点集合（本地时区分桶 ms，见 [com.libeyond.imandroid.data.db.MessageDao.activeLocalDayStarts]）。
+ * 本地完整与否都查——离线/有缺口时至少能画出本地已下载部分的点，不是"没有点"。
+ */
+suspend fun MessageRepository.activeLocalDayStarts(owner: String, convId: String, utcOffsetMs: Long): Set<Long> =
+    messages.activeLocalDayStarts(owner, convId, utcOffsetMs).toSet()
+
+/**
  * 本地一页搜索结果。
  *
  * 单独一个类型只为带上 [truncated]：命中被单页上限截断时计数要补 `+`，

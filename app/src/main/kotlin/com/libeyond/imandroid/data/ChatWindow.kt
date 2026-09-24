@@ -97,6 +97,15 @@ object ChatWindows {
      */
     const val LOCATE_FAILED_NOTICE = "没能定位到这条消息，请重试"
 
+    /** 「跳到最早」时本地一条消息都没有（空会话）。对齐 iOS `chat.search.no_messages`。 */
+    const val NO_MESSAGES_NOTICE = "暂无消息"
+
+    /**
+     * 「跳到最早」离线时的退化：只能落到本地已经握着的那一条，说清楚这不是会话开头。
+     * 对齐 iOS `chat.search.offline_jumped_earliest`。
+     */
+    const val OFFLINE_JUMPED_EARLIEST_NOTICE = "网络未连接，已跳到已下载的最早一条"
+
     /**
      * 「回到最新」按钮该不该亮。
      *

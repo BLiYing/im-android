@@ -1,100 +1,235 @@
 package com.libeyond.imandroid.ui.screens
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.ChevronLeft
+import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.data.ChatCalendar
 import com.libeyond.imandroid.ui.theme.IMTheme
-import java.util.Calendar
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
 import java.util.TimeZone
 
 /**
- * 📅 日历跳转弹层（对齐 iOS `IMChatDateJumpViewController`：系统日历 + 「最早」「今天」两个快捷项）。
+ * 📅 日历跳转弹层（对齐 iOS `IMChatDateJumpViewController`：系统日历 + 「最早」「今天」两个快捷项 +
+ * 有消息的天下方一颗圆点）。
  *
- * **不画"哪些天有消息"的圆点装饰**：iOS 那份是靠本地/服务端合并出的打点集合逐天渲染，
- * Material3 `DatePicker` 没有现成的"某天加装饰"钩子，要做等于自绘一份日历——装饰只是锦上添花，
- * 跳转会不会跳对（本地/服务端谁给答案）才是这个功能的核心正确性，已经在 [com.libeyond.imandroid.data.ChatCalendar] /
- * `ChatCalendarState` 里做对了。**所有天都可点**，没消息的天点了会自然退到下一个有消息的日子
- * （同 iOS："没有'不可点'这回事"）。
+ * **自绘月历网格，不用 Material3 `DatePicker`**：M3 `DatePicker`（1.3.x）没有"给某一天加装饰"的公开钩子
+ * ——想在它上面叠圆点，要么等它加这个 API，要么整块换成自绘。iOS `UICalendarView` 有
+ * `decorationForDateComponents:` 这个钩子，是两端实现分叉的根源，不是本端没做到位。
+ *
+ * 圆点数据来自 [activeDays]（本地时区分桶 ms 集合，调用方 `ChatCalendarState.kt` 里
+ * 本地打点 ∪ 服务端打点合并好才传进来），查表用的桶 key 与 [onPickDay] 回传坐标同一套口径
+ * （[ChatCalendar.dayStartMs]）——网格上点哪天、判它有没有点、跳转跳到哪，三处必须用同一份算法，
+ * 用三份就会出现"点了看着有点的那天，跳转却落到隔壁"。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ChatCalendarDialog(
     onDismiss: () -> Unit,
-    /** 用户选中那天、**本地时区**的 00:00 对应 UTC 毫秒（已做过 UTC picker → 本地日的换算）。 */
+    /** 用户选中那天、**本地时区**的 00:00 对应 UTC 毫秒（已做过换算）。 */
     onPickDay: (localDayStartMs: Long) -> Unit,
     onEarliest: () -> Unit,
     onToday: () -> Unit,
+    /** 有消息的整天集合（本地时区分桶 ms），见 [com.libeyond.imandroid.ui.ChatCalendarController.activeDays]。 */
+    activeDays: Set<Long>,
 ) {
     val c = IMTheme.colors
-    val state = rememberDatePickerState()
-    DatePickerDialog(
+    val zone = remember { ZoneId.systemDefault() }
+    // 与 activeDays 是同一份固定 offset（弹层打开那一刻算一次），不逐天用 zone 规则重算——
+    // 三处（打点集合/网格查表/跳转坐标）必须共用一份，见类注释。
+    val offsetMs = remember { TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong() }
+    var displayedMonth by remember { mutableStateOf(YearMonth.now(zone)) }
+    var selected by remember { mutableStateOf<LocalDate?>(null) }
+
+    AlertDialog(
         onDismissRequest = onDismiss,
+        title = { Text("按日期跳转", color = c.textPrimary, style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                ) {
+                    Text(
+                        "最早",
+                        color = c.accent,
+                        fontSize = 14.sp,
+                        modifier = Modifier.clickable(onClick = onEarliest),
+                    )
+                    Text(
+                        "今天",
+                        color = c.accent,
+                        fontSize = 14.sp,
+                        modifier = Modifier.clickable(onClick = onToday),
+                    )
+                }
+                IMCalendarGrid(
+                    displayedMonth = displayedMonth,
+                    onMonthChange = { displayedMonth = it },
+                    selected = selected,
+                    onSelect = { selected = it },
+                    activeDays = activeDays,
+                    offsetMs = offsetMs,
+                    zone = zone,
+                )
+            }
+        },
         confirmButton = {
             TextButton(
                 onClick = {
-                    val picked = state.selectedDateMillis
-                    if (picked != null) onPickDay(localDayStartOf(picked)) else onDismiss()
+                    val day = selected
+                    if (day != null) onPickDay(day.dayStartMsKey(zone, offsetMs)) else onDismiss()
                 },
             ) { Text("跳转", color = c.accent) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消", color = c.textSecondary) }
         },
-    ) {
-        // DatePickerDialog 内部用 Box 装 content()，多个直接子项会互相叠放而不是纵向排列
-        // （曾在真机上验证「最早/今天」被 DatePicker 盖住、连无障碍树都摸不到）——这里显式套一层
-        // Column 强制纵向堆叠，别删掉当作多余包装。
-        Column {
-            // 两个快捷项：最早 / 今天。放在系统日历上方，点了直接跳、不必再点「跳转」确认
-            // （对齐 iOS 底部的两枚快捷钮，同样是点了立刻生效）。
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-            ) {
-                Text(
-                    "最早",
-                    color = c.accent,
-                    fontSize = 14.sp,
-                    modifier = Modifier.clickable(onClick = onEarliest),
-                )
-                Text(
-                    "今天",
-                    color = c.accent,
-                    fontSize = 14.sp,
-                    modifier = Modifier.clickable(onClick = onToday),
-                )
+        containerColor = c.surfaceElevated,
+    )
+}
+
+private val WEEKDAY_LABELS = listOf("日", "一", "二", "三", "四", "五", "六")
+
+@Composable
+private fun IMCalendarGrid(
+    displayedMonth: YearMonth,
+    onMonthChange: (YearMonth) -> Unit,
+    selected: LocalDate?,
+    onSelect: (LocalDate) -> Unit,
+    activeDays: Set<Long>,
+    offsetMs: Long,
+    zone: ZoneId,
+) {
+    val c = IMTheme.colors
+
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MonthNavButton(Lucide.ChevronLeft, "上个月") { onMonthChange(displayedMonth.minusMonths(1)) }
+            Text(
+                "${displayedMonth.year}年${displayedMonth.monthValue}月",
+                color = c.textPrimary,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            MonthNavButton(Lucide.ChevronRight, "下个月") { onMonthChange(displayedMonth.plusMonths(1)) }
+        }
+
+        Row(Modifier.fillMaxWidth()) {
+            WEEKDAY_LABELS.forEach { label ->
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Text(label, color = c.textTertiary, style = MaterialTheme.typography.bodySmall)
+                }
             }
-            DatePicker(state = state, showModeToggle = false)
+        }
+
+        val firstOfMonth = displayedMonth.atDay(1)
+        // DayOfWeek：MON=1..SUN=7。取 %7 把 SUN 归到第 0 列，网格从周日起头（对齐系统日历习惯）。
+        val leading = firstOfMonth.dayOfWeek.value % 7
+        val daysInMonth = displayedMonth.lengthOfMonth()
+        val rows = (leading + daysInMonth + 6) / 7
+
+        for (row in 0 until rows) {
+            Row(Modifier.fillMaxWidth()) {
+                for (col in 0 until 7) {
+                    val dayNum = row * 7 + col - leading + 1
+                    Box(Modifier.weight(1f).aspectRatio(1f), contentAlignment = Alignment.Center) {
+                        if (dayNum in 1..daysInMonth) {
+                            val date = displayedMonth.atDay(dayNum)
+                            val key = date.dayStartMsKey(zone, offsetMs)
+                            DayCell(
+                                dayNum = dayNum,
+                                selected = date == selected,
+                                hasMessage = activeDays.contains(key),
+                                onClick = { onSelect(date) },
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
-/**
- * Material3 `DatePicker` 回的是**时区无关**的 UTC 毫秒（用户在界面上选中那一天的 UTC 00:00），
- * 不是本地日 00:00——两者在非 UTC 时区下相差一个时区偏移。取出年月日后按**本地时区**重建 00:00，
- * 才能对上 [com.libeyond.imandroid.data.ChatCalendar.dayStartMs] 与本地库/服务端日历的分桶口径。
- */
-private fun localDayStartOf(utcPickerMillis: Long): Long {
-    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = utcPickerMillis }
-    val y = utc.get(Calendar.YEAR)
-    val m = utc.get(Calendar.MONTH)
-    val d = utc.get(Calendar.DAY_OF_MONTH)
-    val local = Calendar.getInstance().apply {
-        clear()
-        set(y, m, d, 0, 0, 0)
+@Composable
+private fun DayCell(dayNum: Int, selected: Boolean, hasMessage: Boolean, onClick: () -> Unit) {
+    val c = IMTheme.colors
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(onClick = onClick).padding(vertical = 2.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(32.dp)
+                .clip(CircleShape)
+                .background(if (selected) c.accent else Color.Transparent),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "$dayNum",
+                color = if (selected) c.onAccent else c.textPrimary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Box(Modifier.size(4.dp)) {
+            if (hasMessage) {
+                Box(Modifier.size(4.dp).clip(CircleShape).background(c.accent))
+            }
+        }
     }
-    return local.timeInMillis
+}
+
+@Composable
+private fun MonthNavButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
+    val c = IMTheme.colors
+    Box(
+        modifier = Modifier.size(32.dp).clip(CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            imageVector = icon,
+            contentDescription = description,
+            modifier = Modifier.size(18.dp),
+            colorFilter = ColorFilter.tint(c.textSecondary),
+        )
+    }
+}
+
+/**
+ * 这一天本地时区 00:00 对应的 UTC 毫秒，按 [ChatCalendar.dayStartMs] 同一份公式算
+ * （用当天正午当参照点，避免月初/月末在个别时区下被 `atStartOfDay` 的夏令时规则牵动半小时/一小时）。
+ */
+private fun LocalDate.dayStartMsKey(zone: ZoneId, offsetMs: Long): Long {
+    val noonMs = atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+    return ChatCalendar.dayStartMs(noonMs, offsetMs)
 }

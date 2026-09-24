@@ -153,6 +153,22 @@ interface MessageDao {
     suspend fun firstConvSeqAtOrAfter(owner: String, convId: String, fromMs: Long): Long?
 
     /**
+     * 日历打点：本地库里"有消息的整天"集合（本地时区分桶 ms，公式与
+     * [com.libeyond.imandroid.data.ChatCalendar.dayStartMs] 逐字一致——同一份 [utcOffsetMs]
+     * 算出来的桶才能直接跟服务端 `ConvCalendarDay.dayStartMs` 求并集）。
+     * 镜像 iOS `IMDatabase.activeLocalDayStartsInConv:utcOffsetMs:`；本地完整与否都查
+     * ——只看当前窗口打点会几乎全灰。过滤口径同 [firstConvSeqAtOrAfter]：撤回/本地删除/系统消息不算"有消息"。
+     */
+    @Query("""
+        SELECT DISTINCT CAST((timestamp + :utcOffsetMs) / 86400000 AS INTEGER) * 86400000 - :utcOffsetMs AS dayStart
+        FROM message
+        WHERE ownerUid = :owner AND convId = :convId
+          AND recalledAt IS NULL AND deletedAt IS NULL AND contentType <> 'system' AND timestamp > 0
+        ORDER BY dayStart ASC
+    """)
+    suspend fun activeLocalDayStarts(owner: String, convId: String, utcOffsetMs: Long): List<Long>
+
+    /**
      * 观察一段**锚点窗**（`ChatWindow.Anchored`），返回显示序（旧→新）。
      *
      * 与 [observeWindow] 的区别只有一个：那个是"最近 N 条"（上界开着，新消息会进来），

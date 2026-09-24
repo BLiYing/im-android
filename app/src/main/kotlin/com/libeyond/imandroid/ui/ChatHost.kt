@@ -145,6 +145,7 @@ fun ChatHost(
         convId = conv.convId,
         online = connected,
         onLocate = { seq, refuse -> locator.locate(seq, refuse) },
+        onLocateEarliest = { refuse -> locator.locateEarliest(refuse) },
         onToast = { toast = it },
     )
     // 👤「来自」候选：面板一开才查 uid 去重集（不是每次进搜索态都查一遍库）；
@@ -510,6 +511,7 @@ fun ChatHost(
             onPickDay = { calendar.pick(it) },
             onEarliest = { calendar.earliest() },
             onToday = { calendar.today() },
+            activeDays = calendar.activeDays,
         )
     }
 

@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.ChatCalendar
+import com.libeyond.imandroid.data.activeLocalDayStarts
 import com.libeyond.imandroid.data.firstConvSeqAtOrAfter
 import com.libeyond.imandroid.data.isLocalComplete
 import com.libeyond.imandroid.sdk.IMClient
@@ -36,6 +37,14 @@ class ChatCalendarController internal constructor() {
      * （本地库已经齐全，见 [rememberChatCalendar] 里的判据）。
      */
     var serverDays by mutableStateOf<List<ConvCalendarDay>?>(null)
+        internal set
+
+    /**
+     * 弹层圆点打点集合（本地时区分桶 ms，对齐 iOS `IMChatDateJumpViewController` 的 `_activeDayKeys`）：
+     * 本地打点 ∪ 服务端打点（有缺口且在线才有后者）。**打开弹层前恒为空**——别在没查过库时画"全灰"，
+     * 那看着像"真没消息"。
+     */
+    var activeDays by mutableStateOf<Set<Long>>(emptySet())
         internal set
 
     /** 本次搜索会话里"仅本地"降级提示是否已经弹过一次——同一次别反复打扰。 */
@@ -71,6 +80,8 @@ fun rememberChatCalendar(
     convId: String,
     online: Boolean,
     onLocate: (Long, (String) -> Unit) -> Unit,
+    /** 「最早」专用出口（[ChatLocator.locateEarliest]）——**不是** `onLocate(1L, …)`，见该方法注释。 */
+    onLocateEarliest: ((String) -> Unit) -> Unit,
     onToast: (String) -> Unit,
 ): ChatCalendarController {
     val owner = client.uid.orEmpty()
@@ -82,6 +93,12 @@ fun rememberChatCalendar(
     // key 带 online：日历开着时网络从离线恢复，要能补一次服务端请求，不能停在"离线降级"的答案上不再问。
     LaunchedEffect(ctl.open, convId, owner, online) {
         if (!ctl.open || owner.isEmpty()) return@LaunchedEffect
+        val nowMs = System.currentTimeMillis()
+        val offset = TimeZone.getDefault().getOffset(nowMs).toLong()
+        // 本地打点恒先查一遍——即便有缺口/离线也至少能画出本地已下载部分的点（镜像 iOS
+        // `activeDaysFromMessages` 恒查库，不是只在"本地完整"分支才查）。
+        val localDays = client.repo.activeLocalDayStarts(owner, convId, offset)
+        ctl.activeDays = localDays
         val complete = client.repo.isLocalComplete(owner, convId)
         if (complete) {
             ctl.serverDays = null
@@ -94,13 +111,15 @@ fun rememberChatCalendar(
             }
             return@LaunchedEffect
         }
-        val nowMs = System.currentTimeMillis()
-        val offset = TimeZone.getDefault().getOffset(nowMs).toLong()
         runCatchingCancellable {
             client.conversationsApi.calendar(convId, nowMs - ChatCalendar.QUERY_SPAN_MS, nowMs, offset)
         }
-            .onSuccess { ctl.serverDays = it.days }
-            // 悄悄失败——跳转时会退化到本地查询，日历只是个次要入口，不必为它打断整页
+            .onSuccess { resp ->
+                ctl.serverDays = resp.days
+                ctl.activeDays = localDays + resp.days.map { it.dayStartMs }.toSet()
+            }
+            // 悄悄失败——跳转时会退化到本地查询，日历只是个次要入口，不必为它打断整页；
+            // 打点也保留刚查到的本地版本，不整层清空。
             .onFailure { e -> log.w("calendar_fetch_failed", "convId" to convId, "err" to e.javaClass.simpleName) }
     }
 
@@ -113,11 +132,11 @@ fun rememberChatCalendar(
         }
     }
 
-    // 「最早」= conv_seq 1（每个会话的序号从 1 起、连续不跳号）。直接走既有跳转出口：
-    // 本地有就地开窗，本地没有（有缺口）就发 window_req 问服务端要——不必另起一条"要最早一条"的协议。
+    // 「最早」**不是**无脑 conv_seq=1：入群前历史不可见的成员永远拿不到 1 号，
+    // conv_seq=1 常常根本不是一条我能看见的消息——见 [ChatLocator.locateEarliest] 的实现注释。
     ctl.pickEarliest = {
         ctl.open = false
-        onLocate(1L, onToast)
+        onLocateEarliest(onToast)
     }
 
     ctl.pickToday = {
