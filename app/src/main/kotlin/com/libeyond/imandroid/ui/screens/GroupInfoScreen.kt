@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -142,9 +143,11 @@ fun GroupInfoScreen(
         LazyColumn(Modifier.fillMaxSize()) {
             if (!galleryOnly) item(key = "header") {
                 // —— 群头部 ——
+                // 左右留页边距 + 群名单行居中、放不下尾部省略（对齐 iOS `makeNameLabel` 的 center + 单行）：
+                // 此前只有上下 padding、Text 也没居中，长群名折成两行后左对齐、贴着屏幕两边（2026-09-27 真机发现）
                 Column(
                     modifier = Modifier.fillMaxWidth().background(c.pageBackground)
-                        .padding(vertical = 20.dp),
+                        .padding(vertical = 20.dp, horizontal = IMTheme.dimens.space4),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     IMAvatar(info.name, seed = info.convId, avatarUrl = info.avatarUrl, size = 72.dp)
@@ -153,6 +156,9 @@ fun GroupInfoScreen(
                         info.name.ifBlank { stringResource(R.string.group_text_unnamed) },
                         style = MaterialTheme.typography.titleLarge,
                         color = c.textPrimary,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
