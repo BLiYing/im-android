@@ -5,7 +5,49 @@
 
 ## 历史焦点（新 → 旧）
 
-> ⬇ 以下一块 2026-09-24 从活快照原样转入（日历圆点自绘网格 + 09-23 批真机回归清单）。
+> ⬇ 以下一块 2026-09-27 从活快照原样转入（im-rtc 音视频 SDK 2.0.0→2.1.0 三端版本升级），被通话记录 cancel 文案细化顶下。
+
+> **im-rtc 音视频 SDK 2.0.0 → 2.1.0（三端同步，2026-09-27）**：`gradle/libs.versions.toml` 的
+> `imrtc` 版本号改为 `2.1.0`（`imrtc-uikit`/`imrtc-webrtc` 都走这个 `version.ref`，唯一改动点）；
+> JitPack 侧 `com.github.BLiYing.im-rtc-android` 的 `2.1.0` tag 已存在，`./scripts/test.sh` 验证过
+> 能正常解析下载（`~/.gradle/caches` 里已落 2.1.0 的 aar/module/pom）并编译通过。同批联动改了
+> iOS（`IMProgram`，SPM `im-rtc-ios` exactVersion）与 Web（`im-web`，`im-rtc-call-engine`/
+> `im-rtc-call-uikit-react` npm 依赖）。`./scripts/test.sh` 全量 **886/886 绿**。
+> 未做真机验证通话功能本身（SDK 内部行为改动未知，只验证了版本号解析与编译）。
+
+> ⬇ 以下一块 2026-09-27 从活快照原样转入（三项用户反馈：系统通知会话详情页 / 日历「最早」跳转 / 群成员搜索调研）。
+
+> **三项用户反馈处理完（2026-09-24）**：
+>
+> 1. **系统通知会话「聊天信息」页对齐 iOS/Web**：用户报 tab 控件和备注名不该出现。根因是
+>    `ChatDetailScreen.kt` 的备注名卡/设置卡/页签条只受 `galleryOnly` 门控，没接 `isSystemPeer`——
+>    顶部操作排/更多菜单早就经 `DetailActions.pillsFor/moreFor` 收窄了，正文三块没跟上。参照 Web
+>    `DetailPanel.tsx` 的 `isSystemPeer`/`showDetailBody` 分支：新增 `isSystemPeer` 入参，备注名/
+>    设置/页签整段隐藏，换成一段说明卡（"这是官方通知会话，用于发送登录提醒、账号安全等系统事件。
+>    你不能回复此会话。"）；`ChatDetailHost.kt` 传入 `DetailActions.isSystemPeer(conv.peerUid)`。
+>    `./scripts/test.sh` 886/886 绿；真机（`GMGY7XF6LBJB6PFU`）验证：系统通知会话「聊天信息」页
+>    只剩头像/名字 + 「更多」+ 说明卡，备注名/设置卡/相册-文件-链接页签条均已不见。
+> 2. **日历圆点 + 「最早」跳转**：
+>    - **圆点变多不是 Android bug**——iOS `searchCalTapped` 请求 730 天日历窗口，超过服务端
+>      `MaxCalendarSpan`（约 400 天）硬上限，请求恒被拒绝、静默回退成"仅本地打点"，iOS 的圆点
+>      从来没真正包含过服务端补的历史；Android 用 390 天（刻意卡在限内）所以服务端合并总能成功，
+>      画出的反而是更完整正确的点。**这是 iOS 端的欠账，需另行找 iOS 端修，本端不用往回改**。
+>    - **「最早」点击没反应：真实 bug，已修**——`pickEarliest` 此前直接 `onLocate(1L,...)`，走的是
+>      "定位到具体某条"的通用路径，把服务端 `anchor_found=false` 当"消息真没了"直接拒答；但
+>      conv_seq=1 常常不是自己能看见的消息（系统事件/入群前历史），服务端答 `anchor_found=false`
+>      但仍带回"我能看见的最早一段"，通用路径误判成失败。新增 `ChatLocator.locateEarliest()`
+>      （镜像 iOS `requestServerWindowAnchor:isJump:earliest:`，忽略 `anchor_found`）：本地已握最早
+>      则直接开窗；没有则问服务端要一窗，**落库后重查本地最早、不看 anchor_found**，再开窗；离线/
+>      超时退化到本地已知最早并明确提示"网络未连接，已跳到已下载的最早一条"（`ChatWindows` 新增
+>      两条文案常量）。`./scripts/test.sh` 886/886 绿；真机（`GMGY7XF6LBJB6PFU`，"20000人大群"，
+>      conv_seq=1 是系统事件）验证：点「最早」能看到 `window_resp` 往返，落到真正的会话最早附近。
+> 3. **群成员搜索 / 日历消息搜索分页现状**——只调研未改代码（用户明确要求先不动）：
+>    - **群成员搜索是真实、未登记的功能缺口**：`GroupApi.members(convId, cursor, q, limit)` 早支持
+>      `q` 关键字分页搜索，但群资料页"成员"tab 从没调用带 `q` 的版本（只有 `MentionComposerState`/
+>      `RtcInviteProvider` 两处用了）——大群里成员 tab 没有搜索入口，只能滚动翻页找人；iOS 有专门的
+>      `IMGroupMemberSearchViewController`。已记入下一步 0d。
+>    - **日历不是分页缺口**：本地打点无界查全部历史，服务端固定开约 390 天窗口，两端都是"固定窗口"
+>      设计，不是"分页翻页"，属合理取舍、非缺陷，不需要新 TODO。
 
 > **搜索日历圆点标记补上 + 上一批（09-23）真机回归清单走完（2026-09-25）**：用户报「搜索时日历点开，
 > 有消息的日期下方缺圆点，iOS 有」——查 `ChatCalendarDialog.kt` 头注释，此前是刻意决定：Material3

@@ -48,8 +48,15 @@ object CallRecord {
     /** `d` 的上限（天）：与服务端 `86400*3` 截断一致，本地也夹一下，防止坏数据撑爆文案。 */
     private const val MAX_DURATION_SEC = 86400 * 3
 
-    /** 会话列表预览尾部的「未接来电」——被叫侧且非红以外的结局都不含这个词，所以能当红字判据。 */
+    /** 会话列表预览尾部的「未接来电」——被叫侧 no_answer/busy/offline 的措辞。 */
     private const val MISSED_TEXT = "未接来电"
+
+    /**
+     * 被叫侧 `cancel` 的措辞（2026-09-27 从 [MISSED_TEXT] 细化拆出）：主叫主动撤回，不是被叫错过，
+     * 归因和 no_answer/busy/offline 不是一回事；`tone` 仍是 [Tone.Missed]（红/计未读/推送不变），
+     * 只是换了句话，与 `reject` 早就在用的"各自站在自己视角"写法对齐。见 CALL_RECORD_DESIGN.md §3。
+     */
+    private const val CANCELLED_BY_PEER_TEXT = "对方已取消"
 
     /** 缺 `cid` / `m` 非法 / 非 JSON → null（走「无法显示」降级）。 */
     fun parse(content: String): Content? {
@@ -81,7 +88,7 @@ object CallRecord {
         val (text, missed) = when {
             c.durationSec > 0 -> "通话时长 ${duration(c.durationSec)}" to false
             else -> when (c.reason) {
-                "cancel" -> if (viewerIsSender) "已取消" to false else MISSED_TEXT to true
+                "cancel" -> if (viewerIsSender) "已取消" to false else CANCELLED_BY_PEER_TEXT to true
                 "reject" -> if (viewerIsSender) "对方已拒绝" to false else "已拒绝" to false
                 "no_answer" -> if (viewerIsSender) "对方无应答" to false else MISSED_TEXT to true
                 "busy" -> if (viewerIsSender) "对方忙线" to false else MISSED_TEXT to true
@@ -100,8 +107,9 @@ object CallRecord {
     /** 会话列表预览。`viewerIsSender` = 我是不是发送者（`row.sender == owner`）。 */
     fun preview(content: String, viewerIsSender: Boolean): String = renderRaw(content, viewerIsSender).preview
 
-    /** 预览是否该整行标红（只有被叫侧的「未接来电」）。 */
-    fun isMissedPreview(preview: String): Boolean = preview.endsWith(MISSED_TEXT)
+    /** 预览是否该整行标红（只有被叫侧真正 missed 的结局——「未接来电」或「对方已取消」）。 */
+    fun isMissedPreview(preview: String): Boolean =
+        preview.endsWith(MISSED_TEXT) || preview.endsWith(CANCELLED_BY_PEER_TEXT)
 
     /** `<1h` → `mm:ss`；`≥1h` → `h:mm:ss`。 */
     fun duration(sec: Int): String {

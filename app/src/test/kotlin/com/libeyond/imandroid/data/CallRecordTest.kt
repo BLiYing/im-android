@@ -72,5 +72,8 @@ class CallRecordTest {
         assertTrue(CallRecord.isMissedPreview(CallRecord.preview("""{"cid":"a","m":"video","r":"no_answer","d":0}""", false)))
         assertFalse(CallRecord.isMissedPreview(CallRecord.preview("""{"cid":"a","m":"video","r":"no_answer","d":0}""", true)))
         assertFalse(CallRecord.isMissedPreview(CallRecord.preview("""{"cid":"a","m":"audio","r":"reject","d":0}""", false)))
+        // cancel 被叫侧文案是「对方已取消」而不是「未接来电」，但仍要标红（2026-09-27 细化时最容易漏改 isMissedPreview 的后缀判据）。
+        assertTrue(CallRecord.isMissedPreview(CallRecord.preview("""{"cid":"a","m":"audio","r":"cancel","d":0}""", false)))
+        assertFalse(CallRecord.isMissedPreview(CallRecord.preview("""{"cid":"a","m":"audio","r":"cancel","d":0}""", true)))
     }
 }

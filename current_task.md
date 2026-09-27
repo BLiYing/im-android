@@ -7,37 +7,19 @@
 
 ## 当前焦点
 
-> **三项用户反馈处理完（2026-09-24）**：
->
-> 1. **系统通知会话「聊天信息」页对齐 iOS/Web**：用户报 tab 控件和备注名不该出现。根因是
->    `ChatDetailScreen.kt` 的备注名卡/设置卡/页签条只受 `galleryOnly` 门控，没接 `isSystemPeer`——
->    顶部操作排/更多菜单早就经 `DetailActions.pillsFor/moreFor` 收窄了，正文三块没跟上。参照 Web
->    `DetailPanel.tsx` 的 `isSystemPeer`/`showDetailBody` 分支：新增 `isSystemPeer` 入参，备注名/
->    设置/页签整段隐藏，换成一段说明卡（"这是官方通知会话，用于发送登录提醒、账号安全等系统事件。
->    你不能回复此会话。"）；`ChatDetailHost.kt` 传入 `DetailActions.isSystemPeer(conv.peerUid)`。
->    `./scripts/test.sh` 886/886 绿；真机（`GMGY7XF6LBJB6PFU`）验证：系统通知会话「聊天信息」页
->    只剩头像/名字 + 「更多」+ 说明卡，备注名/设置卡/相册-文件-链接页签条均已不见。
-> 2. **日历圆点 + 「最早」跳转**：
->    - **圆点变多不是 Android bug**——iOS `searchCalTapped` 请求 730 天日历窗口，超过服务端
->      `MaxCalendarSpan`（约 400 天）硬上限，请求恒被拒绝、静默回退成"仅本地打点"，iOS 的圆点
->      从来没真正包含过服务端补的历史；Android 用 390 天（刻意卡在限内）所以服务端合并总能成功，
->      画出的反而是更完整正确的点。**这是 iOS 端的欠账，需另行找 iOS 端修，本端不用往回改**。
->    - **「最早」点击没反应：真实 bug，已修**——`pickEarliest` 此前直接 `onLocate(1L,...)`，走的是
->      "定位到具体某条"的通用路径，把服务端 `anchor_found=false` 当"消息真没了"直接拒答；但
->      conv_seq=1 常常不是自己能看见的消息（系统事件/入群前历史），服务端答 `anchor_found=false`
->      但仍带回"我能看见的最早一段"，通用路径误判成失败。新增 `ChatLocator.locateEarliest()`
->      （镜像 iOS `requestServerWindowAnchor:isJump:earliest:`，忽略 `anchor_found`）：本地已握最早
->      则直接开窗；没有则问服务端要一窗，**落库后重查本地最早、不看 anchor_found**，再开窗；离线/
->      超时退化到本地已知最早并明确提示"网络未连接，已跳到已下载的最早一条"（`ChatWindows` 新增
->      两条文案常量）。`./scripts/test.sh` 886/886 绿；真机（`GMGY7XF6LBJB6PFU`，"20000人大群"，
->      conv_seq=1 是系统事件）验证：点「最早」能看到 `window_resp` 往返，落到真正的会话最早附近。
-> 3. **群成员搜索 / 日历消息搜索分页现状**——只调研未改代码（用户明确要求先不动）：
->    - **群成员搜索是真实、未登记的功能缺口**：`GroupApi.members(convId, cursor, q, limit)` 早支持
->      `q` 关键字分页搜索，但群资料页"成员"tab 从没调用带 `q` 的版本（只有 `MentionComposerState`/
->      `RtcInviteProvider` 两处用了）——大群里成员 tab 没有搜索入口，只能滚动翻页找人；iOS 有专门的
->      `IMGroupMemberSearchViewController`。已记入下一步 0d。
->    - **日历不是分页缺口**：本地打点无界查全部历史，服务端固定开约 390 天窗口，两端都是"固定窗口"
->      设计，不是"分页翻页"，属合理取舍、非缺陷，不需要新 TODO。
+> **通话记录：被叫侧 `cancel` 文案「未接来电」→「对方已取消」（三端 + 设计文档，2026-09-27，与用户讨论后拍板）**：
+> `cancel`（主叫主动撤回）跟真正错过（`no_answer`/`busy`/`offline`）不是一回事，只改这一种 reason 的措辞，其余三种
+> 与推送文案不变；`tone`（红/计未读/推送）完全不变，纯文案改动。本端改动：`data/CallRecord.kt` 新增
+> `CANCELLED_BY_PEER_TEXT = "对方已取消"` 常量替换 `cancel` 被叫分支的 `MISSED_TEXT`（本端未接入 i18n
+> 表，是硬编码中文字面量，符合本端现状——`scripts/i18n/targets.json` 里 Android 目标仍 `enabled:false`）。
+> **顺手修了一个真实隐患**：`isMissedPreview` 原按字符串**后缀**匹配「未接来电」判断会话列表该不该标红
+> （`lastContent` 写库那一刻就烤好预览串，见 `MessagePreview.kt`），只改文案不改这个判据的话 `cancel`
+> 的会话列表预览会**悄悄丢红**——已改成同时匹配两种后缀，并在 `CallRecordTest.kt` 的
+> `onlyCalleeMissedPreviewIsRed` 补了专门锁住这条的用例。`./scripts/test.sh` 全量 **886/886 绿**
+> （用例数不变，因为是给既有测试方法加断言，不是新增方法）。三端共用向量 `docs/conformance/call_record.json`
+> 改的那条用例已同步拷贝进本仓 `app/src/test/resources/call_record.json`（防漂移测试
+> `resourceMatchesSourceOfTruthWhenPresent` 已过）。细节见 `../IMServer/current_task.md`。
+> **未做**：真机上实际走一遍"A 呼叫 B、A 取消"看会话列表预览是否真的标红（本次只验证了纯函数）。
 
 ## 下一步
 
