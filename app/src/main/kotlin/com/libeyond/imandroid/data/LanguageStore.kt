@@ -2,6 +2,7 @@ package com.libeyond.imandroid.data
 
 import android.app.LocaleManager
 import android.content.Context
+import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
 import com.libeyond.imandroid.sdk.logging.IMLog
@@ -29,11 +30,10 @@ enum class ResolvedLanguage(val wire: String) { ZH_HANS("zh-Hans"), EN("en") }
 /**
  * App 内界面语言偏好的**唯一持有者**（对齐 iOS `IMLocalization` / Web `src/i18n/index.ts`）。
  *
- * **当前范围（2026-09-27 起搭基础设施 + 迁两个试点模块，见 `IMServer/docs/design/I18N_DESIGN.md` §5.4）**：
- * `values/i18n_strings.xml` / `values-en/i18n_strings.xml` 已由 `IMServer/scripts/i18n/gen-i18n.mjs`
- * 生成、[applyToResources] 已接线（见 [setPref]/[init]），语言设置页与登录页已经是双语的；其余 Compose
- * 界面**还是硬编码中文，尚未迁移**，选了 English 只有这两页 + 通话 Kit（`RtcCall.kt` 读 [resolved]）会变。
- * 这不是遗漏，是本轮刻意分批（iOS 当年做全量迁移也分了好几轮）。
+ * 文案来自 `IMServer/docs/i18n/strings.json` 生成的 `values(-en)/i18n_strings.xml`；Compose 用
+ * `stringResource`，非 Compose 代码用 `i18n/Str`。资源切换两条腿：API 33+ 交给平台 `LocaleManager`
+ * （[applyToResources]）；所有版本的 `MainActivity` 都用 [wrap] 包 base context，API 33 以下切换时
+ * 由 MainActivity 自己 `recreate()`。
  *
  * 用普通 SharedPreferences（与 `SessionStore` 同一手法，见其注释：本设置不涉密，不需要加密层），
  * 但额外包一层 [MutableStateFlow]——「我」页的当前值展示与 RtcCall 的实时生效要读同一份、
@@ -84,11 +84,21 @@ object LanguageStore {
      * 猜测原因：本端 `MainActivity` 是 `ComponentActivity`，全仓没有任何 `AppCompatActivity`，而
      * `AppCompatDelegate` 的 API 33+ 路径疑似仍依赖它内部的 `AppCompatActivity`/生命周期回调才能拿到
      * 有效引用——没有验证 androidx 源码，只确认了现象；改用平台 `LocaleManager` 直连后同一台真机上
-     * 验证有效。API 33 以下没有 `LocaleManager`，本端 minSdk 26，那些设备上暂不支持免重启切换
-     * （已知限制，见 current_task.md）。
+     * 验证有效。API 33 以下没有 `LocaleManager`，由 MainActivity 用 [wrap] + `recreate()` 兜住。
      */
+    /** 当前界面语言的 BCP-47 标签（资源限定符 `values-en` / 默认 `values` 即简体中文）。 */
+    fun localeTag(): String = if (resolved == ResolvedLanguage.EN) "en" else "zh-Hans"
+
+    /** 返回按当前界面语言配置的 Context（MainActivity.attachBaseContext 与 `Str` 共用，两边永远一致）。 */
+    fun wrap(base: Context): Context {
+        if (!::prefs.isInitialized) init(base)
+        val config = Configuration(base.resources.configuration)
+        config.setLocales(LocaleList.forLanguageTags(localeTag()))
+        return base.createConfigurationContext(config)
+    }
+
     private fun applyToResources() {
-        val tag = if (resolved == ResolvedLanguage.EN) "en" else "zh-Hans"
+        val tag = localeTag()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         try {
             val localeManager = appContext.getSystemService(LocaleManager::class.java)
