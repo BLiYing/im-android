@@ -186,6 +186,12 @@ data class MessageData(
     @SerialName("reply_to_conv_seq") val replyToConvSeq: Long? = null,
     @SerialName("reply_snapshot") val replySnapshot: String? = null,
     @SerialName("reply_to_from") val replyToFrom: String? = null,
+    /**
+     * 引用快照结构化标记（P3 i18n，§4.3）：客户端按 App 语言重拼快照（`data/ReplySnapshots.kt`）。
+     * 空 = 纯文本引用或老消息，显示 [replySnapshot] 原文。**必须落本地库**，同 [sysSegments]。
+     */
+    @SerialName("reply_snapshot_kind") val replySnapshotKind: String? = null,
+    @SerialName("reply_snapshot_args") val replySnapshotArgs: Map<String, String>? = null,
     /** 状态列：撤回 / 为所有人删除 / 编辑 / 置顶。 */
     @SerialName("recalled_at") val recalledAt: Long? = null,
     @SerialName("deleted_at") val deletedAt: Long? = null,
@@ -206,6 +212,14 @@ data class MessageData(
      * **必须落本地库**：不落的话刷新/重进会话后分段丢失，同一条消息退回"显真实昵称、不可点"。
      */
     @SerialName("sys_segments") val sysSegments: List<SysSegment>? = null,
+    /**
+     * 系统消息结构化事件（P3 i18n，PROTOCOL §6.6）：群系统消息与系统通知单聊（777000）带，
+     * 客户端按 App 语言用本地模板重拼（`data/SysEvents.kt`）。空/不认识 = 回退 `content`/[sysSegments]。
+     * [sysArgs] 是原始数据（群名、设备名、RFC3339 时间…）不是译文；人名不在这里，按顺序取 [sysSegments] 里带 uid 的段。
+     * **必须落本地库**，同 [sysSegments]：不落的话重进会话后切了语言也还是中文。
+     */
+    @SerialName("sys_event") val sysEvent: String? = null,
+    @SerialName("sys_args") val sysArgs: Map<String, String>? = null,
     /**
      * @提及片段（§4.1，仅群聊）。**必须落本地库**——不落的话重进会话后 @ 就不再高亮、
      * 点不动，与 [sysSegments] 同一个坑。

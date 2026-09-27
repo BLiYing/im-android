@@ -35,6 +35,9 @@ internal fun MessageData.toEntity(owner: String) = MessageEntity(
     replyToConvSeq = replyToConvSeq,
     replySnapshot = replySnapshot,
     replyToFrom = replyToFrom,
+    // 快照结构化标记落库：不落的话重进会话后引用条切了语言也还是中文
+    replySnapshotKind = replySnapshotKind?.takeIf { it.isNotEmpty() },
+    replySnapshotArgs = SysEvents.encodeArgs(replySnapshotArgs),
     recalledAt = recalledAt,
     deletedAt = deletedAt,
     editedAt = editedAt,
@@ -45,6 +48,9 @@ internal fun MessageData.toEntity(owner: String) = MessageEntity(
     sysSegments = sysSegments?.takeIf { it.isNotEmpty() }?.let {
         ProtocolJson.encodeToString(kotlinx.serialization.builtins.ListSerializer(SysSegment.serializer()), it)
     },
+    // 结构化事件落库：不落的话重进会话后系统消息切了语言也还是中文
+    sysEvent = sysEvent?.takeIf { it.isNotEmpty() },
+    sysArgs = SysEvents.encodeArgs(sysArgs),
     // @提及片段落库：不落的话重进会话后 @ 不再高亮、也点不动（同上一条的坑）
     mentionSpans = Mention.encodeSpans(mentionSpans.orEmpty()),
 )

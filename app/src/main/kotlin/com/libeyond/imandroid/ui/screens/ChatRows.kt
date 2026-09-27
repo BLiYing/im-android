@@ -4,8 +4,10 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.ChatEntry
 import com.libeyond.imandroid.data.MessageOrder
+import com.libeyond.imandroid.data.ReplySnapshots
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.PendingMessageEntity
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.ui.components.TimeFormat
 
@@ -147,8 +149,9 @@ fun buildChatRows(
         val item = items[i]
         if (TimeFormat.needsDaySeparator(prevTs, item.ts)) rows += ChatRow.DayLabel(item.ts)
 
-        // 未读分割线插在首条未读**之前**（只有已确认消息有 conv_seq，待发不参与判定）
-        if (item is Item.C && !dividerPlaced && item.msg.convSeq > readSeq) {
+        // 未读分割线插在首条未读**之前**（只有已确认消息有 conv_seq，待发不参与判定）。
+        // 群系统消息不计未读（PROTOCOL M4-8），分割线也不以它为首条
+        if (item is Item.C && !dividerPlaced && item.msg.convSeq > readSeq && item.msg.contentType != ContentType.SYSTEM) {
             rows += ChatRow.UnreadDivider
             dividerPlaced = true
         }
@@ -266,7 +269,8 @@ internal fun rowIndexOfSeq(rows: List<ChatRow>, seq: Long): Int {
 internal fun quoteSnapshotFor(rows: List<ChatRow>, msg: MessageEntity): String? {
     val seq = msg.replyToConvSeq ?: return null
     if (seq <= 0) return null
-    msg.replySnapshot?.takeIf { it.isNotBlank() }?.let { return it }
+    ReplySnapshots.canonical(msg.replySnapshotKind, msg.replySnapshotArgs, msg.replySnapshot)
+        ?.takeIf { it.isNotBlank() }?.let { return it }
     val original = originalOf(rows, seq) ?: return Str.s(R.string.chat_quote_original_fallback)
     return replyPreviewOf(original.contentType, original.content, original.fileName, original.caption)
 }

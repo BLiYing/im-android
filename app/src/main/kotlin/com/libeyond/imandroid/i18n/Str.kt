@@ -38,9 +38,12 @@ object Str {
 
     fun p(@PluralsRes id: Int, count: Int, vararg args: Any): String = r().plural(id, count, args)
 
+    /** 当前取文案所用的语言（`en` / `zh-Hans`），与 [s] 同源——拼名单分隔符等按语言分支时用。 */
+    val languageTag: String get() = r().languageTag
+
     /** `time.month_day` / `time.full_date` 的 month 参数：zh 传数字串，en 传英文缩写（见文案表 note）。 */
     fun monthArg(cal: Calendar): String =
-        if (r().languageTag == "en") {
+        if (languageTag == "en") {
             SimpleDateFormat("MMM", Locale.ENGLISH).also { it.timeZone = cal.timeZone }.format(cal.time)
         } else {
             (cal.get(Calendar.MONTH) + 1).toString()

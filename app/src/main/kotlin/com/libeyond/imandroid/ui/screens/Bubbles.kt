@@ -44,6 +44,7 @@ import com.libeyond.imandroid.data.CaptionPlacement
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.LinkDetect
+import com.libeyond.imandroid.data.ReplySnapshots
 import com.libeyond.imandroid.data.Mention
 import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.data.db.MessageEntity
@@ -238,7 +239,9 @@ internal fun Bubble(
                     // 引用条：被引用消息的降级快照（发送时冻结，原消息删了仍可展示）。
                     // **判据是 replyToConvSeq > 0 而不是"有没有快照"**（同 iOS `IMBubbleCell`）：
                     // 自己发的那条拿不到冻结快照，按"有快照才画"就会在自己这一侧整个不显示。
-                    val snap = quoteSnapshot ?: msg?.replySnapshot
+                    // **调用方（`quoteSnapshotFor`）已经按三档优先级算好并做过 ReplySnapshots.canonical
+                    // 还原**，这里不重复算一遍——重复一遍只会多一份容易与调用方脱节的实现。
+                    val snap = quoteSnapshot
                     if (!snap.isNullOrBlank() && !recalled) {
                         QuoteBlock(
                             snapshot = snap,
@@ -414,8 +417,10 @@ private fun onTapBubble(m: MessageEntity, onOpenRecord: ((String) -> Unit)?, onC
  * `chat_record` / `contact` 由服务端预本地化下发，客户端只对存量裸 token 精确匹配兜底。
  */
 internal fun localizeReplySnapshot(raw: String): String = when {
-    raw == "[chat_record]" -> Str.s(R.string.quote_snapshot_chat_record)
-    raw == "[contact]" -> Str.s(R.string.quote_snapshot_contact)
+    // 带尾缀的 `[chat_record] 标题` / `[contact] 名字` 只来自结构化标记还原（ReplySnapshots），服务端老字段不下发这种形态
+    raw == ReplySnapshots.RECALLED -> Str.s(R.string.quote_snapshot_recalled)
+    raw.startsWith("[chat_record]") -> raw.replaceFirst("[chat_record]", Str.s(R.string.quote_snapshot_chat_record))
+    raw.startsWith("[contact]") -> raw.replaceFirst("[contact]", Str.s(R.string.quote_snapshot_contact))
     raw == "[call]" -> Str.s(R.string.quote_snapshot_call)
     raw.startsWith("[image]") -> raw.replaceFirst("[image]", Str.s(R.string.preview_image))
     raw.startsWith("[video]") -> raw.replaceFirst("[video]", Str.s(R.string.preview_video))

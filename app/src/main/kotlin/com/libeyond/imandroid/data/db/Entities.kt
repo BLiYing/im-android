@@ -57,6 +57,10 @@ data class MessageEntity(
     val replyToConvSeq: Long? = null,
     val replySnapshot: String? = null,
     val replyToFrom: String? = null,
+    /** 引用快照结构化类型（PROTOCOL §4.3 P3）；与 [replySnapshot] 并行，显示见 `data/ReplySnapshots.kt`。 */
+    val replySnapshotKind: String? = null,
+    /** `reply_snapshot_args` 的 JSON（原始参数，非译文）。 */
+    val replySnapshotArgs: String? = null,
     val recalledAt: Long? = null,
     val deletedAt: Long? = null,
     val editedAt: Long? = null,
@@ -71,6 +75,10 @@ data class MessageEntity(
      * 存 JSON 而不是拆表——它只被渲染层解析一次，没有查询需求。
      */
     val sysSegments: String? = null,
+    /** 系统消息结构化事件（PROTOCOL §6.6）；与 [sysSegments] 同一类，必须落库。渲染见 `data/SysEvents.kt`。 */
+    val sysEvent: String? = null,
+    /** `sys_args` 的 JSON（原始参数，非译文）。 */
+    val sysArgs: String? = null,
     /**
      * @提及片段的 JSON（PROTOCOL §4.1）。空/NULL = 没有片段，渲染回落按昵称扫文本的老路。
      *
@@ -190,6 +198,14 @@ data class ConversationEntity(
      * ——与"写库时烤死 lastContent"那条老路径（本类头部注释）刻意不同。
      */
     val lastRecalled: Boolean = false,
+    /**
+     * 最后一条的结构化事件三件套（P3 i18n，PROTOCOL §6.6）：群系统消息 / 系统通知单聊的预览
+     * 由 [com.libeyond.imandroid.data.ConversationPreview] **按当前语言现算**，切语言立即生效；
+     * 空 = 回退 [lastContent]（老消息 / 不认识的事件）。对齐 iOS `IMConversation.lastSysEvent`。
+     */
+    val lastSysEvent: String = "",
+    val lastSysArgs: String = "",
+    val lastSysSegments: String = "",
     val unread: Int = 0,
     /**
      * 未读区间内有人 @我（含 @所有人），仅群聊有意义（M4-8）。

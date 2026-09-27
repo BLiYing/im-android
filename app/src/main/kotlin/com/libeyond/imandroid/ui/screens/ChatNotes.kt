@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ChatSearch
 import com.libeyond.imandroid.data.SysSegments
+import com.libeyond.imandroid.sdk.protocol.SysSegment
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -66,6 +67,8 @@ internal fun SystemNote(
     text: String,
     /** 落库的分段 JSON；null/坏数据 → 回退整句（历史消息本来就没有分段）。 */
     sysSegments: String? = null,
+    /** 按 App 语言重拼好的分段（`SysEvents.groupSegments`）；非 null 时优先于 [sysSegments]/[text]。 */
+    localized: List<SysSegment>? = null,
     /** 名字段的本地显示名：uid → 备注/群昵称。返回 null 用服务端给的公开昵称。 */
     localName: (String) -> String? = { null },
     /** 点名字。不传则名字只染色不可点（与 iOS `onTapUID` 为空时同）。 */
@@ -73,7 +76,7 @@ internal fun SystemNote(
 ) {
     val c = IMTheme.colors
     val appearance = IMTheme.appearance
-    val segs = remember(sysSegments, text) { SysSegments.render(sysSegments, text) }
+    val segs = remember(localized, sysSegments, text) { localized ?: SysSegments.render(sysSegments, text) }
 
     // 名字段用**琥珀色半粗**，不用 accent：胶囊底是主题绿，把名字染成同样是绿的 accent
     // 两者色相几乎重合，看不出哪几个字是名字（iOS 2026-08-30 用户反馈过）。

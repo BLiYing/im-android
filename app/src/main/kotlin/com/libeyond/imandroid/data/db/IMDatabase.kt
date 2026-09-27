@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 10,
+    version = 12,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -146,6 +146,34 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /**
+         * v10 → v11：系统消息结构化事件（P3 i18n，PROTOCOL §6.6）。消息加 `sysEvent`/`sysArgs`，
+         * 会话加最后一条的 `lastSysEvent`/`lastSysArgs`/`lastSysSegments`（列表预览按当前语言现算）。
+         *
+         * 老行为 NULL/空串 = 没有结构化事件，回退整句中文——服务端对存量历史消息本来就不回填，
+         * 协议里明写接受这个限制。
+         */
+        internal val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE message ADD COLUMN sysEvent TEXT")
+                db.execSQL("ALTER TABLE message ADD COLUMN sysArgs TEXT")
+                db.execSQL("ALTER TABLE conversation ADD COLUMN lastSysEvent TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE conversation ADD COLUMN lastSysArgs TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE conversation ADD COLUMN lastSysSegments TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /**
+         * v11 → v12：消息加 `replySnapshotKind`/`replySnapshotArgs`（引用快照结构化，P3 i18n，PROTOCOL §4.3）。
+         * 老行为 NULL = 按 `replySnapshot` 原文 + 前缀 token 本地化显示（存量行为不变）。
+         */
+        internal val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE message ADD COLUMN replySnapshotKind TEXT")
+                db.execSQL("ALTER TABLE message ADD COLUMN replySnapshotArgs TEXT")
+            }
+        }
+
         fun get(context: Context): IMDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -157,7 +185,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                    MIGRATION_9_10,
+                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                 )
                 .build().also { instance = it }
         }

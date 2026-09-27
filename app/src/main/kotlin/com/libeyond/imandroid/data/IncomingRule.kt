@@ -46,4 +46,14 @@ object IncomingRule {
         (deletedAt ?: 0L) > 0L -> IncomingKind.RemoveDeleted
         else -> IncomingKind.Message
     }
+
+    /**
+     * 计不计未读：与服务端 `conversation.unreadCount` 同口径（PROTOCOL M4-8）——别人发的、且不是群系统消息
+     * （`msg_op` 事件行在此之前已被 [kindOf] 分流走，不会走到这里）。
+     * 此前只排除了自己发的，群里改名/公告/禁言一次就让全体成员红点 +1、进会话还插一条"未读消息"分割线
+     * （2026-09-27 真机发现；下次拉会话列表服务端值又把它纠回 0，所以表现为红点忽有忽无）。
+     * 系统通知单聊（777000，`content_type=text`）照常计未读，服务端也计。
+     */
+    fun countsAsUnread(from: String, contentType: String, owner: String): Boolean =
+        from != owner && contentType != ContentType.SYSTEM
 }

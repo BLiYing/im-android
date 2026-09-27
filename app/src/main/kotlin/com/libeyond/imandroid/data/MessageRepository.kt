@@ -296,7 +296,7 @@ class MessageRepository(
         if (routeNonMessage(owner, m)) return
         val row = m.toEntity(owner)
         messages.upsert(row)
-        bumpConversation(owner, m.convId, row, incUnread = bumpUnread && m.from != owner)
+        bumpConversation(owner, m.convId, row, incUnread = bumpUnread && IncomingRule.countsAsUnread(m.from, m.contentType, owner))
     }
 
     /**
@@ -405,6 +405,17 @@ class MessageRepository(
                 lastFrom = s.lastMessage?.from ?: "",
                 lastFromNickname = s.lastMessage?.fromNickname ?: "",
                 lastRecalled = (s.lastMessage?.recalledAt ?: 0L) > 0L,
+                lastSysEvent = s.lastMessage?.sysEvent.orEmpty(),
+                lastSysArgs = SysEvents.encodeArgs(s.lastMessage?.sysArgs).orEmpty(),
+                // 与 MessageMapping.toEntity 同一种编码，直接对字段编码而不必先造一整个 MessageEntity
+                lastSysSegments = s.lastMessage?.sysSegments?.takeIf { it.isNotEmpty() }?.let {
+                    ProtocolJson.encodeToString(
+                        kotlinx.serialization.builtins.ListSerializer(
+                            com.libeyond.imandroid.sdk.protocol.SysSegment.serializer(),
+                        ),
+                        it,
+                    )
+                }.orEmpty(),
                 lastTimestamp = s.lastMessage?.timestamp ?: 0,
                 lastConvSeq = s.latestConvSeq,
                 unread = s.unread,
@@ -511,7 +522,16 @@ class MessageRepository(
         messages.clearConv(owner, convId)
         pending.clearConv(owner, convId)
         conversations.byId(owner, convId)?.let {
-            conversations.upsert(it.copy(lastContent = "", lastContentType = "text", lastTimestamp = 0))
+            conversations.upsert(
+                it.copy(
+                    lastContent = "",
+                    lastContentType = "text",
+                    lastTimestamp = 0,
+                    lastSysEvent = "",
+                    lastSysArgs = "",
+                    lastSysSegments = "",
+                )
+            )
         }
         log.i("conv_history_cleared", "convId" to convId)
     }
@@ -543,6 +563,9 @@ class MessageRepository(
                 lastFromNickname = row.fromNickname.orEmpty(),
                 // 新落的这一条必然不是撤回态——撤回是之后另一帧 msg_op 才会翻的位（见 applyMsgOp）
                 lastRecalled = false,
+                lastSysEvent = row.sysEvent.orEmpty(),
+                lastSysArgs = row.sysArgs.orEmpty(),
+                lastSysSegments = row.sysSegments.orEmpty(),
                 lastTimestamp = maxOf(c.lastTimestamp, row.timestamp),
                 lastConvSeq = maxOf(c.lastConvSeq, row.convSeq),
                 unread = if (incUnread) c.unread + 1 else c.unread,

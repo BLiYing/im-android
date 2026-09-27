@@ -9,16 +9,24 @@ import org.w3c.dom.Element
  * JVM 单测里的 [StringResolver]（经 `META-INF/services` 被 [Str] 自动发现）：按 R.string 字段名反查
  * `src/main/res/values/` 下的 XML（默认语言 = 简体中文），所以既有测试里的中文断言原样成立。
  */
-class XmlStringResolver : StringResolver {
-    override val languageTag = "zh-Hans"
+class XmlStringResolver(
+    /** `null` = 只读默认 `values/`；`"en"` = 先读 `values/` 再用 `values-en/` 覆盖（同 Android 的资源回退）。 */
+    private val qualifier: String? = null,
+) : StringResolver {
+    override val languageTag = qualifier ?: "zh-Hans"
     private val strings = HashMap<String, String>()
     private val plurals = HashMap<String, Map<String, String>>()
     private val stringNames: Map<Int, String> = namesOf(R.string::class.java)
     private val pluralNames: Map<Int, String> = namesOf(R.plurals::class.java)
 
     init {
-        val dir = listOf("src/main/res/values", "app/src/main/res/values").map(::File).first { it.isDirectory }
-        dir.listFiles { f -> f.extension == "xml" }!!.forEach(::load)
+        val res = listOf("src/main/res", "app/src/main/res").map(::File).first { it.isDirectory }
+        listOfNotNull("values", qualifier?.let { "values-$it" }).forEach { name ->
+            val dir = File(res, name)
+            val files = dir.listFiles { f -> f.extension == "xml" }
+                ?: error("XmlStringResolver: 资源目录不存在或不是目录 — ${dir.path}（qualifier=$qualifier）")
+            files.forEach(::load)
+        }
     }
 
     private fun namesOf(cls: Class<*>): Map<Int, String> =

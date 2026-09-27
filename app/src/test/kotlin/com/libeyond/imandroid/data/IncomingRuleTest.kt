@@ -55,4 +55,13 @@ class IncomingRuleTest {
         // 但在**入库**这一步语义完全不同：系统消息是给人看的，msg_op 不是。
         assertEquals(IncomingKind.Message, IncomingRule.kindOf(ContentType.SYSTEM, null))
     }
+
+    @Test
+    fun `群系统消息与自己发的不计未读，系统通知单聊照计`() {
+        // PROTOCOL M4-8：服务端 unreadCount 排除 content_type=system；本地 +1 若不同口径，红点会忽有忽无
+        assertEquals(false, IncomingRule.countsAsUnread("", ContentType.SYSTEM, "me"))
+        assertEquals(false, IncomingRule.countsAsUnread("me", ContentType.TEXT, "me"))
+        assertEquals(true, IncomingRule.countsAsUnread("u2", ContentType.TEXT, "me"))
+        assertEquals(true, IncomingRule.countsAsUnread(DetailActions.SYSTEM_UID, ContentType.TEXT, "me"))
+    }
 }

@@ -2,12 +2,14 @@ package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.ReplyNames
 import com.libeyond.imandroid.data.SenderNames
 import com.libeyond.imandroid.data.SenderRun
+import com.libeyond.imandroid.data.SysEvents
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.SendState
 import com.libeyond.imandroid.sdk.api.LinkPreview
@@ -172,6 +174,10 @@ internal fun ChatRowView(
             SystemNote(
                 text = r.msg.content,
                 sysSegments = r.msg.sysSegments,
+                // P3：认识的结构化事件按 App 语言重拼分段（人名段不变，照旧本地显示名 + 可点）
+                localized = remember(r.msg.sysEvent, r.msg.sysArgs, r.msg.sysSegments) {
+                    SysEvents.groupSegments(r.msg.sysEvent, r.msg.sysArgs, r.msg.sysSegments)
+                },
                 localName = localNameOf,
                 onTapUid = onOpenUser,
             )
@@ -180,7 +186,8 @@ internal fun ChatRowView(
             // 名字头只画在连续段首条；徽标跟着名字走（iOS `isFirstInSenderRun:` + `IMRoleBadge`）
             val showName = showsSenderName(rows, i, myUid, isGroup)
             Bubble(
-            text = m.content,
+            // 系统通知单聊（P3）：认识的事件按 App 语言拼多行正文，否则显示服务端中文 content
+            text = SysEvents.noticeTextOf(m) ?: m.content,
             msg = m,
             mentionNames = style.mentionNames,
             // 点 @某人 与点系统消息里的名字是同一个去处：他的资料页
