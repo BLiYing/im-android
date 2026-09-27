@@ -10,7 +10,7 @@ activityCompose = "1.9.3"
 composeBom = "2024.10.01"
 okhttp = "4.12.0"
 # im-rtc SDK（通话）。联调期取本机 mavenLocal（见 settings.gradle.kts），发布后改回公网版本。
-imrtc = "2.0.0"   # JitPack 正式版；本地联调改成未发布的版本号，见 settings.gradle.kts 里注释掉的 mavenLocal
+imrtc = "2.1.0"   # JitPack 正式版；本地联调改成未发布的版本号，见 settings.gradle.kts 里注释掉的 mavenLocal
 serialization = "1.7.3"
 coroutines = "1.9.0"
 datastore = "1.1.1"
