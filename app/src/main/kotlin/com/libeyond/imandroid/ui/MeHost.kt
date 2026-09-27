@@ -2,10 +2,12 @@ package com.libeyond.imandroid.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.data.MePage
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.UserCard
@@ -13,6 +15,7 @@ import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.screens.MeScreen
+import com.libeyond.imandroid.ui.screens.languageCurrentLabel
 
 /**
  * 「我」页（对齐 iOS `IMSettingsViewController` 及其 push 出去的几页）。
@@ -59,26 +62,32 @@ fun MeHost(
             MePage.DataStorage -> DataStorageHost(client = client, onBack = { page = MePage.List })
             MePage.Privacy -> PrivacySecurityHost(client = client, onBack = { page = MePage.List })
             MePage.Qr -> QrCardHost(client = client, me = me, onBack = { page = MePage.List })
+            MePage.Language -> LanguageHost(onBack = { page = MePage.List })
             MePage.Profile -> MyProfileHost(
                 client = client,
                 card = me,
                 onChanged = { me = it },
                 onBack = { page = MePage.List },
             )
-            MePage.List -> TabRoot(bottomBar) {
-                MeScreen(
-                    me = me,
-                    fallbackName = client.myPublicName(),
-                    seed = client.uid.orEmpty(),
-                    onOpenProfile = { page = MePage.Profile },
-                    onOpenQr = { page = MePage.Qr },
-                    onOpenDevices = { page = MePage.Devices },
-                    onOpenDataStorage = { page = MePage.DataStorage },
-                    onOpenPrivacy = { page = MePage.Privacy },
-                    onOpenFavorites = { page = MePage.Favorites },
-                    onComingSoon = { toast = "「$it」还没做" },
-                    onLogout = { confirmLogout = true },
-                )
+            MePage.List -> {
+                val languagePref by LanguageStore.pref.collectAsState()
+                TabRoot(bottomBar) {
+                    MeScreen(
+                        me = me,
+                        fallbackName = client.myPublicName(),
+                        seed = client.uid.orEmpty(),
+                        languageLabel = languageCurrentLabel(languagePref, LanguageStore.resolved),
+                        onOpenProfile = { page = MePage.Profile },
+                        onOpenQr = { page = MePage.Qr },
+                        onOpenDevices = { page = MePage.Devices },
+                        onOpenDataStorage = { page = MePage.DataStorage },
+                        onOpenPrivacy = { page = MePage.Privacy },
+                        onOpenFavorites = { page = MePage.Favorites },
+                        onOpenLanguage = { page = MePage.Language },
+                        onComingSoon = { toast = "「$it」还没做" },
+                        onLogout = { confirmLogout = true },
+                    )
+                }
             }
         }
     }

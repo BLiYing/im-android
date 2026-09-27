@@ -18,10 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.R
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Contrast
@@ -78,6 +80,9 @@ fun MeScreen(
     onOpenDataStorage: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenFavorites: () -> Unit,
+    onOpenLanguage: () -> Unit,
+    /** 语言行右值，如「跟随系统（简体中文）」——由调用方算好传入（[com.libeyond.imandroid.data.LanguageStore]）。 */
+    languageLabel: String,
     onComingSoon: (String) -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -100,7 +105,7 @@ fun MeScreen(
             MeRow("数据和存储", Lucide.HardDrive, ic.green, onClick = onOpenDataStorage),
             MeRow("外观", Lucide.Contrast, ic.blue) { onComingSoon("外观") },
             MeRow("省电模式", Lucide.Zap, ic.yellow, rightValue = "关闭") { onComingSoon("省电模式") },
-            MeRow("语言", Lucide.Globe, ic.purple, rightValue = "简体中文") { onComingSoon("语言") },
+            MeRow(stringResource(R.string.settings_language_title), Lucide.Globe, ic.purple, rightValue = languageLabel, onClick = onOpenLanguage),
         ),
         listOf(
             MeRow("退出登录", null, Color.Unspecified, destructive = true, onClick = onLogout),

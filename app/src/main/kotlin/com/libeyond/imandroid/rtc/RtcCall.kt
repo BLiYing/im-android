@@ -14,6 +14,9 @@ import com.imrtc.engine.media.IMVideoProfile
 import com.imrtc.engine.webrtc.IMWebRTCAdapter
 import com.imrtc.uikit.IMCallKit
 import com.imrtc.uikit.IMCallKitConfig
+import com.imrtc.uikit.IMLocale
+import com.libeyond.imandroid.data.LanguageStore
+import com.libeyond.imandroid.data.ResolvedLanguage
 import com.libeyond.imandroid.sdk.logging.IMLog
 
 /**
@@ -94,6 +97,7 @@ object RtcCall {
         IMCallKit.start(ctx, instance, IMCallKitConfig().apply {
             profileResolver = profiles
             inviteMemberProvider = invites
+            locale = imLocaleOf(LanguageStore.resolved)
         })
         val token = signToken(config)
         log.i("rtc_start", "uid" to uid, "app" to config.appId, "url" to config.wsUrl)
@@ -101,6 +105,19 @@ object RtcCall {
             if (error != null) log.w("rtc_login_failed", "code" to error.code, "name" to error.name)
         }
     }
+
+    /**
+     * 语言设置页选择变化时调用：Kit 挂着时立即生效，不用等下次 [start]（重登）。
+     * `IMCallKit.config` 是 [start] 传入的同一个 [IMCallKitConfig] 实例（反编译 `call-uikit-2.1.0-api.jar`
+     * 确认过），改它的 `locale` 字段不需要重建 Kit——与 iOS `IMRtcCall.m` 的 `_kit.config.locale =` 同一手法。
+     */
+    fun updateLocale() {
+        if (!isStarted) return
+        IMCallKit.config.locale = imLocaleOf(LanguageStore.resolved)
+    }
+
+    private fun imLocaleOf(language: ResolvedLanguage): IMLocale =
+        if (language == ResolvedLanguage.EN) IMLocale.EN else IMLocale.ZH_CN
 
     /** 群资料页加载成员时顺手喂给通话（群通话按群成员表取名字与头像）；通话服务没起来时是空操作。 */
     fun onGroupMembers(convId: String, members: List<com.libeyond.imandroid.sdk.api.GroupMember>) {

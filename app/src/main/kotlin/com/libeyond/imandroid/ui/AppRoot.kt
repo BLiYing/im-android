@@ -139,7 +139,7 @@ fun AppRoot(client: IMClient) {
                         endedNotice = ""
                         phase = Phase.Main
                     } catch (e: ApiException) {
-                        error = LoginError.friendly(e)
+                        error = LoginError.friendly(e, appContext)
                     } finally { busy = false }
                 }
             },
@@ -152,7 +152,7 @@ fun AppRoot(client: IMClient) {
                         endedNotice = ""
                         phase = Phase.Main
                     } catch (e: ApiException) {
-                        error = LoginError.friendly(e)
+                        error = LoginError.friendly(e, appContext)
                     } finally { busy = false }
                 }
             },
@@ -165,7 +165,7 @@ fun AppRoot(client: IMClient) {
                         endedNotice = ""
                         phase = Phase.Main
                     } catch (e: ApiException) {
-                        error = LoginError.friendly(e)
+                        error = LoginError.friendly(e, appContext)
                     } finally { busy = false }
                 }
             },

@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -34,6 +35,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.ColorFilter
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.components.IMErrorText
 import com.libeyond.imandroid.ui.components.IMPrimaryButton
 import com.libeyond.imandroid.ui.components.IMSecondaryButton
@@ -120,7 +122,7 @@ fun LoginScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = if (t == LoginTab.Password) "登录" else "注册",
+                        text = stringResource(if (t == LoginTab.Password) R.string.login_button_login else R.string.login_tab_register),
                         color = if (selected) c.accent else c.textSecondary,
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                     )
@@ -132,10 +134,10 @@ fun LoginScreen(
             modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(d.space3),
         ) {
-            IMTextField(username, { username = it }, "用户名", enabled = !busy)
-            IMTextField(password, { password = it }, "密码", isPassword = true, enabled = !busy)
+            IMTextField(username, { username = it }, stringResource(R.string.settings_info_username), enabled = !busy)
+            IMTextField(password, { password = it }, stringResource(R.string.login_password), isPassword = true, enabled = !busy)
             if (tab == LoginTab.Register) {
-                IMTextField(nickname, { nickname = it }, "昵称", enabled = !busy)
+                IMTextField(nickname, { nickname = it }, stringResource(R.string.login_nickname), enabled = !busy)
                 Text(
                     "用户名 5–32 位小写字母/数字/下划线；密码至少 6 位",
                     style = MaterialTheme.typography.bodyMedium,
@@ -147,14 +149,14 @@ fun LoginScreen(
 
             if (tab == LoginTab.Password) {
                 IMPrimaryButton(
-                    text = "登录",
+                    text = stringResource(R.string.login_button_login),
                     onClick = { onLogin(username.trim(), password) },
                     enabled = username.isNotBlank() && password.isNotBlank(),
                     loading = busy,
                 )
             } else {
                 IMPrimaryButton(
-                    text = "注册并登录",
+                    text = stringResource(R.string.login_button_register),
                     onClick = { onRegister(username.trim(), password, nickname.trim()) },
                     enabled = username.isNotBlank() && password.isNotBlank() && nickname.isNotBlank(),
                     loading = busy,

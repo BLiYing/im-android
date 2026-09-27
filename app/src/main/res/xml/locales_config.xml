@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  声明本端支持的语言，配合 AndroidManifest.xml 的 android:localeConfig 使用
+  （data/LanguageStore.kt 直接调平台 LocaleManager.applicationLocales 需要它）。
+
+  2026-09-27 真机实测（Android 15/API 35 OPPO 机型）确认：Android 13+ 起 LocaleManager 会拿请求的
+  语言去比对这份清单，声明的语言集合还顺带让系统"设置 → App → 语言"里出现本 App 的语言选择入口
+  （免费的额外收益）。同一轮还踩了另一个坑：`AppCompatDelegate.setApplicationLocales` 在本端
+  （无 AppCompatActivity）完全不生效，改用平台 LocaleManager 直连才验证通过，见 LanguageStore.kt
+  的 applyToResources() 注释。
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="zh-Hans" />
+    <locale android:name="en" />
+</locale-config>
