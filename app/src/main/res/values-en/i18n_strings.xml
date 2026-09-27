@@ -87,12 +87,12 @@
     <string name="call_record_tail_duration">Duration %1$s</string>
     <string name="call_record_tail_ended">Ended</string>
     <string name="call_record_tail_no_answer">No answer</string>
-    <string name="call_record_unavailable">[Voice/video call] Unable to display</string>
-    <string name="call_record_unsupported">[Voice/video call] Update the app to view it</string>
+    <string name="call_record_unavailable">[Call] Unable to display</string>
+    <string name="call_record_unsupported">[Call] Update the app to view it</string>
     <string name="call_record_who_peer">The other party</string>
     <string name="call_record_who_self">You</string>
-    <string name="card_contact_unavailable">[Contact card] Unable to display</string>
-    <string name="card_record_unavailable">[Chat history] Unable to display</string>
+    <string name="card_contact_unavailable">[Contact] Unable to display</string>
+    <string name="card_record_unavailable">[Chat History] Unable to display</string>
     <string name="chat_archive_delete_failed_retry">Delete failed, please retry</string>
     <string name="chat_attach_audio_video_unimplemented">Voice/video calling isn\'t available yet</string>
     <string name="chat_attach_av">Audio/Video</string>
@@ -196,16 +196,16 @@
     <string name="chat_error_invalid_uid">Enter a valid uid</string>
     <string name="chat_error_translate_failed">Translation failed: %1$s</string>
     <string name="chat_favorite_failed_detail">Couldn\'t favorite: %1$s</string>
-    <string name="chat_favorite_partial">Saved %1$d of %2$d items (%3$d failed)</string>
+    <string name="chat_favorite_partial">Saved %1$d of %2$d to favorites (%3$d failed)</string>
     <string name="chat_favorite_success">Saved to favorites</string>
     <plurals name="chat_favorite_success_count">
-        <item quantity="one">Saved %1$d item</item>
-        <item quantity="other">Saved %1$d items</item>
+        <item quantity="one">Saved %1$d item to favorites</item>
+        <item quantity="other">Saved %1$d items to favorites</item>
     </plurals>
     <string name="chat_file_expired">File expired</string>
     <string name="chat_file_local_missing_retry">The file is no longer on this device. Downloading it again.</string>
     <string name="chat_file_no_app_to_open">No app can open this file</string>
-    <string name="chat_file_not_downloaded">File isn\'t downloaded yet — download it first</string>
+    <string name="chat_file_not_downloaded">This file isn\'t downloaded yet. Download it first.</string>
     <string name="chat_file_open_failed">Couldn\'t open the file</string>
     <string name="chat_file_paused_tap_resume">Paused. Click to resume.</string>
     <string name="chat_file_size_tap_download">%1$s · Click to download</string>
@@ -224,6 +224,7 @@
     </plurals>
     <string name="chat_forward_merged_success">Merged and forwarded</string>
     <plurals name="chat_forward_merged_success_count">
+        <item quantity="one">Forwarded to %1$d chat</item>
         <item quantity="other">Forwarded to %1$d chats</item>
     </plurals>
     <string name="chat_forward_none_forwardable">None of the selected messages can be forwarded</string>
@@ -382,19 +383,22 @@
     <string name="chat_search_prev_month">Previous month</string>
     <string name="chat_search_today_jump_nearest">No messages today. Jumped to %1$s.</string>
     <string name="chat_search_today_no_messages_jumped_latest">No messages today — jumped to the most recent one</string>
-    <string name="chat_select_delete_confirm_message">Only deletes on this device; other devices and the other person can still see it.</string>
+    <string name="chat_select_delete_confirm_message">This only deletes from this device. Other devices and the other person aren\'t affected.</string>
     <plurals name="chat_select_delete_confirm_title">
+        <item quantity="one">Delete %1$d message</item>
         <item quantity="other">Delete %1$d messages</item>
     </plurals>
     <plurals name="chat_select_delete_done">
-        <item quantity="other">Deleted %1$d</item>
+        <item quantity="one">Deleted %1$d message</item>
+        <item quantity="other">Deleted %1$d messages</item>
     </plurals>
     <plurals name="chat_select_delete_failed_count">
         <item quantity="other">%1$d failed to delete</item>
     </plurals>
     <string name="chat_select_delete_for_me">Delete for me</string>
     <plurals name="chat_select_forward_partial_skip">
-        <item quantity="other">%1$d couldn\'t be forwarded and were skipped</item>
+        <item quantity="one">%1$d message couldn\'t be forwarded and was skipped</item>
+        <item quantity="other">%1$d messages couldn\'t be forwarded and were skipped</item>
     </plurals>
     <plurals name="chat_select_max">
         <item quantity="one">You can select up to %1$d message</item>
@@ -425,7 +429,7 @@
     <string name="chat_unread_divider">Unread messages</string>
     <string name="chat_viewer_copy_failed_network">Copy failed, please check your network</string>
     <string name="chat_viewer_copy_failed_too_large">Copy failed: image is too large</string>
-    <string name="chat_viewer_copy_no_url">This image has no location to copy</string>
+    <string name="chat_viewer_copy_no_url">This image has no URL</string>
     <string name="chat_viewer_delete_unavailable">This message can\'t be deleted</string>
     <string name="chat_voice_cannot_preview_while_recording">Can\'t preview while recording</string>
     <string name="chat_voice_cannot_start">Can\'t start recording</string>
@@ -501,7 +505,7 @@
     <string name="common_emoji">Emoji</string>
     <string name="common_error_action_failed">Action failed: %1$s</string>
     <string name="common_error_not_logged_in">Not logged in</string>
-    <string name="common_error_network_unavailable_detail">%1$s: Network unavailable</string>
+    <string name="common_error_network_unavailable_detail">%1$s: network unavailable</string>
     <string name="common_everyone">Everyone</string>
     <string name="common_favorite">Favorite</string>
     <string name="common_file">File</string>
@@ -523,7 +527,7 @@
     <string name="common_more">More</string>
     <string name="common_my_contacts">My contacts</string>
     <string name="common_next">Next</string>
-    <string name="common_no_app_for_link">No app found to open this link.</string>
+    <string name="common_no_app_for_link">No app can open this link</string>
     <string name="common_no_selectable_people">No one to choose from</string>
     <string name="common_not_logged_in">Not logged in</string>
     <string name="common_notice">Notice</string>
@@ -847,7 +851,7 @@
     </plurals>
     <string name="friend_block_confirm">Block this contact? You won’t receive their messages anymore.</string>
     <string name="friend_block_done">Blocked</string>
-    <string name="friend_block_failed_toast">Couldn\'t block</string>
+    <string name="friend_block_failed_toast">Couldn\'t block this user</string>
     <string name="friend_block_undone">Unblocked</string>
     <string name="friend_delete_confirm">Delete this friend? They’ll be removed from your contacts, but the chat history stays on this device.</string>
     <string name="friend_delete_confirm_message">After deleting, you and %1$s will no longer be friends. Chat history is kept. This can\'t be undone.</string>
@@ -973,7 +977,7 @@
     <string name="group_info_remark_hint">Only visible to you, to tell apart chats with the same name. Other members won\'t be notified.</string>
     <string name="group_info_rename_hint">1–30 characters</string>
     <string name="group_info_rename_title">Rename group</string>
-    <string name="group_info_super_note">Large group · 3 features disabled: no typing indicator, no double-check read receipts, no member online status. At a scale of 20,000 members, these would generate a flood of useless pushes.</string>
+    <string name="group_info_super_note">Large group · 3 features are off: typing indicators, read receipts, and member online status. At 20,000 members they would flood everyone with useless updates.</string>
     <string name="group_info_title">Group info</string>
     <string name="group_info_transfer_confirm_message">After transferring to %1$s, you\'ll immediately become a regular member. This can\'t be undone.</string>
     <string name="group_list_empty">You haven\'t joined any groups yet</string>
@@ -996,7 +1000,7 @@
     <string name="group_manage_edit_my_nickname">Edit group nickname</string>
     <string name="group_manage_history_note">When “New members only see history from when they joined” is on, new members can\'t see chat history from before they joined.</string>
     <string name="group_manage_history_visible">New members only see history from when they joined</string>
-    <string name="group_manage_intro_empty">Not filled in</string>
+    <string name="group_manage_intro_empty">Not set</string>
     <string name="group_manage_intro_footer">The intro appears on the group info page and the join preview page.</string>
     <string name="group_manage_intro_label">Intro</string>
     <string name="group_manage_intro_placeholder">Describe this group</string>
@@ -1004,19 +1008,19 @@
     <string name="group_manage_join_approval">Approve new members</string>
     <string name="group_manage_join_speak_footer">Approve new members: joining by QR code requires admin approval. Mute everyone: only the owner and admins can post.</string>
     <string name="group_manage_mute_all">Mute everyone</string>
-    <string name="group_manage_mute_all_off_confirm">Turn off</string>
-    <string name="group_manage_mute_all_off_confirm_message">Once turned off, all members can post.</string>
-    <string name="group_manage_mute_all_off_confirm_title">Turn off mute all?</string>
-    <string name="group_manage_mute_all_off_label">Turn off mute all</string>
+    <string name="group_manage_mute_all_off_confirm">Unmute</string>
+    <string name="group_manage_mute_all_off_confirm_message">All members will be able to post again.</string>
+    <string name="group_manage_mute_all_off_confirm_title">Unmute everyone?</string>
+    <string name="group_manage_mute_all_off_label">Unmute everyone</string>
     <string name="group_manage_mute_all_off_toast">Mute everyone turned off</string>
-    <string name="group_manage_mute_all_on_confirm">Turn on</string>
-    <string name="group_manage_mute_all_on_confirm_message">Once turned on, only the owner and admins can post until you turn it off.</string>
-    <string name="group_manage_mute_all_on_confirm_title">Turn on mute all?</string>
-    <string name="group_manage_mute_all_on_label">Turn on mute all</string>
+    <string name="group_manage_mute_all_on_confirm">Mute</string>
+    <string name="group_manage_mute_all_on_confirm_message">Only the owner and admins will be able to post until you unmute everyone.</string>
+    <string name="group_manage_mute_all_on_confirm_title">Mute everyone?</string>
+    <string name="group_manage_mute_all_on_label">Mute everyone</string>
     <string name="group_manage_mute_all_on_toast">Mute everyone turned on</string>
-    <string name="group_manage_op_failed">%1$s failed</string>
-    <string name="group_manage_op_failed_with_code">%1$s failed (%2$d)</string>
-    <string name="group_manage_op_succeeded">%1$s succeeded</string>
+    <string name="group_manage_op_failed">%1$s: failed</string>
+    <string name="group_manage_op_failed_with_code">%1$s: failed (%2$d)</string>
+    <string name="group_manage_op_succeeded">%1$s: done</string>
     <string name="group_manage_pending_count">%1$d pending</string>
     <string name="group_manage_pending_none">None</string>
     <string name="group_manage_perm_edit_info">Only admins can edit group info</string>
@@ -1150,7 +1154,7 @@
     <string name="login_registering">Signing up…</string>
     <string name="login_relogin">Log in again</string>
     <string name="login_restoring">Restoring your session…</string>
-    <string name="login_revoked_notice">You\'ve signed in elsewhere, or this device was removed.</string>
+    <string name="login_revoked_notice">Your account was logged in elsewhere, or this device was removed.</string>
     <string name="login_session_revoked">This device has been signed out. Please log in again.</string>
     <string name="login_submitting">Logging in…</string>
     <string name="login_tab_password">Password login</string>
@@ -1564,8 +1568,8 @@
     <string name="receipts_tab_unread">Unread %1$d</string>
     <string name="receipts_title">Read receipts</string>
     <string name="record_chat_history">Chat history</string>
-    <string name="record_dirty_card">[Contact card]</string>
-    <string name="record_dirty_record">[Chat history]</string>
+    <string name="record_dirty_card">[Contact]</string>
+    <string name="record_dirty_record">[Chat History]</string>
     <string name="rtc_error_id_empty">%1$s is empty</string>
     <string name="rtc_error_id_has_whitespace">%1$s contains whitespace: %2$s</string>
     <string name="rtc_error_id_too_long">%1$s exceeds %2$d bytes</string>
@@ -1604,7 +1608,7 @@
     <string name="settings_language_option_zh_hans">简体中文</string>
     <string name="settings_language_title">Language</string>
     <string name="settings_logout">Log out</string>
-    <string name="settings_logout_confirm_message">You\'ll need to log in again after signing out. Chat history already downloaded to this device will be kept.</string>
+    <string name="settings_logout_confirm_message">You\'ll need to log in again. Chat history downloaded to this device will be kept.</string>
     <string name="settings_password_changed_toast">✓ Password changed. Other devices have been signed out.</string>
     <string name="settings_row_animations">Animations &amp; performance</string>
     <string name="settings_row_data_storage">Data &amp; storage</string>
