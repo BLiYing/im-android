@@ -1,6 +1,8 @@
 package com.libeyond.imandroid.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
@@ -33,30 +35,38 @@ internal fun GroupMemberMenu(
     val actions = buildList {
         if (GroupPermissions.canSetRole(info, member, myUid)) {
             val makeAdmin = !member.isAdmin
-            add(SheetItem(if (makeAdmin) "设为管理员" else "撤销管理员") {
-                runManage(if (makeAdmin) "设为管理员" else "撤销管理员") {
+            val label = stringResource(
+                if (makeAdmin) R.string.group_member_action_make_admin else R.string.group_member_action_revoke_admin
+            )
+            add(SheetItem(label) {
+                runManage(label) {
                     client.groups.setRole(convId, member.userId, if (makeAdmin) "admin" else "member")
                 }
             })
         }
         if (GroupPermissions.canMute(info, member, myUid)) {
             val muted = GroupPermissions.isMuteActive(member.muteUntil)
-            add(SheetItem(if (muted) "解除禁言" else "禁言") {
-                runManage(if (muted) "解除禁言" else "禁言") {
+            val label = stringResource(
+                if (muted) R.string.group_member_action_unmute else R.string.group_member_action_mute_toggle
+            )
+            add(SheetItem(label) {
+                runManage(label) {
                     client.groups.muteMember(convId, member.userId, if (muted) 0L else -1L)
                 }
             })
         }
         if (GroupPermissions.canTransfer(info, member, myUid)) {
-            add(SheetItem("转让群主", destructive = true) {
-                runManage("转让群主") { client.groups.transferOwner(convId, member.userId) }
+            val label = stringResource(R.string.group_member_action_transfer_owner)
+            add(SheetItem(label, destructive = true) {
+                runManage(label) { client.groups.transferOwner(convId, member.userId) }
             })
         }
         if (GroupPermissions.canRemove(info, member, myUid)) {
-            add(SheetItem("移出群聊", destructive = true) {
+            val label = stringResource(R.string.group_member_action_remove)
+            add(SheetItem(label, destructive = true) {
                 // 缺省 cooldown=24h：只移出（none）会让人立刻又进来，
                 // 永久黑名单（forever）对一次误操作又太重（PROTOCOL §11 三档）
-                runManage("移出群聊") {
+                runManage(label) {
                     client.groups.removeMember(convId, member.userId, ban = "cooldown")
                 }
             })

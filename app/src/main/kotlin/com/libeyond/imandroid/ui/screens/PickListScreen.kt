@@ -22,7 +22,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -46,7 +49,7 @@ internal fun PickListScreen(
     multi: Boolean = false,
     /** 多选上限；`0` = 不限。超限时不再让勾。 */
     limit: Int = 0,
-    emptyText: String = "没有可选的人",
+    emptyText: String = stringResource(R.string.common_no_selectable_people),
     onToggle: (String) -> Unit = {},
     onPick: (PickRow) -> Unit = {},
     onConfirm: () -> Unit = {},
@@ -57,9 +60,13 @@ internal fun PickListScreen(
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         IMTopBar(
             title = title,
-            subtitle = if (multi && selected.isNotEmpty()) "已选 ${selected.size}" else "",
+            subtitle = if (multi && selected.isNotEmpty()) {
+                pluralStringResource(R.plurals.chat_select_selected, selected.size, selected.size)
+            } else {
+                ""
+            },
             onLeft = onBack,
-            actionText = if (multi) "确定" else "",
+            actionText = if (multi) stringResource(R.string.common_confirm) else "",
             actionEnabled = selected.isNotEmpty(),
             onAction = if (multi) onConfirm else null,
         )

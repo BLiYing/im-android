@@ -37,7 +37,8 @@ class OriginalVideoTest {
     @Test
     fun `没下过时显文案，带上大小让用户先知道要花多少流量`() {
         assertEquals("查看原视频", label())
-        assertEquals("查看原视频 · 1.0 MB", label(sizeBytes = 1024L * 1024))
+        // 复用 iOS 键 chat.media.view_original_sized 的措辞（无居中点分隔符）
+        assertEquals("查看原视频 1.0 MB", label(sizeBytes = 1024L * 1024))
     }
 
     @Test

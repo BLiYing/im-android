@@ -25,11 +25,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -133,7 +136,7 @@ fun GroupInfoScreen(
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         // 媒体库标题逐字对齐 iOS（理由见 `ChatDetailScreen` 同一行）
-        IMTopBar(title = if (galleryOnly) GALLERY_TITLE else "群聊信息", onLeft = onBack)
+        IMTopBar(title = if (galleryOnly) GALLERY_TITLE else stringResource(R.string.group_info_title), onLeft = onBack)
 
         // 头部拆成几个独立 item，别再合回一个大 item（理由见 `ChatDetailScreen` 同一处）
         LazyColumn(Modifier.fillMaxSize()) {
@@ -147,16 +150,19 @@ fun GroupInfoScreen(
                     IMAvatar(info.name, seed = info.convId, avatarUrl = info.avatarUrl, size = 72.dp)
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        info.name.ifBlank { "未命名群聊" },
+                        info.name.ifBlank { stringResource(R.string.group_text_unnamed) },
                         style = MaterialTheme.typography.titleLarge,
                         color = c.textPrimary,
                     )
                     Spacer(Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${info.memberCount} 人", color = c.textSecondary,
-                            style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            pluralStringResource(R.plurals.common_people_count, info.memberCount, info.memberCount),
+                            color = c.textSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                         if (info.isSuper) {
-                            Text(" · 大群", color = c.textSecondary,
+                            Text(" · " + stringResource(R.string.group_text_super), color = c.textSecondary,
                                 style = MaterialTheme.typography.bodyMedium)
                         }
                     }
@@ -179,8 +185,7 @@ fun GroupInfoScreen(
                         .padding(d.space4),
                 ) {
                     Text(
-                        "大群 · 已关闭 3 项能力：不显示「正在输入」、不显示已读双勾、" +
-                            "不显示成员在线态。这些能力在两万人规模下会产生海量无效推送。",
+                        stringResource(R.string.group_info_super_note),
                         color = c.textSecondary,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -193,11 +198,13 @@ fun GroupInfoScreen(
             // `IMGroupTextViewController` 的只读全屏页，本端用弹窗而非整页）。
             if (!galleryOnly && info.announcement.isNotBlank()) item(key = "announcement") {
                 Spacer(Modifier.height(d.cardGap))
-                NoticeCard("群公告", info.announcement) { onOpenNotice("群公告", info.announcement) }
+                val label = stringResource(R.string.group_text_announcement)
+                NoticeCard(label, info.announcement) { onOpenNotice(label, info.announcement) }
             }
             if (!galleryOnly && info.intro.isNotBlank()) item(key = "intro") {
                 Spacer(Modifier.height(d.cardGap))
-                NoticeCard("群简介", info.intro) { onOpenNotice("群简介", info.intro) }
+                val label = stringResource(R.string.group_text_intro)
+                NoticeCard(label, info.intro) { onOpenNotice(label, info.intro) }
             }
 
             // —— 设置区（对齐 iOS Settings 分区）——
@@ -207,18 +214,23 @@ fun GroupInfoScreen(
                     Modifier.fillMaxWidth().padding(horizontal = d.space4)
                         .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
                 ) {
-                    SettingsSwitchRow("置顶聊天", pinned, onTogglePinned)
+                    val notSet = stringResource(R.string.settings_info_not_set)
+                    SettingsSwitchRow(stringResource(R.string.chat_detail_pinned), pinned, onTogglePinned)
                     SettingsDivider()
-                    SettingsSwitchRow("消息免打扰", muted, onToggleMuted)
+                    SettingsSwitchRow(stringResource(R.string.chat_detail_muted), muted, onToggleMuted)
                     SettingsDivider()
-                    SettingsChevronRow("我在本群的昵称", info.myNickname.ifBlank { "未设置" }, onEditMyNickname)
+                    SettingsChevronRow(
+                        stringResource(R.string.chat_detail_my_group_nickname),
+                        info.myNickname.ifBlank { notSet },
+                        onEditMyNickname,
+                    )
                     SettingsDivider()
-                    SettingsChevronRow("群备注", remark.ifBlank { "未设置" }, onEditRemark)
+                    SettingsChevronRow(stringResource(R.string.chat_detail_group_remark), remark.ifBlank { notSet }, onEditRemark)
                     if (GroupPermissions.canInvite(info)) {
                         SettingsDivider()
-                        SettingsChevronRow("群二维码", "", onOpenGroupQR)
+                        SettingsChevronRow(stringResource(R.string.qr_card_group_title_code), "", onOpenGroupQR)
                         SettingsDivider()
-                        SettingsChevronRow("群邀请链接", "", onOpenGroupInviteLink)
+                        SettingsChevronRow(stringResource(R.string.qr_card_group_title_link), "", onOpenGroupInviteLink)
                     }
                 }
             }
@@ -236,7 +248,7 @@ fun GroupInfoScreen(
                             .padding(horizontal = d.space4, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("邀请好友入群", color = c.textPrimary,
+                        Text(stringResource(R.string.group_info_invite_friends), color = c.textPrimary,
                             style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                         Text("›", color = c.textTertiary)
                     }
@@ -260,12 +272,15 @@ fun GroupInfoScreen(
                             .padding(horizontal = d.space4, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("群管理", color = c.textPrimary,
+                        Text(stringResource(R.string.group_manage_title), color = c.textPrimary,
                             style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                         // 有人在等审批就把数字摆到入口上——否则要点进两层才知道
                         if (info.pendingCount > 0) {
-                            Text("${info.pendingCount} 待处理", color = c.accent,
-                                style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                stringResource(R.string.chat_detail_manage_pending_badge, info.pendingCount),
+                                color = c.accent,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                         }
                         Text("  ›", color = c.textTertiary)
                     }
@@ -288,7 +303,7 @@ fun GroupInfoScreen(
                             // （2 万人群要点 400 次「加载更多」是不可接受的）
                             androidx.compose.runtime.LaunchedEffect(members.size) { onLoadMoreMembers() }
                             Box(Modifier.fillMaxWidth().padding(14.dp), contentAlignment = Alignment.Center) {
-                                Text("加载更多", color = c.accent,
+                                Text(stringResource(R.string.group_member_load_more), color = c.accent,
                                     modifier = Modifier.clickable { onLoadMoreMembers() })
                             }
                         }
@@ -336,7 +351,10 @@ private fun MemberRow(m: GroupMember, onClick: () -> Unit, onLongClick: () -> Un
                 Text(m.displayName, color = c.textPrimary, style = MaterialTheme.typography.titleMedium)
                 if (m.isManager) {
                     Spacer(Modifier.width(6.dp))
-                    RoleBadge(if (m.isOwner) "群主" else "管理员", m.isOwner)
+                    RoleBadge(
+                        if (m.isOwner) stringResource(R.string.group_role_owner) else stringResource(R.string.group_role_admin),
+                        m.isOwner,
+                    )
                 }
                 // 判据须与 GroupPermissions.isMuteActive 同口径：0=没禁/到期的历史时间戳不算禁言中
                 // （此前用 != 0L 判定，过期的禁言时间戳会被误显示成"仍在禁言"）。

@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.AlignLeft
 import com.composables.icons.lucide.Ban
@@ -43,8 +44,10 @@ import com.composables.icons.lucide.SquarePen
 import com.composables.icons.lucide.Tag
 import com.composables.icons.lucide.UserCheck
 import com.composables.icons.lucide.UserPlus
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.data.GroupSettings
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -93,7 +96,7 @@ internal fun GroupManageScreen(
     val d = IMTheme.dimens
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        IMTopBar(title = "群管理", subtitle = info.name, onLeft = onBack)
+        IMTopBar(title = stringResource(R.string.group_manage_title), subtitle = info.name, onLeft = onBack)
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             // —— 群头像头部（对齐 iOS 的 IMGroupAvatarHeader：头像 + 相机圈 + 「设置新头像」）——
@@ -117,7 +120,7 @@ internal fun GroupManageScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             Image(
-                                Lucide.Camera, "更换群头像", Modifier.size(14.dp),
+                                Lucide.Camera, stringResource(R.string.group_avatar_change), Modifier.size(14.dp),
                                 colorFilter = ColorFilter.tint(c.onAccent),
                             )
                         }
@@ -125,7 +128,7 @@ internal fun GroupManageScreen(
                 }
                 if (onPickAvatar != null) {
                     Spacer(Modifier.height(8.dp))
-                    Text("设置新头像", color = c.accent,
+                    Text(stringResource(R.string.group_avatar_set_new), color = c.accent,
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.clickable(onClick = onPickAvatar))
                 }
@@ -139,13 +142,13 @@ internal fun GroupManageScreen(
             // 群简介编辑之前完全看不到已经填了什么，要点进去才知道。
             val editItems = buildList {
                 if (GroupPermissions.canEditInfo(info)) {
-                    add(EditRow(GroupManageAction.EditName, "群名称", Lucide.Tag, info.name))
-                    add(EditRow(GroupManageAction.EditIntro, "群简介", Lucide.AlignLeft,
-                        info.intro.ifBlank { "未填写" }))
+                    add(EditRow(GroupManageAction.EditName, stringResource(R.string.group_create_name_label), Lucide.Tag, info.name))
+                    add(EditRow(GroupManageAction.EditIntro, stringResource(R.string.group_text_intro), Lucide.AlignLeft,
+                        info.intro.ifBlank { stringResource(R.string.group_manage_intro_empty) }))
                 }
                 if (GroupPermissions.canEditAnnouncement(info)) {
-                    add(EditRow(GroupManageAction.EditAnnouncement, "群公告", Lucide.Megaphone,
-                        info.announcement.ifBlank { "未发布" }))
+                    add(EditRow(GroupManageAction.EditAnnouncement, stringResource(R.string.group_text_announcement), Lucide.Megaphone,
+                        info.announcement.ifBlank { stringResource(R.string.group_manage_announcement_unpublished) }))
                 }
             }
             if (editItems.isNotEmpty()) {
@@ -156,11 +159,11 @@ internal fun GroupManageScreen(
                         ChevronRow(row.label, row.icon, value = row.value) { onManage(row.action) }
                     }
                 }
-                Footnote("简介与公告展示给全体成员；公告发布后会通知所有人。")
+                Footnote(stringResource(R.string.group_manage_profile_footer))
             }
 
             // —— 加入与发言 ——
-            CardTitle("加入与发言")
+            CardTitle(stringResource(R.string.group_manage_section_join))
             Card {
                 SwitchRow(
                     GroupSettings.label(GroupSettings.Key.JoinApproval),
@@ -171,54 +174,62 @@ internal fun GroupManageScreen(
                     CardDivider()
                     // 全员禁言**不是**治理开关组的一员（走 /mute 接口、值是到期时间不是布尔），
                     // 但在用户眼里是同一类东西，iOS 也把它并在这一节。
-                    SwitchRow("全员禁言", Lucide.MicOff, GroupPermissions.isMuteActive(info.muteUntil)) {
+                    SwitchRow(stringResource(R.string.group_manage_mute_all), Lucide.MicOff, GroupPermissions.isMuteActive(info.muteUntil)) {
                         onManage(GroupManageAction.ToggleMuteAll)
                     }
                 }
             }
-            Footnote("进群确认：凭二维码加入需管理员审批。全员禁言：仅群主 / 管理员可发言。")
+            Footnote(stringResource(R.string.group_manage_join_speak_footer))
 
             // —— 成员权限 ——
-            CardTitle("成员权限")
+            CardTitle(stringResource(R.string.group_manage_section_permissions))
             Card {
                 PERM_ICONS.entries.forEachIndexed { i, (k, icon) ->
                     if (i > 0) CardDivider()
                     SwitchRow(GroupSettings.label(k), icon, GroupSettings.isOn(info, k)) { onToggleSetting(k) }
                 }
             }
-            Footnote("「新成员仅可见入群后历史」开启后，新成员看不到加入前的聊天记录。")
+            Footnote(stringResource(R.string.group_manage_history_note))
 
             // —— 治理 ——
-            CardTitle("治理")
+            CardTitle(stringResource(R.string.group_manage_section_governance))
             Card {
                 ChevronRow(
-                    "待审入群申请",
+                    stringResource(R.string.qr_join_req_list_title),
                     Lucide.UserCheck,
                     // pending_count 只对群主/管理员下发（PROTOCOL §11），普通成员恒 0
-                    value = if (info.pendingCount > 0) "${info.pendingCount} 待处理" else "无",
+                    value = if (info.pendingCount > 0) {
+                        stringResource(R.string.group_manage_pending_count, info.pendingCount)
+                    } else {
+                        stringResource(R.string.group_manage_pending_none)
+                    },
                     valueAccent = info.pendingCount > 0,
                     onClick = onOpenJoinRequests,
                 )
                 CardDivider()
-                ChevronRow("黑名单", Lucide.Ban, value = banCount?.let { "$it 人" }.orEmpty(), onClick = onOpenBans)
+                ChevronRow(
+                    stringResource(R.string.group_manage_blacklist), Lucide.Ban,
+                    value = banCount?.let { stringResource(R.string.group_manage_ban_count, it) }.orEmpty(),
+                    onClick = onOpenBans,
+                )
             }
 
             // —— 管理员 ——
-            CardTitle("管理员")
+            CardTitle(stringResource(R.string.group_role_admin))
             Card {
-                ChevronRow("管理员", Lucide.ShieldCheck, value = adminCountText(info, members), onClick = onOpenAdmins)
+                ChevronRow(stringResource(R.string.group_role_admin), Lucide.ShieldCheck, value = adminCountText(info, members), onClick = onOpenAdmins)
             }
-            Footnote("管理员可审批入群、禁言与移出普通成员，但不能设置管理员或转让群组。")
+            Footnote(stringResource(R.string.group_manage_permission_note))
 
             // —— 群主：只有群主看得到 ——
             // 单开一张卡：不可逆的一次性操作不该和会反复进出的「治理」混在一张卡里（手指一滑就点到旁边）。
             if (info.myRole == GroupMember.ROLE_OWNER) {
-                CardTitle("群主")
+                CardTitle(stringResource(R.string.group_role_owner))
                 Card {
                     // 本页唯一的红色行。有意为之，不是漏改主题色（iOS 同）。
-                    ChevronRow("转让群组", Lucide.Crown, danger = true, onClick = onTransferOwner)
+                    ChevronRow(stringResource(R.string.group_manage_transfer_group), Lucide.Crown, danger = true, onClick = onTransferOwner)
                 }
-                Footnote("转让后你将立即变为普通成员，且不可撤销。群主不能直接退群，须先转让。")
+                Footnote(stringResource(R.string.group_manage_transfer_warning))
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -243,7 +254,7 @@ private val PERM_ICONS: Map<GroupSettings.Key, ImageVector> = linkedMapOf(
 private fun adminCountText(info: GroupInfo, members: List<GroupMember>): String {
     if (info.isSuper) return ""
     val n = members.count { it.role == GroupMember.ROLE_ADMIN }
-    return if (n > 0) "$n 位" else "未设置"
+    return if (n > 0) Str.s(R.string.group_manage_admin_count_value, n) else Str.s(R.string.settings_info_not_set)
 }
 
 /** 分组小标题（对齐 im-web 的 `detail-card-title` 与 iOS 的 section header）。 */

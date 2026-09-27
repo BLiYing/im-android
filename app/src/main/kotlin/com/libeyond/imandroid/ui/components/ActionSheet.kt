@@ -16,8 +16,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /** 底部动作菜单的一项。 */
@@ -98,7 +100,7 @@ fun ActionSheet(
                 Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
             }
             Text(
-                text = "取消",
+                text = stringResource(R.string.common_cancel),
                 color = c.textSecondary,
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,

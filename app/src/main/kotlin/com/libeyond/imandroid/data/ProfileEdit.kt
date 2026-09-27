@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /**
  * 「我的资料」编辑表单的**纯校验/规整逻辑**。
  *
@@ -28,8 +31,8 @@ object ProfileEdit {
     fun nicknameError(nickname: String): String? {
         val n = nickname.trim()
         return when {
-            n.isEmpty() -> "昵称不能为空"
-            n.length > MAX_NICKNAME_RUNES -> "昵称最多 $MAX_NICKNAME_RUNES 个字"
+            n.isEmpty() -> Str.s(R.string.profile_nickname_required)
+            n.length > MAX_NICKNAME_RUNES -> Str.s(R.string.profile_nickname_too_long, MAX_NICKNAME_RUNES)
             else -> null
         }
     }
@@ -43,8 +46,8 @@ object ProfileEdit {
     fun usernameError(username: String): String? {
         val u = username.trim()
         return when {
-            u.isEmpty() -> "用户名不能为空"
-            !USERNAME_RE.matches(u) -> "用户名只能是小写字母、数字、下划线，5–32 位"
+            u.isEmpty() -> Str.s(R.string.profile_username_required)
+            !USERNAME_RE.matches(u) -> Str.s(R.string.profile_username_invalid_format)
             else -> null
         }
     }

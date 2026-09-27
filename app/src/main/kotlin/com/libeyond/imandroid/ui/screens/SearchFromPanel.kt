@@ -17,9 +17,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -42,7 +44,7 @@ internal fun SearchFromPanel(
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
         if (candidates.isEmpty()) {
             Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                Text("没有可筛选的发送者", color = c.textTertiary, fontSize = 13.sp)
+                Text(stringResource(R.string.chat_search_no_senders), color = c.textTertiary, fontSize = 13.sp)
             }
         } else {
             LazyColumn {

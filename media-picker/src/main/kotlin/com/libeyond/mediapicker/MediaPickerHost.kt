@@ -1,5 +1,6 @@
 package com.libeyond.mediapicker
 
+import androidx.compose.ui.res.stringResource
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -132,6 +133,7 @@ fun MediaPickerHost(
     androidx.compose.runtime.CompositionLocalProvider(
         LocalPickerImageLoader provides rememberPickerImageLoader(),
     ) {
+    val limitMsg = stringResource(R.string.mp_limit, MediaPick.LIMIT)
     MediaPickerTheme(skin) {
         MediaPickerScreen(
             buckets = buckets,
@@ -141,7 +143,7 @@ fun MediaPickerHost(
             selected = selected,
             onToggle = { a ->
                 val next = MediaPick.toggle(selected, a.id)
-                if (next == null) onToast("最多选 ${MediaPick.LIMIT} 个") else selected = next
+                if (next == null) onToast(limitMsg) else selected = next
             },
             sendOriginal = sendOriginal,
             onOriginalChange = { sendOriginal = it },

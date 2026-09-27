@@ -1,10 +1,12 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.ChatEntry
 import com.libeyond.imandroid.data.MessageOrder
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.PendingMessageEntity
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.ui.components.TimeFormat
 
 // 从 ChatScreen.kt 拆出（2026-09-07，那份文件到 586/600 行）。
@@ -265,6 +267,6 @@ internal fun quoteSnapshotFor(rows: List<ChatRow>, msg: MessageEntity): String? 
     val seq = msg.replyToConvSeq ?: return null
     if (seq <= 0) return null
     msg.replySnapshot?.takeIf { it.isNotBlank() }?.let { return it }
-    val original = originalOf(rows, seq) ?: return "原消息"
+    val original = originalOf(rows, seq) ?: return Str.s(R.string.chat_quote_original_fallback)
     return replyPreviewOf(original.contentType, original.content, original.fileName, original.caption)
 }

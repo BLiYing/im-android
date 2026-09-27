@@ -33,6 +33,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.ConversationListPhase
 import com.libeyond.imandroid.data.ConversationPreview
@@ -85,12 +87,12 @@ fun ConversationListScreen(
         // 标题**居中**、连接态走副标题，对齐 iOS 注入栏（标题恒为「消息」，连接中放在「在线」那个位置）。
         // 此前是左对齐的大标题 + 右上角一个文字「我」——底栏已有「我」，那个入口是多余的（2026-09-15 用户报）
         IMTopBar(
-            title = "消息",
-            subtitle = if (connected) "" else "连接中…",
+            title = stringResource(R.string.ios_tab_messages),
+            subtitle = if (connected) "" else stringResource(R.string.conn_state_connecting),
             right = {
                 TopBarCircleButton(
                     icon = Lucide.Plus,
-                    description = "添加",
+                    description = stringResource(R.string.common_add),
                     onClick = { onPlus(plusRect) },
                     modifier = Modifier.onGloballyPositioned { plusRect = it.boundsInWindow() },
                 )
@@ -171,7 +173,7 @@ private fun ConversationRow(
                 // 群里有人 @我：红字前缀，且**穿透免打扰**
                 if (conv.mentionUnread) {
                     Text(
-                        text = "[有人@我] ",
+                        text = stringResource(R.string.conv_list_mention_tag) + " ",
                         color = c.danger,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -269,13 +271,13 @@ private fun EmptyState() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("还没有会话", color = c.textSecondary, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(4.dp))
-        // 与 iOS emptyLabel 同一句：入口就在右上角 ＋
+        // 与 iOS/Web 共用同一句完整文案（conv.list.empty），不再手工拆成两行——
+        // 拆开在中文里正好卡在逗号上，英文原文是句号+另起一句，硬切位置对不上
         Text(
-            "点右上角 ＋ 新建群聊或添加好友",
-            color = c.textTertiary,
+            stringResource(R.string.conv_list_empty),
+            color = c.textSecondary,
             style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
         )
     }
 }

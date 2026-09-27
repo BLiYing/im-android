@@ -11,6 +11,8 @@ import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.MediaTimeline
 import com.libeyond.imandroid.data.ViewerMedia
 import com.libeyond.imandroid.data.toViewerMedia
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.MediaKind
 import com.libeyond.imandroid.sdk.logging.IMLog
@@ -90,7 +92,7 @@ internal fun rememberChatMediaTimeline(client: IMClient, convId: String): ChatMe
                     }
                     .onFailure {
                         timeline.hasMore = false
-                        timeline.notice = "网络不通，只能翻已下载的部分"
+                        timeline.notice = Str.s(R.string.media_viewer_offline_partial_notice)
                         log.w("viewer_media_page_failed", "conv" to convId)
                     }
                 timeline.loading = false

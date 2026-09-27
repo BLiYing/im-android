@@ -22,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.BuildConfig
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.rtc.RtcCall
 import com.libeyond.imandroid.rtc.RtcProfileResolver
 import com.libeyond.imandroid.sdk.IMClient
@@ -75,7 +77,7 @@ fun AppRoot(client: IMClient) {
             }
             RestoreOutcome.NoCredentials -> Phase.Login
             is RestoreOutcome.Dead -> {
-                endedNotice = "登录已失效，请重新登录"
+                endedNotice = Str.s(R.string.common_login_expired)
                 Phase.Login
             }
             // 判据三：网络不通 ≠ 会话已死。凭据还在，进主界面靠自动重连自愈，
@@ -90,8 +92,8 @@ fun AppRoot(client: IMClient) {
     LaunchedEffect(Unit) {
         client.sessionEnded.collect { reason ->
             endedNotice = when (reason) {
-                SessionEndReason.Revoked -> "你的账号已在别处登录，或该设备已被移除"
-                SessionEndReason.Banned -> "账号已被封禁"
+                SessionEndReason.Revoked -> Str.s(R.string.login_revoked_notice)
+                SessionEndReason.Banned -> Str.s(R.string.err_200003)
             }
             phase = Phase.Login
         }

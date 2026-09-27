@@ -17,9 +17,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.core.content.ContextCompat
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.QrEncode
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.QrCard
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
@@ -64,7 +68,7 @@ fun GroupQrCardHost(
     LaunchedEffect(convId) {
         runCatchingCancellable { client.qr.groupQR(convId) }
             .onSuccess { card = it; error = "" }
-            .onFailure { error = it.userMessage("获取二维码失败") }
+            .onFailure { error = it.userMessage(Str.s(R.string.qr_card_fetch_failed)) }
     }
 
     // 展示页要给别人扫：临时拉满屏幕亮度，离开还原（同 QrCardHost）。
@@ -84,7 +88,7 @@ fun GroupQrCardHost(
         val code = card?.codeString.orEmpty()
         val matrix = QrEncode.encode(code)
         if (matrix == null) {
-            toast = "二维码还没准备好"
+            toast = Str.s(R.string.qr_card_not_ready)
             return
         }
         scope.launch {
@@ -99,26 +103,25 @@ fun GroupQrCardHost(
     ) { granted ->
         if (!pendingSave) return@rememberLauncherForActivityResult
         pendingSave = false
-        if (granted) saveNow() else toast = "没有存储权限，无法保存到相册"
+        if (granted) saveNow() else toast = Str.s(R.string.media_storage_permission_denied_save)
     }
 
     QrCardScreen(
         card = card,
-        title = if (asLink) "群邀请链接" else "群二维码",
+        title = if (asLink) stringResource(R.string.qr_card_group_title_link) else stringResource(R.string.qr_card_group_title_code),
         displayName = groupName,
-        subtitle = "$memberCount 人", // 与详情页头部人数文案一致（GroupInfoScreen.kt）
+        subtitle = pluralStringResource(R.plurals.common_people_count, memberCount, memberCount), // 与详情页头部人数文案一致（GroupInfoScreen.kt）
         avatarUrl = avatarUrl,
         seed = convId,
         error = error,
-        hint = if (asLink) "复制链接分享给好友，扫描/点击即可加入本群\n该链接 7 天内有效，重置后旧链接立即失效"
-        else "邀请好友扫描二维码加入本群\n该码 7 天内有效，重置后旧码立即失效",
+        hint = if (asLink) stringResource(R.string.group_qr_hint_link) else stringResource(R.string.group_qr_hint_code),
         onCopyLink = {
             val code = card?.codeString.orEmpty()
             if (code.isEmpty()) {
-                toast = "链接还没准备好"
+                toast = Str.s(R.string.qr_card_link_not_ready)
             } else {
                 clipboard.setText(AnnotatedString(code))
-                toast = "已复制链接"
+                toast = Str.s(R.string.common_copied_link)
             }
         },
         onSave = {
@@ -136,7 +139,7 @@ fun GroupQrCardHost(
             val code = card?.codeString.orEmpty()
             val matrix = QrEncode.encode(code)
             if (matrix == null) {
-                toast = "二维码还没准备好"
+                toast = Str.s(R.string.qr_card_not_ready)
             } else {
                 scope.launch {
                     val err = withContext(Dispatchers.IO) {
@@ -152,14 +155,14 @@ fun GroupQrCardHost(
 
     if (confirmReset) {
         IMConfirmDialog(
-            title = "重置二维码？",
-            message = "重置后旧二维码/旧链接立即失效，已经把它发出去的人将无法通过它加群。",
-            confirmText = "确认重置",
+            title = stringResource(R.string.qr_card_reset_confirm_title),
+            message = stringResource(R.string.qr_card_reset_group_message),
+            confirmText = stringResource(R.string.qr_confirm_reset),
             onConfirm = {
                 scope.launch {
                     runCatchingCancellable { client.qr.resetGroupQR(convId) }
-                        .onSuccess { card = it; error = ""; toast = "已重置，旧码已失效" }
-                        .onFailure { toast = it.userMessage("重置失败") }
+                        .onSuccess { card = it; error = ""; toast = Str.s(R.string.qr_card_reset_done) }
+                        .onFailure { toast = it.userMessage(Str.s(R.string.qr_card_reset_failed)) }
                 }
             },
             onDismiss = { confirmReset = false },

@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,6 +40,7 @@ import coil.compose.AsyncImage
 import com.composables.icons.lucide.Link
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pause
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.DownloadLabels
 import com.libeyond.imandroid.data.DownloadPhase
@@ -195,7 +197,8 @@ internal fun LinkRow(
                 contentAlignment = Alignment.Center,
             ) {
                 androidx.compose.foundation.Image(
-                    Lucide.Link, "链接", Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.accent),
+                    Lucide.Link, stringResource(R.string.common_link), Modifier.size(18.dp),
+                    colorFilter = ColorFilter.tint(c.accent),
                 )
             }
             Spacer(Modifier.width(d.space3))
@@ -293,7 +296,11 @@ internal fun MediaTile(
                 // 被门控挡着：**只给磨砂**，不给远端地址——给了等于 Coil 照样把原图拉下来，门控成了装饰
                 else -> null
             },
-            contentDescription = if (isVideo) "视频" else "图片",
+            contentDescription = if (isVideo) {
+                stringResource(R.string.common_video)
+            } else {
+                stringResource(R.string.common_image)
+            },
             contentScale = ContentScale.Crop,
             placeholder = frosted,
             error = frosted,
@@ -329,7 +336,14 @@ internal fun PickCheckButton(
     overMedia: Boolean = false,
 ) {
     Box(
-        modifier.size(36.dp).clickable(onClickLabel = if (selected) "取消选择" else "选择", onClick = onClick),
+        modifier.size(36.dp).clickable(
+            onClickLabel = if (selected) {
+                stringResource(R.string.fav_row_deselect)
+            } else {
+                stringResource(R.string.fav_row_select)
+            },
+            onClick = onClick,
+        ),
         contentAlignment = Alignment.Center,
     ) {
         SelectionCheck(selected, overMedia = overMedia)
@@ -411,7 +425,7 @@ internal fun FileRow(
 internal fun SourceLine(source: String) {
     if (source.isBlank()) return
     Text(
-        "来自$source",
+        stringResource(R.string.fav_from, source),
         color = IMTheme.colors.accent, style = MaterialTheme.typography.bodySmall,
         maxLines = 1, overflow = TextOverflow.Ellipsis,
     )

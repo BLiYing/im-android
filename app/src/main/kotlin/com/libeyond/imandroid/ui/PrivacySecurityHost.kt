@@ -8,8 +8,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ChangePasswordRules
 import com.libeyond.imandroid.data.PasswordFeedback
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.http.ApiException
@@ -48,7 +50,7 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit) {
         runCatchingCancellable { client.contacts.friends(FriendEntry.BLOCKED) }
             .onSuccess { blocked = it; blockedError = "" }
             // 失败**保留当前内容**（iOS 同）：把已经看到的列表 / 计数清掉换一行报错，只会让人以为黑名单被清空了
-            .onFailure { if (blocked == null) blockedError = it.userMessage("加载已屏蔽的用户失败") }
+            .onFailure { if (blocked == null) blockedError = it.userMessage(Str.s(R.string.blocked_load_failed)) }
     }
 
     fun unblock(f: FriendEntry) {
@@ -61,7 +63,7 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit) {
                         blocked = blocked?.filterNot { it.userId == f.userId }
                         reloadBlocked()
                     }
-                    .onFailure { toast = it.userMessage("取消屏蔽失败") }
+                    .onFailure { toast = it.userMessage(Str.s(R.string.net_fallback_unblock_failed)) }
             } finally {
                 unblocking.remove(f.userId)
             }
@@ -114,7 +116,7 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit) {
                     onBack = onBack,
                     onOpenBlocked = { page = PrivacyPage.Blocked },
                     onOpenChangePassword = { page = PrivacyPage.ChangePassword },
-                    onComingSoon = { toast = "「$it」还没做" },
+                    onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                 )
             }
 

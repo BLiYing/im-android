@@ -4,10 +4,15 @@ import android.content.Context
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import com.libeyond.imandroid.data.LanguageStore
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import java.util.ServiceLoader
 
 /** 按资源 id 取文案。App 里走 Context（[ContextStringResolver]），JVM 单测走 ServiceLoader 注册的实现。 */
 interface StringResolver {
+    /** 该解析器实际取文案所用的语言（`en` / `zh-Hans`），拼日期等需要与文案同源判断语言时用。 */
+    val languageTag: String
     fun get(@StringRes id: Int, args: Array<out Any>): String
     fun plural(@PluralsRes id: Int, count: Int, args: Array<out Any>): String
 }
@@ -32,10 +37,19 @@ object Str {
     fun s(@StringRes id: Int, vararg args: Any): String = r().get(id, args)
 
     fun p(@PluralsRes id: Int, count: Int, vararg args: Any): String = r().plural(id, count, args)
+
+    /** `time.month_day` / `time.full_date` 的 month 参数：zh 传数字串，en 传英文缩写（见文案表 note）。 */
+    fun monthArg(cal: Calendar): String =
+        if (r().languageTag == "en") {
+            SimpleDateFormat("MMM", Locale.ENGLISH).also { it.timeZone = cal.timeZone }.format(cal.time)
+        } else {
+            (cal.get(Calendar.MONTH) + 1).toString()
+        }
 }
 
 /** 用跟随 [LanguageStore] 的 Context 取文案——API 33 以下没有 per-app locale，不能直接用 Application 的资源。 */
 class ContextStringResolver(private val app: Context) : StringResolver {
+    override val languageTag: String get() = LanguageStore.localeTag()
     @Volatile private var cached: Pair<String, Context>? = null
 
     private fun ctx(): Context {

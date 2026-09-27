@@ -1,22 +1,28 @@
 package com.libeyond.imandroid.data
 
+import androidx.annotation.StringRes
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ContentType
 
-/** 消息长按菜单里的一项。 */
-enum class MessageAction(val label: String, val destructive: Boolean = false) {
-    Copy("复制"),
-    Reply("引用"),
-    Forward("转发"),
+/** 消息长按菜单里的一项。`label` 惰性取值（[Str.s]），切语言不需要重建这些枚举实例。 */
+enum class MessageAction(@StringRes private val labelRes: Int, val destructive: Boolean = false) {
+    Copy(R.string.common_copy),
+    Reply(R.string.chat_msg_menu_reply),
+    Forward(R.string.common_forward),
     /** 收藏（M4-4）：内容快照存到服务端，原消息撤回/删除后仍在。 */
-    Favorite("收藏"),
+    Favorite(R.string.common_favorite),
     /** 进入多选态（判据在 [ChatSelection]）。 */
-    MultiSelect("多选"),
-    Recall("撤回", destructive = true),
+    MultiSelect(R.string.chat_msg_menu_multi_select),
+    Recall(R.string.chat_msg_menu_recall, destructive = true),
     /** 为所有人删除。 */
-    DeleteForEveryone("为所有人删除", destructive = true),
+    DeleteForEveryone(R.string.delete_sheet_everyone, destructive = true),
     /** 仅删除自己（走 REST /messages/hide）。 */
-    HideForMe("仅删除自己", destructive = true),
+    HideForMe(R.string.delete_sheet_only_me, destructive = true),
+    ;
+
+    val label: String get() = Str.s(labelRes)
 }
 
 /**
@@ -129,16 +135,19 @@ fun copyKindOf(msg: MessageEntity): CopyKind? = when {
     else -> null
 }
 
-/** 会话长按菜单（CHAT_UX §12/§14）。 */
-enum class ConversationAction(val label: String, val destructive: Boolean = false) {
-    Pin("置顶"),
-    Unpin("取消置顶"),
-    Mute("免打扰"),
-    Unmute("取消免打扰"),
-    MarkUnread("标为未读"),
+/** 会话长按菜单（CHAT_UX §12/§14）。`label` 惰性取值（[Str.s]），切语言不需要重建这些枚举实例。 */
+enum class ConversationAction(@StringRes private val labelRes: Int, val destructive: Boolean = false) {
+    Pin(R.string.conv_menu_pin),
+    Unpin(R.string.conv_menu_unpin),
+    Mute(R.string.conv_menu_mute),
+    Unmute(R.string.conv_menu_unmute),
+    MarkUnread(R.string.conv_menu_mark_unread),
     // 文案逐字对齐 iOS `conversationActionsFor:`（「设为已读」不是「标为已读」、「删除」不是「删除会话」）
-    MarkRead("设为已读"),
-    Delete("删除", destructive = true),
+    MarkRead(R.string.conv_menu_mark_read),
+    Delete(R.string.common_delete, destructive = true),
+    ;
+
+    val label: String get() = Str.s(labelRes)
 }
 
 object ConversationActions {

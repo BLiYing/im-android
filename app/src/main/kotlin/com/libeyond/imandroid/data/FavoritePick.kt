@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.Favorite
 
 /**
@@ -26,10 +28,10 @@ object FavoritePick {
         return selected + id
     }
 
-    fun limitText(max: Int = MAX): String = "最多选择 $max 项"
+    fun limitText(max: Int = MAX): String = Str.s(R.string.fav_pick_limit, max)
 
     /** 底栏按钮：没选时是灰着的「发送」，选了是「发送 (N)」（iOS `updatePickSendButton`）。 */
-    fun sendLabel(n: Int): String = if (n > 0) "发送 ($n)" else "发送"
+    fun sendLabel(n: Int): String = if (n > 0) Str.s(R.string.favorites_pick_send_count, n) else Str.s(R.string.common_send)
 
     /** 要发的收藏，按列表顺序；内容为空的剔掉（iOS `sendPickedFavorite:` 同样跳过空 content）。 */
     fun picked(items: List<Favorite>, selected: Set<Long>): List<Favorite> =
@@ -40,8 +42,8 @@ object FavoritePick {
      * 对端必 404，收藏页「转发」、聊天页转发都拦着它），所以要把跳过了几条如实说出来。
      */
     fun sentText(sent: Int, expiredSkipped: Int): String {
-        if (sent <= 0) return if (expiredSkipped > 0) "所选内容已失效，无法发送" else ""
-        val base = if (sent == 1) "已发送" else "已发送 $sent 条"
-        return if (expiredSkipped > 0) "$base（$expiredSkipped 条已失效未发送）" else base
+        if (sent <= 0) return if (expiredSkipped > 0) Str.s(R.string.favorites_pick_sent_none_expired) else ""
+        val base = if (sent == 1) Str.s(R.string.common_sent) else Str.p(R.plurals.chat_media_sent_count, sent, sent)
+        return if (expiredSkipped > 0) base + Str.p(R.plurals.favorites_pick_sent_expired_suffix, expiredSkipped, expiredSkipped) else base
     }
 }

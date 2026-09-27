@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.DeviceSession
 import java.time.Instant
 import java.time.ZoneId
@@ -29,9 +31,9 @@ object DeviceDisplay {
     fun platformLabel(platform: String): String = when (platform) {
         "ios" -> "iOS"
         "android" -> "Android"
-        "web" -> "网页版"
-        "desktop" -> "桌面端"
-        else -> "未知设备"
+        "web" -> Str.s(R.string.device_platform_web)
+        "desktop" -> Str.s(R.string.device_platform_desktop)
+        else -> Str.s(R.string.device_platform_unknown)
     }
 
     /**
@@ -39,7 +41,7 @@ object DeviceDisplay {
      * Web 在这里按平台兜底成「iOS 设备 / 网页版…」，是已知的三端文案差异，不是 bug；
      * 本端跟 iOS，是因为本次「我」页整体以 iOS 为基准。
      */
-    fun deviceName(d: DeviceSession): String = d.deviceName.trim().ifBlank { "未知设备" }
+    fun deviceName(d: DeviceSession): String = d.deviceName.trim().ifBlank { Str.s(R.string.device_platform_unknown) }
 
     /**
      * 最近活跃的相对文案。`ms <= 0` 视为从未活跃过 → 「离线」。
@@ -49,13 +51,13 @@ object DeviceDisplay {
      * 它对当前输出不可观测，所以测试断言的是**输出**「刚刚活跃」，不是钳位本身。）
      */
     fun lastActiveText(lastActiveAt: Long, now: Long): String {
-        if (lastActiveAt <= 0) return "离线"
+        if (lastActiveAt <= 0) return Str.s(R.string.common_offline)
         val sec = ((now - lastActiveAt) / 1000).coerceAtLeast(0)
         return when {
-            sec < 60 -> "刚刚活跃"
-            sec < 3600 -> "${sec / 60} 分钟前活跃"
-            sec < 86400 -> "${sec / 3600} 小时前活跃"
-            else -> "${sec / 86400} 天前活跃"
+            sec < 60 -> Str.s(R.string.device_active_just_now)
+            sec < 3600 -> Str.p(R.plurals.device_active_minutes_ago, (sec / 60).toInt(), (sec / 60).toInt())
+            sec < 86400 -> Str.p(R.plurals.device_active_hours_ago, (sec / 3600).toInt(), (sec / 3600).toInt())
+            else -> Str.p(R.plurals.device_active_days_ago, (sec / 86400).toInt(), (sec / 86400).toInt())
         }
     }
 
@@ -68,7 +70,7 @@ object DeviceDisplay {
     fun statusLine(d: DeviceSession, now: Long): String {
         val parts = mutableListOf<String>()
         if (d.online) {
-            parts += "在线"
+            parts += Str.s(R.string.common_online)
             parts += platformLabel(d.platform)
         } else {
             parts += lastActiveText(d.lastActiveAt, now)
@@ -104,10 +106,11 @@ object DeviceDisplay {
     fun sections(devices: List<DeviceSession>): List<Section> {
         val current = devices.firstOrNull { it.current }
         val others = devices.filter { it !== current }
+        val thisDevice = Str.s(R.string.device_list_section_this_device)
         return when {
-            current != null && others.isEmpty() -> listOf(Section("这台设备", listOf(current)))
-            current != null -> listOf(Section("这台设备", listOf(current)), Section("其他设备", others))
-            others.isNotEmpty() -> listOf(Section("已登录设备", others))
+            current != null && others.isEmpty() -> listOf(Section(thisDevice, listOf(current)))
+            current != null -> listOf(Section(thisDevice, listOf(current)), Section(Str.s(R.string.device_list_section_other_devices), others))
+            others.isNotEmpty() -> listOf(Section(Str.s(R.string.settings_row_devices), others))
             else -> emptyList()
         }
     }

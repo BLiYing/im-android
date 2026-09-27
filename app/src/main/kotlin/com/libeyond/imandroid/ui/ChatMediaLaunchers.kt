@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.mediapicker.PickedMedia
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -73,7 +75,7 @@ internal fun rememberChatMediaLaunchers(
         openCamera = {
             val uri = MediaSendFlow.newCameraUri(context)
             if (uri == null) {
-                onToast("打不开相机")
+                onToast(Str.s(R.string.qr_scan_camera_open_failed))
             } else {
                 cameraUri = uri
                 takePhoto.launch(uri)

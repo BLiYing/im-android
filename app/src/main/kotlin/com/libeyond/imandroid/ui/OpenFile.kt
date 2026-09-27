@@ -3,6 +3,8 @@ package com.libeyond.imandroid.ui
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 import java.io.File
 
@@ -27,7 +29,7 @@ object OpenFile {
      * @return 失败时给用户看的文案；成功返回 null。
      */
     fun open(context: Context, file: File, displayName: String): String? {
-        if (!file.isFile || file.length() <= 0) return "文件不在本地，请先下载"
+        if (!file.isFile || file.length() <= 0) return Str.s(R.string.chat_file_not_downloaded)
         return try {
             val dir = File(context.cacheDir, "share").apply { mkdirs() }
             val out = File(dir, safeName(displayName))
@@ -42,10 +44,10 @@ object OpenFile {
         } catch (e: android.content.ActivityNotFoundException) {
             // 没装能打开 .xlsx/.psd 的应用是常态，不是错误——如实说，别报"打开失败"
             log.i("file_open_no_app")
-            "没有能打开这个文件的应用"
+            Str.s(R.string.chat_file_no_app_to_open)
         } catch (e: Exception) {
             log.w("file_open_failed", "err" to (e.javaClass.simpleName))
-            "打开失败"
+            Str.s(R.string.chat_file_open_failed)
         }
     }
 

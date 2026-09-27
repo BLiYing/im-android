@@ -10,6 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import com.composables.icons.lucide.Antenna
 import com.composables.icons.lucide.ChartPie
 import com.composables.icons.lucide.Lucide
@@ -48,22 +50,22 @@ fun DataStorageScreen(
     val ic = IMTheme.settingsIcons
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
-        IMTopBar(title = "数据和存储", onLeft = onBack)
+        IMTopBar(title = stringResource(R.string.ios_settings_row_data_storage), onLeft = onBack)
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(d.sectionGap))
             IMSettingsGroup {
                 IMSettingsRow(
-                    title = "存储用量",
+                    title = stringResource(R.string.storage_row_usage),
                     onClick = onStorageUsage,
                     icon = Lucide.ChartPie,
                     iconBackground = ic.orange,
                     rightValue = DownloadSettingsUi.usageLabel(cacheBytes),
                 )
             }
-            IMSectionFooter("下载的文件缓存在本机；清除后云端仍保留，需要时可重新下载。")
+            IMSectionFooter(stringResource(R.string.storage_footer_cache_hint))
 
-            IMSectionHeader("自动下载媒体文件")
+            IMSectionHeader(stringResource(R.string.autodl_master_switch))
             IMSettingsGroup {
                 DownloadNetwork.entries.forEachIndexed { i, net ->
                     if (i > 0) IMRowDivider()
@@ -79,13 +81,13 @@ fun DataStorageScreen(
                 IMRowDivider()
                 // 已是出厂默认（含刚点过重置）→ 无可重置：置灰不可点，改过之后自动恢复（iOS 同）
                 IMActionRow(
-                    title = "重置自动下载设置",
+                    title = stringResource(R.string.storage_row_reset),
                     onClick = onReset,
                     enabled = !DownloadPolicy.isDefault(settings),
                     alignToIconRows = true,
                 )
             }
-            IMSectionFooter("“重置”会把两个网络都恢复为出厂默认（移动数据中档、Wi-Fi 高档）。语音消息占用小，始终自动下载。")
+            IMSectionFooter(stringResource(R.string.storage_footer_reset_hint))
             Spacer(Modifier.height(d.sectionGap))
         }
     }

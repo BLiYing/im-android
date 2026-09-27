@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 import java.io.File
 
@@ -43,21 +45,21 @@ object ImageExport {
             }
             val resolver = context.contentResolver
             val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-                ?: return "保存失败：相册不可写"
+                ?: return Str.s(R.string.media_save_gallery_not_writable)
             resolver.openOutputStream(uri)?.use { out ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-            } ?: return "保存失败：无法写入"
+            } ?: return Str.s(R.string.media_save_write_failed)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 values.clear()
                 values.put(MediaStore.Images.Media.IS_PENDING, 0)
                 resolver.update(uri, values, null, null)
             }
             log.i("qr_saved_to_gallery")
-            "已保存到相册"
+            Str.s(R.string.qr_card_saved)
         } catch (e: Exception) {
             // 权限被拒、存储满、厂商 ROM 拦截都会走到这里——必须给出可行动的提示而不是静默。
             log.w("gallery_save_failed", "err" to e.javaClass.simpleName)
-            "保存失败，请检查存储权限"
+            Str.s(R.string.qr_card_save_failed)
         }
     }
 
@@ -82,12 +84,12 @@ object ImageExport {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             context.startActivity(
-                Intent.createChooser(intent, "分享二维码").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                Intent.createChooser(intent, Str.s(R.string.media_share_qr_chooser_title)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
             null
         } catch (e: Exception) {
             log.w("share_failed", "err" to e.javaClass.simpleName)
-            "分享失败"
+            Str.s(R.string.media_share_failed)
         }
     }
 }

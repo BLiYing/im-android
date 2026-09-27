@@ -26,16 +26,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ChatCalendar
+import com.libeyond.imandroid.data.LanguageStore
+import com.libeyond.imandroid.data.ResolvedLanguage
 import com.libeyond.imandroid.ui.theme.IMTheme
 import java.time.LocalDate
+import java.time.Month
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.format.TextStyle
+import java.util.Locale
 import java.util.TimeZone
 
 /**
@@ -71,7 +78,13 @@ internal fun ChatCalendarDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("按日期跳转", color = c.textPrimary, style = MaterialTheme.typography.titleMedium) },
+        title = {
+            Text(
+                stringResource(R.string.chat_search_date_jump_dialog_title),
+                color = c.textPrimary,
+                style = MaterialTheme.typography.titleMedium,
+            )
+        },
         text = {
             Column {
                 Row(
@@ -79,13 +92,13 @@ internal fun ChatCalendarDialog(
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
                 ) {
                     Text(
-                        "最早",
+                        stringResource(R.string.chat_search_earliest),
                         color = c.accent,
                         fontSize = 14.sp,
                         modifier = Modifier.clickable(onClick = onEarliest),
                     )
                     Text(
-                        "今天",
+                        stringResource(R.string.time_today),
                         color = c.accent,
                         fontSize = 14.sp,
                         modifier = Modifier.clickable(onClick = onToday),
@@ -108,16 +121,41 @@ internal fun ChatCalendarDialog(
                     val day = selected
                     if (day != null) onPickDay(day.dayStartMsKey(zone, offsetMs)) else onDismiss()
                 },
-            ) { Text("跳转", color = c.accent) }
+            ) { Text(stringResource(R.string.chat_search_date_jump_confirm), color = c.accent) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消", color = c.textSecondary) }
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel), color = c.textSecondary)
+            }
         },
         containerColor = c.surfaceElevated,
     )
 }
 
-private val WEEKDAY_LABELS = listOf("日", "一", "二", "三", "四", "五", "六")
+/**
+ * 星期表头文案。**不能是顶层 val**（禁止在顶层初始化时求值文案，切语言不会变），
+ * 改成组合期按 [R.string.chat_search_dow_sun] 等一读七个（复用会话内搜索日历同一套键）。
+ */
+@Composable
+private fun weekdayLabels(): List<String> = listOf(
+    stringResource(R.string.chat_search_dow_sun),
+    stringResource(R.string.chat_search_dow_mon),
+    stringResource(R.string.chat_search_dow_tue),
+    stringResource(R.string.chat_search_dow_wed),
+    stringResource(R.string.chat_search_dow_thu),
+    stringResource(R.string.chat_search_dow_fri),
+    stringResource(R.string.chat_search_dow_sat),
+)
+
+/**
+ * 月历头部「年月」的 month 参数（对齐 `chat.search.calendar_month_label` 的口径）：
+ * zh 传数字串、en 传英文月份缩写（如 Sep）——不是简单的数字格式化。
+ */
+private fun monthArg(month: Int): String = if (LanguageStore.resolved == ResolvedLanguage.EN) {
+    Month.of(month).getDisplayName(TextStyle.SHORT, Locale.ENGLISH)
+} else {
+    month.toString()
+}
 
 @Composable
 private fun IMCalendarGrid(
@@ -137,17 +175,25 @@ private fun IMCalendarGrid(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MonthNavButton(Lucide.ChevronLeft, "上个月") { onMonthChange(displayedMonth.minusMonths(1)) }
+            MonthNavButton(Lucide.ChevronLeft, stringResource(R.string.chat_search_prev_month)) {
+                onMonthChange(displayedMonth.minusMonths(1))
+            }
             Text(
-                "${displayedMonth.year}年${displayedMonth.monthValue}月",
+                stringResource(
+                    R.string.chat_search_calendar_month_label,
+                    displayedMonth.year.toString(),
+                    monthArg(displayedMonth.monthValue),
+                ),
                 color = c.textPrimary,
                 style = MaterialTheme.typography.titleSmall,
             )
-            MonthNavButton(Lucide.ChevronRight, "下个月") { onMonthChange(displayedMonth.plusMonths(1)) }
+            MonthNavButton(Lucide.ChevronRight, stringResource(R.string.chat_search_next_month)) {
+                onMonthChange(displayedMonth.plusMonths(1))
+            }
         }
 
         Row(Modifier.fillMaxWidth()) {
-            WEEKDAY_LABELS.forEach { label ->
+            weekdayLabels().forEach { label ->
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Text(label, color = c.textTertiary, style = MaterialTheme.typography.bodySmall)
                 }

@@ -32,12 +32,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Quote
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.FavoriteCategory
 import com.libeyond.imandroid.data.FavoritePick
 import com.libeyond.imandroid.data.Favorites
@@ -98,9 +100,13 @@ internal fun FavoritesScreen(
     val c = IMTheme.colors
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         if (pick != null) {
-            IMTopBar(title = "从收藏发送", leftLabel = "取消", onLeft = onBack)
+            IMTopBar(
+                title = stringResource(R.string.favorites_pick_title),
+                leftLabel = stringResource(R.string.common_cancel),
+                onLeft = onBack,
+            )
         } else {
-            IMTopBar(title = "收藏消息", onLeft = onBack)
+            IMTopBar(title = stringResource(R.string.common_saved_messages), onLeft = onBack)
         }
         LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
             if (current != null) {
@@ -109,7 +115,7 @@ internal fun FavoritesScreen(
                     IMSearchField(
                         value = query,
                         onValueChange = onQueryChange,
-                        placeholder = "在${current.title}中搜索",
+                        placeholder = stringResource(R.string.favorites_search_placeholder_in_category, current.title),
                         modifier = Modifier.fillMaxWidth()
                             .padding(horizontal = IMTheme.dimens.space4)
                             .padding(top = 8.dp),
@@ -120,11 +126,17 @@ internal fun FavoritesScreen(
                 }
             }
             when {
-                loading && noneAtAll -> item { Hint("加载中…") }
+                loading && noneAtAll -> item { Hint(stringResource(R.string.common_loading)) }
                 failed && noneAtAll -> item { RetryHint(onRetry) }
                 noneAtAll || current == null -> item { EmptyFavorites() }
                 shown.isEmpty() -> item {
-                    Hint(if (query.isNotBlank()) "未找到相关收藏" else Favorites.emptyText(current))
+                    Hint(
+                        if (query.isNotBlank()) {
+                            stringResource(R.string.favorites_empty_no_results)
+                        } else {
+                            Favorites.emptyText(current)
+                        },
+                    )
                 }
                 else -> favoriteItems(
                     current, shown, host, useTls, sourceNameOf, onOpen,
@@ -269,7 +281,10 @@ private fun TextFavoriteRow(
                 Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(c.accentSoft),
                 contentAlignment = Alignment.Center,
             ) {
-                Image(Lucide.Quote, "文本", Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.accent))
+                Image(
+                    Lucide.Quote, stringResource(R.string.favorites_category_text),
+                    Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.accent),
+                )
             }
             Spacer(Modifier.width(d.space3))
             Column(Modifier.weight(1f)) {
@@ -349,10 +364,10 @@ private fun EmptyFavorites() {
     ) {
         Image(Lucide.Bookmark, null, Modifier.size(44.dp), colorFilter = ColorFilter.tint(c.textTertiary))
         Spacer(Modifier.height(12.dp))
-        Text("还没有收藏", color = c.textPrimary, style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.favorites_empty_title), color = c.textPrimary, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
         Text(
-            "长按聊天里的任意消息 → 收藏，就会出现在这里",
+            stringResource(R.string.favorites_empty_hint),
             color = c.textTertiary, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
         )
     }
@@ -363,10 +378,10 @@ private fun EmptyFavorites() {
 private fun RetryHint(onRetry: () -> Unit) {
     val c = IMTheme.colors
     Column(Modifier.fillMaxWidth().padding(top = 96.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("加载失败", color = c.textPrimary, style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.common_load_failed), color = c.textPrimary, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         Text(
-            "点击重试", color = c.accent, style = MaterialTheme.typography.bodyMedium,
+            stringResource(R.string.common_tap_to_retry), color = c.accent, style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.archiveItemGestures(onClick = onRetry, onLongPress = null),
         )
     }
@@ -380,7 +395,7 @@ private fun RetryHint(onRetry: () -> Unit) {
 internal fun FavoriteReaderScreen(text: String, onBack: () -> Unit) {
     val c = IMTheme.colors
     Column(Modifier.fillMaxSize().background(c.pageBackground).systemBarsPadding()) {
-        IMTopBar(title = "收藏", onLeft = onBack)
+        IMTopBar(title = stringResource(R.string.favorites_reader_title), onLeft = onBack)
         androidx.compose.foundation.text.selection.SelectionContainer(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         ) {

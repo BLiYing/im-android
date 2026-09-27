@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.sdk.api
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.http.HttpClient
 import com.libeyond.imandroid.sdk.logging.IMLog
@@ -123,7 +125,7 @@ class UploadApi(
         }
         if (env.code != 0) {
             log.w("upload_biz_error", "code" to env.code, "reqId" to env.requestId)
-            throw ApiException(env.code, env.message.ifEmpty { "上传失败" }, env.requestId, status)
+            throw ApiException(env.code, env.message.ifEmpty { Str.s(R.string.net_error_upload_failed) }, env.requestId, status)
         }
         val data = env.data ?: throw ApiException(ApiException.TRANSPORT, "上传未返回 data", requestId)
         val r = ProtocolJson.decodeFromJsonElement(UploadResult.serializer(), data)
@@ -265,7 +267,7 @@ class UploadApi(
         }
         if (env.code != 0) {
             log.w("${event}_biz_error", "code" to env.code, "reqId" to env.requestId)
-            throw ApiException(env.code, env.message.ifEmpty { "上传失败" }, env.requestId, status)
+            throw ApiException(env.code, env.message.ifEmpty { Str.s(R.string.net_error_upload_failed) }, env.requestId, status)
         }
         val data = env.data
             ?: throw ApiException(ApiException.TRANSPORT, "上传未返回 data", requestId)

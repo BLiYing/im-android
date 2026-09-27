@@ -23,8 +23,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -62,19 +64,19 @@ fun UserSearchScreen(
         modifier = Modifier.fillMaxSize().background(c.groupedBackground)
             .systemBarsPadding().imePadding(),
     ) {
-        IMTopBar(title = "添加朋友", onLeft = onBack)
+        IMTopBar(title = stringResource(R.string.friend_request_title), onLeft = onBack)
 
         Column(Modifier.padding(d.space4)) {
-            IMTextField(query, onQueryChange, "用户名或手机号")
+            IMTextField(query, onQueryChange, stringResource(R.string.contacts_search_placeholder))
             Spacer(Modifier.size(d.space2))
             Text(
-                "按用户名或手机号**精确**匹配（防止批量枚举），昵称搜不到",
+                stringResource(R.string.friend_request_search_hint),
                 color = c.textTertiary,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.size(d.space2))
             com.libeyond.imandroid.ui.components.IMPrimaryButton(
-                text = "搜索", onClick = onSearch,
+                text = stringResource(R.string.common_search), onClick = onSearch,
                 enabled = query.isNotBlank(), loading = searching,
             )
             IMErrorText(error, Modifier.padding(top = d.space2))
@@ -82,7 +84,7 @@ fun UserSearchScreen(
 
         if (searched && results.isEmpty() && !searching) {
             Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                Text("没找到这个用户", color = c.textTertiary)
+                Text(stringResource(R.string.friend_request_no_user_found), color = c.textTertiary)
             }
         }
 
@@ -118,11 +120,11 @@ private fun ResultRow(user: UserCard, relation: String, onAdd: () -> Unit, onOpe
         }
         // 按关系给不同动作，与 iOS/Web 同一矩阵
         when (relation) {
-            FriendEntry.ACCEPTED -> ActionChip("发消息", onOpenChat)
-            FriendEntry.REQUESTED -> Text("已申请", color = c.textTertiary)
-            FriendEntry.PENDING -> ActionChip("同意", onAdd)
-            FriendEntry.BLOCKED -> Text("已拉黑", color = c.textTertiary)
-            else -> ActionChip("加好友", onAdd)
+            FriendEntry.ACCEPTED -> ActionChip(stringResource(R.string.qr_action_send_message), onOpenChat)
+            FriendEntry.REQUESTED -> Text(stringResource(R.string.contacts_search_action_requested), color = c.textTertiary)
+            FriendEntry.PENDING -> ActionChip(stringResource(R.string.common_agree), onAdd)
+            FriendEntry.BLOCKED -> Text(stringResource(R.string.common_blocked), color = c.textTertiary)
+            else -> ActionChip(stringResource(R.string.contacts_search_action_add), onAdd)
         }
     }
 }

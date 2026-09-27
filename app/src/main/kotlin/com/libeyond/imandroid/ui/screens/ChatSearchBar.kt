@@ -32,6 +32,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +45,7 @@ import com.composables.icons.lucide.CircleUserRound
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.X
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -99,7 +101,7 @@ internal fun ChatSearchTopBar(
                 Spacer(Modifier.width(d.space2))
                 Box(Modifier.weight(1f)) {
                     if (query.isEmpty()) {
-                        Text("搜索聊天内容", color = c.textTertiary, fontSize = 15.sp)
+                        Text(stringResource(R.string.chat_search_placeholder), color = c.textTertiary, fontSize = 15.sp)
                     }
                     BasicTextField(
                         value = query,
@@ -117,7 +119,7 @@ internal fun ChatSearchTopBar(
                 if (query.isNotEmpty()) {
                     Image(
                         imageVector = Lucide.X,
-                        contentDescription = "清空",
+                        contentDescription = stringResource(R.string.chat_clear_ok),
                         modifier = Modifier
                             .size(16.dp)
                             .clickable { onQueryChange("") },
@@ -127,7 +129,7 @@ internal fun ChatSearchTopBar(
             }
             Spacer(Modifier.width(d.space3))
             Text(
-                text = "取消",
+                text = stringResource(R.string.common_cancel),
                 color = c.accent,
                 fontSize = 16.sp,
                 modifier = Modifier.clickable(onClick = onCancel),
@@ -189,11 +191,15 @@ internal fun ChatSearchNavBar(
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("来自: $fromLabel", color = c.accent, fontSize = 12.sp)
+                    Text(
+                        stringResource(R.string.chat_search_from_token, fromLabel),
+                        color = c.accent,
+                        fontSize = 12.sp,
+                    )
                     Spacer(Modifier.width(4.dp))
                     Image(
                         imageVector = Lucide.X,
-                        contentDescription = "清除发件人筛选",
+                        contentDescription = stringResource(R.string.chat_search_clear_sender),
                         modifier = Modifier.size(12.dp),
                         colorFilter = ColorFilter.tint(c.accent),
                     )
@@ -214,15 +220,15 @@ internal fun ChatSearchNavBar(
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                NavArrow(Lucide.Calendar, "按日期跳转", enabled = true, onOpenCalendar)
+                NavArrow(Lucide.Calendar, stringResource(R.string.chat_search_date_jump_dialog_title), enabled = true, onOpenCalendar)
                 if (showsFromFilter && fromLabel == null) {
                     Spacer(Modifier.width(d.space2))
-                    NavArrow(Lucide.CircleUserRound, "按发送者筛选", enabled = true, onOpenFrom)
+                    NavArrow(Lucide.CircleUserRound, stringResource(R.string.chat_search_by_member), enabled = true, onOpenFrom)
                 }
                 Spacer(Modifier.width(d.space2))
-                NavArrow(Lucide.ChevronUp, "上一条（更旧）", canPrev, onPrev)
+                NavArrow(Lucide.ChevronUp, stringResource(R.string.chat_search_prev), canPrev, onPrev)
                 Spacer(Modifier.width(d.space2))
-                NavArrow(Lucide.ChevronDown, "下一条（更新）", canNext, onNext)
+                NavArrow(Lucide.ChevronDown, stringResource(R.string.chat_search_next), canNext, onNext)
             }
         }
     }

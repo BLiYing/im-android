@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.ui.components.IMAvatar
 import androidx.compose.foundation.Image
@@ -55,7 +57,7 @@ internal fun ContactCardContent(
 
     if (card == null) {
         // 降级：老版本/被截断的名片。给一句人话，不给 JSON。
-        CardFallback("[个人名片] 无法显示", footerTrailing)
+        CardFallback(stringResource(R.string.card_contact_unavailable), footerTrailing)
         return
     }
 
@@ -86,7 +88,7 @@ internal fun ContactCardContent(
         Spacer(Modifier.height(6.dp))
         // 脚注前那枚小图标：iOS 用 `person.crop.square`（11pt，textSecondary）。
         // 只有文字没有图标时，名片卡和聊天记录卡的底部长得一模一样，一眼分不出是哪种卡。
-        CardFooter(Lucide.Contact, "个人名片", footerTrailing)
+        CardFooter(Lucide.Contact, stringResource(R.string.contact_card_footer), footerTrailing)
     }
 }
 
@@ -104,7 +106,7 @@ internal fun ChatRecordCardContent(
     val rec = CardContent.parseRecord(content, previewLines)
 
     if (rec == null) {
-        CardFallback("[聊天记录] 无法显示", footerTrailing)
+        CardFallback(stringResource(R.string.card_record_unavailable), footerTrailing)
         return
     }
 
@@ -130,7 +132,7 @@ internal fun ChatRecordCardContent(
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
         Spacer(Modifier.height(6.dp))
         // 脚注只写「聊天记录」，**不写「共 N 条」**：iOS/Web 都没有这一段
-        CardFooter(Lucide.MessageSquare, "聊天记录", footerTrailing)
+        CardFooter(Lucide.MessageSquare, stringResource(R.string.record_chat_history), footerTrailing)
     }
 }
 

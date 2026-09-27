@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.sdk.http
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import kotlinx.coroutines.Dispatchers
@@ -101,7 +103,12 @@ class HttpClient(
         if (env.code != 0) {
             log.w("http_biz_error", "method" to method, "path" to path,
                 "code" to env.code, "http" to status, "reqId" to serverReqId, "ms" to cost)
-            throw ApiException(env.code, env.message.ifEmpty { "请求失败" }, serverReqId, status)
+            throw ApiException(
+                env.code,
+                env.message.ifEmpty { Str.s(R.string.err_request_failed, env.code.toString()) },
+                serverReqId,
+                status,
+            )
         }
 
         log.d("http_ok", "method" to method, "path" to path, "reqId" to serverReqId, "ms" to cost)

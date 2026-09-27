@@ -53,7 +53,7 @@ fun LanguageScreen(current: LanguagePref, onSelect: (LanguagePref) -> Unit, onBa
                 )
             }
         }
-        IMSectionFooter(stringResource(R.string.settings_language_footer_call_only))
+        IMSectionFooter(stringResource(R.string.settings_language_footer))
     }
 }
 

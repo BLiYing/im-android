@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.QrGroupCard
 
@@ -25,10 +27,10 @@ fun qrUserActionFor(relation: String): QrUserAction = when (relation) {
 
 /** 名片码主按钮文案。 */
 fun qrUserActionLabel(action: QrUserAction): String = when (action) {
-    QrUserAction.MESSAGE -> "发消息"
-    QrUserAction.SELF -> "查看我的资料"
-    QrUserAction.BLOCKED -> "查看资料"
-    QrUserAction.ADD -> "添加到通讯录"
+    QrUserAction.MESSAGE -> Str.s(R.string.qr_action_send_message)
+    QrUserAction.SELF -> Str.s(R.string.qr_action_view_my_profile)
+    QrUserAction.BLOCKED -> Str.s(R.string.qr_branch_view_profile)
+    QrUserAction.ADD -> Str.s(R.string.qr_action_add_contact)
 }
 
 /**
@@ -55,10 +57,10 @@ fun qrGroupActionFor(card: QrGroupCard?): QrGroupAction {
 
 /** 群码主按钮文案。 */
 fun qrGroupActionLabel(action: QrGroupAction): String = when (action) {
-    QrGroupAction.ENTER -> "进入群聊"
-    QrGroupAction.APPLY -> "申请加入"
-    QrGroupAction.DISABLED -> "无法加入"
-    QrGroupAction.JOIN -> "加入群聊"
+    QrGroupAction.ENTER -> Str.s(R.string.qr_action_enter_group)
+    QrGroupAction.APPLY -> Str.s(R.string.qr_action_apply)
+    QrGroupAction.DISABLED -> Str.s(R.string.qr_action_cannot_join)
+    QrGroupAction.JOIN -> Str.s(R.string.qr_action_join)
 }
 
 /** 群码不可加入/需审批时的说明文案（可空=不显示）。 */
@@ -67,13 +69,13 @@ fun qrGroupActionNote(card: QrGroupCard?): String? {
     if (card.joined) return null
     if (!card.joinable) {
         return when (card.reason) {
-            "full" -> "群成员已达上限，暂时无法加入"
-            "banned" -> "你已被移出该群，暂时或永久不可加入"
-            "invite_revoked" -> "该群已改为仅管理员可邀请，此邀请已失效"
+            "full" -> Str.s(R.string.qr_action_group_full_note)
+            "banned" -> Str.s(R.string.qr_action_banned_note)
+            "invite_revoked" -> Str.s(R.string.qr_action_admin_only_note)
             else -> null
         }
     }
-    if (card.reason == "approval") return "该群需管理员审批"
+    if (card.reason == "approval") return Str.s(R.string.qr_action_apply_note)
     return null
 }
 
@@ -92,10 +94,11 @@ fun qrUnknownDomain(text: String): String? {
 fun qrScanLabelFor(raw: String): String {
     val t = raw.trim()
     return when {
-        t.isEmpty() -> "（空）"
-        t.contains("/q/u/") -> "名片码（本应用）"
-        t.contains("/q/g/") -> "群二维码（本应用）"
-        t.contains("/q/l/") -> "登录码（本应用）"
-        else -> qrUnknownDomain(t)?.let { "网址 · $it" } ?: (if (t.length > 20) t.take(20) + "…" else t)
+        t.isEmpty() -> Str.s(R.string.qr_result_empty)
+        t.contains("/q/u/") -> Str.s(R.string.qr_scan_label_user)
+        t.contains("/q/g/") -> Str.s(R.string.qr_scan_label_group)
+        t.contains("/q/l/") -> Str.s(R.string.qr_scan_label_login)
+        else -> qrUnknownDomain(t)?.let { Str.s(R.string.qr_scan_label_url, it) }
+            ?: (if (t.length > 20) t.take(20) + "…" else t)
     }
 }

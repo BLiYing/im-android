@@ -1,21 +1,29 @@
 package com.libeyond.imandroid.data
 
+import androidx.annotation.StringRes
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.round
 
 /** 自动下载设置里的两个网络（iOS `IMDownloadNetworkKind`）。 */
-enum class DownloadNetwork(val title: String) {
-    Cellular("使用移动数据"),
-    Wifi("使用 Wi-Fi"),
+enum class DownloadNetwork(@StringRes private val titleRes: Int) {
+    Cellular(R.string.download_network_cellular),
+    Wifi(R.string.download_network_wifi),
+    ;
+
+    val title: String get() = Str.s(titleRes)
 }
 
 /** 自动下载设置里的三类媒体（iOS `IMDownloadCategoryKind`）。 */
-enum class DownloadCategory(val title: String) {
-    Image("图片"),
-    Video("视频"),
-    File("文件"),
+enum class DownloadCategory(@StringRes private val titleRes: Int) {
+    Image(R.string.common_image),
+    Video(R.string.common_video),
+    File(R.string.common_file),
     ;
+
+    val title: String get() = Str.s(titleRes)
 
     /**
      * 图片没有大小上限：它的 `maxBytes` 恒 0，含义是「无门槛恒自动」（服务端 `normalized` 也强制归 0）。
@@ -80,7 +88,7 @@ object DownloadSettingsUi {
     }
 
     /** 上限文案：0 = 「关」，其余按 [formatBytes]（iOS `IMDownloadSizeLabel`）。 */
-    fun sizeLabel(bytes: Long): String = if (bytes <= 0) "关" else formatBytes(bytes)
+    fun sizeLabel(bytes: Long): String = if (bytes <= 0) Str.s(R.string.download_size_off) else formatBytes(bytes)
 
     /**
      * 字节数 → 「512 KB / 1 MB / 1.5 GB」，**逐条对齐 iOS `IMFormatFileSize`**：
@@ -109,7 +117,8 @@ object DownloadSettingsUi {
 
     /** 网络行的副标题（iOS `IMNetworkSummary`）。 */
     fun networkSummary(p: NetworkPolicy): String =
-        if (!p.enabled) "已停用" else "视频 ${sizeLabel(p.video.maxBytes)} · 文件 ${sizeLabel(p.file.maxBytes)}"
+        if (!p.enabled) Str.s(R.string.download_network_disabled)
+        else Str.s(R.string.download_network_summary, sizeLabel(p.video.maxBytes), sizeLabel(p.file.maxBytes))
 
     /**
      * 网络页三类媒体行的右值：图片恒「对所有聊天启用」，视频/文件「最大 X」。
@@ -118,11 +127,14 @@ object DownloadSettingsUi {
      * 要改应三端一起改，不在这里单端悄悄修正（会让两台手机上同一行写得不一样）。
      */
     fun categoryValue(p: NetworkPolicy, cat: DownloadCategory): String =
-        if (cat == DownloadCategory.Image) "对所有聊天启用" else "最大 ${sizeLabel(ruleOf(p, cat).maxBytes)}"
+        if (cat == DownloadCategory.Image) Str.s(R.string.autodl_row_enabled_all_chats)
+        else Str.s(R.string.autodl_row_max_size_prefix, sizeLabel(ruleOf(p, cat).maxBytes))
 
     /** 档位滑杆的刻度名。**只有当前对不上任何预设时才出现第四档**（iOS `presetTickNames`）。 */
-    fun tierNames(custom: Boolean): List<String> =
-        if (custom) listOf("低", "中", "高", "自定义") else listOf("低", "中", "高")
+    fun tierNames(custom: Boolean): List<String> {
+        val base = listOf(Str.s(R.string.autodl_tier_low), Str.s(R.string.autodl_tier_medium), Str.s(R.string.autodl_tier_high))
+        return if (custom) base + Str.s(R.string.autodl_tier_custom) else base
+    }
 
     /**
      * 档位滑杆松手停在 [index]，策略该变成什么（iOS `presetSliderCommitted:`）。返回 null = 不保存。
@@ -149,5 +161,6 @@ object DownloadSettingsUi {
 
     /** 清除缓存确认框正文（iOS `confirmClearCache`）。 */
     fun clearCacheMessage(bytes: Long): String =
-        if (bytes > 0) "将删除本机缓存的 ${formatBytes(bytes)} 下载文件，云端保留可重新下载。" else "暂无可清除的缓存。"
+        if (bytes > 0) Str.s(R.string.storage_clear_confirm_message_with_size, formatBytes(bytes))
+        else Str.s(R.string.storage_clear_confirm_message_empty)
 }

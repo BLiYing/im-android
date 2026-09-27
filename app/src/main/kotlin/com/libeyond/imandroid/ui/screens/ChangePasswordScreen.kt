@@ -35,6 +35,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ChangePasswordRules
 import com.libeyond.imandroid.data.PasswordFeedback
 import com.libeyond.imandroid.data.PasswordField
@@ -94,7 +96,8 @@ fun ChangePasswordScreen(
             Spacer(Modifier.height(d.sectionGap))
             IMSettingsGroup {
                 PasswordRow(
-                    value = oldPassword, onValueChange = onOldChange, placeholder = "旧密码",
+                    value = oldPassword, onValueChange = onOldChange,
+                    placeholder = stringResource(R.string.password_field_old),
                     isError = error?.field == PasswordField.Old, enabled = !submitting,
                     focusRequester = oldFocus, imeAction = ImeAction.Next, onImeAction = { newFocus.requestFocus() },
                 )
@@ -104,13 +107,15 @@ fun ChangePasswordScreen(
             Spacer(Modifier.height(d.sectionGap))
             IMSettingsGroup {
                 PasswordRow(
-                    value = newPassword, onValueChange = onNewChange, placeholder = "新密码（≥6 位）",
+                    value = newPassword, onValueChange = onNewChange,
+                    placeholder = stringResource(R.string.password_field_new),
                     isError = error?.field == PasswordField.New, enabled = !submitting,
                     focusRequester = newFocus, imeAction = ImeAction.Next, onImeAction = { confirmFocus.requestFocus() },
                 )
                 IMRowDivider(insetStart = d.space4)
                 PasswordRow(
-                    value = confirmPassword, onValueChange = onConfirmChange, placeholder = "再次输入新密码",
+                    value = confirmPassword, onValueChange = onConfirmChange,
+                    placeholder = stringResource(R.string.password_field_confirm),
                     isError = error?.field == PasswordField.Confirm, enabled = !submitting,
                     focusRequester = confirmFocus, imeAction = ImeAction.Done,
                     onImeAction = { if (canSubmit) onSubmit() },
@@ -195,7 +200,11 @@ private fun PasswordRow(
             // 密文态画「划掉的眼睛」、明文态画眼睛（iOS eye.slash.fill / eye.fill 同）
             Image(
                 imageVector = if (visible) Lucide.Eye else Lucide.EyeOff,
-                contentDescription = if (visible) "隐藏密码" else "显示密码",
+                contentDescription = if (visible) {
+                    stringResource(R.string.password_eye_hide)
+                } else {
+                    stringResource(R.string.password_eye_show)
+                },
                 modifier = Modifier.size(EYE_GLYPH),
                 colorFilter = ColorFilter.tint(c.textSecondary),
             )

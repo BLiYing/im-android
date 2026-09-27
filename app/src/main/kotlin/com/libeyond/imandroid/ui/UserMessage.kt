@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.ui
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.http.ApiException
 
 /**
@@ -14,7 +16,7 @@ import com.libeyond.imandroid.sdk.http.ApiException
  */
 internal fun Throwable.userMessage(fallback: String): String {
     val api = this as? ApiException ?: return fallback
-    if (api.isTransport) return "$fallback：网络不可用"
+    if (api.isTransport) return Str.s(R.string.common_error_network_unavailable_detail, fallback)
     return api.message.ifBlank { fallback }
 }
 

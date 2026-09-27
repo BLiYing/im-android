@@ -15,6 +15,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import com.libeyond.imandroid.data.AttachItems
 import com.libeyond.imandroid.data.SenderNames
 import com.libeyond.imandroid.sdk.api.FriendEntry
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -394,12 +396,12 @@ fun ChatHost(
                 AttachItems.Kind.ContactCard -> scope.launch {
                     pickingFriend = runCatchingCancellable { client.contacts.friends("accepted") }
                         .getOrElse {
-                            toast = "联系人加载失败"
+                            toast = Str.s(R.string.chat_attach_friends_load_failed)
                             null
                         }
                 }
                 // 与 iOS 一致：整个功能三端都没做
-                AttachItems.Kind.AudioVideo -> toast = "音视频通话还没做"
+                AttachItems.Kind.AudioVideo -> toast = Str.s(R.string.chat_attach_audio_video_unimplemented)
                 // 收藏页的选择模式（iOS `openFavoritesPicker`），发送见下方 ChatPickerLayers 的 onFavoritesPicked
                 AttachItems.Kind.Favorite -> pickingFavorites = true
             }

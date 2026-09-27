@@ -1,5 +1,9 @@
 package com.libeyond.imandroid.data
 
+import androidx.annotation.StringRes
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /**
  * 归档（详情页的媒体 / 文件 / 语音 / 链接页签）里长按一项弹出的菜单项。
  *
@@ -10,18 +14,21 @@ package com.libeyond.imandroid.data
  * 与聊天页长按菜单（[MessageAction]）**刻意是两套**：那边有复制/引用/撤回，这边没有；
  * 这边有「取消下载」「定位到聊天」，那边没有。合成一套只会得到一堆互相排斥的可见性判据。
  */
-enum class ArchiveAction(val label: String, val destructive: Boolean = false) {
-    Forward("转发"),
-    LocateInChat("定位到聊天"),
+enum class ArchiveAction(@StringRes private val labelRes: Int, val destructive: Boolean = false) {
+    Forward(R.string.common_forward),
+    LocateInChat(R.string.chat_menu_locate),
 
     /** 下载中 / 已暂停时才有。本端无断点续传，「取消」= 停掉并回到未下载态。 */
-    CancelDownload("取消下载"),
+    CancelDownload(R.string.file_menu_cancel_download),
 
     /** 仅本机隐藏（REST hide，多设备同步）。文案与 iOS 子菜单第一项一致。 */
-    HideForMe("仅删除自己", destructive = true),
+    HideForMe(R.string.delete_sheet_only_me, destructive = true),
 
     /** 撤回式硬删（msg_op delete），全群消失。iOS 把破坏性重的排在子菜单最后。 */
-    DeleteForEveryone("为所有人删除", destructive = true),
+    DeleteForEveryone(R.string.delete_sheet_everyone, destructive = true),
+    ;
+
+    val label: String get() = Str.s(labelRes)
 }
 
 object ArchiveActions {

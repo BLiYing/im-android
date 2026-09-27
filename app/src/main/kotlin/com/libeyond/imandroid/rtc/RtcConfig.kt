@@ -1,6 +1,8 @@
 package com.libeyond.imandroid.rtc
 
 import com.libeyond.imandroid.BuildConfig
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 
 /**
  * im-rtc 联调配置。值来自 `local.properties`（已被 .gitignore 忽略）→ `BuildConfig`，**secret 不进源码**。
@@ -43,9 +45,9 @@ object RtcIds {
 
     /** 不合规返回原因，合规返回 null。 */
     fun problem(kind: String, id: String?): String? = when {
-        id.isNullOrEmpty() -> "$kind 为空"
-        id.any { it.isWhitespace() } -> "$kind 含空白：$id"
-        id.toByteArray(Charsets.UTF_8).size > MAX_BYTES -> "$kind 超过 $MAX_BYTES 字节"
+        id.isNullOrEmpty() -> Str.s(R.string.rtc_error_id_empty, kind)
+        id.any { it.isWhitespace() } -> Str.s(R.string.rtc_error_id_has_whitespace, kind, id)
+        id.toByteArray(Charsets.UTF_8).size > MAX_BYTES -> Str.s(R.string.rtc_error_id_too_long, kind, MAX_BYTES)
         else -> null
     }
 }

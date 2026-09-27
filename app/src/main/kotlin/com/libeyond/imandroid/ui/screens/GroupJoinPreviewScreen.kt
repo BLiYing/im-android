@@ -19,8 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.QrGroupAction
 import com.libeyond.imandroid.data.qrGroupActionLabel
 import com.libeyond.imandroid.data.qrGroupActionNote
@@ -51,26 +54,32 @@ fun GroupJoinPreviewScreen(
         Modifier.fillMaxSize().background(c.groupedBackground)
             .systemBarsPadding().verticalScroll(rememberScrollState()),
     ) {
-        IMTopBar(title = "加入群聊", onLeft = onBack, showDivider = false)
+        IMTopBar(title = stringResource(R.string.qr_action_join), onLeft = onBack, showDivider = false)
 
         Column(
             Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = d.space4),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            val fallbackName = stringResource(R.string.common_group_chat)
             IMAvatar(
-                card.name.ifBlank { "群聊" }, seed = card.groupId, avatarUrl = card.avatarUrl, size = 72.dp,
+                card.name.ifBlank { fallbackName }, seed = card.groupId, avatarUrl = card.avatarUrl, size = 72.dp,
             )
             Spacer(Modifier.height(14.dp))
             Text(
-                card.name.ifBlank { "群聊" },
+                card.name.ifBlank { fallbackName },
                 style = MaterialTheme.typography.titleLarge,
                 color = c.textPrimary,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                if (card.inviterNickname.isNotEmpty()) "${card.memberCount} 人 · ${card.inviterNickname}邀请你加入"
-                else "${card.memberCount} 人",
+                if (card.inviterNickname.isNotEmpty()) {
+                    pluralStringResource(
+                        R.plurals.qr_preview_meta_invited, card.memberCount, card.memberCount, card.inviterNickname,
+                    )
+                } else {
+                    pluralStringResource(R.plurals.common_people_count, card.memberCount, card.memberCount)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
                 textAlign = TextAlign.Center,
@@ -91,12 +100,12 @@ fun GroupJoinPreviewScreen(
                 IMTextField(
                     value = hello,
                     onValueChange = { hello = it },
-                    label = "附言（选填）",
+                    label = stringResource(R.string.qr_preview_hello_header),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "该群需管理员审批",
+                    stringResource(R.string.qr_action_apply_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = c.textSecondary,
                 )

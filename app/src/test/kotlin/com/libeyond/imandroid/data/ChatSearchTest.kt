@@ -140,14 +140,14 @@ class ChatSearchTest {
 
     @Test
     fun `计数从 1 开始数给人看`() {
-        assertEquals("1 / 12", ChatSearch.hitLabel(idx = 0, count = 12, truncated = false))
-        assertEquals("12 / 12", ChatSearch.hitLabel(idx = 11, count = 12, truncated = false))
+        assertEquals("第 1 / 12 条", ChatSearch.hitLabel(idx = 0, count = 12, truncated = false))
+        assertEquals("第 12 / 12 条", ChatSearch.hitLabel(idx = 11, count = 12, truncated = false))
     }
 
     @Test
     fun `被单页上限截断时必须补加号`() {
         // 悄悄截成 50 条还写「/ 50」会让人以为大群里就只有这些命中
-        assertEquals("50 / 50+", ChatSearch.hitLabel(idx = 49, count = 50, truncated = true))
+        assertEquals("第 50 / 50+ 条", ChatSearch.hitLabel(idx = 49, count = 50, truncated = true))
     }
 
     @Test

@@ -2,6 +2,8 @@ package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.screens.replyPreviewOf
+import com.libeyond.imandroid.ui.screens.quoteFileNameOf
+import com.libeyond.imandroid.ui.screens.localizeReplySnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -17,15 +19,15 @@ class ReplyPreviewTest {
 
     @Test
     fun `媒体不显路径而显类型占位`() {
-        val p = replyPreviewOf(ContentType.IMAGE, "/uploads/req-abc__照片.jpg", null, null)
+        val p = shown(ContentType.IMAGE, "/uploads/req-abc__照片.jpg", null, null)
         assertEquals("[图片]", p)
         assertFalse("绝不能把 URL 显出来", p.contains("uploads"))
     }
 
     @Test
     fun `图说跟在类型后面`() {
-        assertEquals("[图片] 看这个", replyPreviewOf(ContentType.IMAGE, "/uploads/a.jpg", null, "看这个"))
-        assertEquals("[视频]", replyPreviewOf(ContentType.VIDEO, "/uploads/a.mp4", null, ""))
+        assertEquals("[图片] 看这个", shown(ContentType.IMAGE, "/uploads/a.jpg", null, "看这个"))
+        assertEquals("[视频]", shown(ContentType.VIDEO, "/uploads/a.mp4", null, ""))
     }
 
     /** 文件带原始文件名——引用条上分不清是哪个文件的话，引用就没意义了。 */
@@ -33,24 +35,37 @@ class ReplyPreviewTest {
     fun `文件带原名`() {
         assertEquals(
             "[文件] 报表.xlsx",
-            replyPreviewOf(ContentType.FILE, "/uploads/req-1__报表.xlsx", null, null),
+            shown(ContentType.FILE, "/uploads/req-1__报表.xlsx", null, null),
         )
         // fileName 显式给了就用它
         assertEquals(
             "[文件] 合同.pdf",
-            replyPreviewOf(ContentType.FILE, "/uploads/req-2__x.bin", "合同.pdf", null),
+            shown(ContentType.FILE, "/uploads/req-2__x.bin", "合同.pdf", null),
         )
     }
 
     @Test
     fun `卡片类各有占位`() {
-        assertEquals("[个人名片]", replyPreviewOf(ContentType.CONTACT, "{...}", null, null))
-        assertEquals("[聊天记录]", replyPreviewOf(ContentType.CHAT_RECORD, "{...}", null, null))
-        assertEquals("[语音]", replyPreviewOf(ContentType.VOICE, "/uploads/a.m4a", null, null))
+        assertEquals("[个人名片]", shown(ContentType.CONTACT, "{...}", null, null))
+        assertEquals("[聊天记录]", shown(ContentType.CHAT_RECORD, "{...}", null, null))
+        assertEquals("[语音]", shown(ContentType.VOICE, "/uploads/a.m4a", null, null))
     }
 
     @Test
     fun `文本原样`() {
-        assertEquals("今天天气不错", replyPreviewOf(ContentType.TEXT, "今天天气不错", null, null))
+        assertEquals("今天天气不错", shown(ContentType.TEXT, "今天天气不错", null, null))
+    }
+
+    /** 引用条显示的是原始快照经本地化后的文案（与气泡里的引用块同一条路径）。 */
+    private fun shown(type: String, content: String, fileName: String?, caption: String?) =
+        localizeReplySnapshot(replyPreviewOf(type, content, fileName, caption))
+
+    /** 判据只认原始快照：本地化后的文案随界面语言变，拿它判断英文下会全部失效。 */
+    @Test
+    fun `文件名判据认原始 token 与存量中文`() {
+        assertEquals("报表.xlsx", quoteFileNameOf(replyPreviewOf(ContentType.FILE, "/uploads/req-1__报表.xlsx", null, null)))
+        assertEquals("合同.pdf", quoteFileNameOf("[文件] 合同.pdf"))
+        assertEquals(null, quoteFileNameOf("[file]"))
+        assertEquals(null, quoteFileNameOf("[image]"))
     }
 }

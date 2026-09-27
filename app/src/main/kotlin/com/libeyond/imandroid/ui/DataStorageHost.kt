@@ -14,6 +14,9 @@ import com.libeyond.imandroid.data.DownloadCategory
 import com.libeyond.imandroid.data.DownloadNetwork
 import com.libeyond.imandroid.data.DownloadSettingsUi
 import com.libeyond.imandroid.data.NetworkPolicy
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
@@ -71,7 +74,7 @@ fun DataStorageHost(client: IMClient, onBack: () -> Unit) {
         client.scope.launch {
             val cur = store.current
             val next = change(DownloadSettingsUi.policyOf(cur, net)) ?: return@launch
-            if (!store.save(DownloadSettingsUi.withPolicy(cur, net, next))) toast = "保存失败，请检查网络后重试"
+            if (!store.save(DownloadSettingsUi.withPolicy(cur, net, next))) toast = Str.s(R.string.common_save_failed)
         }
     }
 
@@ -139,16 +142,16 @@ fun DataStorageHost(client: IMClient, onBack: () -> Unit) {
 
     if (confirmClear) {
         IMConfirmDialog(
-            title = "清除缓存",
+            title = stringResource(R.string.storage_clear_confirm_title),
             message = DownloadSettingsUi.clearCacheMessage(cacheBytes ?: 0L),
-            confirmText = "清除",
+            confirmText = stringResource(R.string.common_clear),
             onConfirm = {
                 clearing = true
                 // 与保存同理挂在 client.scope：点完确认立刻返回的话，页面作用域一取消，
                 // 会停在「媒体清了、图片缓存没清」的半截状态
                 client.scope.launch {
                     runCatchingCancellable { StorageUsage.clear(context, client.downloads) }
-                        .onFailure { toast = it.userMessage("清除缓存失败") }
+                        .onFailure { toast = it.userMessage(Str.s(R.string.storage_clear_cache_failed)) }
                     measure()
                     clearing = false
                 }
@@ -159,11 +162,11 @@ fun DataStorageHost(client: IMClient, onBack: () -> Unit) {
 
     if (confirmReset) {
         IMConfirmDialog(
-            title = "重置自动下载设置",
-            message = "恢复为出厂默认（移动数据中档、Wi-Fi 高档）。",
-            confirmText = "重置",
+            title = stringResource(R.string.storage_row_reset),
+            message = stringResource(R.string.storage_reset_confirm_message),
+            confirmText = stringResource(R.string.common_reset),
             onConfirm = {
-                client.scope.launch { if (!store.resetToDefaults()) toast = "重置失败，请检查网络后重试" }
+                client.scope.launch { if (!store.resetToDefaults()) toast = Str.s(R.string.net_fallback_download_settings_reset) }
             },
             onDismiss = { confirmReset = false },
         )

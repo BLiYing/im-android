@@ -12,6 +12,8 @@ import com.libeyond.imandroid.data.isLocalComplete
 import com.libeyond.imandroid.data.ChatSearch
 import com.libeyond.imandroid.data.QuerySource
 import com.libeyond.imandroid.data.SearchHit
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.delay
@@ -240,7 +242,7 @@ fun rememberChatSearch(
                     }
                     .onFailure { e ->
                         // 失败**不静默**：本地有缺口才走的这条路，回空集会被当成"真的没有"
-                        ctl.applyHits(emptyList(), truncated = false, notice = "搜索失败，请重试")
+                        ctl.applyHits(emptyList(), truncated = false, notice = Str.s(R.string.group_picker_search_failed))
                         log.w("conv_search_failed", "convId" to convId, "err" to e.javaClass.simpleName)
                     }
             }

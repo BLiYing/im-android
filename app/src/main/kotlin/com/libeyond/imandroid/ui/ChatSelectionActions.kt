@@ -8,6 +8,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.DownloadPhase
 import com.libeyond.imandroid.data.SelectionActions
@@ -103,7 +106,7 @@ internal class SelectionActionsController(
         }
         val live = r.msgs.filterNot(::expired)
         if (live.isEmpty()) {
-            toast("所选均已失效，未转发")
+            toast(Str.s(R.string.chat_forward_all_expired_skip))
             return
         }
         r.notice?.let(toast)
@@ -120,7 +123,7 @@ internal class SelectionActionsController(
         val picked = sel.picked()
         val kept = SelectionActions.mergeable(picked, ::expired)
         if (kept.isEmpty()) {
-            toast(if (picked.any(::expired)) "所选均已失效，无法合并转发" else "所选消息都无法转发")
+            toast(if (picked.any(::expired)) Str.s(R.string.chat_forward_all_expired_merge) else Str.s(R.string.chat_forward_none_forwardable))
             return
         }
         val p = people()
@@ -161,10 +164,10 @@ internal class SelectionActionsController(
         scope.launch {
             runCatchingCancellable { client.contacts.reportMessages(convId, d.seqs, reason) }
                 .onSuccess {
-                    toast("举报已提交，感谢反馈。")
+                    toast(Str.s(R.string.chat_detail_report_submitted))
                     sel.cancel()
                 }
-                .onFailure { toast(it.userMessage("举报失败")) }
+                .onFailure { toast(it.userMessage(Str.s(R.string.net_fallback_report_failed))) }
         }
     }
 
@@ -172,7 +175,7 @@ internal class SelectionActionsController(
     fun favorite() {
         val ok = SelectionActions.favoritable(sel.picked())
         if (ok.isEmpty()) {
-            toast("所选消息都无法收藏")
+            toast(Str.s(R.string.chat_select_none_favoritable))
             return
         }
         sel.cancel()
@@ -216,8 +219,8 @@ internal fun SelectionActionLayers(ctrl: SelectionActionsController) {
         ActionSheet(
             title = "",
             items = listOf(
-                SheetItem("逐条转发", onClick = { ctrl.forwardEach() }),
-                SheetItem("合并转发", onClick = { ctrl.forwardMerged() }),
+                SheetItem(stringResource(R.string.forward_mode_each), onClick = { ctrl.forwardEach() }),
+                SheetItem(stringResource(R.string.forward_mode_merged), onClick = { ctrl.forwardMerged() }),
             ),
             onDismiss = { ctrl.askingMode = false },
         )
@@ -227,9 +230,9 @@ internal fun SelectionActionLayers(ctrl: SelectionActionsController) {
             title = d.title,
             initial = "",
             maxLen = REPORT_REASON_MAX,
-            hint = "请填写举报理由（可空）",
+            hint = stringResource(R.string.chat_detail_report_reason_prompt),
             multiline = true,
-            confirmText = "提交举报",
+            confirmText = stringResource(R.string.chat_detail_report_submit),
             onConfirm = { ctrl.submitReport(d, it) },
             onDismiss = { ctrl.reporting = null },
         )
@@ -268,7 +271,7 @@ internal fun ForwardPickerLayer(
                     for (t in targets) {
                         client.messages.sendCard(t.convId, if (t.isGroup) "" else t.peerUid, ContentType.CHAT_RECORD, record)
                     }
-                    onToast(if (targets.size > 1) "已合并转发到 ${targets.size} 个会话" else "已合并转发")
+                    onToast(if (targets.size > 1) Str.p(R.plurals.chat_forward_merged_success_count, targets.size, targets.size) else Str.s(R.string.chat_forward_merged_success))
                 }
             }
         },

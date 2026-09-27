@@ -15,6 +15,8 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquareText
 import com.composables.icons.lucide.Trash2
 import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.data.MessageAction
 import com.libeyond.imandroid.data.MessageActions
 import com.libeyond.imandroid.data.ViewerAction
@@ -117,8 +119,8 @@ internal fun ChatViewerLayer(
                             ViewerAction.Locate -> onLocate(cur.convSeq)
                             ViewerAction.Favorite -> scope.launch {
                                 runCatchingCancellable { client.favorites.add(FavoriteDraft.of(cur)) }
-                                    .onSuccess { onToast("已收藏") }
-                                    .onFailure { onToast(it.userMessage("收藏失败")) }
+                                    .onSuccess { onToast(Str.s(R.string.chat_favorite_success)) }
+                                    .onFailure { onToast(it.userMessage(Str.s(R.string.net_fallback_favorite_failed))) }
                             }
                             // 复制图片：**本地原件优先**，与渲染/存相册同一个地址（见 CopyImage 的注释）
                             ViewerAction.Copy -> scope.launch {
@@ -138,7 +140,7 @@ internal fun ChatViewerLayer(
                                     .availableFor(cur, owner, conv.isGroup, iAmManager)
                                     .filter(::isDeleteTier)
                                 when (tiers.size) {
-                                    0 -> onToast("这条消息不能删除")
+                                    0 -> onToast(Str.s(R.string.chat_viewer_delete_unavailable))
                                     1 -> runMessageDelete(client, conv.convId, tiers.first(), cur.convSeq, scope)
                                     else -> deleting = cur to tiers
                                 }

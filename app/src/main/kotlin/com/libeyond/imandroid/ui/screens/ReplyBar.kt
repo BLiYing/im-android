@@ -36,12 +36,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ReplyNames
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.ui.components.FileTypeIcon
@@ -157,13 +159,13 @@ private fun ReplyBarContent(m: MessageEntity, title: String, onJump: (Long) -> U
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(preview, color = c.textSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(localizeReplySnapshot(preview), color = c.textSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Box(
             Modifier.padding(start = 8.dp, end = 12.dp).size(24.dp).clip(CircleShape).clickable(onClick = onCancel),
             contentAlignment = Alignment.Center,
         ) {
-            Image(Lucide.X, "取消回复", Modifier.size(16.dp), colorFilter = ColorFilter.tint(c.textTertiary))
+            Image(Lucide.X, stringResource(R.string.chat_reply_cancel_a11y), Modifier.size(16.dp), colorFilter = ColorFilter.tint(c.textTertiary))
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ErrCode
 import com.libeyond.imandroid.sdk.protocol.ErrorData
 import com.libeyond.imandroid.sdk.protocol.FrameType
@@ -103,7 +105,7 @@ internal suspend fun MessageService.resendInFlight(owner: String) {
             owner,
             ErrorData(
                 code = ErrCode.PARAM_INVALID,
-                message = "上传未完成，请重新发送",
+                message = Str.s(R.string.chat_resend_upload_incomplete),
                 clientMsgId = it.clientMsgId,
             ),
         )

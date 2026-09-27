@@ -19,10 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DeviceDisplay
 import com.libeyond.imandroid.sdk.api.DeviceSession
 import com.libeyond.imandroid.ui.components.IMKeyValueRow
@@ -49,7 +51,7 @@ fun DeviceDetailScreen(
     val d = IMTheme.dimens
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
-        IMTopBar(title = "设备详情", onLeft = onBack)
+        IMTopBar(title = stringResource(R.string.device_detail_title), onLeft = onBack)
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(24.dp))
@@ -71,25 +73,43 @@ fun DeviceDetailScreen(
             Spacer(Modifier.height(22.dp))
 
             IMSettingsGroup {
-                val statusText = if (device.online) "在线" else DeviceDisplay.lastActiveText(device.lastActiveAt, now)
-                IMKeyValueRow("状态", statusText, valueColor = if (device.online) c.online else c.textSecondary)
-                IMRowDivider(insetStart = d.space4)
-                IMKeyValueRow("类型", DeviceDisplay.typeText(device))
-                IMRowDivider(insetStart = d.space4)
-                IMKeyValueRow("登录时间", DeviceDisplay.loginTimeText(device.createdAt))
-                IMRowDivider(insetStart = d.space4)
+                val statusText = if (device.online) {
+                    stringResource(R.string.common_online)
+                } else {
+                    DeviceDisplay.lastActiveText(device.lastActiveAt, now)
+                }
                 IMKeyValueRow(
-                    "最近活跃",
-                    if (device.online) "当前在线" else DeviceDisplay.lastActiveText(device.lastActiveAt, now),
+                    stringResource(R.string.common_status),
+                    statusText,
+                    valueColor = if (device.online) c.online else c.textSecondary,
                 )
                 IMRowDivider(insetStart = d.space4)
-                IMKeyValueRow("IP 地址", device.loginIp.ifBlank { "未知" })
+                IMKeyValueRow(stringResource(R.string.common_type), DeviceDisplay.typeText(device))
                 IMRowDivider(insetStart = d.space4)
-                IMKeyValueRow("大致位置", device.loginLoc.ifBlank { "未知" })
+                IMKeyValueRow(stringResource(R.string.device_detail_login_time), DeviceDisplay.loginTimeText(device.createdAt))
+                IMRowDivider(insetStart = d.space4)
+                IMKeyValueRow(
+                    stringResource(R.string.device_detail_last_active),
+                    if (device.online) {
+                        stringResource(R.string.device_detail_currently_online)
+                    } else {
+                        DeviceDisplay.lastActiveText(device.lastActiveAt, now)
+                    },
+                )
+                IMRowDivider(insetStart = d.space4)
+                IMKeyValueRow(
+                    stringResource(R.string.qr_login_confirm_row_ip),
+                    device.loginIp.ifBlank { stringResource(R.string.common_unknown) },
+                )
+                IMRowDivider(insetStart = d.space4)
+                IMKeyValueRow(
+                    stringResource(R.string.qr_login_confirm_row_location),
+                    device.loginLoc.ifBlank { stringResource(R.string.common_unknown) },
+                )
             }
 
             Text(
-                text = "位置由 IP 粗略反查，仅供识别，不参与鉴权。",
+                text = stringResource(R.string.device_detail_location_note),
                 color = c.textSecondary,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
@@ -97,7 +117,7 @@ fun DeviceDetailScreen(
         }
 
         Text(
-            text = if (submitting) "退出中…" else "退出登录该设备",
+            text = if (submitting) stringResource(R.string.device_revoking) else stringResource(R.string.device_detail_revoke_button),
             color = c.onAccent,
             style = MaterialTheme.typography.titleSmall,
             textAlign = TextAlign.Center,

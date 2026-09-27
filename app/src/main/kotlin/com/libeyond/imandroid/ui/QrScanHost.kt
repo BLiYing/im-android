@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -66,8 +67,10 @@ import com.composables.icons.lucide.Flashlight
 import com.composables.icons.lucide.FlashlightOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.QrImageDecode
 import com.libeyond.imandroid.data.qrScanLabelFor
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.components.ActionSheet
 import com.libeyond.imandroid.ui.components.IMToast
@@ -155,7 +158,7 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
             val codes = withContext(Dispatchers.IO) { decodeQrImage(context, uri) }
             pickerBusy = false
             when {
-                codes.isEmpty() -> toast = "这张图片里没有识别到二维码，换一张试试"
+                codes.isEmpty() -> toast = Str.s(R.string.qr_scan_no_code)
                 codes.size == 1 -> { if (handled.compareAndSet(false, true)) onResult(codes.first()) }
                 else -> candidates = codes
             }
@@ -172,7 +175,7 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
                 )
                 ScanReticle(Modifier.align(Alignment.Center))
                 Text(
-                    "将二维码放入框内，即可自动扫描",
+                    stringResource(R.string.qr_scan_frame_hint),
                     color = Color.White.copy(alpha = 0.82f),
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
@@ -199,7 +202,7 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
                 },
         ) {
             Text(
-                if (pickerBusy) "识别中…" else "从相册选择",
+                if (pickerBusy) stringResource(R.string.chat_voice_transcribing) else stringResource(R.string.qr_scan_pick_album),
                 color = Color.White,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -209,12 +212,12 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
             Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart)) {
-                Icon(Lucide.X, contentDescription = "关闭", tint = Color.White)
+                Icon(Lucide.X, contentDescription = stringResource(R.string.common_close), tint = Color.White)
             }
             // 标题贴屏幕中线（对齐 iOS `title.centerXAnchor == view.centerXAnchor`），不随左右按钮
             // 宽度是否对称漂移——此前用 Row+SpaceBetween 只放了两颗按钮，漏了这行标题。
             Text(
-                "扫一扫",
+                stringResource(R.string.conv_menu_scan),
                 color = Color.White,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
@@ -224,7 +227,7 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
                 IconButton(onClick = { torchOn = !torchOn }, modifier = Modifier.align(Alignment.CenterEnd)) {
                     Icon(
                         if (torchOn) Lucide.Flashlight else Lucide.FlashlightOff,
-                        contentDescription = "手电筒",
+                        contentDescription = stringResource(R.string.qr_scan_flashlight),
                         tint = Color.White,
                     )
                 }
@@ -234,7 +237,7 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
 
     candidates?.let { list ->
         ActionSheet(
-            title = "这张图里有多个二维码",
+            title = stringResource(R.string.qr_scan_multi_sheet_title),
             items = list.map { code ->
                 SheetItem(qrScanLabelFor(code)) {
                     if (handled.compareAndSet(false, true)) onResult(code)
@@ -438,13 +441,13 @@ private fun ScanPermissionDenied(onOpenSettings: () -> Unit) {
     Box(Modifier.fillMaxSize().padding(horizontal = 34.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                "需要相机权限",
+                stringResource(R.string.qr_scan_perm_title),
                 color = Color.White,
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
             )
             Text(
-                "开启后即可扫描二维码加好友、进群。",
+                stringResource(R.string.qr_scan_perm_detail),
                 color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
@@ -456,7 +459,7 @@ private fun ScanPermissionDenied(onOpenSettings: () -> Unit) {
                     .clickable(onClick = onOpenSettings),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("去设置开启", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.qr_scan_open_settings), color = Color.White, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

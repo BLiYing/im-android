@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -96,7 +98,7 @@ internal class MediaSendPipeline(
      * 视频大小为 0 之类。**不标的话那一格会永远转圈**：既没上传也没失败，
      * 用户只能杀进程。
      */
-    suspend fun markFailed(clientMsgId: String, code: Int = 0, message: String = "读取失败") {
+    suspend fun markFailed(clientMsgId: String, code: Int = 0, message: String = Str.s(R.string.net_error_file_read_failed)) {
         val owner = ownerProvider() ?: return
         repo.onSendRejected(
             owner,

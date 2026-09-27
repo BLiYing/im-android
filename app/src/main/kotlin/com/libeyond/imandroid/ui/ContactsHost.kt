@@ -18,6 +18,9 @@ import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.data.FriendAction
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.PushTransition
@@ -100,14 +103,14 @@ fun ContactsHost(
                             FriendAction.Delete -> confirmRemove = f
                             FriendAction.Block -> scope.launch {
                                 runCatchingCancellable { client.contacts.block(f.userId) }
-                                    .onSuccess { toast = "已拉黑" }
-                                    .onFailure { toast = it.userMessage("拉黑失败") }
+                                    .onSuccess { toast = Str.s(R.string.common_blocked) }
+                                    .onFailure { toast = it.userMessage(Str.s(R.string.friend_block_failed_toast)) }
                                 reload()
                             }
                             FriendAction.Unblock -> scope.launch {
                                 runCatchingCancellable { client.contacts.unblock(f.userId) }
-                                    .onSuccess { toast = "已解除拉黑" }
-                                    .onFailure { toast = it.userMessage("操作失败") }
+                                    .onSuccess { toast = Str.s(R.string.friend_block_undone) }
+                                    .onFailure { toast = it.userMessage(Str.s(R.string.common_action_failed)) }
                                 reload()
                             }
                         }
@@ -121,11 +124,11 @@ fun ContactsHost(
                                 .onSuccess { groups = it }
                                 // 拉不到就留着上一次的列表 + 一句吐司，别把页面停在"还没有加入群聊"上
                                 // ——那句空态是**结论**，网络失败时它是假的。
-                                .onFailure { toast = "群列表加载失败" }
+                                .onFailure { toast = Str.s(R.string.contacts_groups_load_failed) }
                             groupsLoading = false
                         }
                     },
-                    onComingSoon = { name -> toast = "$name 还没做" },
+                    onComingSoon = { name -> toast = Str.s(R.string.contacts_coming_soon, name) },
                     // **先进资料页，不直接进聊天**（微信式，三端统一：群成员行、通讯录行都是这个口径）
                     onOpenFriend = { f -> profileOf = f; page = ContactsPage.Profile },
                 )
@@ -193,17 +196,17 @@ fun ContactsHost(
     // 删除好友的二次确认（理由见 confirmRemove 的注释）
     confirmRemove?.let { f ->
         IMConfirmDialog(
-            title = "删除好友",
-            message = "删除后你与「${f.displayName}」将不再是好友，聊天记录保留。此操作不可撤销。",
-            confirmText = "删除",
+            title = stringResource(R.string.friend_menu_delete),
+            message = stringResource(R.string.friend_delete_confirm_message, f.displayName),
+            confirmText = stringResource(R.string.common_delete),
             destructive = true,
             onDismiss = { confirmRemove = null },
             onConfirm = {
                 confirmRemove = null
                 scope.launch {
                     runCatchingCancellable { client.contacts.remove(f.userId) }
-                        .onSuccess { toast = "已删除好友" }
-                        .onFailure { toast = it.userMessage("删除失败") }
+                        .onSuccess { toast = Str.s(R.string.friend_delete_done) }
+                        .onFailure { toast = it.userMessage(Str.s(R.string.net_fallback_delete_failed)) }
                     reload()
                 }
             },

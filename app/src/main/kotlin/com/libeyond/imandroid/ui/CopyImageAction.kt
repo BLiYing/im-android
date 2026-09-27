@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.core.content.FileProvider
 import com.libeyond.imandroid.data.MediaSaveName
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -48,7 +50,7 @@ internal object CopyImage {
     private fun imageClip(context: Context, uri: android.net.Uri): ClipData {
         val mime = context.contentResolver.getType(uri) ?: "image/*"
         val desc = android.content.ClipDescription(
-            "图片",
+            Str.s(R.string.common_image),
             arrayOf(android.content.ClipDescription.MIMETYPE_TEXT_PLAIN, mime),
         )
         return ClipData(desc, ClipData.Item(uri.toString(), null, uri))
@@ -59,7 +61,7 @@ internal object CopyImage {
      * @return 给用户看的文案（成功失败都有话说，不静默）。
      */
     suspend fun copy(context: Context, url: String): String = withContext(Dispatchers.IO) {
-        if (url.isBlank()) return@withContext "这张图片没有地址"
+        if (url.isBlank()) return@withContext Str.s(R.string.chat_viewer_copy_no_url)
         try {
             val dir = File(context.cacheDir, "share").apply { mkdirs() }
             val out = File(dir, MediaSaveName.fileNameFor(url, isVideo = false, nowMs = System.currentTimeMillis()))
@@ -74,7 +76,7 @@ internal object CopyImage {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
             }
             log.i("image_copied")
-            "已复制图片"
+            Str.s(R.string.common_copied_image)
         } catch (e: kotlinx.coroutines.CancellationException) {
             // **必须原样抛回去**：下面那个 `catch (Exception)` 会把取消也吞掉，于是"协程被取消"
             // 被记成一条 `image_copy_failed`，看起来像复制失败、实际是调用方那一层已经离开组合
@@ -84,10 +86,10 @@ internal object CopyImage {
         } catch (e: Exception) {
             // 网络失败、磁盘满、厂商 ROM 拦剪贴板都会到这——如实说，别静默
             log.w("image_copy_failed", "err" to e.javaClass.simpleName)
-            "复制失败，请检查网络"
+            Str.s(R.string.chat_viewer_copy_failed_network)
         } catch (e: OutOfMemoryError) {
             log.w("image_copy_oom")
-            "复制失败：图片太大"
+            Str.s(R.string.chat_viewer_copy_failed_too_large)
         }
     }
 }

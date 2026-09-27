@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /**
  * 查看器里那枚「查看原视频」胶囊的判据（对齐 iOS `IMMediaViewerViewController` 的 `_originalChip`
  * + `IMOriginalVideoCache`）。
@@ -43,9 +46,17 @@ object OriginalVideo {
             DownloadPhase.Expired -> null
             // Ready 但 hasLocal=false：缓存被清了/被系统回收了，当没下过处理
             DownloadPhase.Downloading ->
-                if (hasPercent) "下载中 ${(fraction * 100).toInt()}%" else "下载中…"
-            DownloadPhase.Failed -> "下载失败，点击重试"
-            else -> if (sizeBytes > 0) "查看原视频 · ${MediaUrl.formatSize(sizeBytes)}" else "查看原视频"
+                if (hasPercent) {
+                    Str.s(R.string.chat_media_downloading_progress, (fraction * 100).toInt())
+                } else {
+                    Str.s(R.string.chat_media_downloading)
+                }
+            DownloadPhase.Failed -> Str.s(R.string.media_download_failed_tap_retry)
+            else -> if (sizeBytes > 0) {
+                Str.s(R.string.chat_media_view_original_sized, MediaUrl.formatSize(sizeBytes))
+            } else {
+                Str.s(R.string.chat_media_view_original)
+            }
         }
     }
 

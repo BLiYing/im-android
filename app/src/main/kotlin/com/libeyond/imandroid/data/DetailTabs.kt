@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.MediaKind
 import com.libeyond.imandroid.sdk.protocol.ContentType
 
@@ -23,11 +25,11 @@ object DetailTabs {
     }
 
     fun title(tab: DetailTab): String = when (tab) {
-        DetailTab.Members -> "成员"
-        DetailTab.Media -> "媒体"
-        DetailTab.Files -> "文件"
-        DetailTab.Voice -> "语音"
-        DetailTab.Links -> "链接"
+        DetailTab.Members -> Str.s(R.string.group_member_tab_label)
+        DetailTab.Media -> Str.s(R.string.favorites_category_media)
+        DetailTab.Files -> Str.s(R.string.common_file)
+        DetailTab.Voice -> Str.s(R.string.favorites_category_voice)
+        DetailTab.Links -> Str.s(R.string.favorites_category_links)
     }
 
     /**
@@ -51,11 +53,11 @@ object DetailTabs {
      * （"这个会话还没有图片或视频"），同一个页签两端文案不同（2026-09-17 对照源码核出来的）。
      */
     fun emptyText(tab: DetailTab): String = when (tab) {
-        DetailTab.Members -> "还没有成员"
-        DetailTab.Media -> "暂无媒体"
-        DetailTab.Files -> "暂无文件"
-        DetailTab.Voice -> "暂无语音"
-        DetailTab.Links -> "暂无链接"
+        DetailTab.Members -> Str.s(R.string.detail_tab_empty_members)
+        DetailTab.Media -> Str.s(R.string.detail_tab_empty_media)
+        DetailTab.Files -> Str.s(R.string.detail_tab_empty_files)
+        DetailTab.Voice -> Str.s(R.string.detail_tab_empty_voice)
+        DetailTab.Links -> Str.s(R.string.detail_tab_empty_links)
     }
 }
 

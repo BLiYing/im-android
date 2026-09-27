@@ -28,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,7 +37,9 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.Forward
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMCardSheet
@@ -81,13 +85,13 @@ fun ForwardPickerScreen(
 
     IMCardSheet(onDismissed = onCancel) { sheet ->
         IMTopBar(
-            title = "转发到",
-            leftLabel = "取消",
+            title = stringResource(R.string.forward_picker_destination_title),
+            leftLabel = stringResource(R.string.common_cancel),
             onLeft = { sheet.dismiss(onCancel) },
             actionText = when {
-                !multi -> "多选"
-                selected.isEmpty() -> "发送"
-                else -> "发送(${selected.size})"
+                !multi -> stringResource(R.string.forward_picker_multi)
+                selected.isEmpty() -> stringResource(R.string.common_send)
+                else -> pluralStringResource(R.plurals.forward_picker_send_count, selected.size, selected.size)
             },
             actionEnabled = !multi || selected.isNotEmpty(),
             onAction = {
@@ -102,13 +106,13 @@ fun ForwardPickerScreen(
         IMSearchField(
             value = query,
             onValueChange = { query = it },
-            placeholder = "搜索会话",
+            placeholder = stringResource(R.string.forward_picker_search_placeholder),
             modifier = Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = d.space2),
         )
         // 只在「搜了但没搜到」时说话：会话列表还没从库里读到时（调用方初值是空表）说「没有」再改口，就是闪一下空态
         if (rows.isEmpty() && query.isNotBlank()) {
             Text(
-                "没有匹配的会话",
+                stringResource(R.string.forward_picker_no_match),
                 color = c.textTertiary,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
@@ -127,7 +131,11 @@ fun ForwardPickerScreen(
                             confirming = conv
                         } else {
                             val next = Forward.toggleTarget(selected, conv.convId)
-                            if (next == null) onToast("最多选择 ${Forward.MAX_TARGETS} 个会话") else selected = next
+                            if (next == null) {
+                                onToast(Str.p(R.plurals.forward_picker_max_selection, Forward.MAX_TARGETS, Forward.MAX_TARGETS))
+                            } else {
+                                selected = next
+                            }
                         }
                     },
                 )
@@ -135,9 +143,9 @@ fun ForwardPickerScreen(
         }
         confirming?.let { target ->
             IMConfirmDialog(
-                title = "转发",
-                message = "发送给「${Forward.titleOf(target)}」？",
-                confirmText = "发送",
+                title = stringResource(R.string.common_forward),
+                message = stringResource(R.string.forward_picker_confirm_single, Forward.titleOf(target)),
+                confirmText = stringResource(R.string.common_send),
                 destructive = false,
                 onConfirm = { sheet.dismiss { onConfirm(listOf(target)) } },
                 onDismiss = { confirming = null },

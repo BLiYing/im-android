@@ -13,6 +13,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.GroupNameDefault
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.GroupInfo
@@ -89,14 +91,14 @@ fun CreateGroupHost(
             val bytes = withContext(Dispatchers.IO) { AvatarPrepare.fromUri(context, uri) }
             if (bytes == null) {
                 avatarUploading = false
-                error = "图片处理失败，换一张试试"
+                error = Str.s(R.string.common_image_process_failed)
                 return@launch
             }
             val up = runCatching { client.upload.uploadAvatar(bytes) }
             avatarUploading = false
             val url = up.getOrNull()?.url
             if (url == null) {
-                error = "头像上传失败"
+                error = Str.s(R.string.net_error_avatar_upload_failed)
                 return@launch
             }
             avatarUrl = url
@@ -126,7 +128,7 @@ fun CreateGroupHost(
                     client.messages.refreshConversations()
                     onCreated(group)
                 } catch (e: ApiException) {
-                    error = if (e.isTransport) "网络请求失败" else e.message
+                    error = if (e.isTransport) Str.s(R.string.net_error_generic) else e.message
                 } finally { creating = false }
             }
         },

@@ -13,6 +13,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import kotlinx.coroutines.launch
 
 /**
@@ -35,7 +37,7 @@ internal fun rememberMediaSaver(onToast: (String) -> Unit): (url: String, isVide
     fun start(url: String, isVideo: Boolean) {
         // 视频要整段下载，几秒到几十秒都有可能——先给一句「正在保存…」，
         // 否则点了没反应，用户会连点好几次（每次都是一次完整下载）
-        onToast("正在保存…")
+        onToast(Str.s(R.string.chat_media_saving))
         scope.launch { onToast(MediaSaver.save(context, url, isVideo)) }
     }
 
@@ -45,7 +47,7 @@ internal fun rememberMediaSaver(onToast: (String) -> Unit): (url: String, isVide
         val p = pending
         pending = null
         when {
-            !granted -> onToast("没有存储权限，无法保存到相册")
+            !granted -> onToast(Str.s(R.string.media_storage_permission_denied_save))
             p != null -> start(p.first, p.second)
         }
     }

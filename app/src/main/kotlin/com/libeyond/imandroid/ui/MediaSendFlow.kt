@@ -7,6 +7,8 @@ import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.ThumbEncode
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.api.FriendEntry
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -121,7 +123,7 @@ internal class MediaSendFlow(
     ) {
         if (m.sizeBytes <= 0) {
             // 分片协议按声明大小校验，0 会被挡下——先给用户一句话，别静默什么都不发生
-            onToast("这个视频读不出来")
+            onToast(Str.s(R.string.chat_media_video_read_failed))
             pendingId?.let { client.messages.markMediaFailed(it) }
             return
         }
@@ -180,12 +182,12 @@ internal class MediaSendFlow(
     suspend fun sendFile(uri: Uri, onToast: (String) -> Unit) {
         val meta = withContext(Dispatchers.IO) { describeFile(uri) }
         if (meta == null) {
-            onToast("这个文件读不出来")
+            onToast(Str.s(R.string.chat_media_file_read_failed))
             return
         }
         val (name, size) = meta
         if (size <= 0) {
-            onToast("这个文件读不出来")
+            onToast(Str.s(R.string.chat_media_file_read_failed))
             return
         }
         // **一律走分片**：文件上限同样是 2GB，整包读进内存不行。
@@ -211,7 +213,7 @@ internal class MediaSendFlow(
      */
     suspend fun sendContactCard(f: FriendEntry, onToast: (String) -> Unit) {
         if (f.userId.isBlank()) {
-            onToast("这个联系人不完整")
+            onToast(Str.s(R.string.chat_media_contact_card_incomplete))
             return
         }
         client.messages.sendCard(

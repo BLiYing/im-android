@@ -37,11 +37,11 @@ object LoginError {
             // 故意不复用 IMServer/docs/i18n/strings.json 的 err.200002（"密码错误"）——那条会暴露
             // 「用户名是对的、只是密码错了」，本端刻意用「用户名或密码错误」防用户名被枚举出来，
             // 这是既有的安全考量，不因为接上多语言就悄悄改掉。
-            ErrCode.WRONG_PASSWORD -> "用户名或密码错误"
+            ErrCode.WRONG_PASSWORD -> strings.get(R.string.login_error_wrong_username_or_password)
             ErrCode.USER_NOT_FOUND -> strings.get(R.string.err_200001)
             ErrCode.USER_ALREADY_EXISTS -> strings.get(R.string.err_200004)
             ErrCode.ACCOUNT_BANNED -> strings.get(R.string.err_200003)
-            ErrCode.PARAM_INVALID -> e.message.ifEmpty { "输入不合法" }
+            ErrCode.PARAM_INVALID -> e.message.ifEmpty { strings.get(R.string.login_error_param_invalid) }
             ErrCode.RATE_LIMITED -> strings.get(R.string.err_100002)
             else -> e.message.ifEmpty { strings.get(R.string.err_request_failed, e.code.toString()) }
         }

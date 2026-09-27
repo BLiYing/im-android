@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.sdk.api
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.http.HttpClient
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -31,7 +33,7 @@ data class UserCard(
      */
     val displayName: String
         get() = remark.ifBlank { nickname }.ifBlank { username.ifBlank { "" }.let { if (it.isEmpty()) "" else "@$it" } }
-            .ifBlank { "未命名用户" }
+            .ifBlank { Str.s(R.string.common_unnamed_user) }
 
     /** 副标题里的标识行。**为空时整行隐藏**，不显示「用户名：未设置」，更不回退内部 ID。 */
     val handle: String get() = if (username.isBlank()) "" else "@$username"
@@ -55,7 +57,7 @@ data class FriendEntry(
     val hello: String = "",
 ) {
     val displayName: String
-        get() = remark.ifBlank { nickname }.ifBlank { if (username.isBlank()) "未命名用户" else "@$username" }
+        get() = remark.ifBlank { nickname }.ifBlank { if (username.isBlank()) Str.s(R.string.common_unnamed_user) else "@$username" }
 
     val handle: String get() = if (username.isBlank()) "" else "@$username"
 

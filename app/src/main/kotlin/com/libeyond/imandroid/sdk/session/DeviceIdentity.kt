@@ -3,6 +3,8 @@ package com.libeyond.imandroid.sdk.session
 import android.content.Context
 import android.os.Build
 import com.libeyond.imandroid.BuildConfig
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import java.util.UUID
 
 /**
@@ -34,7 +36,7 @@ class DeviceIdentity(context: Context) {
     val deviceName: String = listOfNotNull(
         Build.MANUFACTURER?.replaceFirstChar { it.uppercase() },
         Build.MODEL,
-    ).joinToString(" ").ifBlank { "Android 设备" }
+    ).joinToString(" ").ifBlank { Str.s(R.string.device_default_name_android) }
 
     val appVersion: String = BuildConfig.VERSION_NAME
 

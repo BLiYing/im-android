@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ContentType
 
 /**
@@ -19,12 +21,12 @@ object MessagePreview {
     /** @param viewerIsSender 通话记录的预览按「看的人」出两套文案；其它类型用不到。 */
     fun of(contentType: String, content: String, caption: String?, viewerIsSender: Boolean = false): String = when (contentType) {
         ContentType.TEXT -> content
-        ContentType.IMAGE -> caption?.takeIf { it.isNotBlank() } ?: "[图片]"
-        ContentType.VIDEO -> caption?.takeIf { it.isNotBlank() } ?: "[视频]"
-        ContentType.VOICE -> "[语音]"
-        ContentType.FILE -> caption?.takeIf { it.isNotBlank() } ?: "[文件]"
-        ContentType.CONTACT -> "[个人名片]"
-        ContentType.CHAT_RECORD -> "[聊天记录]"
+        ContentType.IMAGE -> caption?.takeIf { it.isNotBlank() } ?: Str.s(R.string.preview_image)
+        ContentType.VIDEO -> caption?.takeIf { it.isNotBlank() } ?: Str.s(R.string.preview_video)
+        ContentType.VOICE -> Str.s(R.string.preview_voice)
+        ContentType.FILE -> caption?.takeIf { it.isNotBlank() } ?: Str.s(R.string.preview_file)
+        ContentType.CONTACT -> Str.s(R.string.quote_snapshot_contact)
+        ContentType.CHAT_RECORD -> Str.s(R.string.preview_chat_record)
         ContentType.CALL -> CallRecord.preview(content, viewerIsSender)
         // system 与未知类型都回正文：未知类型多半是**新版本加的**消息，
         // 正文至少还能看出个大概，显示成空白才是真的丢信息（PROTOCOL §2「未知要忍」）。

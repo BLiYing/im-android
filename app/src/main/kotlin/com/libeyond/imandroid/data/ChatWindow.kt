@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /**
  * 聊天页的**渲染窗口**（`../IMServer/docs/design/MESSAGE_WINDOW_DESIGN.md` §4）。
  *
@@ -77,7 +80,7 @@ object ChatWindows {
      * 目标不在本机、但本地**确有缺口**——它多半只是还没同步下来。
      * 同 im-web `NEED_NETWORK_NOTICE`（三端同一处境同一句话）。
      */
-    const val NEED_NETWORK_NOTICE = "该消息尚未下载，需要联网加载"
+    val NEED_NETWORK_NOTICE: String get() = Str.s(R.string.conv_query_need_network)
 
     /**
      * 目标真的没了。两个来源：本地齐全却找不到（撤回 / 为所有人删除 / 仅为我删除都是物理删行），
@@ -87,7 +90,7 @@ object ChatWindows {
      * 与 [NEED_NETWORK_NOTICE] 必须分开：引用块自 2026-09-09 起**只要有原消息号就可点**，
      * "自己删掉的消息"是一条常见路径，对它说"需要联网加载"是把原因归错了地方。
      */
-    const val GONE_NOTICE = "原消息不在了"
+    val GONE_NOTICE: String get() = Str.s(R.string.chat_window_gone_notice)
 
     /**
      * 换完窗、等满 [LOCATE_TIMEOUT_MS] 仍没滚过去。**不说"原消息不在了"**——它明明在，只是没跳成。
@@ -95,16 +98,16 @@ object ChatWindows {
      * 兜底而不是主路径：正常情况下换完窗下一帧就命中了。但只要有任何一条路让目标进不了列表，
      * 没有这道兜底就是**唯一一个不给任何反馈的失败分支**——而这一族的纪律是"跳不了要说出来"。
      */
-    const val LOCATE_FAILED_NOTICE = "没能定位到这条消息，请重试"
+    val LOCATE_FAILED_NOTICE: String get() = Str.s(R.string.chat_window_locate_failed_notice)
 
     /** 「跳到最早」时本地一条消息都没有（空会话）。对齐 iOS `chat.search.no_messages`。 */
-    const val NO_MESSAGES_NOTICE = "暂无消息"
+    val NO_MESSAGES_NOTICE: String get() = Str.s(R.string.chat_search_no_messages)
 
     /**
      * 「跳到最早」离线时的退化：只能落到本地已经握着的那一条，说清楚这不是会话开头。
      * 对齐 iOS `chat.search.offline_jumped_earliest`。
      */
-    const val OFFLINE_JUMPED_EARLIEST_NOTICE = "网络未连接，已跳到已下载的最早一条"
+    val OFFLINE_JUMPED_EARLIEST_NOTICE: String get() = Str.s(R.string.chat_search_offline_jumped_earliest)
 
     /**
      * 「回到最新」按钮该不该亮。

@@ -27,8 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.JoinRequest
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMTopBar
@@ -60,17 +62,26 @@ internal fun JoinRequestsScreen(
     val shown = if (showDone) done else pending
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        IMTopBar(title = "入群申请", onLeft = onBack)
+        IMTopBar(title = stringResource(R.string.qr_join_req_title), onLeft = onBack)
 
         Row(Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = 10.dp)) {
-            SegButton("待处理" + if (pending.isNotEmpty()) "（${pending.size}）" else "", !showDone) { showDone = false }
+            SegButton(
+                if (pending.isNotEmpty()) {
+                    stringResource(R.string.qr_join_req_tab_pending_count, pending.size)
+                } else {
+                    stringResource(R.string.qr_join_req_tab_pending)
+                },
+                !showDone,
+            ) { showDone = false }
             Spacer(Modifier.width(d.space3))
-            SegButton("已处理", showDone) { showDone = true }
+            SegButton(stringResource(R.string.qr_join_req_tab_done), showDone) { showDone = true }
         }
 
         when {
-            loading -> Empty("加载中…")
-            shown.isEmpty() -> Empty(if (showDone) "暂无已处理的申请" else "暂无待审批的入群申请")
+            loading -> Empty(stringResource(R.string.common_loading))
+            shown.isEmpty() -> Empty(
+                if (showDone) stringResource(R.string.qr_join_req_empty_done) else stringResource(R.string.qr_join_req_empty_pending),
+            )
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 items(shown, key = { it.userId }) { r ->
                     RequestRow(r, busy = busyUid == r.userId, onDecide = onDecide)
@@ -122,12 +133,12 @@ private fun RequestRow(r: JoinRequest, busy: Boolean, onDecide: (String, Boolean
                 Spacer(Modifier.width(d.space3))
                 // 「同意」是主操作用实心，「拒绝」次级——两个都做成一样重的按钮
                 // 容易让人在列表里连点错（这一步不可撤销）
-                Pill("同意", primary = true, enabled = !busy) { onDecide(r.userId, true) }
+                Pill(stringResource(R.string.common_agree), primary = true, enabled = !busy) { onDecide(r.userId, true) }
                 Spacer(Modifier.width(8.dp))
-                Pill("拒绝", primary = false, enabled = !busy) { onDecide(r.userId, false) }
+                Pill(stringResource(R.string.common_reject), primary = false, enabled = !busy) { onDecide(r.userId, false) }
             } else {
                 Text(
-                    if (r.status == "approved") "已同意" else "已拒绝",
+                    if (r.status == "approved") stringResource(R.string.qr_join_req_approved) else stringResource(R.string.qr_join_req_rejected),
                     color = if (r.status == "approved") c.textSecondary else c.textTertiary,
                     style = MaterialTheme.typography.bodyMedium,
                 )

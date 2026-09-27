@@ -32,8 +32,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -144,7 +146,7 @@ fun MessageContextMenu(
             // 子菜单里给一行返回上一级——否则进了子菜单只能关掉重来
             if (submenu != null) {
                 MenuRow(
-                    SheetItem("‹ 返回", icon = null) { },
+                    SheetItem("‹ " + stringResource(R.string.common_back), icon = null) { },
                     onClick = { submenu = null },
                 )
                 MenuDivider()

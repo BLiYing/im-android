@@ -73,7 +73,7 @@ class GroupPickTest {
     fun titles_match_each_purpose() {
         assertEquals("添加管理员", GroupPick.title(PickPurpose.AddAdmin))
         assertEquals("选择新群主", GroupPick.title(PickPurpose.Transfer))
-        assertEquals("邀请入群", GroupPick.title(PickPurpose.Invite))
+        assertEquals("邀请成员", GroupPick.title(PickPurpose.Invite))
     }
 
     @Test

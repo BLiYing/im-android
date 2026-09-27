@@ -10,11 +10,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DownloadCategory
 import com.libeyond.imandroid.data.DownloadNetwork
 import com.libeyond.imandroid.data.DownloadPolicy
 import com.libeyond.imandroid.data.DownloadSettingsUi
 import com.libeyond.imandroid.data.NetworkPolicy
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.ui.components.IMRowDivider
 import com.libeyond.imandroid.ui.components.IMSectionFooter
 import com.libeyond.imandroid.ui.components.IMSectionHeader
@@ -51,13 +54,18 @@ fun AutoDownloadNetworkScreen(
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(d.sectionGap))
             IMSettingsGroup {
-                IMSwitchRow(title = "自动下载媒体文件", checked = policy.enabled, onCheckedChange = onEnabledChange)
+                IMSwitchRow(
+                    title = stringResource(R.string.autodl_master_switch),
+                    checked = policy.enabled,
+                    onCheckedChange = onEnabledChange,
+                )
             }
 
-            IMSectionHeader("流量档位")
+            IMSectionHeader(stringResource(R.string.autodl_section_traffic_tier))
             IMSettingsGroup {
                 IMStepSlider(
-                    title = { "流量使用情况：${names[it]}" },
+                    // title 是普通 (Int) -> String，非 @Composable，取文案走 Str.s
+                    title = { Str.s(R.string.autodl_traffic_usage_prefix, names[it]) },
                     index = tier.ordinal,
                     count = names.size,
                     onCommit = onCommitTier,
@@ -65,9 +73,9 @@ fun AutoDownloadNetworkScreen(
                     enabled = policy.enabled,
                 )
             }
-            IMSectionFooter("“低”只自动下图片，视频/文件手动；“中/高”自动下更大的视频与文件。可进各类微调。")
+            IMSectionFooter(stringResource(R.string.autodl_footer_traffic_tier))
 
-            IMSectionHeader("媒体文件类型")
+            IMSectionHeader(stringResource(R.string.autodl_section_media_types))
             IMSettingsGroup {
                 DownloadCategory.entries.forEachIndexed { i, cat ->
                     if (i > 0) IMRowDivider(insetStart = d.space4)
@@ -78,7 +86,7 @@ fun AutoDownloadNetworkScreen(
                     )
                 }
             }
-            IMSectionFooter("语音消息占用小，始终自动下载。")
+            IMSectionFooter(stringResource(R.string.autodl_footer_media_types))
             Spacer(Modifier.height(d.sectionGap))
         }
     }

@@ -28,12 +28,14 @@ import com.composables.icons.lucide.Undo2
 import com.composables.icons.lucide.User
 import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.X
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ArchiveAction
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.MessageAction
 import com.libeyond.imandroid.data.MessageActions
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.protocol.MsgOp
 import com.libeyond.imandroid.ui.components.MessageContextMenu
@@ -73,11 +75,11 @@ private fun <T> buildMenuWithDeleteSubmenu(
     val tail = when {
         deletes.isEmpty() -> emptyList()
         deletes.size == 1 -> listOf(
-            SheetItem("删除", destructive = true, icon = Lucide.Trash2) { run(deletes.first()) },
+            SheetItem(Str.s(R.string.common_delete), destructive = true, icon = Lucide.Trash2) { run(deletes.first()) },
         )
         else -> listOf(
             SheetItem(
-                "删除", destructive = true, icon = Lucide.Trash2,
+                Str.s(R.string.common_delete), destructive = true, icon = Lucide.Trash2,
                 submenu = deletes.map { a ->
                     SheetItem(label(a), destructive = true, icon = icon(a)) { run(a) }
                 },
@@ -228,11 +230,11 @@ internal fun ChatMessageMenu(
                 MessageAction.Copy -> when (com.libeyond.imandroid.data.copyKindOf(target)) {
                     com.libeyond.imandroid.data.CopyKind.Caption -> {
                         clipboard.setText(AnnotatedString(target.caption.orEmpty()))
-                        onToast("已复制")
+                        onToast(Str.s(R.string.common_copied))
                     }
                     com.libeyond.imandroid.data.CopyKind.Text -> {
                         clipboard.setText(AnnotatedString(target.content))
-                        onToast("已复制")
+                        onToast(Str.s(R.string.common_copied))
                     }
                     com.libeyond.imandroid.data.CopyKind.Link -> {
                         clipboard.setText(
@@ -242,7 +244,7 @@ internal fun ChatMessageMenu(
                                 ),
                             ),
                         )
-                        onToast("已复制链接")
+                        onToast(Str.s(R.string.common_copied_link))
                     }
                     // 图片走与查看器「更多 → 复制」同一条（本地原件优先），别另搓一份
                     com.libeyond.imandroid.data.CopyKind.Image -> scope.launch {
@@ -261,8 +263,8 @@ internal fun ChatMessageMenu(
                 // 快照字段与多选底栏同一份 FavoriteDraft.of（宽高/时长/波形/文件名大小都带上）
                 MessageAction.Favorite -> scope.launch {
                     runCatchingCancellable { client.favorites.add(com.libeyond.imandroid.sdk.api.FavoriteDraft.of(target)) }
-                        .onSuccess { onToast("已收藏") }
-                        .onFailure { onToast(it.userMessage("收藏失败")) }
+                        .onSuccess { onToast(Str.s(R.string.chat_favorite_success)) }
+                        .onFailure { onToast(it.userMessage(Str.s(R.string.net_fallback_favorite_failed))) }
                 }
                 // 进多选态：**默认把触发的那条勾上**（同 iOS enterSelectionWithMessage:）
                 MessageAction.MultiSelect -> onMultiSelect(target)

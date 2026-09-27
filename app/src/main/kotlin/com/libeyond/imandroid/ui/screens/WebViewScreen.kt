@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -61,8 +62,10 @@ import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RotateCw
 import com.composables.icons.lucide.X
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.LinkDetect
 import com.libeyond.imandroid.data.WebLinks
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.IMTopBar
@@ -140,7 +143,7 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit) {
                 override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
                     handler.cancel()
                     log.w("web_ssl_error", "primary" to error.primaryError)
-                    if (error.url == current) failure = "这个网页的安全证书有问题，已停止加载"
+                    if (error.url == current) failure = Str.s(R.string.webview_ssl_error)
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -189,11 +192,12 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit) {
     ) {
         val host = LinkDetect.hostOf(current)
         val loading = progress in 1..99
+        val copiedLinkToast = stringResource(R.string.common_copied_link)
         IMTopBar(
             title = title.ifBlank { host },
             subtitle = if (title.isBlank()) "" else host,
             leftIcon = Lucide.X,
-            leftDescription = "关闭",
+            leftDescription = stringResource(R.string.common_close),
             onLeft = onClose,
             right = {
                 WebMenu(
@@ -201,7 +205,7 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit) {
                     onOpen = { menuOpen = true },
                     onDismiss = { menuOpen = false },
                     onReload = { failure = null; webView.reload() },
-                    onCopy = { clipboard.setText(AnnotatedString(current)); toast = "链接已复制" },
+                    onCopy = { clipboard.setText(AnnotatedString(current)); toast = copiedLinkToast },
                     onBrowser = { openInBrowser(context, current) { toast = it } },
                 )
             },
@@ -243,14 +247,14 @@ private fun WebMenu(
     Box {
         Image(
             imageVector = Lucide.Ellipsis,
-            contentDescription = "更多",
+            contentDescription = stringResource(R.string.common_more),
             modifier = Modifier.size(d.topBarIcon).clickable(onClick = onOpen),
             colorFilter = ColorFilter.tint(c.accent),
         )
         DropdownMenu(expanded = open, onDismissRequest = onDismiss) {
-            WebMenuItem(Lucide.RotateCw, "刷新") { onDismiss(); onReload() }
-            WebMenuItem(Lucide.Copy, "复制链接") { onDismiss(); onCopy() }
-            WebMenuItem(Lucide.Globe, "用浏览器打开") { onDismiss(); onBrowser() }
+            WebMenuItem(Lucide.RotateCw, stringResource(R.string.common_refresh)) { onDismiss(); onReload() }
+            WebMenuItem(Lucide.Copy, stringResource(R.string.qr_copy_link)) { onDismiss(); onCopy() }
+            WebMenuItem(Lucide.Globe, stringResource(R.string.common_open_in_browser)) { onDismiss(); onBrowser() }
         }
     }
 }
@@ -277,9 +281,9 @@ private fun WebFailure(message: String, onRetry: () -> Unit, onBrowser: () -> Un
         Text(message, color = c.textSecondary, fontSize = 15.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
         Row {
-            Text("重试", color = c.accent, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onRetry).padding(12.dp))
+            Text(stringResource(R.string.common_retry), color = c.accent, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onRetry).padding(12.dp))
             Spacer(Modifier.width(16.dp))
-            Text("用浏览器打开", color = c.accent, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onBrowser).padding(12.dp))
+            Text(stringResource(R.string.common_open_in_browser), color = c.accent, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onBrowser).padding(12.dp))
         }
     }
 }
@@ -299,12 +303,12 @@ private fun openExternalApp(context: Context, url: String, onToast: (String) -> 
         }
     }.getOrNull()
     if (intent == null) {
-        onToast("打不开这个链接")
+        onToast(Str.s(R.string.webview_link_unopenable))
         return
     }
     intent.addCategory(Intent.CATEGORY_BROWSABLE)
     intent.component = null
     intent.selector = null
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { context.startActivity(intent) }.onFailure { onToast("没有能打开这个链接的应用") }
+    runCatching { context.startActivity(intent) }.onFailure { onToast(Str.s(R.string.webview_no_app_for_link)) }
 }

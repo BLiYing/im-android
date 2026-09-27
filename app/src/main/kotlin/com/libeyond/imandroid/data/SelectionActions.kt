@@ -1,6 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -46,7 +48,11 @@ object SelectionActions {
      */
     fun reportBlockedHint(msgs: List<MessageEntity>, myUid: String): String? {
         if (msgs.isEmpty() || reportableSender(msgs, myUid) != null) return null
-        return if (msgs.any { it.sender == myUid }) "不能举报自己的消息" else "一次只能举报同一个人的消息"
+        return if (msgs.any { it.sender == myUid }) {
+            Str.s(R.string.chat_select_report_own)
+        } else {
+            Str.s(R.string.chat_select_report_multi)
+        }
     }
 
     /**
@@ -54,7 +60,7 @@ object SelectionActions {
      * 与合并转发"会发出去必须用公开名"刻意分叉（同 iOS）。
      */
     fun reportTitle(count: Int, who: String): String =
-        if (count <= 1) "举报这条消息" else "举报 $who 的 $count 条消息"
+        if (count <= 1) Str.s(R.string.chat_report_single_title) else Str.p(R.plurals.chat_report_multi_title, count, who, count)
 
     // ————————————————— 逐条转发 —————————————————
 
@@ -75,11 +81,11 @@ object SelectionActions {
      */
     fun expiredForwardText(contentType: String): String {
         val noun = when (contentType) {
-            ContentType.VIDEO -> "视频"
-            ContentType.FILE -> "文件"
-            else -> "图片"
+            ContentType.VIDEO -> Str.s(R.string.common_video)
+            ContentType.FILE -> Str.s(R.string.common_file)
+            else -> Str.s(R.string.common_image)
         }
-        return "该${noun}已失效，无法转发"
+        return Str.s(R.string.chat_forward_expired_noun, noun)
     }
 
     /**
@@ -100,11 +106,16 @@ object SelectionActions {
 
     /** 转发回执：「已转发」/「已转发到 N 个会话」，有失效跳过的再补一句（同 iOS 文案）。 */
     fun forwardDoneText(targets: Int, expiredSkipped: Int): String {
-        val base = if (targets > 1) "已转发到 $targets 个会话" else "已转发"
+        val base = if (targets > 1) {
+            Str.p(R.plurals.favorites_forward_success_count, targets, targets)
+        } else {
+            Str.s(R.string.favorites_forward_success_single)
+        }
         return base + expiredSuffix(expiredSkipped)
     }
 
-    fun expiredSuffix(n: Int): String = if (n > 0) "（$n 条已失效未转发）" else ""
+    fun expiredSuffix(n: Int): String =
+        if (n > 0) Str.p(R.plurals.chat_forward_expired_suffix, n, n) else ""
 
     // ————————————————— 合并转发 —————————————————
 
@@ -247,8 +258,12 @@ object SelectionActions {
 
     /** 批量收藏回执。部分失败要说清几条成功——逐条弹 N 个吐司会互相盖掉。 */
     fun favoriteSummary(ok: Int, total: Int): String = when {
-        ok <= 0 -> "收藏失败"
-        ok >= total -> if (total == 1) "已收藏" else "已收藏 $total 条"
-        else -> "已收藏 $ok/$total 条，${total - ok} 条失败"
+        ok <= 0 -> Str.s(R.string.net_fallback_favorite_failed)
+        ok >= total -> if (total == 1) {
+            Str.s(R.string.chat_favorite_success)
+        } else {
+            Str.p(R.plurals.chat_favorite_success_count, total, total)
+        }
+        else -> Str.s(R.string.chat_favorite_partial, ok, total, total - ok)
     }
 }

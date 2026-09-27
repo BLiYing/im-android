@@ -68,8 +68,8 @@ internal fun QuoteBlock(
     val c = IMTheme.colors
     val fs = IMTheme.appearance.chatFontSize
     val localized = localizeReplySnapshot(snapshot)
-    val kindGlyph = quoteGlyphFor(localized)
-    val fileName = quoteFileNameOf(localized)
+    val kindGlyph = quoteGlyphFor(snapshot)
+    val fileName = quoteFileNameOf(snapshot)
     val hasName = !fromName.isNullOrBlank()
 
     val frosted = com.libeyond.imandroid.ui.rememberFrostedPainter(thumb)
@@ -144,23 +144,29 @@ private fun QuoteLine(barColor: Color, first: Boolean, last: Boolean, content: @
     }
 }
 
-/** 快照是媒体占位时给个小图标（对齐 iOS `IMMediaGlyphForSnippet`）；否则 null。输入栏回复条也用。 */
-internal fun quoteGlyphFor(localized: String): androidx.compose.ui.graphics.vector.ImageVector? = when {
-    localized.startsWith("[图片]") -> Lucide.LucideImageIcon
-    localized.startsWith("[视频]") -> Lucide.Video
-    localized.startsWith("[语音]") -> Lucide.Mic
-    localized.startsWith("[聊天记录]") -> Lucide.MessageSquare
-    localized.startsWith("[个人名片]") -> Lucide.IdCard
+/**
+ * 快照是媒体占位时给个小图标（对齐 iOS `IMMediaGlyphForSnippet`）；否则 null。输入栏回复条也用。
+ * **只认原始快照**（PROTOCOL §4.3 的 `[image]` 等 token，外加服务端预本地化的 `[聊天记录]`/`[个人名片]`
+ * 与存量中文快照），不认本地化之后的文案——否则界面换成英文判据就全部失效（iOS 2026-09 修过同一处）。
+ */
+internal fun quoteGlyphFor(raw: String): androidx.compose.ui.graphics.vector.ImageVector? = when {
+    raw.startsWith("[image]") || raw.startsWith("[图片]") -> Lucide.LucideImageIcon
+    raw.startsWith("[video]") || raw.startsWith("[视频]") -> Lucide.Video
+    raw.startsWith("[voice]") || raw.startsWith("[语音]") -> Lucide.Mic
+    raw.startsWith("[chat_record]") || raw.startsWith("[聊天记录]") -> Lucide.MessageSquare
+    raw.startsWith("[contact]") || raw.startsWith("[个人名片]") -> Lucide.IdCard
     else -> null
 }
 
+private val FILE_TOKENS = listOf("[file]", "[文件]")
+
 /**
- * `[文件] 报表.xlsx` → `报表.xlsx`（对齐 iOS `IMReplySnippetFileName`）。
- * 没带名字（只有 `[文件]`）返回 null，让调用方退回通用图标。
+ * `[file] 报表.xlsx` → `报表.xlsx`（对齐 iOS `IMReplySnippetFileName`）。同样只认原始快照（含存量中文 `[文件]`）。
+ * 没带名字（只有 token）返回 null，让调用方退回通用图标。
  */
-internal fun quoteFileNameOf(localized: String): String? {
-    if (!localized.startsWith("[文件]")) return null
-    return localized.removePrefix("[文件]").trim().takeIf { it.isNotEmpty() }
+internal fun quoteFileNameOf(raw: String): String? {
+    val token = FILE_TOKENS.firstOrNull { raw.startsWith(it) } ?: return null
+    return raw.removePrefix(token).trim().takeIf { it.isNotEmpty() }
 }
 
 /**
@@ -177,13 +183,13 @@ internal fun replyPreviewOf(
     fileName: String?,
     caption: String?,
 ): String = when (contentType) {
-    ContentType.IMAGE -> "[图片]" + captionSuffix(caption)
-    ContentType.VIDEO -> "[视频]" + captionSuffix(caption)
-    ContentType.VOICE -> "[语音]"
-    ContentType.FILE -> "[文件] " + MediaUrl.displayFileName(content, fileName.orEmpty())
-    ContentType.CONTACT -> "[个人名片]"
-    ContentType.CHAT_RECORD -> "[聊天记录]"
-    ContentType.CALL -> "[音视频通话]"
+    ContentType.IMAGE -> "[image]" + captionSuffix(caption)
+    ContentType.VIDEO -> "[video]" + captionSuffix(caption)
+    ContentType.VOICE -> "[voice]"
+    ContentType.FILE -> "[file] " + MediaUrl.displayFileName(content, fileName.orEmpty())
+    ContentType.CONTACT -> "[contact]"
+    ContentType.CHAT_RECORD -> "[chat_record]"
+    ContentType.CALL -> "[call]"
     else -> content
 }
 

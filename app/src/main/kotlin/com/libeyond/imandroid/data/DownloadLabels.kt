@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import kotlin.math.roundToLong
 
 /**
@@ -45,12 +47,12 @@ object DownloadLabels {
 
     /** iOS `IMFormatUploadProgress`：还没收到字节「等待中」，否则「已下 / 总」。暂停见类注释。 */
     fun progressText(state: DownloadState, sizeBytes: Long): String {
-        if (state.phase == DownloadPhase.Paused) return "已暂停"
+        if (state.phase == DownloadPhase.Paused) return Str.s(R.string.media_download_paused)
         val total = totalOf(state, sizeBytes)
         // 两边都不知道总大小：iOS 不会走到这里（它恒有 total），本端给已收多少，总比「等待中」真
-        if (total <= 0) return if (state.received > 0) MediaUrl.formatSize(state.received) else "等待中"
+        if (total <= 0) return if (state.received > 0) MediaUrl.formatSize(state.received) else Str.s(R.string.media_upload_waiting)
         val f = fractionOf(state, sizeBytes)
-        if (f <= 0f) return "等待中"
+        if (f <= 0f) return Str.s(R.string.media_upload_waiting)
         val sent = (f.toDouble() * total).roundToLong()
         return "${MediaUrl.formatSize(sent)} / ${MediaUrl.formatSize(total)}"
     }
@@ -59,8 +61,8 @@ object DownloadLabels {
     fun displayText(state: DownloadState, sizeBytes: Long): String = when (state.phase) {
         DownloadPhase.NotStarted -> MediaUrl.formatSize(sizeBytes)
         DownloadPhase.Downloading, DownloadPhase.Paused -> progressText(state, sizeBytes)
-        DownloadPhase.Failed -> "下载失败"
-        DownloadPhase.Expired -> "文件已失效"
+        DownloadPhase.Failed -> Str.s(R.string.media_download_failed)
+        DownloadPhase.Expired -> Str.s(R.string.chat_file_expired)
         DownloadPhase.Ready -> ""
     }
 
@@ -93,11 +95,11 @@ object DownloadLabels {
     fun fileStatusLine(state: DownloadState, sizeBytes: Long): String {
         val size = MediaUrl.formatSize(sizeBytes)
         return when (state.phase) {
-            DownloadPhase.NotStarted -> if (size.isEmpty()) "点击下载" else "$size · 点击下载"
+            DownloadPhase.NotStarted -> if (size.isEmpty()) Str.s(R.string.media_download_tap_to_download) else Str.s(R.string.chat_file_size_tap_download, size)
             DownloadPhase.Ready -> size
             DownloadPhase.Downloading, DownloadPhase.Paused -> progressText(state, sizeBytes)
-            DownloadPhase.Failed -> "下载失败，点击重试"
-            DownloadPhase.Expired -> "文件已失效"
+            DownloadPhase.Failed -> Str.s(R.string.media_download_failed_tap_retry)
+            DownloadPhase.Expired -> Str.s(R.string.chat_file_expired)
         }
     }
 
@@ -112,11 +114,11 @@ object DownloadLabels {
     fun archiveFileLine(state: DownloadState, sizeBytes: Long): String {
         val size = MediaUrl.formatSize(sizeBytes)
         return when (state.phase) {
-            DownloadPhase.NotStarted -> if (size.isEmpty()) "未下载" else "$size · 未下载"
-            DownloadPhase.Ready -> if (size.isEmpty()) "已下载" else "$size · 已下载"
+            DownloadPhase.NotStarted -> if (size.isEmpty()) Str.s(R.string.chat_media_alt_not_downloaded) else Str.s(R.string.detail_tab_file_size_not_downloaded, size)
+            DownloadPhase.Ready -> if (size.isEmpty()) Str.s(R.string.media_download_a11y_done) else Str.s(R.string.detail_tab_file_size_downloaded, size)
             DownloadPhase.Downloading, DownloadPhase.Paused -> progressText(state, sizeBytes)
-            DownloadPhase.Failed -> "下载失败，点击重试"
-            DownloadPhase.Expired -> "文件已失效"
+            DownloadPhase.Failed -> Str.s(R.string.media_download_failed_tap_retry)
+            DownloadPhase.Expired -> Str.s(R.string.chat_file_expired)
         }
     }
 

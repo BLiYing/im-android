@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /**
  * 引用相关的两处**名字**：气泡里引用块的被引用者、输入栏回复条的「回复 X」。
  *
@@ -21,7 +24,7 @@ object ReplyNames {
         originalNickname: String?,
     ): String? {
         if (uid.isNullOrBlank()) return null
-        if (uid == myUid) return "你"
+        if (uid == myUid) return Str.s(R.string.common_you)
         return listOf(localName, memberName, originalNickname).firstOrNull { !it.isNullOrBlank() }
     }
 
@@ -41,10 +44,10 @@ object ReplyNames {
         convTitle: String,
     ): String {
         val name = when {
-            sender == myUid -> "自己"
+            sender == myUid -> Str.s(R.string.chat_reply_self)
             isGroup -> listOf(localName, memberName, fromNickname).firstOrNull { !it.isNullOrBlank() }.orEmpty()
             else -> convTitle
         }
-        return if (name.isBlank()) "回复" else "回复 $name"
+        return if (name.isBlank()) Str.s(R.string.chat_reply_title_fallback) else Str.s(R.string.chat_reply_who, name)
     }
 }

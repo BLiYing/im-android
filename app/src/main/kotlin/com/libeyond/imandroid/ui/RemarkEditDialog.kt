@@ -9,6 +9,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 
 /**
  * 备注名编辑弹窗——**页内弹窗，不跳页**，对齐 iOS `IMChatDetailViewController+Actions.m`
@@ -30,7 +32,7 @@ fun RemarkEditDialog(
     var draft by remember(current) { mutableStateOf(current) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("设置备注名") },
+        title = { Text(stringResource(R.string.contact_edit_remark_placeholder)) },
         text = {
             OutlinedTextField(
                 value = draft,
@@ -39,7 +41,7 @@ fun RemarkEditDialog(
                 placeholder = { Text(placeholderNickname) },
             )
         },
-        confirmButton = { TextButton(onClick = { onConfirm(draft.trim()) }) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        confirmButton = { TextButton(onClick = { onConfirm(draft.trim()) }) { Text(stringResource(R.string.common_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }

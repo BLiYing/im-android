@@ -79,7 +79,7 @@ object Forward {
 
     /** 行上显示的名字。末级**不落内部 ID**（10 位随机数字对人没有意义，见 [DisplayName]）。 */
     fun titleOf(c: ConversationEntity): String =
-        c.title.ifBlank { if (c.isGroup) "未命名群聊" else DisplayName.UNNAMED }
+        c.title.ifBlank { if (c.isGroup) DisplayName.UNNAMED_GROUP else DisplayName.UNNAMED }
 
     /**
      * 按**勾选顺序**取回目标会话（iOS `_selected` 是有序数组，发送顺序即勾选顺序）。

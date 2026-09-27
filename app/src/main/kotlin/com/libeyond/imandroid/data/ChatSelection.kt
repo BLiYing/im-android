@@ -1,6 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ContentType
 
 /**
@@ -74,10 +76,11 @@ object ChatSelection {
         selected.entries.sortedBy { it.key }.map { it.value }
 
     /** 标题栏文案：没勾时「选择消息」，勾了显条数（同 iOS `updateSelectionUI`）。 */
-    fun titleOf(count: Int): String = if (count > 0) "已选择 $count 条" else "选择消息"
+    fun titleOf(count: Int): String =
+        if (count > 0) Str.p(R.plurals.chat_selection_selected_count, count, count) else Str.s(R.string.chat_menu_select_messages)
 
     /** 超限吐司文案。 */
-    fun overflowNotice(max: Int = MAX): String = "最多选择 $max 条"
+    fun overflowNotice(max: Int = MAX): String = Str.p(R.plurals.chat_select_max, max, max)
 
     /**
      * 这批里真正转得出去的几条（撤回/空内容/系统/未确认一律滤掉）。

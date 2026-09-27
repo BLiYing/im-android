@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.ConversationSummary
 
 /**
@@ -21,13 +23,16 @@ import com.libeyond.imandroid.sdk.api.ConversationSummary
  */
 object DisplayName {
 
-    const val UNNAMED = "未命名用户"
+    val UNNAMED: String get() = Str.s(R.string.common_unnamed_user)
+
+    /** 群名为空时的回退占位。 */
+    val UNNAMED_GROUP: String get() = Str.s(R.string.common_unnamed_group)
 
     /** 会话在**本机**列表/标题里显示的名字。可以带备注。 */
     fun ofConversation(c: ConversationSummary): String {
         if (c.remark.isNotBlank()) return c.remark
         return if (c.isGroup) {
-            c.name.ifBlank { "未命名群聊" }
+            c.name.ifBlank { UNNAMED_GROUP }
         } else {
             c.peerRemark.ifBlank { c.peerNickname }.ifBlank { UNNAMED }
         }
@@ -42,7 +47,7 @@ object DisplayName {
      * （iOS 2026-08-30→09-05 的变体事故）。
      */
     fun publicName(c: ConversationSummary): String = if (c.isGroup) {
-        c.name.ifBlank { "未命名群聊" }
+        c.name.ifBlank { UNNAMED_GROUP }
     } else {
         c.peerNickname.ifBlank { UNNAMED }
     }

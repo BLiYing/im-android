@@ -59,8 +59,9 @@ class PresenceTest {
     fun `粗档位文案`() {
         assertEquals("最近在线", Presence.label(Presence.display(PresenceStatus.RECENTLY, 0, 0, NOW), NOW))
         assertEquals("一周内在线", Presence.label(Presence.display(PresenceStatus.LAST_WEEK, 0, 0, NOW), NOW))
-        assertEquals("一月内在线", Presence.label(Presence.display(PresenceStatus.LAST_MONTH, 0, 0, NOW), NOW))
-        assertEquals("很久以前在线", Presence.label(Presence.display(PresenceStatus.LONG_AGO, 0, 0, NOW), NOW))
+        // 复用 iOS 键 presence.last_month / presence.long_ago 的措辞
+        assertEquals("一个月内在线", Presence.label(Presence.display(PresenceStatus.LAST_MONTH, 0, 0, NOW), NOW))
+        assertEquals("很久未上线", Presence.label(Presence.display(PresenceStatus.LONG_AGO, 0, 0, NOW), NOW))
     }
 
     @Test

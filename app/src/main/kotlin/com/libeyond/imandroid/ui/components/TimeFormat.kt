@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.ui.components
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -28,11 +30,14 @@ object TimeFormat {
                 Locale.getDefault(), "%02d:%02d",
                 c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE),
             )
-            isYesterday(c, n) -> "昨天"
+            isYesterday(c, n) -> Str.s(R.string.time_yesterday)
             c.get(Calendar.YEAR) == n.get(Calendar.YEAR) ->
-                "${c.get(Calendar.MONTH) + 1}月${c.get(Calendar.DAY_OF_MONTH)}日"
+                Str.s(R.string.time_month_day, Str.monthArg(c), c.get(Calendar.DAY_OF_MONTH))
             else ->
-                "${c.get(Calendar.YEAR)}年${c.get(Calendar.MONTH) + 1}月${c.get(Calendar.DAY_OF_MONTH)}日"
+                Str.s(
+                    R.string.time_full_date,
+                    c.get(Calendar.YEAR).toString(), Str.monthArg(c), c.get(Calendar.DAY_OF_MONTH),
+                )
         }
     }
 
@@ -47,11 +52,15 @@ object TimeFormat {
     fun fileDateTime(tsMillis: Long): String {
         if (tsMillis <= 0) return ""
         val c = Calendar.getInstance().apply { timeInMillis = tsMillis }
-        return String.format(
-            Locale.getDefault(), "%d年%d月%d日 %02d:%02d",
-            c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH),
+        val datePart = Str.s(
+            R.string.time_full_date,
+            c.get(Calendar.YEAR).toString(), Str.monthArg(c), c.get(Calendar.DAY_OF_MONTH),
+        )
+        val timePart = String.format(
+            Locale.getDefault(), "%02d:%02d",
             c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE),
         )
+        return "$datePart $timePart"
     }
 
     /** 气泡内的时间，恒 `HH:mm`。 */
@@ -69,12 +78,15 @@ object TimeFormat {
         val c = Calendar.getInstance().apply { timeInMillis = tsMillis }
         val n = Calendar.getInstance().apply { timeInMillis = now }
         return when {
-            isSameDay(c, n) -> "今天"
-            isYesterday(c, n) -> "昨天"
+            isSameDay(c, n) -> Str.s(R.string.time_today)
+            isYesterday(c, n) -> Str.s(R.string.time_yesterday)
             c.get(Calendar.YEAR) == n.get(Calendar.YEAR) ->
-                "${c.get(Calendar.MONTH) + 1}月${c.get(Calendar.DAY_OF_MONTH)}日"
+                Str.s(R.string.time_month_day, Str.monthArg(c), c.get(Calendar.DAY_OF_MONTH))
             else ->
-                "${c.get(Calendar.YEAR)}年${c.get(Calendar.MONTH) + 1}月${c.get(Calendar.DAY_OF_MONTH)}日"
+                Str.s(
+                    R.string.time_full_date,
+                    c.get(Calendar.YEAR).toString(), Str.monthArg(c), c.get(Calendar.DAY_OF_MONTH),
+                )
         }
     }
 

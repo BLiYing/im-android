@@ -7,7 +7,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.LanguageStore
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.data.MePage
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.UserCard
@@ -84,7 +87,7 @@ fun MeHost(
                         onOpenPrivacy = { page = MePage.Privacy },
                         onOpenFavorites = { page = MePage.Favorites },
                         onOpenLanguage = { page = MePage.Language },
-                        onComingSoon = { toast = "「$it」还没做" },
+                        onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                         onLogout = { confirmLogout = true },
                     )
                 }
@@ -94,9 +97,9 @@ fun MeHost(
 
     if (confirmLogout) {
         IMConfirmDialog(
-            title = "退出登录",
-            message = "退出后需要重新登录。本机已下载的聊天记录会保留。",
-            confirmText = "退出登录",
+            title = stringResource(R.string.settings_logout),
+            message = stringResource(R.string.settings_logout_confirm_message),
+            confirmText = stringResource(R.string.settings_logout),
             onConfirm = onLogout,
             onDismiss = { confirmLogout = false },
         )

@@ -90,35 +90,48 @@ fun MeScreen(
     val d = IMTheme.dimens
     val ic = IMTheme.settingsIcons
 
+    val savedMessages = stringResource(R.string.common_saved_messages)
+    val recentCalls = stringResource(R.string.ios_settings_row_recent_calls)
+    val devices = stringResource(R.string.settings_row_devices)
+    val folders = stringResource(R.string.settings_row_folders)
+    val shareCard = stringResource(R.string.settings_info_share_card)
+    val notifications = stringResource(R.string.ios_settings_row_notifications)
+    val privacy = stringResource(R.string.settings_row_privacy)
+    val dataStorage = stringResource(R.string.ios_settings_row_data_storage)
+    val appearance = stringResource(R.string.ios_settings_row_appearance)
+    val powerSaving = stringResource(R.string.ios_settings_row_power_saving)
+    val off = stringResource(R.string.common_off)
+    val logout = stringResource(R.string.settings_logout)
+
     val groups = listOf(
         listOf(
-            MeRow("收藏消息", Lucide.Bookmark, ic.blue, onClick = onOpenFavorites),
-            MeRow("最近通话", Lucide.Phone, ic.green) { onComingSoon("最近通话") },
-            MeRow("已登录设备", Lucide.Laptop, ic.orange, onClick = onOpenDevices),
-            MeRow("聊天文件夹", Lucide.Folder, ic.blue) { onComingSoon("聊天文件夹") },
+            MeRow(savedMessages, Lucide.Bookmark, ic.blue, onClick = onOpenFavorites),
+            MeRow(recentCalls, Lucide.Phone, ic.green) { onComingSoon(recentCalls) },
+            MeRow(devices, Lucide.Laptop, ic.orange, onClick = onOpenDevices),
+            MeRow(folders, Lucide.Folder, ic.blue) { onComingSoon(folders) },
             // 与左上角「我的二维码」并列：二维码给**面对面**，名片消息给**线上**。
-            MeRow("分享我的名片", Lucide.IdCard, ic.teal) { onComingSoon("分享我的名片") },
+            MeRow(shareCard, Lucide.IdCard, ic.teal) { onComingSoon(shareCard) },
         ),
         listOf(
-            MeRow("通知与提示音", Lucide.Bell, ic.red) { onComingSoon("通知与提示音") },
-            MeRow("隐私与安全", Lucide.Lock, ic.gray, onClick = onOpenPrivacy),
-            MeRow("数据和存储", Lucide.HardDrive, ic.green, onClick = onOpenDataStorage),
-            MeRow("外观", Lucide.Contrast, ic.blue) { onComingSoon("外观") },
-            MeRow("省电模式", Lucide.Zap, ic.yellow, rightValue = "关闭") { onComingSoon("省电模式") },
+            MeRow(notifications, Lucide.Bell, ic.red) { onComingSoon(notifications) },
+            MeRow(privacy, Lucide.Lock, ic.gray, onClick = onOpenPrivacy),
+            MeRow(dataStorage, Lucide.HardDrive, ic.green, onClick = onOpenDataStorage),
+            MeRow(appearance, Lucide.Contrast, ic.blue) { onComingSoon(appearance) },
+            MeRow(powerSaving, Lucide.Zap, ic.yellow, rightValue = off) { onComingSoon(powerSaving) },
             MeRow(stringResource(R.string.settings_language_title), Lucide.Globe, ic.purple, rightValue = languageLabel, onClick = onOpenLanguage),
         ),
         listOf(
-            MeRow("退出登录", null, Color.Unspecified, destructive = true, onClick = onLogout),
+            MeRow(logout, null, Color.Unspecified, destructive = true, onClick = onLogout),
         ),
     )
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
         IMTopBar(
-            title = "我",
+            title = stringResource(R.string.ios_tab_me),
             leftIcon = Lucide.QrCode,
-            leftDescription = "我的二维码",
+            leftDescription = stringResource(R.string.settings_info_my_qr),
             onLeft = onOpenQr,
-            actionText = "编辑",
+            actionText = stringResource(R.string.common_edit),
             onAction = onOpenProfile,
         )
 
@@ -159,8 +172,9 @@ fun MeScreen(
 private fun ProfileHeader(me: UserCard?, fallbackName: String, seed: String, onClick: () -> Unit) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
-    val display = me?.displayName?.takeIf { it.isNotBlank() && it != "未命名用户" }
-        ?: fallbackName.ifBlank { "未命名用户" }
+    val unnamedUser = stringResource(R.string.common_unnamed_user)
+    val display = me?.displayName?.takeIf { it.isNotBlank() && it != unnamedUser }
+        ?: fallbackName.ifBlank { unnamedUser }
     val handle = me?.handle.orEmpty()
     val phone = me?.phone.orEmpty()
     val meta = when {

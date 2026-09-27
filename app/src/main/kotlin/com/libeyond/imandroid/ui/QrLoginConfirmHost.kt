@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.screens.QrLoginConfirmScreen
@@ -48,8 +50,8 @@ internal fun QrLoginConfirmHost(
             submitting = true
             scope.launch {
                 runCatchingCancellable { client.qr.loginConfirm(ticket) }
-                    .onSuccess { onBack(); onDone("已确认，网页版即将登录") }
-                    .onFailure { e -> submitting = false; error = e.userMessage("确认登录失败") }
+                    .onSuccess { onBack(); onDone(Str.s(R.string.qr_login_confirm_confirmed_toast)) }
+                    .onFailure { e -> submitting = false; error = e.userMessage(Str.s(R.string.qr_login_confirm_confirm_failed)) }
             }
         },
         onReject = {
@@ -57,8 +59,8 @@ internal fun QrLoginConfirmHost(
             submitting = true
             scope.launch {
                 runCatchingCancellable { client.qr.loginReject(ticket) }
-                    .onSuccess { onBack(); onDone("已拒绝该次登录") }
-                    .onFailure { e -> submitting = false; error = e.userMessage("拒绝登录失败") }
+                    .onSuccess { onBack(); onDone(Str.s(R.string.qr_login_confirm_rejected_toast)) }
+                    .onFailure { e -> submitting = false; error = e.userMessage(Str.s(R.string.qr_login_confirm_reject_failed)) }
             }
         },
         onBack = onBack,

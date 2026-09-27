@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -53,6 +54,7 @@ import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.VideoTap
 import com.libeyond.imandroid.data.VideoTapAction
@@ -230,7 +232,7 @@ internal fun VideoPlayer(
         if (!started && !posterUrl.isNullOrBlank()) {
             AsyncImage(
                 model = MediaUrl.absolute(posterUrl, host, useTls),
-                contentDescription = "视频封面",
+                contentDescription = stringResource(R.string.chat_media_alt_video_cover),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -252,7 +254,7 @@ internal fun VideoPlayer(
 
         if (failed) {
             Text(
-                "这个视频放不了",
+                stringResource(R.string.chat_media_video_unplayable),
                 color = c.onMediaMuted,
                 fontSize = 15.sp,
                 modifier = Modifier.align(Alignment.Center),
@@ -277,7 +279,7 @@ internal fun VideoPlayer(
                 // **不用 "▶" 这类文字字形**：部分设备（实测 OPPO ColorOS）会用彩色 emoji 字体渲染，看着像坏了
                 Image(
                     imageVector = Lucide.Play,
-                    contentDescription = "播放",
+                    contentDescription = stringResource(R.string.common_play),
                     modifier = Modifier.size(32.dp),
                     colorFilter = ColorFilter.tint(Color.White),
                 )
@@ -288,7 +290,7 @@ internal fun VideoPlayer(
             PlaybackBar(
                 positionMs = if (scrubbing) scrubTo.toLong() else positionMs,
                 durationMs = durationMs,
-                speedLabel = if (speedTouched) String.format(java.util.Locale.US, "%.1fx", SPEEDS[speedIdx]) else "倍速",
+                speedLabel = if (speedTouched) String.format(java.util.Locale.US, "%.1fx", SPEEDS[speedIdx]) else stringResource(R.string.chat_media_speed_label),
                 onScrubStart = { scrubbing = true },
                 onScrub = { scrubTo = it },
                 onScrubEnd = {

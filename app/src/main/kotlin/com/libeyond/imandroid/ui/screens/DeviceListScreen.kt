@@ -25,12 +25,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DeviceDisplay
 import com.libeyond.imandroid.sdk.api.DeviceSession
 import com.libeyond.imandroid.ui.components.IMRowDivider
@@ -65,18 +67,18 @@ fun DeviceListScreen(
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
         IMTopBar(
-            title = "已登录设备",
+            title = stringResource(R.string.settings_row_devices),
             onLeft = onBack,
-            actionText = if (devices == null) "刷新中" else "刷新",
+            actionText = if (devices == null) stringResource(R.string.common_refreshing) else stringResource(R.string.common_refresh),
             actionEnabled = devices != null,
             onAction = onRefresh,
         )
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             when {
-                devices == null -> Hint("加载中…")
+                devices == null -> Hint(stringResource(R.string.common_loading))
                 error.isNotEmpty() -> Hint(error, danger = true)
-                devices.isEmpty() -> Hint("没有已登录的设备")
+                devices.isEmpty() -> Hint(stringResource(R.string.device_list_empty))
                 else -> {
                     DeviceDisplay.sections(devices).forEach { section ->
                         IMSectionHeader(section.title)
@@ -96,7 +98,11 @@ fun DeviceListScreen(
                         Spacer(Modifier.height(d.sectionGap))
                         IMSettingsGroup {
                             Text(
-                                text = if (revoking == REVOKE_ALL) "退出中…" else "退出其他所有设备",
+                                text = if (revoking == REVOKE_ALL) {
+                                    stringResource(R.string.device_revoking)
+                                } else {
+                                    stringResource(R.string.device_list_revoke_all_action)
+                                },
                                 color = if (revoking.isEmpty()) c.danger else c.textTertiary,
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier
@@ -106,7 +112,7 @@ fun DeviceListScreen(
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             )
                         }
-                        IMSectionFooter("退出后该设备需重新登录。若你不认识某台设备，请退出它并尽快修改密码。")
+                        IMSectionFooter(stringResource(R.string.device_list_revoke_all_footer))
                     }
                 }
             }
@@ -163,7 +169,7 @@ private fun DeviceRow(device: DeviceSession, now: Long, onClick: (() -> Unit)?) 
                 if (device.current) {
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "当前",
+                        text = stringResource(R.string.device_row_current_tag),
                         color = c.accent,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,

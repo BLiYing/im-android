@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.logging.IMLog
@@ -345,7 +347,7 @@ class MessageService(
         media.attachThumb(clientMsgId, thumb)
 
     /** 见 [MediaSendPipeline.markFailed]。 */
-    suspend fun markMediaFailed(clientMsgId: String, code: Int = 0, message: String = "读取失败") =
+    suspend fun markMediaFailed(clientMsgId: String, code: Int = 0, message: String = Str.s(R.string.net_error_file_read_failed)) =
         media.markFailed(clientMsgId, code, message)
 
     /** 见 [MediaSendPipeline.sendBytes]。 */

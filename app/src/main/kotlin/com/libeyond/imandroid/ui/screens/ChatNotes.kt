@@ -21,8 +21,10 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ChatSearch
 import com.libeyond.imandroid.data.SysSegments
 import com.libeyond.imandroid.ui.components.TimeFormat
@@ -159,7 +161,7 @@ internal fun UnreadDividerRow() {
     ) {
         Box(Modifier.weight(1f).height(0.5.dp).background(c.separator))
         Text(
-            text = "以下为新消息",
+            text = stringResource(R.string.chat_unread_divider),
             color = c.textTertiary,
             fontSize = 11.sp,
             modifier = Modifier.padding(horizontal = 8.dp),

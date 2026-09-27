@@ -1,5 +1,9 @@
 package com.libeyond.imandroid.data
 
+import androidx.annotation.StringRes
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /**
  * 输入栏 ➕ 面板的条目（数据驱动，加入口 = 数组加一条）。
  *
@@ -33,16 +37,18 @@ object AttachItems {
         File,
     }
 
-    data class Item(val kind: Kind, val title: String, val implemented: Boolean)
+    data class Item(val kind: Kind, @StringRes private val titleRes: Int, val implemented: Boolean) {
+        val title: String get() = Str.s(titleRes)
+    }
 
     /** 与 iOS `attachItems` 同序。 */
     val ALL: List<Item> = listOf(
-        Item(Kind.Photo, "照片", implemented = true),
-        Item(Kind.Camera, "拍摄", implemented = true),
-        Item(Kind.AudioVideo, "音视频", implemented = false),
-        Item(Kind.Favorite, "收藏", implemented = false),
-        Item(Kind.ContactCard, "个人名片", implemented = true),
-        Item(Kind.File, "文件", implemented = true),
+        Item(Kind.Photo, R.string.chat_attach_photo, implemented = true),
+        Item(Kind.Camera, R.string.chat_attach_camera, implemented = true),
+        Item(Kind.AudioVideo, R.string.chat_attach_av, implemented = false),
+        Item(Kind.Favorite, R.string.common_favorite, implemented = false),
+        Item(Kind.ContactCard, R.string.chat_attach_contact_card, implemented = true),
+        Item(Kind.File, R.string.common_file, implemented = true),
     )
 
     /** 面板高度（顶起输入栏的量）。与 iOS `kIMAttachPanelHeight` 同值。 */

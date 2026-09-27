@@ -8,6 +8,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.ScanQrCode
 import com.composables.icons.lucide.UserPlus
@@ -98,11 +101,11 @@ fun ChatsHost(
             // ＋ 在右上角：菜单靠右、贴在按钮下方
             mine = true,
             items = listOf(
-                SheetItem("扫一扫", icon = Lucide.ScanQrCode) {
-                    openScan?.invoke() ?: run { toast = "扫一扫暂不可用" }
+                SheetItem(stringResource(R.string.conv_menu_scan), icon = Lucide.ScanQrCode) {
+                    openScan?.invoke() ?: run { toast = Str.s(R.string.conv_menu_scan_unavailable) }
                 },
-                SheetItem("新建群聊", icon = Lucide.Users) { page = ChatsPage.CreateGroup },
-                SheetItem("添加好友", icon = Lucide.UserPlus) { page = ChatsPage.AddFriend },
+                SheetItem(stringResource(R.string.conv_menu_new_group), icon = Lucide.Users) { page = ChatsPage.CreateGroup },
+                SheetItem(stringResource(R.string.common_add_friend), icon = Lucide.UserPlus) { page = ChatsPage.AddFriend },
             ),
             onDismiss = { plusAnchor = null },
         )

@@ -6,7 +6,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.MediaSaveName
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -41,7 +43,7 @@ internal object MediaSaver {
      */
     suspend fun save(context: Context, url: String, isVideo: Boolean): String =
         withContext(Dispatchers.IO) {
-            if (url.isBlank()) return@withContext "这条媒体没有地址"
+            if (url.isBlank()) return@withContext Str.s(R.string.media_save_no_url)
             val name = MediaSaveName.fileNameFor(url, isVideo, System.currentTimeMillis())
             val mime = MediaSaveName.mimeFor(name, isVideo)
             val collection = if (isVideo) {
@@ -66,7 +68,7 @@ internal object MediaSaver {
             } catch (e: Exception) {
                 log.w("media_save_insert_failed", "err" to e.javaClass.simpleName)
                 null
-            } ?: return@withContext "保存失败：相册不可写"
+            } ?: return@withContext Str.s(R.string.media_save_gallery_not_writable)
 
             try {
                 openSource(context, url).use { input ->
@@ -79,17 +81,17 @@ internal object MediaSaver {
                     resolver.update(target, values, null, null)
                 }
                 log.i("media_saved", "video" to isVideo)
-                "已保存到相册"
+                Str.s(R.string.qr_card_saved)
             } catch (e: Exception) {
                 // **失败必须把占位行删掉**：不删就在相册里留一条 0 字节、点开是黑屏的条目，
                 // 用户不会认为是「保存失败」，只会认为「这个 App 存出来的东西是坏的」。
                 runCatching { resolver.delete(target, null, null) }
                 log.w("media_save_failed", "err" to e.javaClass.simpleName)
-                "保存失败，请检查网络与存储空间"
+                Str.s(R.string.media_save_failed_network_storage)
             } catch (e: OutOfMemoryError) {
                 runCatching { resolver.delete(target, null, null) }
                 log.w("media_save_oom")
-                "保存失败：文件太大"
+                Str.s(R.string.media_save_failed_too_large)
             }
         }
 

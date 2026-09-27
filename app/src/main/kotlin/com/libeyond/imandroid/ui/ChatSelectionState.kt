@@ -6,6 +6,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.data.ChatSelection
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.IMClient
@@ -68,8 +72,11 @@ internal class ChatSelectionController {
         val all = picked()
         val ok = ChatSelection.forwardable(all)
         return when {
-            ok.isEmpty() -> ForwardPick(emptyList(), "所选消息都无法转发")
-            ok.size < all.size -> ForwardPick(ok, "${all.size - ok.size} 条无法转发，已跳过")
+            ok.isEmpty() -> ForwardPick(emptyList(), Str.s(R.string.chat_forward_none_forwardable))
+            ok.size < all.size -> ForwardPick(
+                ok,
+                Str.p(R.plurals.chat_select_forward_partial_skip, all.size - ok.size, all.size - ok.size),
+            )
             else -> ForwardPick(ok, null)
         }
     }
@@ -102,9 +109,9 @@ internal fun BatchDeleteConfirm(
     val scope = rememberCoroutineScope()
     val picked = sel.picked()
     IMConfirmDialog(
-        title = "删除 ${picked.size} 条消息",
-        message = "只从本机删除，其他设备与对方仍能看到。",
-        confirmText = "删除",
+        title = pluralStringResource(R.plurals.chat_select_delete_confirm_title, picked.size, picked.size),
+        message = stringResource(R.string.chat_select_delete_confirm_message),
+        confirmText = stringResource(R.string.common_delete),
         destructive = true,
         onDismiss = { sel.confirmDelete = false },
         onConfirm = {
@@ -116,7 +123,10 @@ internal fun BatchDeleteConfirm(
                         client.conversationsApi.hideMessage(convId, m.convSeq)
                     }.onFailure { failed++ }
                 }
-                onToast(if (failed == 0) "已删除 ${picked.size} 条" else "$failed 条删除失败")
+                onToast(
+                    if (failed == 0) Str.p(R.plurals.chat_select_delete_done, picked.size, picked.size)
+                    else Str.p(R.plurals.chat_select_delete_failed_count, failed, failed),
+                )
             }
         },
     )

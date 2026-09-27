@@ -32,11 +32,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Camera
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ContactSection
 import com.libeyond.imandroid.data.GroupNameDefault
 import com.libeyond.imandroid.sdk.api.FriendEntry
@@ -93,8 +95,12 @@ fun CreateGroupScreen(
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding().imePadding()) {
         IMTopBar(
-            title = "发起群聊",
-            subtitle = if (selected.isEmpty()) "" else "已选 ${selected.size}/${selected.size + 1}",
+            title = stringResource(R.string.group_create_title),
+            subtitle = if (selected.isEmpty()) {
+                ""
+            } else {
+                stringResource(R.string.group_create_selected_count, selected.size, selected.size + 1)
+            },
             onLeft = onBack,
         )
 
@@ -126,14 +132,14 @@ fun CreateGroupScreen(
             }
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(
-                    if (avatarUrl.isNotBlank() || avatarUploading) "更换头像" else "添加头像",
+                    stringResource(R.string.group_create_set_avatar),
                     color = c.accent, style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = d.space2, bottom = d.space2)
                         .clickable(enabled = !avatarUploading, onClick = onPickAvatar),
                 )
             }
 
-            IMTextField(name, onNameChange, "群名称", enabled = !busy)
+            IMTextField(name, onNameChange, stringResource(R.string.group_create_name_placeholder), enabled = !busy)
             Row(Modifier.fillMaxWidth().padding(top = d.space1), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
                 Text(
                     "${GroupNameDefault.runeLength(name)}/${GroupNameDefault.MAX_LENGTH}",
@@ -143,7 +149,7 @@ fun CreateGroupScreen(
             IMErrorText(error, Modifier.padding(top = d.space1))
             if (atLimit) {
                 Text(
-                    "已达本群成员上限（$maxMembers 人）。要装更多人请走大群。",
+                    stringResource(R.string.group_create_limit_reached, maxMembers),
                     color = c.textTertiary,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = d.space2),
@@ -151,14 +157,24 @@ fun CreateGroupScreen(
             }
         }
 
-        IMTextField(query, { query = it }, "搜索联系人", enabled = true, modifier = Modifier.padding(horizontal = d.space4, vertical = d.space2))
+        IMTextField(
+            query, { query = it }, stringResource(R.string.friend_picker_search_placeholder),
+            enabled = true, modifier = Modifier.padding(horizontal = d.space4, vertical = d.space2),
+        )
 
         Box(Modifier.weight(1f)) {
             LazyColumn(Modifier.fillMaxSize(), state = listState) {
                 if (filtered.isEmpty()) {
                     item {
                         Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            Text(if (query.isBlank()) "还没有好友" else "没有匹配的联系人", color = c.textTertiary)
+                            Text(
+                                if (query.isBlank()) {
+                                    stringResource(R.string.contact_card_picker_empty)
+                                } else {
+                                    stringResource(R.string.friend_picker_no_match)
+                                },
+                                color = c.textTertiary,
+                            )
                         }
                     }
                 }
@@ -215,7 +231,7 @@ fun CreateGroupScreen(
 
         Box(Modifier.padding(d.space4)) {
             IMPrimaryButton(
-                text = "创建群聊",
+                text = stringResource(R.string.group_create_title),
                 onClick = onCreate,
                 enabled = name.isNotBlank() && selected.isNotEmpty(),
                 loading = busy,

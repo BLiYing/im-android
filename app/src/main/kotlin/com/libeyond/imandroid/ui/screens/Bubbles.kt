@@ -33,9 +33,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.data.BubbleCaption
 import com.libeyond.imandroid.data.CaptionPlacement
 import com.libeyond.imandroid.data.CallRecord
@@ -186,7 +189,7 @@ internal fun Bubble(
             val fwd = msg?.forwardFrom
             if (!fwd.isNullOrBlank() && !recalled) {
                 Text(
-                    text = "转发自 $fwd",
+                    text = stringResource(R.string.chat_bubble_forward_from, fwd),
                     color = c.textTertiary,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
@@ -260,7 +263,7 @@ internal fun Bubble(
                     }
                     when {
                         recalled -> Text(
-                            text = "你撤回了一条消息",
+                            text = stringResource(R.string.conv_list_recalled_self),
                             color = c.textTertiary,
                             fontSize = appearance.chatFontSize,
                         )
@@ -411,13 +414,13 @@ private fun onTapBubble(m: MessageEntity, onOpenRecord: ((String) -> Unit)?, onC
  * `chat_record` / `contact` 由服务端预本地化下发，客户端只对存量裸 token 精确匹配兜底。
  */
 internal fun localizeReplySnapshot(raw: String): String = when {
-    raw == "[chat_record]" -> "[聊天记录]"
-    raw == "[contact]" -> "[个人名片]"
-    raw == "[call]" -> "[音视频通话]"
-    raw.startsWith("[image]") -> raw.replaceFirst("[image]", "[图片]")
-    raw.startsWith("[video]") -> raw.replaceFirst("[video]", "[视频]")
-    raw.startsWith("[file]") -> raw.replaceFirst("[file]", "[文件]")
-    raw.startsWith("[voice]") -> raw.replaceFirst("[voice]", "[语音]")
+    raw == "[chat_record]" -> Str.s(R.string.quote_snapshot_chat_record)
+    raw == "[contact]" -> Str.s(R.string.quote_snapshot_contact)
+    raw == "[call]" -> Str.s(R.string.quote_snapshot_call)
+    raw.startsWith("[image]") -> raw.replaceFirst("[image]", Str.s(R.string.preview_image))
+    raw.startsWith("[video]") -> raw.replaceFirst("[video]", Str.s(R.string.preview_video))
+    raw.startsWith("[file]") -> raw.replaceFirst("[file]", Str.s(R.string.preview_file))
+    raw.startsWith("[voice]") -> raw.replaceFirst("[voice]", Str.s(R.string.preview_voice))
     else -> raw
 }
 

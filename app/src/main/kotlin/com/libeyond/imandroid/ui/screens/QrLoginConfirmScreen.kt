@@ -19,10 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Monitor
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.components.IMPrimaryButton
 import com.libeyond.imandroid.ui.components.IMSecondaryButton
 import com.libeyond.imandroid.ui.components.IMTopBar
@@ -49,7 +51,7 @@ fun QrLoginConfirmScreen(
     val d = IMTheme.dimens
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground)) {
-        IMTopBar(title = "网页版登录确认", onLeft = onBack, showDivider = false)
+        IMTopBar(title = stringResource(R.string.qr_login_confirm_nav_title), onLeft = onBack, showDivider = false)
 
         Column(Modifier.fillMaxWidth().padding(horizontal = d.space4), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
@@ -58,14 +60,14 @@ fun QrLoginConfirmScreen(
             )
             Spacer(Modifier.height(14.dp))
             Text(
-                "确认登录网页版",
+                stringResource(R.string.qr_login_confirm_title),
                 style = MaterialTheme.typography.titleLarge,
                 color = c.textPrimary,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "有设备正在用你的账号登录网页版，请核对下方信息",
+                stringResource(R.string.qr_login_confirm_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
                 textAlign = TextAlign.Center,
@@ -75,13 +77,13 @@ fun QrLoginConfirmScreen(
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
             ) {
-                InfoRow("设备", device.ifBlank { "未知设备" })
+                InfoRow(stringResource(R.string.qr_login_confirm_row_device), device.ifBlank { stringResource(R.string.device_platform_unknown) })
                 Divider()
-                InfoRow("IP 地址", ip.ifBlank { "未知" })
+                InfoRow(stringResource(R.string.qr_login_confirm_row_ip), ip.ifBlank { stringResource(R.string.common_unknown) })
                 Divider()
-                InfoRow("大致位置", location.ifBlank { "未知" })
+                InfoRow(stringResource(R.string.qr_login_confirm_row_location), location.ifBlank { stringResource(R.string.common_unknown) })
                 Divider()
-                InfoRow("扫码时间", scanTime)
+                InfoRow(stringResource(R.string.qr_login_confirm_row_time), scanTime)
             }
 
             Spacer(Modifier.height(14.dp))
@@ -90,7 +92,7 @@ fun QrLoginConfirmScreen(
                     .background(c.danger.copy(alpha = 0.10f)).padding(11.dp),
             ) {
                 Text(
-                    "不是你本人操作？请点「不是我，拒绝登录」，并尽快修改密码。",
+                    stringResource(R.string.qr_login_confirm_warning),
                     style = MaterialTheme.typography.bodySmall,
                     color = c.danger,
                 )
@@ -100,9 +102,9 @@ fun QrLoginConfirmScreen(
         Spacer(Modifier.weight(1f))
 
         Column(Modifier.fillMaxWidth().padding(horizontal = d.space4).padding(bottom = 20.dp)) {
-            IMPrimaryButton("确认登录", onConfirm, enabled = !submitting)
+            IMPrimaryButton(stringResource(R.string.qr_login_confirm_confirm), onConfirm, enabled = !submitting)
             Spacer(Modifier.height(10.dp))
-            IMSecondaryButton("不是我，拒绝登录", onReject, enabled = !submitting)
+            IMSecondaryButton(stringResource(R.string.qr_login_confirm_reject), onReject, enabled = !submitting)
         }
     }
 }

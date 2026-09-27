@@ -10,10 +10,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -32,6 +34,6 @@ fun VideoPlayBadge(
         modifier = modifier.size(diameter).clip(CircleShape).background(c.overlay),
         contentAlignment = Alignment.Center,
     ) {
-        Image(Lucide.Play, "播放", Modifier.size(iconSize), colorFilter = ColorFilter.tint(c.onMedia))
+        Image(Lucide.Play, stringResource(R.string.common_play), Modifier.size(iconSize), colorFilter = ColorFilter.tint(c.onMedia))
     }
 }

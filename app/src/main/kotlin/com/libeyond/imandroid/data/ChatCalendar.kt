@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.ConvCalendarDay
 
 /**
@@ -26,9 +28,9 @@ object ChatCalendar {
      */
     const val QUERY_SPAN_MS = 390L * DAY_MS
 
-    const val DEGRADED_NOTICE = "离线：日历仅显示已下载的消息"
-    const val NO_MESSAGE_ON_OR_AFTER = "该日期之后无消息"
-    const val NOTHING_TODAY = "今天没有消息，已跳转到最新"
+    val DEGRADED_NOTICE: String get() = Str.s(R.string.conv_query_offline_calendar)
+    val NO_MESSAGE_ON_OR_AFTER: String get() = Str.s(R.string.chat_search_day_no_messages_after)
+    val NOTHING_TODAY: String get() = Str.s(R.string.chat_search_today_no_messages_jumped_latest)
 
     /**
      * 本地日 00:00 对应的 UTC 毫秒。

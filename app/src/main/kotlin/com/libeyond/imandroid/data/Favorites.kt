@@ -1,6 +1,9 @@
 package com.libeyond.imandroid.data
 
+import androidx.annotation.StringRes
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.sdk.api.Favorite
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -9,26 +12,32 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
  * 收藏页的页签（对齐 iOS `IMFavoritesCategories` 的 B 方案：**无「全部」**、逐签浏览）。
  * 顺序即 iOS 的页签顺序：媒体 → 文件 → 链接 → 语音 → 文本 → 聊天记录 → 名片。
  */
-enum class FavoriteCategory(val title: String) {
-    Media("媒体"),
-    Files("文件"),
-    Links("链接"),
-    Voice("语音"),
-    Text("文本"),
-    Record("聊天记录"),
-    Contact("名片"),
+enum class FavoriteCategory(@StringRes private val titleRes: Int) {
+    Media(R.string.favorites_category_media),
+    Files(R.string.common_file),
+    Links(R.string.favorites_category_links),
+    Voice(R.string.favorites_category_voice),
+    Text(R.string.favorites_category_text),
+    Record(R.string.record_chat_history),
+    Contact(R.string.favorites_category_contact),
+    ;
+
+    val title: String get() = Str.s(titleRes)
 }
 
 /** 收藏页长按一项弹出的菜单项（iOS `contextMenuForFavorite:`，宫格格子与各行共用这一份）。 */
-enum class FavoriteAction(val label: String, val destructive: Boolean = false) {
-    Forward("转发"),
-    Copy("复制"),
+enum class FavoriteAction(@StringRes private val labelRes: Int, val destructive: Boolean = false) {
+    Forward(R.string.common_forward),
+    Copy(R.string.common_copy),
 
     /** 下载中 / 已暂停的文件或视频才有。本端无断点续传，「取消」= 停掉并回到未下载态。 */
-    CancelDownload("取消下载"),
+    CancelDownload(R.string.file_menu_cancel_download),
 
     /** 删的是**这条收藏**，不碰原消息。iOS 长按菜单里直接删、不二次确认，本端同。 */
-    Delete("删除", destructive = true),
+    Delete(R.string.common_delete, destructive = true),
+    ;
+
+    val label: String get() = Str.s(labelRes)
 }
 
 /**
@@ -98,7 +107,7 @@ object Favorites {
         return listOf(f.content, f.caption, name).any { it.contains(q, ignoreCase = true) }
     }
 
-    fun emptyText(kind: FavoriteCategory): String = "暂无${kind.title}"
+    fun emptyText(kind: FavoriteCategory): String = Str.s(R.string.fav_empty_category, kind.title)
 
     /**
      * 追加下一页：**按 id 去重**。删过收藏之后 offset 整体前移，再翻页会把同一条读两次（iOS 同一处注释）。
@@ -194,7 +203,7 @@ object Favorites {
         convId = f.sourceConvId,
         convSeq = f.id,
         sender = f.sourceFrom,
-        fromNickname = originName.ifBlank { if (f.sourceFrom == owner) null else UNNAMED },
+        fromNickname = originName.ifBlank { if (f.sourceFrom == owner) null else DisplayName.UNNAMED },
         contentType = f.contentType.ifBlank { ContentType.TEXT },
         content = f.content,
         caption = f.caption.ifBlank { null },
@@ -226,7 +235,7 @@ object Favorites {
     ): String {
         val from = f.sourceFrom
         if (from.isBlank()) return ""
-        if (myUid.isNotEmpty() && from == myUid) return "我"
+        if (myUid.isNotEmpty() && from == myUid) return Str.s(R.string.common_me)
         if (sourceConv != null && !sourceConv.isGroup && sourceConv.peerUid == from) {
             sourceConv.peerRemark.ifBlank { sourceConv.title }.takeIf { it.isNotBlank() }?.let { return it }
         }
@@ -248,9 +257,6 @@ object Favorites {
         card != null -> card.nickname.ifBlank { card.handle }
         else -> ""
     }
-
-    /** 解析不出公开名时「转发自」写的字（同全端显示名回退链的末级，绝不是 uid）。 */
-    private const val UNNAMED = "未命名用户"
 
     /** iOS 收藏归类表里的两个老类型（本端协议常量里没有）。 */
     private const val LINK = "link"

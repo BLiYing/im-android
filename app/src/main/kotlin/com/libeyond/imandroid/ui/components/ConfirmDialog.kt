@@ -13,7 +13,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -30,7 +32,7 @@ fun IMConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     destructive: Boolean = true,
-    cancelText: String = "取消",
+    cancelText: String = stringResource(R.string.common_cancel),
 ) {
     val c = IMTheme.colors
     AlertDialog(
@@ -65,7 +67,7 @@ fun IMTextPrompt(
     multiline: Boolean = false,
     hint: String = "",
     /** 确认钮文案。举报这类「提交出去就收不回」的动作写清动词，别只写「确定」。 */
-    confirmText: String = "确定",
+    confirmText: String = stringResource(R.string.common_confirm),
     /**
      * 撤下类二级动作按钮文案（对齐 iOS 群公告页独立的红色「撤下公告」按钮）。
      * 非空且当前已有内容时才显示，点击直接以空值确认——不必先手动清空文本框再点确定。
@@ -106,7 +108,7 @@ fun IMTextPrompt(
             TextButton(onClick = { onConfirm(value.trim()) }) { Text(confirmText, color = c.accent) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消", color = c.textSecondary) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel), color = c.textSecondary) }
         },
         containerColor = c.surfaceElevated,
     )

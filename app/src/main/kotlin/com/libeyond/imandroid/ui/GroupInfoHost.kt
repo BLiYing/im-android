@@ -36,6 +36,8 @@ import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.sdk.api.JoinRequest
 import com.libeyond.imandroid.data.db.ConversationEntity
 import androidx.compose.ui.platform.LocalContext
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.screens.GroupAdminListScreen
 import com.libeyond.imandroid.ui.screens.GroupBanListScreen
@@ -174,10 +176,11 @@ fun GroupInfoHost(
             r.onFailure { e ->
                 val code = (e as? com.libeyond.imandroid.sdk.http.ApiException)?.code
                 // 端上放行了但服务端拒——把码带出来，别只说「失败」
-                toast = if (code != null) "${label}失败（$code）" else "${label}失败"
+                toast = if (code != null) Str.s(R.string.group_manage_op_failed_with_code, label, code)
+                    else Str.s(R.string.group_manage_op_failed, label)
                 IMLog.tag("IM.Group").w("group_manage_failed", "op" to label, "code" to (code ?: -1))
             }
-            if (r.isSuccess) toast = "${label}成功"
+            if (r.isSuccess) toast = Str.s(R.string.group_manage_op_succeeded, label)
             runCatching { client.groups.info(convId) }.onSuccess { info = it }
             if (!loading) {
                 loading = true
@@ -234,13 +237,13 @@ fun GroupInfoHost(
             myUid = myUid,
             onToggle = { id ->
                 val next = GroupPick.toggle(pk, picked, id)
-                if (next == picked && id !in picked) toast = "群通话最多选择 ${GroupPick.MAX_CALL_PICK} 人"
+                if (next == picked && id !in picked) toast = Str.s(R.string.chat_detail_group_call_pick_max, GroupPick.MAX_CALL_PICK)
                 picked = next
             },
             // 设管理员是可撤销的，直接做；转让不可逆，先二次确认
             onAddAdmin = { id ->
                 pick = null
-                runManage("设为管理员") { client.groups.setRole(convId, id, GroupMember.ROLE_ADMIN) }
+                runManage(Str.s(R.string.group_member_action_make_admin)) { client.groups.setRole(convId, id, GroupMember.ROLE_ADMIN) }
             },
             onTransferTo = { id -> confirmTransfer = members.firstOrNull { it.userId == id } },
             onConfirmInvite = { ids ->
@@ -249,7 +252,7 @@ fun GroupInfoHost(
                 if (pk == PickPurpose.Call) {
                     // 通话界面由 im-rtc 的 Kit 接管；拨不出去才回一句原因
                     if (ids.isNotEmpty()) RtcCall.placeGroup(convId, ids)?.let { toast = it }
-                } else if (ids.isNotEmpty()) runManage("邀请入群") { client.groups.invite(convId, ids) }
+                } else if (ids.isNotEmpty()) runManage(Str.s(R.string.group_manage_invite_members)) { client.groups.invite(convId, ids) }
             },
             onBack = { pick = null; picked = emptySet() },
         )
@@ -262,7 +265,7 @@ fun GroupInfoHost(
                 deciding = uid
                 scope.launch {
                     val r = runCatching { client.groups.unban(convId, uid) }
-                    toast = if (r.isSuccess) "已解除" else "解除失败"
+                    toast = if (r.isSuccess) Str.s(R.string.group_ops_unban_done) else Str.s(R.string.net_fallback_unmute_failed)
                     runCatching { client.groups.bans(convId) }.onSuccess { bans = it }
                     deciding = ""
                 }
@@ -279,7 +282,7 @@ fun GroupInfoHost(
                 deciding = m.userId
                 scope.launch {
                     val r = runCatching { client.groups.setRole(convId, m.userId, GroupMember.ROLE_MEMBER) }
-                    toast = if (r.isSuccess) "已撤销" else "撤销失败"
+                    toast = if (r.isSuccess) Str.s(R.string.group_ops_revoke_admin_done) else Str.s(R.string.group_ops_revoke_admin_failed)
                     // 撤销后重拉首页成员——角色变了，管理员列表要跟着变
                     loadMore(client, convId, "") { pg ->
                         members = pg.items
@@ -303,9 +306,9 @@ fun GroupInfoHost(
                     val r = runCatching { client.groups.reviewJoinRequest(convId, uid, approve) }
                     r.onFailure { e ->
                         val code = (e as? com.libeyond.imandroid.sdk.http.ApiException)?.code
-                        toast = if (code != null) "操作失败（$code）" else "操作失败"
+                        toast = if (code != null) Str.s(R.string.common_action_failed_code, code) else Str.s(R.string.common_action_failed)
                     }
-                    if (r.isSuccess) toast = if (approve) "已同意入群" else "已拒绝"
+                    if (r.isSuccess) toast = if (approve) Str.s(R.string.qr_join_req_approved_toast) else Str.s(R.string.qr_join_req_rejected)
                     // 无论成败都重拉：失败可能是别人已经审过了，本地那条状态已经不对了
                     reloadJoinRequests()
                     // 顺带刷群资料，pending_count 角标要跟着掉
@@ -445,7 +448,7 @@ fun GroupInfoHost(
                 scope.launch {
                     runCatching { client.contacts.friends() }
                         .onSuccess { list -> friends = list.filter { it.status == FriendEntry.ACCEPTED } }
-                        .onFailure { toast = "好友列表加载失败" }
+                        .onFailure { toast = Str.s(R.string.net_fallback_friends_load) }
                 }
             },
         actions = DetailActions.pillsFor(
@@ -500,14 +503,14 @@ fun GroupInfoHost(
             scope.launch {
                 // **只删本机**（同 iOS）：服务端没有"替所有人删历史"的接口
                 client.repo.clearConversation(client.uid.orEmpty(), convId)
-                toast = "聊天记录已清空"
+                toast = Str.s(R.string.chat_detail_clear_history_done)
             }
         },
         onLeave = {
             confirmMore = null
             scope.launch {
                 runCatching { client.groups.leave(convId) }
-                    .onFailure { toast = it.userMessage("退出失败"); return@launch }
+                    .onFailure { toast = it.userMessage(Str.s(R.string.net_fallback_leave_failed)); return@launch }
                 client.messages.refreshConversations()
                 onLeft()
             }
@@ -516,7 +519,7 @@ fun GroupInfoHost(
             confirmMore = null
             scope.launch {
                 runCatching { client.groups.dissolve(convId) }
-                    .onFailure { toast = it.userMessage("解散失败"); return@launch }
+                    .onFailure { toast = it.userMessage(Str.s(R.string.net_fallback_dissolve_failed)); return@launch }
                 client.messages.refreshConversations()
                 onLeft()
             }
@@ -550,7 +553,7 @@ fun GroupInfoHost(
     GroupInfoSettingsDialogs(
         settings = settings,
         myNickname = g.myNickname,
-        onConfirmMyNickname = { v -> runManage("修改群昵称") { client.groups.setMyNickname(convId, v) } },
+        onConfirmMyNickname = { v -> runManage(Str.s(R.string.group_manage_edit_my_nickname)) { client.groups.setMyNickname(convId, v) } },
     )
 
     // 转让的二次确认（文案在 GroupInfoDialogs.kt，与「更多」那三个确认框同住）
@@ -560,7 +563,7 @@ fun GroupInfoHost(
         onConfirm = { m ->
             confirmTransfer = null
             pick = null
-            runManage("转让群组") { client.groups.transferOwner(convId, m.userId) }
+            runManage(Str.s(R.string.group_manage_transfer_group)) { client.groups.transferOwner(convId, m.userId) }
         },
     )
 

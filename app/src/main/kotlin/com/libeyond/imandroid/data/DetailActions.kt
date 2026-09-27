@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /**
  * 详情页「操作排」的可见项（对齐 iOS `IMChatDetailViewController+Header.m` 的 `actionPillSpecs`）。
  *
@@ -87,24 +90,24 @@ object DetailActions {
     }
 
     fun label(a: DetailAction): String = when (a) {
-        DetailAction.AddFriend -> "加好友"
-        DetailAction.Message -> "消息"
-        DetailAction.Call -> "呼叫"
-        DetailAction.Video -> "视频"
-        DetailAction.GroupCall -> "群通话"
-        DetailAction.Search -> "搜索"
-        DetailAction.More -> "更多"
+        DetailAction.AddFriend -> Str.s(R.string.contacts_search_action_add)
+        DetailAction.Message -> Str.s(R.string.chat_detail_pill_message)
+        DetailAction.Call -> Str.s(R.string.chat_header_call)
+        DetailAction.Video -> Str.s(R.string.common_video)
+        DetailAction.GroupCall -> Str.s(R.string.chat_detail_pill_group_call)
+        DetailAction.Search -> Str.s(R.string.common_search)
+        DetailAction.More -> Str.s(R.string.common_more)
     }
 
     fun label(a: DetailMoreAction): String = when (a) {
-        DetailMoreAction.ShareContact -> "推荐给朋友"
-        DetailMoreAction.Block -> "拉黑"
-        DetailMoreAction.Unblock -> "取消拉黑"
-        DetailMoreAction.Report -> "举报"
-        DetailMoreAction.ClearHistory -> "清空聊天记录"
-        DetailMoreAction.RemoveFriend -> "删除好友"
-        DetailMoreAction.LeaveGroup -> "退出群组"
-        DetailMoreAction.DissolveGroup -> "删除群组"
+        DetailMoreAction.ShareContact -> Str.s(R.string.chat_detail_recommend_to_friend)
+        DetailMoreAction.Block -> Str.s(R.string.common_block)
+        DetailMoreAction.Unblock -> Str.s(R.string.chat_menu_unblock)
+        DetailMoreAction.Report -> Str.s(R.string.common_report)
+        DetailMoreAction.ClearHistory -> Str.s(R.string.chat_detail_clear_history)
+        DetailMoreAction.RemoveFriend -> Str.s(R.string.friend_menu_delete)
+        DetailMoreAction.LeaveGroup -> Str.s(R.string.chat_detail_leave_group)
+        DetailMoreAction.DissolveGroup -> Str.s(R.string.chat_detail_dissolve_group)
     }
 
     /** 红色项。**「取消拉黑」不是破坏性的**——它是在撤销一个破坏性动作（同 iOS `destructive:!peerBlocked`）。 */

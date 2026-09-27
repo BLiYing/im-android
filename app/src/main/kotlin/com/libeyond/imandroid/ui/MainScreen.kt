@@ -24,9 +24,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.annotation.StringRes
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.components.blockPointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,7 +62,11 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 import kotlinx.coroutines.flow.emptyFlow
 
 /** 底部三个 Tab，与 iOS 的 TabBar / Web 的左栏切换同构。 */
-private enum class Tab(val label: String) { Chats("消息"), Contacts("通讯录"), Me("我") }
+private enum class Tab(@StringRes val labelRes: Int) {
+    Chats(R.string.ios_tab_messages),
+    Contacts(R.string.ios_tab_contacts),
+    Me(R.string.ios_tab_me),
+}
 
 /**
  * 主界面外壳：底部 Tab + 各 Tab 内容 + 二级页（聊天/找人/新的朋友/资料）。
@@ -358,7 +365,7 @@ private fun BottomBar(current: Tab, unread: Int, onSelect: (Tab) -> Unit) {
                                 Tab.Contacts -> Lucide.Users
                                 Tab.Me -> Lucide.User
                             },
-                            contentDescription = t.label,
+                            contentDescription = stringResource(t.labelRes),
                             modifier = Modifier.size(22.dp),
                             colorFilter = ColorFilter.tint(if (selected) c.accent else c.textTertiary),
                         )
@@ -371,7 +378,7 @@ private fun BottomBar(current: Tab, unread: Int, onSelect: (Tab) -> Unit) {
                         }
                     }
                     Text(
-                        text = t.label,
+                        text = stringResource(t.labelRes),
                         color = if (selected) c.accent else c.textTertiary,
                         fontSize = 10.sp,
                     )

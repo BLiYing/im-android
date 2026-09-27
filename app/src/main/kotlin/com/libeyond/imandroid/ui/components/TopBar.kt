@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -109,7 +111,7 @@ fun IMTopBar(
     /** 副标题用强调色（「在线」）。 */
     subtitleAccent: Boolean = false,
     leftIcon: ImageVector? = null,
-    leftDescription: String = "返回",
+    leftDescription: String = stringResource(R.string.common_back),
     /** 左侧改用**文字**而不是图标（多选态的「取消」）。空 = 仍画 [leftIcon] 或默认返回箭头。 */
     leftLabel: String = "",
     onLeft: (() -> Unit)? = null,

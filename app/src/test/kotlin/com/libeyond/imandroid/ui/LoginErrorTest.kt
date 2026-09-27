@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.protocol.ErrCode
 import org.junit.Assert.assertEquals
@@ -34,7 +35,7 @@ class LoginErrorTest {
             R.string.err_200004 -> "用户名已被注册"
             R.string.err_100002 -> "操作过于频繁，请稍后再试"
             R.string.err_request_failed -> "请求失败(${args[0]})"
-            else -> error("LoginErrorTest 的假 Strings 没覆盖 resId=$resId")
+            else -> Str.s(resId, *args)
         }
     }
 

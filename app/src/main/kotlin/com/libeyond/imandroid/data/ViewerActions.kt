@@ -1,14 +1,24 @@
 package com.libeyond.imandroid.data
 
-/** 聊天页媒体查看器「更多」里的外部动作。内置的「下载」由查看器自己排在最前，不在这里。 */
-enum class ViewerAction(val label: String, val destructive: Boolean = false) {
-    Locate("定位到聊天位置"),
-    Favorite("收藏"),
+import androidx.annotation.StringRes
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
+/**
+ * 聊天页媒体查看器「更多」里的外部动作。内置的「下载」由查看器自己排在最前，不在这里。
+ * `label` 惰性取值（[Str.s]），切语言不需要重建这些枚举实例。
+ */
+enum class ViewerAction(@StringRes private val labelRes: Int, val destructive: Boolean = false) {
+    Locate(R.string.media_viewer_locate),
+    Favorite(R.string.common_favorite),
 
     /** 复制图片到剪贴板（视频没有这一项，同 iOS）。 */
-    Copy("复制"),
-    Forward("转发"),
-    Delete("删除", destructive = true),
+    Copy(R.string.common_copy),
+    Forward(R.string.common_forward),
+    Delete(R.string.common_delete, destructive = true),
+    ;
+
+    val label: String get() = Str.s(labelRes)
 }
 
 /**

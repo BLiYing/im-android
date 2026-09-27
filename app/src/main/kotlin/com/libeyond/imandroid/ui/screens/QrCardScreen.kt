@@ -21,10 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.QrEncode
 import com.libeyond.imandroid.sdk.api.QrCard
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -114,13 +116,13 @@ fun QrCardScreen(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(d.space3),
             ) {
-                CardButton("保存到相册", primary = false, enabled = ready, onClick = onSave, modifier = Modifier.weight(1f))
-                CardButton("分享", primary = true, enabled = ready, onClick = onShare, modifier = Modifier.weight(1f))
+                CardButton(stringResource(R.string.qr_card_save_to_album), primary = false, enabled = ready, onClick = onSave, modifier = Modifier.weight(1f))
+                CardButton(stringResource(R.string.common_share), primary = true, enabled = ready, onClick = onShare, modifier = Modifier.weight(1f))
             }
 
             Spacer(Modifier.height(d.space3))
             Text(
-                text = "复制链接",
+                text = stringResource(R.string.qr_copy_link),
                 color = if (ready) c.accent else c.textTertiary,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.clickable(enabled = ready, onClick = onCopyLink).padding(6.dp),
@@ -128,7 +130,7 @@ fun QrCardScreen(
             if (onReset != null) {
                 Spacer(Modifier.height(d.space2))
                 Text(
-                    text = "重置二维码",
+                    text = stringResource(R.string.qr_reset),
                     color = c.textSecondary,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.clickable(onClick = onReset).padding(6.dp),

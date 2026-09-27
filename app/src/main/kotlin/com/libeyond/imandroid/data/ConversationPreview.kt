@@ -1,6 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ContentType
 
 /**
@@ -27,22 +29,22 @@ object ConversationPreview {
     fun of(conv: ConversationEntity, myUid: String, nameOf: (String) -> String?): String {
         if (conv.lastRecalled) {
             return when {
-                conv.lastFrom == myUid -> "你撤回了一条消息"
-                conv.isGroup && conv.lastFrom.isNotBlank() -> "${displayNameOf(conv, nameOf)}撤回了一条消息"
-                conv.isGroup -> "撤回了一条消息"
-                else -> "对方撤回了一条消息"
+                conv.lastFrom == myUid -> Str.s(R.string.conv_list_recalled_self)
+                conv.isGroup && conv.lastFrom.isNotBlank() -> Str.s(R.string.conv_list_recalled_member, displayNameOf(conv, nameOf))
+                conv.isGroup -> Str.s(R.string.conv_list_recalled_unknown)
+                else -> Str.s(R.string.conv_list_recalled_peer)
             }
         }
 
         val body = conv.lastContent
-        if (body.isBlank()) return "（无消息）"
+        if (body.isBlank()) return Str.s(R.string.conv_list_no_message)
 
         // 群聊文本/媒体一律带"昵称: "前缀；系统消息（无真实发送者）与 lastFrom 为空的（老数据/系统通知）
         // 不加——同 iOS「who 解析不出来就不包前缀」的退化路径，不必对 system 单独判一遍。
         if (!conv.isGroup || conv.lastContentType == ContentType.SYSTEM || conv.lastFrom.isBlank()) return body
 
-        val who = if (conv.lastFrom == myUid) "我" else displayNameOf(conv, nameOf)
-        return "$who: $body"
+        val who = if (conv.lastFrom == myUid) Str.s(R.string.common_me) else displayNameOf(conv, nameOf)
+        return Str.s(R.string.conv_list_sender_prefix, who, body)
     }
 
     private fun displayNameOf(conv: ConversationEntity, nameOf: (String) -> String?): String =

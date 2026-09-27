@@ -18,10 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailTab
 import com.libeyond.imandroid.data.toArchiveTarget
@@ -74,17 +76,23 @@ internal fun SegTabBar(titles: List<String>, selected: Int, onSelect: (Int) -> U
  * 服务端没有可索引的链接列（`internal/conversation/media.go`），这一格只能扫本地文本，
  * 与其他几格的"全量"语义不同。不说的话用户会以为链接丢了。
  */
-internal const val LINK_TAB_NOTE = "链接由本机已加载的聊天记录扫出，往上翻得越多、这里越全。点一条在 App 内打开。"
+internal val LINK_TAB_NOTE: String
+    // **不能是顶层 const val**（禁止在顶层初始化时求值文案，切语言不会变）：
+    // 改成 @Composable getter，两处调用点（`item { Footnote(LINK_TAB_NOTE) }`）本就在组合期，
+    // 读法不用变——只是从编译期常量变成运行时按当前语言取。
+    @Composable get() = stringResource(R.string.detail_tab_link_note)
 
 /** 语音页签的脚注。如实写清楚这一格现在能做什么、不能做什么。 */
-internal const val VOICE_TAB_NOTE = "归档里暂不能播放（长按可定位回聊天、转发或删除）。"
+internal val VOICE_TAB_NOTE: String
+    @Composable get() = stringResource(R.string.detail_tab_voice_note)
 
 /**
  * 会话媒体库页的标题。**逐字取自 iOS** `IMConversationMediaViewController.viewDidLoad`
  * 的 `self.title = @"图片与视频"`——本端此前显的是会话名（2026-09-17 用户报）。
- * 单聊详情与群资料共用这一个常量，别在两处各写一遍字面量。
+ * 单聊详情与群资料共用这一个属性，别在两处各写一遍字面量。
  */
-internal const val GALLERY_TITLE = "图片与视频"
+internal val GALLERY_TITLE: String
+    @Composable get() = stringResource(R.string.gallery_title)
 
 /** 判定一条本地消息是不是链接（薄封装，方便调用点读起来短）。 */
 internal fun linkUrlOf(contentType: String, content: String, convSeq: Long): String? =
@@ -123,7 +131,11 @@ internal fun Hint(text: String) {
 internal fun LoadMore(onLoadMore: () -> Unit) {
     LaunchedEffect(Unit) { onLoadMore() }
     Box(Modifier.fillMaxWidth().padding(14.dp), contentAlignment = Alignment.Center) {
-        Text("加载更多", color = IMTheme.colors.accent, modifier = Modifier.clickable { onLoadMore() })
+        Text(
+            stringResource(R.string.common_load_more),
+            color = IMTheme.colors.accent,
+            modifier = Modifier.clickable { onLoadMore() },
+        )
     }
 }
 
@@ -168,7 +180,7 @@ internal fun LazyListScope.archiveTab(
         DetailTab.Links -> {
             item { Footnote(LINK_TAB_NOTE) }
             if (linkMessages == null) {
-                item { Hint("加载中…") }
+                item { Hint(stringResource(R.string.common_loading)) }
             } else if (linkMessages.isEmpty()) {
                 item { Hint(DetailTabs.emptyText(tab)) }
             } else {
@@ -199,7 +211,7 @@ internal fun LazyListScope.archiveTab(
         }
         DetailTab.Media -> {
             if (loading && archive.isEmpty()) {
-                item { Hint("加载中…") }
+                item { Hint(stringResource(R.string.common_loading)) }
             } else if (archive.isEmpty()) {
                 item { Hint(DetailTabs.emptyText(tab)) }
             } else {
@@ -278,7 +290,7 @@ private fun LazyListScope.archiveList(
     row: @Composable (ConvMediaItem) -> Unit,
 ) {
     if (loading && items.isEmpty()) {
-        item { Hint("加载中…") }
+        item { Hint(stringResource(R.string.common_loading)) }
         return
     }
     if (items.isEmpty()) {

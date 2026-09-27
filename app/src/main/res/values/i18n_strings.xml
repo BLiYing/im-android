@@ -60,6 +60,7 @@
     <string name="blocked_empty_subtitle">你在通讯录或聊天页拉黑对方后，会出现在这里。</string>
     <string name="blocked_empty_title">暂无已屏蔽的用户</string>
     <string name="blocked_hint">已屏蔽的用户不能给你发消息，也看不到你的资料。</string>
+    <string name="blocked_load_failed">加载已屏蔽的用户失败</string>
     <string name="blocked_title">已屏蔽的用户</string>
     <string name="blocked_unblock">取消屏蔽</string>
     <string name="blocked_unblock_failed">取消屏蔽失败：%1$s</string>
@@ -86,12 +87,18 @@
     <string name="call_record_tail_duration">时长 %1$s</string>
     <string name="call_record_tail_ended">已结束</string>
     <string name="call_record_tail_no_answer">无人接听</string>
+    <string name="call_record_unavailable">[音视频通话] 无法显示</string>
     <string name="call_record_unsupported">[音视频通话] 请升级新版查看</string>
     <string name="call_record_who_peer">对方</string>
     <string name="call_record_who_self">你</string>
+    <string name="card_contact_unavailable">[个人名片] 无法显示</string>
+    <string name="card_record_unavailable">[聊天记录] 无法显示</string>
+    <string name="chat_archive_delete_failed_retry">删除失败，请重试</string>
+    <string name="chat_attach_audio_video_unimplemented">音视频通话还没做</string>
     <string name="chat_attach_av">音视频</string>
     <string name="chat_attach_camera">拍摄</string>
     <string name="chat_attach_contact_card">个人名片</string>
+    <string name="chat_attach_friends_load_failed">联系人加载失败</string>
     <string name="chat_attach_photo">照片</string>
     <string name="chat_attach_title">附件</string>
     <string name="chat_banner_all_pinned">全部置顶消息</string>
@@ -105,6 +112,7 @@
     <string name="chat_banner_pinned">置顶消息</string>
     <string name="chat_banner_unpin_current">取消置顶当前这条</string>
     <string name="chat_block_hint">已将对方加入黑名单（TA 发来的消息会被拒收）</string>
+    <string name="chat_bubble_forward_from">转发自 %1$s</string>
     <string name="chat_clear_confirm">清空聊天记录？将删除此会话在本机的全部消息，且无法恢复。</string>
     <string name="chat_clear_done">聊天记录已清空</string>
     <string name="chat_clear_ok">清空</string>
@@ -113,6 +121,7 @@
     </plurals>
     <string name="chat_detail_a11y_title">聊天详情</string>
     <string name="chat_detail_a11y_with_name">%1$s的聊天详情</string>
+    <string name="chat_detail_add_friend_failed">加好友失败</string>
     <string name="chat_detail_block_confirm_message">拉黑后将不再收到对方消息。</string>
     <string name="chat_detail_block_confirm_title">拉黑「%1$s」？</string>
     <string name="chat_detail_clear_history">清空聊天记录</string>
@@ -185,8 +194,16 @@
     <string name="chat_error_invalid_uid">请输入有效的对方 uid</string>
     <string name="chat_error_translate_failed">翻译失败：%1$s</string>
     <string name="chat_favorite_failed_detail">收藏失败：%1$s</string>
+    <string name="chat_favorite_partial">已收藏 %1$d/%2$d 条，%3$d 条失败</string>
     <string name="chat_favorite_success">已收藏</string>
+    <plurals name="chat_favorite_success_count">
+        <item quantity="other">已收藏 %1$d 条</item>
+    </plurals>
     <string name="chat_file_expired">文件已失效</string>
+    <string name="chat_file_local_missing_retry">文件已不在本地，正在重新下载</string>
+    <string name="chat_file_no_app_to_open">没有能打开这个文件的应用</string>
+    <string name="chat_file_not_downloaded">文件不在本地，请先下载</string>
+    <string name="chat_file_open_failed">打开失败</string>
     <string name="chat_file_paused_tap_resume">已暂停，点击继续</string>
     <string name="chat_file_size_tap_download">%1$s · 点击下载</string>
     <string name="chat_file_tap_pause">点击暂停</string>
@@ -202,6 +219,10 @@
         <item quantity="other">（%1$d 条已失效未转发）</item>
     </plurals>
     <string name="chat_forward_merged_success">已合并转发</string>
+    <plurals name="chat_forward_merged_success_count">
+        <item quantity="other">已合并转发到 %1$d 个会话</item>
+    </plurals>
+    <string name="chat_forward_none_forwardable">所选消息都无法转发</string>
     <string name="chat_header_back">‹ 会话</string>
     <string name="chat_header_call">呼叫</string>
     <plurals name="chat_header_member_count">
@@ -214,7 +235,6 @@
     <string name="chat_header_video_call">视频通话</string>
     <string name="chat_header_view_group_profile">查看群资料</string>
     <string name="chat_header_view_profile">查看资料</string>
-    <string name="chat_header_voice_call">语音通话</string>
     <string name="chat_input_disabled_mute_all">本群已开启全员禁言</string>
     <string name="chat_input_disabled_muted">你已被管理员禁言</string>
     <string name="chat_input_disabled_system">此会话不支持回复</string>
@@ -230,8 +250,10 @@
     <string name="chat_media_camera_permission_denied">请在设置中允许使用相机</string>
     <string name="chat_media_camera_unsupported">当前设备不支持拍摄</string>
     <string name="chat_media_cancel_send_confirm">取消发送这条消息？</string>
+    <string name="chat_media_contact_card_incomplete">这个联系人不完整</string>
     <string name="chat_media_continue_send">继续发送</string>
     <string name="chat_media_download_failed_retry">下载失败，请重试</string>
+    <string name="chat_media_downloading">下载中…</string>
     <string name="chat_media_downloading_progress">下载中 %1$d%%</string>
     <string name="chat_media_file_expired_cant_save">该文件已失效，无法保存</string>
     <string name="chat_media_file_read_failed">文件读取失败</string>
@@ -252,6 +274,7 @@
     <string name="chat_media_stage_failed">本地暂存失败，请重试</string>
     <string name="chat_media_switched_to_original">已切换为原视频</string>
     <string name="chat_media_video_read_failed">录像读取失败</string>
+    <string name="chat_media_video_unplayable">这个视频放不了</string>
     <string name="chat_media_view_original">查看原视频</string>
     <string name="chat_media_view_original_sized">查看原视频 %1$s</string>
     <string name="chat_media_voice_hint">按住 语音 按钮说话</string>
@@ -259,6 +282,7 @@
     <plurals name="chat_mention_notify_all_count">
         <item quantity="other">  通知全部 %1$d 人</item>
     </plurals>
+    <string name="chat_mention_notify_all_subtitle">通知群里所有人</string>
     <string name="chat_mention_remark_tail">  备注: %1$s</string>
     <string name="chat_mention_title">提醒谁</string>
     <string name="chat_menu_delete_conversation">删除会话</string>
@@ -289,6 +313,7 @@
     <string name="chat_msg_menu_transcribe_cancel">取消转文字</string>
     <string name="chat_msg_menu_translate">翻译</string>
     <string name="chat_msg_menu_unpin">取消置顶</string>
+    <string name="chat_paste_limit_exceeded">最多粘 %1$d 张，多出来的没收下</string>
     <string name="chat_paste_pending_image_alt">待发送图片</string>
     <string name="chat_quote_original_fallback">原消息</string>
     <string name="chat_reader_copy">复制全文</string>
@@ -296,18 +321,23 @@
     <string name="chat_reader_font_smaller">缩小字号</string>
     <string name="chat_reader_title">全文 · %1$s</string>
     <string name="chat_reply_cancel">取消引用</string>
+    <string name="chat_reply_cancel_a11y">取消回复</string>
     <string name="chat_reply_header">回复 %1$s</string>
     <string name="chat_reply_self">自己</string>
+    <string name="chat_reply_title_fallback">回复</string>
     <string name="chat_reply_who">回复 %1$s</string>
     <plurals name="chat_report_multi_title">
         <item quantity="other">举报 %1$s 的 %2$d 条消息</item>
     </plurals>
     <string name="chat_report_single_title">举报这条消息</string>
     <string name="chat_resend_content_lost">这条消息内容已丢失，无法重发</string>
+    <string name="chat_resend_upload_incomplete">上传未完成，请重新发送</string>
     <string name="chat_search_by_date">按日期</string>
     <string name="chat_search_by_member">来自某成员</string>
     <string name="chat_search_calendar_month_label">%1$s年%2$s月</string>
     <string name="chat_search_clear_sender">清除发件人</string>
+    <string name="chat_search_date_jump_confirm">跳转</string>
+    <string name="chat_search_date_jump_dialog_title">按日期跳转</string>
     <string name="chat_search_day_jump_nearest">%1$s无消息，已跳到最近的 %2$s</string>
     <string name="chat_search_day_no_messages">%1$s及之后无消息</string>
     <string name="chat_search_day_no_messages_after">该日期及之后暂无消息</string>
@@ -321,6 +351,7 @@
     <string name="chat_search_dow_tue">二</string>
     <string name="chat_search_dow_wed">三</string>
     <string name="chat_search_earliest">最早</string>
+    <string name="chat_search_empty_query_hint">输入关键词搜索本会话</string>
     <string name="chat_search_from_prefix">来自:</string>
     <string name="chat_search_from_token">来自:%1$s</string>
     <string name="chat_search_hit_position">第 %1$d / %2$d%3$s 条</string>
@@ -341,10 +372,24 @@
     <string name="chat_search_prev_month">上个月</string>
     <string name="chat_search_today_jump_nearest">今天无消息，已跳到 %1$s</string>
     <string name="chat_search_today_no_messages_jumped_latest">今天暂无消息，已跳到最近一条</string>
+    <string name="chat_select_delete_confirm_message">只从本机删除，其他设备与对方仍能看到。</string>
+    <plurals name="chat_select_delete_confirm_title">
+        <item quantity="other">删除 %1$d 条消息</item>
+    </plurals>
+    <plurals name="chat_select_delete_done">
+        <item quantity="other">已删除 %1$d 条</item>
+    </plurals>
+    <plurals name="chat_select_delete_failed_count">
+        <item quantity="other">%1$d 条删除失败</item>
+    </plurals>
     <string name="chat_select_delete_for_me">仅为我删除</string>
+    <plurals name="chat_select_forward_partial_skip">
+        <item quantity="other">%1$d 条无法转发，已跳过</item>
+    </plurals>
     <plurals name="chat_select_max">
         <item quantity="other">最多选择 %1$d 条</item>
     </plurals>
+    <string name="chat_select_none_favoritable">所选消息都无法收藏</string>
     <string name="chat_select_report_multi">一次只能举报同一个人的消息</string>
     <string name="chat_select_report_own">不能举报自己的消息</string>
     <plurals name="chat_select_selected">
@@ -365,6 +410,10 @@
     <string name="chat_typing">正在输入</string>
     <string name="chat_typing_named">%1$s 正在输入</string>
     <string name="chat_unread_divider">未读消息</string>
+    <string name="chat_viewer_copy_failed_network">复制失败，请检查网络</string>
+    <string name="chat_viewer_copy_failed_too_large">复制失败：图片太大</string>
+    <string name="chat_viewer_copy_no_url">这张图片没有地址</string>
+    <string name="chat_viewer_delete_unavailable">这条消息不能删除</string>
     <string name="chat_voice_cannot_preview_while_recording">录制中不能试听</string>
     <string name="chat_voice_cannot_start">无法开始录音</string>
     <string name="chat_voice_content_empty">语音内容为空</string>
@@ -402,10 +451,15 @@
     <string name="chat_voice_transcript_note">📝 由服务器识别，结果可能不完全准确</string>
     <string name="chat_voice_unplayed">未播放</string>
     <string name="chat_voice_unsupported">当前浏览器不支持录制语音，可在 App 内发送</string>
+    <string name="chat_webview_load_failed">网页加载失败，请检查网络后重试</string>
+    <string name="chat_webview_load_failed_cleartext">网页加载失败。这是未加密的 http 网页，App 内可能不允许打开，可以用浏览器打开</string>
+    <string name="chat_window_gone_notice">原消息不在了</string>
     <string name="chat_window_jump_offline">网络未连接，无法加载这条消息</string>
     <string name="chat_window_jump_timeout">加载超时，请重试</string>
+    <string name="chat_window_locate_failed_notice">没能定位到这条消息，请重试</string>
     <string name="chat_window_no_older_messages">没有更早的消息了</string>
     <string name="common_action_failed">操作失败</string>
+    <string name="common_action_failed_code">操作失败（%1$d）</string>
     <string name="common_action_failed_detail">操作失败：%1$s</string>
     <string name="common_add">添加</string>
     <string name="common_add_friend">添加好友</string>
@@ -434,6 +488,7 @@
     <string name="common_emoji">表情</string>
     <string name="common_error_action_failed">操作失败：%1$s</string>
     <string name="common_error_not_logged_in">未登录</string>
+    <string name="common_error_network_unavailable_detail">%1$s：网络不可用</string>
     <string name="common_everyone">所有人</string>
     <string name="common_favorite">收藏</string>
     <string name="common_file">文件</string>
@@ -444,7 +499,9 @@
     <string name="common_image">图片</string>
     <string name="common_image_process_failed">图片处理失败</string>
     <string name="common_invite">邀请</string>
+    <string name="common_link">链接</string>
     <string name="common_load_failed">加载失败</string>
+    <string name="common_load_more">加载更多</string>
     <string name="common_load_more_results">加载更多结果</string>
     <string name="common_loading">加载中…</string>
     <string name="common_login_expired">登录已失效，请重新登录</string>
@@ -453,12 +510,15 @@
     <string name="common_more">更多</string>
     <string name="common_my_contacts">我的联系人</string>
     <string name="common_next">下一步</string>
+    <string name="common_no_app_for_link">没有能打开这个链接的应用</string>
+    <string name="common_no_selectable_people">没有可选的人</string>
     <string name="common_not_logged_in">未登录</string>
     <string name="common_notice">提示</string>
     <string name="common_off">关闭</string>
     <string name="common_offline">离线</string>
     <string name="common_ok">好</string>
     <string name="common_online">在线</string>
+    <string name="common_open_in_browser">用浏览器打开</string>
     <string name="common_pause">暂停</string>
     <plurals name="common_people_count">
         <item quantity="other">%1$d 人</item>
@@ -470,6 +530,8 @@
     <string name="common_processing">处理中…</string>
     <string name="common_publish">发布</string>
     <string name="common_pull_to_retry">下拉重试</string>
+    <string name="common_refresh">刷新</string>
+    <string name="common_refreshing">刷新中</string>
     <string name="common_reject">拒绝</string>
     <string name="common_remove">移除</string>
     <string name="common_report">举报</string>
@@ -479,6 +541,7 @@
     <string name="common_save">保存</string>
     <string name="common_save_failed">保存失败</string>
     <string name="common_saved_messages">收藏消息</string>
+    <string name="common_saving">保存中</string>
     <string name="common_search">搜索</string>
     <string name="common_search_failed">搜索失败</string>
     <string name="common_search_failed_detail">搜索失败：%1$s</string>
@@ -495,11 +558,13 @@
     <string name="common_status">状态</string>
     <string name="common_stop">停止</string>
     <string name="common_system_notice">系统通知</string>
+    <string name="common_tap_to_retry">点击重试</string>
     <string name="common_type">类型</string>
     <string name="common_unblock">解除拉黑</string>
     <string name="common_unknown">未知</string>
     <string name="common_unknown_device_kicked">某台设备</string>
     <string name="common_unknown_error">未知错误</string>
+    <string name="common_unnamed_group">未命名群聊</string>
     <string name="common_unnamed_user">未命名用户</string>
     <string name="common_unread">未读</string>
     <string name="common_update_failed">修改失败</string>
@@ -529,12 +594,15 @@
     <string name="contact_card_row_shared_by">由 %1$s 分享</string>
     <string name="contacts_action_block">拉黑</string>
     <string name="contacts_action_unblock">解除拉黑</string>
+    <string name="contacts_coming_soon">%1$s 还没做</string>
     <string name="contacts_empty">还没有好友，点右上角 + 搜索用户添加</string>
     <string name="contacts_entry_official_account">公众号</string>
     <string name="contacts_entry_service_account">服务号</string>
     <string name="contacts_friends_empty">还没有好友，上面搜索用户添加吧</string>
     <string name="contacts_friends_header_count">好友（%1$d）</string>
     <string name="contacts_friends_header_filtered">好友（%1$d/%2$d）</string>
+    <string name="contacts_friends_section_label">好友</string>
+    <string name="contacts_groups_load_failed">群列表加载失败</string>
     <string name="contacts_row_handle_blocked">%1$s · 已拉黑</string>
     <string name="contacts_row_official_accounts">公众号</string>
     <string name="contacts_row_service_accounts">服务号</string>
@@ -565,6 +633,8 @@
     <string name="conv_list_recalled_member">%1$s撤回了一条消息</string>
     <string name="conv_list_recalled_peer">对方撤回了一条消息</string>
     <string name="conv_list_recalled_self">你撤回了一条消息</string>
+    <string name="conv_list_recalled_unknown">撤回了一条消息</string>
+    <string name="conv_list_sender_prefix">%1$s: %2$s</string>
     <string name="conv_locate_not_in_view">原消息不在当前视图</string>
     <string name="conv_locate_unavailable">该消息无法定位</string>
     <string name="conv_menu_mark_read">设为已读</string>
@@ -573,6 +643,7 @@
     <string name="conv_menu_new_group">新建群聊</string>
     <string name="conv_menu_pin">置顶</string>
     <string name="conv_menu_scan">扫一扫</string>
+    <string name="conv_menu_scan_unavailable">扫一扫暂不可用</string>
     <string name="conv_menu_unmute">取消免打扰</string>
     <string name="conv_menu_unpin">取消置顶</string>
     <string name="conv_qr_join_approved">你的入群申请已通过，进群聊天吧</string>
@@ -591,9 +662,12 @@
     <string name="detail_tab_empty_files">暂无文件</string>
     <string name="detail_tab_empty_links">暂无链接</string>
     <string name="detail_tab_empty_media">暂无媒体</string>
+    <string name="detail_tab_empty_members">还没有成员</string>
     <string name="detail_tab_empty_voice">暂无语音</string>
     <string name="detail_tab_file_size_downloaded">%1$s · 已下载</string>
     <string name="detail_tab_file_size_not_downloaded">%1$s · 未下载</string>
+    <string name="detail_tab_link_note">链接由本机已加载的聊天记录扫出，往上翻得越多、这里越全。点一条在 App 内打开。</string>
+    <string name="detail_tab_voice_note">归档里暂不能播放（长按可定位回聊天、转发或删除）。</string>
     <plurals name="device_active_days_ago">
         <item quantity="other">%1$d 天前活跃</item>
     </plurals>
@@ -604,6 +678,7 @@
     <plurals name="device_active_minutes_ago">
         <item quantity="other">%1$d 分钟前活跃</item>
     </plurals>
+    <string name="device_default_name_android">Android 设备</string>
     <string name="device_detail_currently_online">当前在线</string>
     <string name="device_detail_fallback_name">该设备</string>
     <string name="device_detail_last_active">最近活跃</string>
@@ -616,6 +691,7 @@
     <string name="device_detail_revoked_toast">已退出该设备</string>
     <string name="device_detail_title">设备详情</string>
     <string name="device_list_current_pill"> 当前 </string>
+    <string name="device_list_empty">没有已登录的设备</string>
     <string name="device_list_revoke_all_action">退出其他所有设备</string>
     <string name="device_list_revoke_all_confirm">退出</string>
     <string name="device_list_revoke_all_footer">退出后该设备需重新登录。若你不认识某台设备，请退出它并尽快修改密码。</string>
@@ -627,6 +703,8 @@
     <string name="device_platform_desktop">桌面端</string>
     <string name="device_platform_unknown">未知设备</string>
     <string name="device_platform_web">网页版</string>
+    <string name="device_revoking">退出中…</string>
+    <string name="device_row_current_tag">当前</string>
     <string name="download_network_cellular">使用移动数据</string>
     <string name="download_network_disabled">已停用</string>
     <string name="download_network_summary">视频 %1$s · 文件 %2$s</string>
@@ -702,6 +780,10 @@
         <item quantity="other">最多选择 %1$d 项</item>
     </plurals>
     <string name="favorites_pick_send_count">发送 (%1$d)</string>
+    <plurals name="favorites_pick_sent_expired_suffix">
+        <item quantity="other">（%1$d 条已失效未发送）</item>
+    </plurals>
+    <string name="favorites_pick_sent_none_expired">所选内容已失效，无法发送</string>
     <string name="favorites_pick_title">从收藏发送</string>
     <string name="favorites_reader_title">收藏</string>
     <string name="favorites_row_voice_fallback">语音消息</string>
@@ -736,8 +818,10 @@
     </plurals>
     <string name="friend_block_confirm">拉黑该联系人？拉黑后将不再收到对方消息。</string>
     <string name="friend_block_done">已拉黑</string>
+    <string name="friend_block_failed_toast">拉黑失败</string>
     <string name="friend_block_undone">已取消拉黑</string>
     <string name="friend_delete_confirm">删除该好友？将从通讯录移除，聊天记录仍保留在本机。</string>
+    <string name="friend_delete_confirm_message">删除后你与「%1$s」将不再是好友，聊天记录保留。此操作不可撤销。</string>
     <string name="friend_delete_done">已删除好友</string>
     <string name="friend_menu_delete">删除好友</string>
     <string name="friend_picker_default_empty">好友都已在群里了</string>
@@ -752,8 +836,10 @@
     <string name="friend_request_became_friends">已添加为好友</string>
     <string name="friend_request_hello_label">验证消息（选填，对方会看到）</string>
     <string name="friend_request_hello_placeholder">说一句，让对方知道你是谁</string>
+    <string name="friend_request_no_user_found">没找到这个用户</string>
     <string name="friend_request_peer_fallback">对方</string>
     <string name="friend_request_placeholder">说一句，让对方知道你是谁</string>
+    <string name="friend_request_search_hint">按用户名或手机号精确匹配（防止批量枚举），昵称搜不到</string>
     <string name="friend_request_send_failed">好友申请发送失败</string>
     <string name="friend_request_send_to">发送给</string>
     <string name="friend_request_sending">发送中…</string>
@@ -808,6 +894,7 @@
     <string name="group_admin_list_revoke_confirm_message">撤销 %1$s 的管理员身份？</string>
     <string name="group_admin_list_revoke_done">已撤销管理员</string>
     <string name="group_admin_picker_add_count">添加（%1$d/%2$d）</string>
+    <string name="group_admin_picker_empty">没有可设为管理员的普通成员</string>
     <string name="group_admin_picker_limit_note">一次最多添加 %1$d 位管理员。</string>
     <string name="group_admin_picker_limit_toast">一次最多添加 %1$d 位管理员</string>
     <string name="group_admin_picker_title">添加管理员</string>
@@ -820,10 +907,12 @@
     <string name="group_bans_footer">左滑可解除拉黑。冷却期到期后会自动移出黑名单。</string>
     <string name="group_bans_title">黑名单（%1$d）</string>
     <string name="group_bans_unban">解除</string>
+    <string name="group_call_picker_title">选择通话成员</string>
     <string name="group_create_add_more">＋ 添加</string>
     <string name="group_create_avatar_failed">头像上传失败</string>
     <string name="group_create_avatar_slow">头像上传较慢，已先创建群聊，可稍后在群管理里设置</string>
     <string name="group_create_failed">建群失败：%1$s</string>
+    <string name="group_create_limit_reached">已达本群成员上限（%1$d 人）。要装更多人请走大群。</string>
     <string name="group_create_max_members">最多 %1$d 位成员。</string>
     <string name="group_create_members_summary">成员 · %1$d 人（加我 %2$d 人）</string>
     <string name="group_create_min_friends">至少选择一位好友</string>
@@ -832,13 +921,16 @@
     <string name="group_create_no_friends">还没有好友，先去通讯录添加吧</string>
     <string name="group_create_remove_member">移除 %1$s</string>
     <string name="group_create_select_friends">选择好友（已选 %1$d）</string>
+    <string name="group_create_selected_count">已选 %1$d/%2$d</string>
     <string name="group_create_set_avatar">设置群头像</string>
     <string name="group_create_title">创建群聊</string>
     <string name="group_error_not_admin">你已不是群主或管理员</string>
     <string name="group_event_dissolved">该群已被解散</string>
     <string name="group_event_join_request_new">有新的入群申请</string>
     <string name="group_event_removed">你已被移出群聊</string>
+    <string name="group_info_edit_intro_label">修改群简介</string>
     <string name="group_info_invite_all_in">所选的人都已在群里</string>
+    <string name="group_info_invite_friends">邀请好友入群</string>
     <string name="group_info_invite_partial">已邀请 %1$d 人，其余 %2$d 人已在群里</string>
     <string name="group_info_leave">退出群聊</string>
     <string name="group_info_leave_confirm">退出</string>
@@ -846,35 +938,55 @@
     <string name="group_info_load_failed">拉取群资料失败</string>
     <string name="group_info_members_failed">拉取群成员失败</string>
     <string name="group_info_members_title">成员（%1$d）</string>
+    <string name="group_info_my_nickname_hint">留空即清除，显示你的全局昵称。</string>
     <string name="group_info_reinvite_blocked">该成员已被移出本群，暂时无法再次邀请</string>
+    <string name="group_info_remark_hint">仅你自己可见，用于区分同名群聊，不会通知其他成员。</string>
     <string name="group_info_rename_hint">1~30 字</string>
     <string name="group_info_rename_title">修改群名</string>
+    <string name="group_info_super_note">大群 · 已关闭 3 项能力：不显示「正在输入」、不显示已读双勾、不显示成员在线态。这些能力在两万人规模下会产生海量无效推送。</string>
     <string name="group_info_title">群资料</string>
+    <string name="group_info_transfer_confirm_message">转让给「%1$s」后你将立即变为普通成员，且不可撤销。</string>
     <string name="group_list_empty">还没有加入任何群聊</string>
     <string name="group_list_empty_hint">还没有加入群聊，点右上角 + 创建</string>
     <string name="group_list_i_am_owner">我是群主</string>
     <string name="group_list_owner">群主 %1$s</string>
     <string name="group_list_title">群聊（%1$d）</string>
+    <string name="group_manage_admin_count_value">%1$d 位</string>
     <string name="group_manage_announcement_footer">发布后全体成员会收到通知，并在聊天页顶部常驻。</string>
+    <string name="group_manage_announcement_hint">留空即撤下公告。发布会在群里落一条系统消息。</string>
     <string name="group_manage_announcement_placeholder">输入公告内容</string>
     <string name="group_manage_announcement_publish_failed">发布失败</string>
+    <string name="group_manage_announcement_publish_label">发布公告</string>
     <string name="group_manage_announcement_published">已发布</string>
     <string name="group_manage_announcement_published_toast">公告已发布</string>
     <string name="group_manage_announcement_retracted_toast">公告已撤下</string>
     <string name="group_manage_announcement_unpublished">未发布</string>
     <string name="group_manage_ban_count">%1$d 人</string>
     <string name="group_manage_blacklist">黑名单</string>
+    <string name="group_manage_edit_my_nickname">修改群昵称</string>
     <string name="group_manage_history_note">「新成员仅可见入群后历史」开启后，新成员看不到加入前的聊天记录。</string>
     <string name="group_manage_history_visible">新成员仅可见入群后历史</string>
     <string name="group_manage_intro_empty">未填写</string>
     <string name="group_manage_intro_footer">简介会展示在群资料页与加群预览页。</string>
     <string name="group_manage_intro_label">简介</string>
     <string name="group_manage_intro_placeholder">介绍这个群</string>
+    <string name="group_manage_invite_members">邀请入群</string>
     <string name="group_manage_join_approval">进群确认</string>
     <string name="group_manage_join_speak_footer">进群确认：凭二维码加入需管理员审批。全员禁言：仅群主 / 管理员可发言。</string>
     <string name="group_manage_mute_all">全员禁言</string>
+    <string name="group_manage_mute_all_off_confirm">解除</string>
+    <string name="group_manage_mute_all_off_confirm_message">解除后所有成员都可以发言。</string>
+    <string name="group_manage_mute_all_off_confirm_title">解除全员禁言？</string>
+    <string name="group_manage_mute_all_off_label">解除全员禁言</string>
     <string name="group_manage_mute_all_off_toast">已关闭全员禁言</string>
+    <string name="group_manage_mute_all_on_confirm">开启</string>
+    <string name="group_manage_mute_all_on_confirm_message">开启后只有群主和管理员可以发言，直到你手动解除。</string>
+    <string name="group_manage_mute_all_on_confirm_title">开启全员禁言？</string>
+    <string name="group_manage_mute_all_on_label">开启全员禁言</string>
     <string name="group_manage_mute_all_on_toast">已开启全员禁言</string>
+    <string name="group_manage_op_failed">%1$s失败</string>
+    <string name="group_manage_op_failed_with_code">%1$s失败（%2$d）</string>
+    <string name="group_manage_op_succeeded">%1$s成功</string>
     <string name="group_manage_pending_count">%1$d 待处理</string>
     <string name="group_manage_pending_none">无</string>
     <string name="group_manage_perm_edit_info">仅管理员可改群资料</string>
@@ -900,6 +1012,7 @@
     <string name="group_member_tab_label">成员</string>
     <string name="group_member_action_make_admin">设为管理员</string>
     <string name="group_member_action_mute">禁言…</string>
+    <string name="group_member_action_mute_toggle">禁言</string>
     <string name="group_member_action_remove">移出群聊</string>
     <string name="group_member_action_remove_and_ban">移出并不再允许加入</string>
     <string name="group_member_action_remove_and_ban_confirm_message">确定把 %1$s 移出并不再允许加入？</string>
@@ -934,14 +1047,18 @@
     <string name="group_ops_remark_save_failed">保存备注失败：%1$s</string>
     <string name="group_ops_revoke_admin_confirm">撤销 %1$s 的管理员身份？</string>
     <string name="group_ops_revoke_admin_done">已撤销管理员</string>
+    <string name="group_ops_revoke_admin_failed">撤销管理员失败</string>
     <string name="group_ops_transfer_confirm_message">确定把群主转让给 %1$s？转让后你将变为普通成员，且不可撤销。</string>
     <string name="group_ops_unban_done">已解除</string>
     <string name="group_ops_unban_failed">解除失败：%1$s</string>
+    <string name="group_pick_no_other_members">群里还没有别人</string>
     <string name="group_picker_no_match">没有匹配的成员</string>
     <string name="group_picker_no_others">群里还没有其他成员</string>
     <string name="group_picker_search_failed">搜索失败，请重试</string>
     <string name="group_picker_search_hint">输入关键词搜索群成员</string>
     <string name="group_picker_search_placeholder">搜索群成员</string>
+    <string name="group_qr_hint_code">邀请好友扫描二维码加入本群\n该码 7 天内有效，重置后旧码立即失效</string>
+    <string name="group_qr_hint_link">复制链接分享给好友，扫描/点击即可加入本群\n该链接 7 天内有效，重置后旧链接立即失效</string>
     <string name="group_role_admin">管理员</string>
     <string name="group_role_owner">群主</string>
     <string name="group_text_announcement">群公告</string>
@@ -954,6 +1071,7 @@
     <string name="group_text_super_notice_2">2. 已读回执、「正在输入」、成员在线态已关闭</string>
     <string name="group_text_super_notice_3">3. 成员进出不再产生群消息（「X 加入了群聊」「A 将 B 移出群聊」等）</string>
     <string name="group_text_super_notice_4">4. 群规模所致，无法改回普通群</string>
+    <string name="group_text_unnamed">未命名群聊</string>
     <string name="group_transfer_owner_confirm">转让</string>
     <string name="group_transfer_owner_confirm_message_full">确定把群主转让给 %1$s？\n转让后你将变为普通成员，且不可撤销。</string>
     <string name="group_transfer_owner_done">已转让给 %1$s</string>
@@ -986,19 +1104,23 @@
     <string name="login_error_host_required">请填写服务器地址</string>
     <string name="login_error_login_failed">登录失败</string>
     <string name="login_error_nickname_required">请填写昵称（这是别人看到的名字）</string>
+    <string name="login_error_param_invalid">输入不合法</string>
     <string name="login_error_register_failed">注册失败</string>
     <string name="login_error_register_login_failed">注册成功但登录失败</string>
     <string name="login_error_register_requirements">用户名必填，密码至少 6 位</string>
     <string name="login_error_username_required">请填写用户名</string>
+    <string name="login_error_wrong_username_or_password">用户名或密码错误</string>
     <string name="login_host_placeholder">服务器地址 host:port</string>
     <string name="login_nickname">昵称</string>
     <string name="login_nickname_placeholder">昵称（注册用，可中文，≤32 字）</string>
     <string name="login_password">密码</string>
     <string name="login_password_placeholder">密码（≥ 6 位）</string>
     <string name="login_reconnect_failed_confirm">%1$s。点\"确定\"重新登录；\"取消\"可继续查看本地聊天记录。</string>
+    <string name="login_register_format_hint">用户名 5–32 位小写字母/数字/下划线；密码至少 6 位</string>
     <string name="login_registering">注册中…</string>
     <string name="login_relogin">重新登录</string>
     <string name="login_restoring">正在恢复登录…</string>
+    <string name="login_revoked_notice">你的账号已在别处登录，或该设备已被移除</string>
     <string name="login_session_revoked">此设备的登录已被移除，请重新登录</string>
     <string name="login_submitting">登录中…</string>
     <string name="login_tab_password">密码登录</string>
@@ -1010,20 +1132,31 @@
     <string name="media_download_a11y_failed">下载失败，点按重试</string>
     <string name="media_download_a11y_paused">已暂停，点按继续</string>
     <string name="media_download_a11y_progress">下载中 %1$d%%</string>
+    <string name="media_download_a11y_resume">继续下载</string>
     <string name="media_download_a11y_start">下载</string>
     <string name="media_download_a11y_start_size">下载，%1$s</string>
     <string name="media_download_a11y_start_sized">下载，%1$s</string>
     <string name="media_download_failed">下载失败</string>
     <string name="media_download_failed_tap_retry">下载失败，点击重试</string>
+    <string name="media_download_paused">已暂停</string>
     <string name="media_download_tap_to_download">点击下载</string>
     <string name="media_download_tap_to_open">点击打开</string>
+    <string name="media_file_open_needs_download">文件不在本地，请先下载</string>
     <string name="media_image_expired">图片已失效</string>
     <plurals name="media_picker_selected_count">
         <item quantity="other">已选 %1$d 项</item>
     </plurals>
     <string name="media_picker_send_original">发送原图/原视频</string>
     <string name="media_placeholder_expired">已失效</string>
+    <string name="media_save_failed_network_storage">保存失败，请检查网络与存储空间</string>
+    <string name="media_save_failed_too_large">保存失败：文件太大</string>
+    <string name="media_save_gallery_not_writable">保存失败：相册不可写</string>
+    <string name="media_save_no_url">这条媒体没有地址</string>
+    <string name="media_save_write_failed">保存失败：无法写入</string>
     <string name="media_settings_save_failed">保存失败：%1$s</string>
+    <string name="media_share_failed">分享失败</string>
+    <string name="media_share_qr_chooser_title">分享二维码</string>
+    <string name="media_storage_permission_denied_save">没有存储权限，无法保存到相册</string>
     <string name="media_upload_compressing">压缩中 %1$d%%</string>
     <string name="media_upload_preparing">准备中…</string>
     <string name="media_upload_waiting">等待中</string>
@@ -1034,6 +1167,7 @@
     <string name="media_viewer_image_unsupported">当前浏览器无法预览该图片格式（如 HEIC）。</string>
     <string name="media_viewer_locate">定位到聊天位置</string>
     <string name="media_viewer_next">下一张（→）</string>
+    <string name="media_viewer_offline_partial_notice">网络不通，只能翻已加载的部分</string>
     <string name="media_viewer_prev">上一张（←）</string>
     <string name="media_viewer_video_expired">视频已失效（已被服务端清理）。</string>
     <string name="media_viewer_video_unsupported">当前浏览器不支持该视频的编码格式（如 HEVC）。</string>
@@ -1117,6 +1251,7 @@
     <string name="net_fallback_transcribe_failed">转文字失败</string>
     <string name="net_fallback_transfer_failed">转让失败</string>
     <string name="net_fallback_translate_failed">翻译失败</string>
+    <string name="net_fallback_unblock_failed">取消屏蔽失败</string>
     <string name="net_fallback_unmute_failed">解除失败</string>
     <string name="net_fallback_user_resolve_failed">解析用户资料失败</string>
     <string name="net_fallback_username_change">修改用户名失败</string>
@@ -1124,14 +1259,18 @@
     <string name="notify_body_default">[消息]</string>
     <string name="notify_body_missed_call">[未接来电]</string>
     <string name="password_error_account_banned">账号已被封禁，无法修改密码</string>
+    <string name="password_error_empty_old">请输入旧密码</string>
     <string name="password_error_generic_failed">修改密码失败，请稍后再试</string>
     <string name="password_error_min_length">新密码至少 6 位</string>
     <string name="password_error_mismatch">两次输入不一致</string>
     <string name="password_error_same_as_old">新密码不能与旧密码相同</string>
     <string name="password_error_session_expired">登录会话已失效</string>
     <string name="password_error_session_expired_retry">会话已过期，请重新登录</string>
+    <string name="password_error_too_long">新密码太长（最多 72 个字节）</string>
     <string name="password_error_weak">密码强度不足（至少 6 位）</string>
     <string name="password_error_wrong_old">旧密码错误</string>
+    <string name="password_eye_hide">隐藏密码</string>
+    <string name="password_eye_show">显示密码</string>
     <string name="password_field_confirm">再次输入新密码</string>
     <string name="password_field_new">新密码（≥6 位）</string>
     <string name="password_field_old">旧密码</string>
@@ -1140,6 +1279,12 @@
     <string name="password_success_toast">✓ 密码已修改，其它设备已下线</string>
     <string name="pinned_title">置顶消息（%1$d）</string>
     <string name="pinned_unpin">取消置顶</string>
+    <plurals name="presence_days_ago">
+        <item quantity="other">%1$d 天前在线</item>
+    </plurals>
+    <plurals name="presence_hours_ago">
+        <item quantity="other">%1$d 小时前在线</item>
+    </plurals>
     <string name="presence_just_now">刚刚在线</string>
     <string name="presence_last_month">一个月内在线</string>
     <string name="presence_last_week">一周内在线</string>
@@ -1162,18 +1307,22 @@
     <string name="preview_video_captioned">[视频] %1$s</string>
     <string name="preview_voice">[语音]</string>
     <string name="preview_voice_duration">[语音] %1$s</string>
+    <string name="profile_avatar_change_a11y">更换头像</string>
     <string name="profile_avatar_change_hint">点击头像更换</string>
     <string name="profile_avatar_saved_hint">头像已更新，记得保存</string>
     <string name="profile_field_tags_label">标签</string>
     <string name="profile_field_tags_placeholder">标签（空格或逗号分隔）</string>
     <string name="profile_field_username_placeholder">a-z、0-9、下划线，≥5 位</string>
     <string name="profile_nickname_required">昵称不能为空</string>
+    <string name="profile_nickname_too_long">昵称最多 %1$d 个字</string>
     <string name="profile_not_logged_in_retry">尚未登录，请稍候重试</string>
     <string name="profile_readonly_phone_label">手机</string>
     <string name="profile_save_failed">保存失败：%1$s</string>
     <string name="profile_saved_toast">已保存</string>
     <string name="profile_title_view">我的资料</string>
     <string name="profile_username_change_failed">用户名未能修改：%1$s</string>
+    <string name="profile_username_invalid_format">用户名只能是小写字母、数字、下划线，5–32 位</string>
+    <string name="profile_username_required">用户名不能为空</string>
     <string name="ps_account_protection_footer">绑定第二因子后，即使密码泄露也无法登录你的账号。</string>
     <string name="ps_chat_privacy_footer">为你开始的每个新会话默认开启阅后自删。</string>
     <string name="ps_coming_soon_hint">即将上线</string>
@@ -1327,9 +1476,11 @@
     <string name="qr_scan_cancel_pick">取消，换一张图</string>
     <string name="qr_scan_choose_image">选择图片</string>
     <string name="qr_scan_drop_title">把带二维码的图片拖到这里</string>
+    <string name="qr_scan_flashlight">手电筒</string>
     <string name="qr_scan_frame_hint">将二维码放入框内，即可自动扫描</string>
     <string name="qr_scan_image_read_failed">无法读取该图片</string>
     <string name="qr_scan_label_group">群二维码（本应用）</string>
+    <string name="qr_scan_label_login">登录码（本应用）</string>
     <string name="qr_scan_label_url">网址 · %1$s</string>
     <string name="qr_scan_label_user">名片码（本应用）</string>
     <string name="qr_scan_multi_sheet_message">选择你要打开的那个</string>
@@ -1375,9 +1526,15 @@
     <string name="receipts_title">已读详情</string>
     <string name="record_chat_history">聊天记录</string>
     <string name="record_dirty_card">[个人名片]</string>
+    <string name="record_dirty_record">[聊天记录]</string>
+    <string name="rtc_error_id_empty">%1$s 为空</string>
+    <string name="rtc_error_id_has_whitespace">%1$s 含空白：%2$s</string>
+    <string name="rtc_error_id_too_long">%1$s 超过 %2$d 字节</string>
     <string name="rtc_error_no_callees">请选择要呼叫的成员</string>
     <string name="rtc_error_not_started">通话服务未启动（请重新登录）</string>
     <string name="rtc_invite_in_call">已在通话中</string>
+    <string name="rtc_kind_group_id">群号</string>
+    <string name="rtc_kind_peer_id">对方 id</string>
     <string name="scene_kicked_logged_out">该账号已在其他设备退出登录，请重新登录</string>
     <string name="search_global_placeholder">搜索会话、联系人、聊天记录</string>
     <plurals name="search_result_member_count">
@@ -1402,12 +1559,12 @@
     <string name="settings_info_username">用户名</string>
     <string name="settings_language_current_system">跟随系统（%1$s）</string>
     <string name="settings_language_footer">更改语言不会影响聊天中已发送的消息内容。</string>
-    <string name="settings_language_footer_call_only">目前只有通话界面支持英文，App 其余界面仍为中文。</string>
     <string name="settings_language_option_en">English</string>
     <string name="settings_language_option_system">跟随系统</string>
     <string name="settings_language_option_zh_hans">简体中文</string>
     <string name="settings_language_title">语言</string>
     <string name="settings_logout">退出登录</string>
+    <string name="settings_logout_confirm_message">退出后需要重新登录。本机已下载的聊天记录会保留。</string>
     <string name="settings_password_changed_toast">✓ 密码已修改，其它设备已下线</string>
     <string name="settings_row_animations">动画与性能</string>
     <string name="settings_row_data_storage">数据与存储</string>
@@ -1420,6 +1577,7 @@
     <string name="settings_title">设置</string>
     <string name="sidebar_tab_chats">消息</string>
     <string name="sidebar_tab_unread_aria">有未读消息</string>
+    <string name="storage_clear_cache_failed">清除缓存失败</string>
     <string name="storage_clear_confirm_message_empty">暂无可清除的缓存。</string>
     <string name="storage_clear_confirm_message_with_size">将删除本机缓存的 %1$s 下载文件，云端保留可重新下载。</string>
     <string name="storage_clear_confirm_title">清除缓存</string>
@@ -1468,4 +1626,7 @@
     <string name="web_login_password_placeholder">≥ 6 位</string>
     <string name="web_login_title">IM Web 登录</string>
     <string name="web_login_username_placeholder">a-z、0-9、下划线，≥5 位</string>
+    <string name="webview_link_unopenable">打不开这个链接</string>
+    <string name="webview_no_app_for_link">没有能打开这个链接的应用</string>
+    <string name="webview_ssl_error">这个网页的安全证书有问题，已停止加载</string>
 </resources>

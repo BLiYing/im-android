@@ -20,8 +20,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -53,18 +55,22 @@ internal fun FriendPickerScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "取消", color = c.accent,
+                stringResource(R.string.common_cancel), color = c.accent,
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.width(64.dp).clickable(onClick = onCancel),
             )
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text("选择联系人", color = c.textPrimary, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.contact_card_picker_title),
+                    color = c.textPrimary,
+                    style = MaterialTheme.typography.titleMedium,
+                )
             }
             Box(Modifier.width(64.dp))
         }
         if (friends.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("还没有好友", color = c.textSecondary)
+                Text(stringResource(R.string.contact_card_picker_empty), color = c.textSecondary)
             }
             return@Column
         }

@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ErrCode
 
 /** 修改密码页的三个输入框。 */
@@ -28,11 +30,11 @@ object ChangePasswordRules {
     /** bcrypt 硬上限 72 **字节**（服务端 `len(newPassword) > 72` 回 100001，文案是英文）。 */
     const val MAX_BYTES = 72
 
-    const val TITLE = "修改密码"
-    const val FOOTER = "为保护账号安全，修改密码后你在其它设备上的登录会被自动下线，需用新密码重新登录；当前设备保持登录。"
-    const val HELPER = "新密码至少 6 位，与旧密码不同。"
-    const val SUCCESS_TOAST = "✓ 密码已修改，其它设备已下线"
-    const val FALLBACK = "修改密码失败，请稍后再试"
+    val TITLE: String get() = Str.s(R.string.settings_change_password)
+    val FOOTER: String get() = Str.s(R.string.password_footer_security_note)
+    val HELPER: String get() = Str.s(R.string.password_helper_min_length_hint)
+    val SUCCESS_TOAST: String get() = Str.s(R.string.password_success_toast)
+    val FALLBACK: String get() = Str.s(R.string.password_error_generic_failed)
 
     /**
      * 三个框都填了按钮才亮（**Web 口径，不是 iOS 的**）。iOS 要求本地校验全过才亮，
@@ -43,12 +45,12 @@ object ChangePasswordRules {
 
     /** 提交前的本地校验；null = 通过。先后顺序同 iOS `submitTapped`：长度 → 与旧相同 → 两次一致。 */
     fun validate(old: String, new: String, confirm: String): PasswordFeedback.Inline? = when {
-        old.isEmpty() -> PasswordFeedback.Inline("请输入旧密码", PasswordField.Old)
-        new.length < MIN_LENGTH -> PasswordFeedback.Inline("新密码至少 6 位", PasswordField.New)
+        old.isEmpty() -> PasswordFeedback.Inline(Str.s(R.string.password_error_empty_old), PasswordField.Old)
+        new.length < MIN_LENGTH -> PasswordFeedback.Inline(Str.s(R.string.password_error_min_length), PasswordField.New)
         new.toByteArray(Charsets.UTF_8).size > MAX_BYTES ->
-            PasswordFeedback.Inline("新密码太长（最多 72 个字节）", PasswordField.New)
-        new == old -> PasswordFeedback.Inline("新密码不能与旧密码相同", PasswordField.New)
-        confirm != new -> PasswordFeedback.Inline("两次输入不一致", PasswordField.Confirm)
+            PasswordFeedback.Inline(Str.s(R.string.password_error_too_long), PasswordField.New)
+        new == old -> PasswordFeedback.Inline(Str.s(R.string.password_error_same_as_old), PasswordField.New)
+        confirm != new -> PasswordFeedback.Inline(Str.s(R.string.password_error_mismatch), PasswordField.Confirm)
         else -> null
     }
 
@@ -59,10 +61,10 @@ object ChangePasswordRules {
      * 「密码强度不足」一支实际走不到（2026-09-11 对照服务端 `errcode.go` 发现，iOS 未改）。
      */
     fun feedbackFor(code: Int): PasswordFeedback? = when (code) {
-        ErrCode.WRONG_PASSWORD -> PasswordFeedback.Inline("旧密码错误", PasswordField.Old)
-        ErrCode.PARAM_INVALID -> PasswordFeedback.Inline("密码强度不足（至少 6 位）", PasswordField.New)
-        ErrCode.ACCOUNT_BANNED -> PasswordFeedback.Inline("账号已被封禁，无法修改密码", null)
-        ErrCode.TOKEN_INVALID, ErrCode.TOKEN_EXPIRED -> PasswordFeedback.Toast("会话已过期，请重新登录")
+        ErrCode.WRONG_PASSWORD -> PasswordFeedback.Inline(Str.s(R.string.password_error_wrong_old), PasswordField.Old)
+        ErrCode.PARAM_INVALID -> PasswordFeedback.Inline(Str.s(R.string.password_error_weak), PasswordField.New)
+        ErrCode.ACCOUNT_BANNED -> PasswordFeedback.Inline(Str.s(R.string.password_error_account_banned), null)
+        ErrCode.TOKEN_INVALID, ErrCode.TOKEN_EXPIRED -> PasswordFeedback.Toast(Str.s(R.string.password_error_session_expired_retry))
         else -> null
     }
 }

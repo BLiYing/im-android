@@ -22,8 +22,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMTopBar
@@ -44,24 +46,24 @@ fun NewFriendsScreen(
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        IMTopBar(title = "新的朋友", onLeft = onBack)
+        IMTopBar(title = stringResource(R.string.friend_requests_title), onLeft = onBack)
 
         if (pending.isEmpty() && requested.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("没有新的好友申请", color = c.textTertiary)
+                Text(stringResource(R.string.friend_requests_empty), color = c.textTertiary)
             }
             return@Column
         }
 
         LazyColumn(Modifier.fillMaxSize()) {
             if (pending.isNotEmpty()) {
-                item { Section("待我确认") }
+                item { Section(stringResource(R.string.friend_requests_incoming, pending.size)) }
                 items(pending, key = { "p${it.userId}" }) { f ->
                     RequestRow(f, showActions = true, onAccept = { onAccept(f) }, onReject = { onReject(f) })
                 }
             }
             if (requested.isNotEmpty()) {
-                item { Section("已发出") }
+                item { Section(stringResource(R.string.friend_requests_outgoing, requested.size)) }
                 items(requested, key = { "r${it.userId}" }) { f ->
                     RequestRow(f, showActions = false, onAccept = {}, onReject = {})
                 }
@@ -109,9 +111,9 @@ private fun RequestRow(
             Box(
                 Modifier.clip(RoundedCornerShape(14.dp)).background(c.accent)
                     .clickable { onAccept() }.padding(horizontal = 12.dp, vertical = 6.dp),
-            ) { Text("同意", color = c.onAccent, style = MaterialTheme.typography.bodyMedium) }
+            ) { Text(stringResource(R.string.common_agree), color = c.onAccent, style = MaterialTheme.typography.bodyMedium) }
             Spacer(Modifier.width(8.dp))
-            Text("拒绝", color = c.textTertiary, modifier = Modifier.clickable { onReject() },
+            Text(stringResource(R.string.common_reject), color = c.textTertiary, modifier = Modifier.clickable { onReject() },
                 style = MaterialTheme.typography.bodyMedium)
         }
     }

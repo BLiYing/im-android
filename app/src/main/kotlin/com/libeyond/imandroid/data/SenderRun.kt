@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import androidx.annotation.StringRes
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import java.text.BreakIterator
 
 /**
@@ -40,8 +43,14 @@ object SenderRun {
         return if (clusters.size <= max) name else clusters.take(max).joinToString("") + "…"
     }
 
-    /** 昵称旁的角色徽标。普通成员不画。 */
-    enum class Badge(val label: String) { Owner("群主"), Admin("管理员") }
+    /** 昵称旁的角色徽标。普通成员不画。`label` 惰性取值（[Str.s]），切语言不需要重建枚举实例。 */
+    enum class Badge(@StringRes private val labelRes: Int) {
+        Owner(R.string.group_role_owner),
+        Admin(R.string.group_role_admin),
+        ;
+
+        val label: String get() = Str.s(labelRes)
+    }
 
     /**
      * 角色取**本群成员表里的当前角色**，拿不到才退回消息上冻结的 `from_role`。

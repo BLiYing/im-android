@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /**
  * 应用内浏览器（`WebViewScreen`）的地址判据。对齐 iOS `openLink:`：只收 http/https，
  * 交给 `SFSafariViewController` 在 App 内打开。
@@ -74,6 +77,6 @@ object WebLinks {
      * 只说「检查网络」会让人对着好好的网络反复重试。
      */
     fun failureText(url: String): String =
-        if (isCleartext(url)) "网页加载失败。这是未加密的 http 网页，App 内可能不允许打开，可以用浏览器打开"
-        else "网页加载失败，请检查网络后重试"
+        if (isCleartext(url)) Str.s(R.string.chat_webview_load_failed_cleartext)
+        else Str.s(R.string.chat_webview_load_failed)
 }

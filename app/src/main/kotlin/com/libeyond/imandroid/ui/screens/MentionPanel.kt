@@ -20,10 +20,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.Mention
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -60,7 +62,7 @@ internal fun MentionPanel(
                 item(key = "@all") {
                     MentionRow(
                         title = Mention.ALL_LABEL,
-                        subtitle = "通知群里所有人",
+                        subtitle = stringResource(R.string.chat_mention_notify_all_subtitle),
                         seed = "",
                         avatarUrl = "",
                         badge = null,
@@ -76,8 +78,8 @@ internal fun MentionPanel(
                     seed = m.userId,
                     avatarUrl = m.avatarUrl,
                     badge = when {
-                        m.isOwner -> "群主"
-                        m.isAdmin -> "管理员"
+                        m.isOwner -> stringResource(R.string.group_role_owner)
+                        m.isAdmin -> stringResource(R.string.group_role_admin)
                         else -> null
                     },
                     onClick = { onPick(m.displayName, m.userId) },

@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,7 @@ import com.composables.icons.lucide.Ellipsis
 import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.MediaDownloader
 import com.libeyond.imandroid.data.MediaTimeline
 import com.libeyond.imandroid.data.MediaUrl
@@ -205,7 +207,7 @@ internal fun MediaViewerScreen(
                     if (item.poster.isNotBlank()) {
                         AsyncImage(
                             model = MediaUrl.absolute(item.poster, host, useTls),
-                            contentDescription = "视频封面",
+                            contentDescription = stringResource(R.string.chat_media_alt_video_cover),
                             contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -214,7 +216,7 @@ internal fun MediaViewerScreen(
             } else {
                 ZoomableImage(
                     model = sourceOf(item, localOf, host, useTls),
-                    contentDescription = "图片",
+                    contentDescription = stringResource(R.string.common_image),
                     // 磨砂占位：没下到本地的原图是现拉的，那几秒不能是纯黑
                     // （iOS `showThumbPlaceholder` 同）。没有 thumb 的老消息仍回落黑底。
                     placeholder = rememberFrostedPainter(item.thumb),
@@ -241,7 +243,7 @@ internal fun MediaViewerScreen(
             modifier = Modifier.fillMaxWidth().systemBarsPadding().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ViewerButton(Lucide.X, "关闭", onClose)
+            ViewerButton(Lucide.X, stringResource(R.string.common_close), onClose)
             // **标题在上、页码在下**，逐条对齐 iOS：`IMMediaPagerViewController` 用的是聊天页同款
             // `IMLiquidNavigationBar`，主标题＝会话名（17 semibold），副标题＝`i / N`（13 regular、次要灰），
             // 且 `_count <= 1` 时副标题为空串。本端此前只有一个居中的 `21/21`，没有标题
@@ -307,19 +309,19 @@ internal fun MediaViewerScreen(
             if (more.isNotEmpty()) {
                 // 菜单锚在「⋯」上，靠近屏幕下沿时 DropdownMenu 自己往上展开（iOS IMPopoverCard 同）
                 Box {
-                    ViewerButton(Lucide.Ellipsis, "更多") { moreOpen = true }
+                    ViewerButton(Lucide.Ellipsis, stringResource(R.string.common_more)) { moreOpen = true }
                     ViewerMoreMenu(
                         open = moreOpen,
                         // 内置「下载」排最前、**不关查看器**（iOS `showMoreSheet` 同）
                         items = listOf(
-                            SheetItem("下载", icon = Lucide.Download) { onSave(source, current.isVideo) },
+                            SheetItem(stringResource(R.string.common_download), icon = Lucide.Download) { onSave(source, current.isVideo) },
                         ) + more,
                         onDismiss = { moreOpen = false },
                     )
                 }
             }
-            if (onOpenGallery != null) ViewerButton(Lucide.LayoutGrid, "媒体", onOpenGallery)
-            ViewerButton(Lucide.Download, "保存到相册") { onSave(source, current.isVideo) }
+            if (onOpenGallery != null) ViewerButton(Lucide.LayoutGrid, stringResource(R.string.favorites_category_media), onOpenGallery)
+            ViewerButton(Lucide.Download, stringResource(R.string.qr_card_save_to_album)) { onSave(source, current.isVideo) }
         }
     }
 }

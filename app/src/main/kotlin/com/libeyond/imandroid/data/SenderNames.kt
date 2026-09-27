@@ -1,6 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.GroupMember
 
 /**
@@ -58,6 +60,6 @@ fun groupVoiceSenderNameOf(
     members: List<GroupMember>,
     localNames: Map<String, String>,
 ): (String) -> String = { uid ->
-    if (uid == myUid) "你自己"
+    if (uid == myUid) Str.s(R.string.chat_detail_you)
     else members.firstOrNull { it.userId == uid }?.displayName ?: localNames[uid].orEmpty()
 }

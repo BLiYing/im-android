@@ -7,43 +7,20 @@
 
 ## 当前焦点
 
-> **应用内多语言：搭基础设施 + 迁两个试点模块（语言设置页、登录页），复用 iOS 现有翻译（2026-09-27）**：
-> 接上一轮「im-rtc 2.1.0 通话 Kit 多语言」之后，这轮把本端应用自己的界面文案也接上了
-> `IMServer/docs/i18n/strings.json`（`scripts/i18n/targets.json` 的 Android 目标 `enabled` 已从 `false`
-> 翻正、跑生成器产出 `res/values(-en)/i18n_strings.xml`）。运行时切换靠**直接调平台
-> `LocaleManager.applicationLocales`**（`data/LanguageStore.kt` 的 `setPref()`/`init()` 里调，API 33+，
-> 本端 minSdk 26 故 <33 设备暂不支持免重启切换），不用像 iOS `IMLocalization` 那样手写 bundle 查表。
-> ⚠️ **真机踩坑记录（2026-09-27，Android 15/API 35 OPPO 机型实测才发现）**：一开始按 androidx 官方文档
-> 用的是 `AppCompatDelegate.setApplicationLocales`（配 `androidx.appcompat` 依赖 +
-> `AppLocalesMetadataHolderService`），编译、单测全过，但**真机上点了完全没反应**——`adb shell cmd
-> locale get-app-locales` 恒为空、调用本身不抛异常。改成直接调 `Context.getSystemService(LocaleManager
-> ::class.java).applicationLocales = ...` 后当场生效（同一台机器验证）。怀疑是本端全仓没有任何
-> `AppCompatActivity`（`MainActivity` 是 `ComponentActivity`）导致 `AppCompatDelegate` 内部拿不到有效
-> 引用，但没有去读 androidx 源码坐实，只确认了现象与解法。**已改用直连方案，`androidx.appcompat`
-> 依赖与相关 manifest service 已移除**（不必要的依赖，且不生效）。另外**必须**声明
-> `android:localeConfig="@xml/locales_config"` + `res/xml/locales_config.xml`——没有这个文件时
-> `LocaleManager` 的调用同样悄无声息地不生效，这是 Android 13+/targetSdk 34+ 的硬性要求。
-> **已在真机上完整走通全流程并截图确认**：「我」页语言行→语言设置页选 English→Activity 重建→
-> 「我」页与语言设置页文案变英文（含 `settings.language.current_system` 占位符渲染）；退出登录→
-> 登录页确认按钮/输入框标签/tab 全部变英文；免密登录（开发）登回同一账号验证会话数据无损；
-> 切回简体中文全部复原。**试点一**：语言设置页（`LanguageScreen.kt`/`MeScreen.kt` 语言行）直接复用刚好现成的
-> `settings.language.*` 键；`LanguageStore` 里手写的 `displayName()`/`currentLabel()` 挪到 UI 层
-> （`ui/screens/LanguageScreen.kt` 的 `languagePrefDisplayName()`/`languageCurrentLabel()`，因为要用
-> `@Composable` 的 `stringResource()`，`data/` 层不该依赖 Compose）。**试点二**：登录页
-> （`LoginScreen.kt` 的按钮/输入框标签、`LoginError.kt` 的错误文案）复用 `login.*`/`err.*` 键；
-> **刻意不复用**的两处都有明确理由——① 密码错误文案不改用共享表的 `err.200002`（"密码错误"，会暴露
-> "用户名对了只是密码错"），保留本端已有的用户名枚举防护措辞"用户名或密码错误"；② 登录页两个页签是
-> "登录/注册"（按操作分），与 iOS 的"密码登录/扫码登录"（按登录方式分）信息架构不同，不强行拉齐，
-> 新增了一个 Android 专属键 `login.tab_register`。另新增 Android 专属键
-> `settings.language.footer_call_only`（语言页脚注，因为本端还没做全量迁移，措辞与 iOS 的
-> `settings.language.footer` 不同义）。`LoginError.friendly()` 改吃注入的 `Strings` 接口而不是直接吃
-> `Context`——本仓 JVM 单测没接 Robolectric，真 `Context.getString` 在纯 JUnit 里会因为 `android.jar`
-> 是桩实现直接抛异常，`LoginErrorTest.kt` 已按新签名改写并核对文案表当前值。
-> `./scripts/test.sh` 全量 **891/891 绿**；`IMServer` 的 `node scripts/i18n/gen-i18n.mjs --check`
-> 与 `check-i18n.mjs`/`i18n.test.mjs` 全绿（新增的两个 Android 专属键按预期报"暂无端上引用" warn，
-> 不是 error）。**范围收窄**（用户已确认这轮只做这些）：其余 281 个含中文字面量的 `.kt` 文件仍未迁移，
-> 量级与 iOS 当年的 P2 相当，留作后续多轮任务；`check-i18n` 的 `sources` 漂移扫描也还没接 Android
-> （`R.string.foo_bar` 下划线转回点号键需要额外映射，留到全量迁移时做）。
+> **应用内多语言全量迁移 ✅（2026-09-27，真机 OPPO Android 15 实测中↔英通过）**：全 App 文案接上
+> `IMServer/docs/i18n/strings.json`（本轮新增 145 个键，优先复用 iOS/Web 译文；表现 1538 键）。
+> 取文案两条路：Compose 用 `stringResource`；非 Compose（`data/` 纯函数、回调、toast）用 **`i18n/Str`**
+> ——可插拔解析器，App 里跟随 `LanguageStore`，JVM 单测经 ServiceLoader 读 `values/` 简体中文，故既有中文断言原样成立。
+> 切换：API 33+ 平台 `LocaleManager`；**所有版本** `MainActivity.attachBaseContext` 按当前语言包 Context，
+> API 33 以下切换时自行 `recreate()`（原"<33 不能即时切换"的限制已消除）。`media-picker` 模块看不到 app 的 `R`，
+> 自带一份 `mp_*` 中英资源（手写，改时两份一起改）。`check-i18n.mjs` 已接 Android 源码扫描（`R.string.a_b` 反查回表键）。
+> 顺手修的真实 bug：引用块/输入栏回复条的类型图标与文件名判据原先比对本地化后的中文（`[图片]`），英文下会全部失效——
+> 改为只认原始快照 token（`[image]` 等 + 服务端预本地化的 `[聊天记录]`/`[个人名片]` + 存量中文）；
+> `replyPreviewOf` 改产出原始 token，与服务端冻结快照同一形态，显示时统一 `localizeReplySnapshot`。
+> `./scripts/test.sh` **896/896 绿**。真机看过：消息列表、通讯录、我、语言页、聊天页、聊天详情、通话界面。
+> **刻意保留中文（DEFERRED，同 iOS）**：会写进消息内容外发的（@全员 token `Mention.ALL_LABEL`、合并转发兜底标题
+> `SelectionActions.chatRecordTitle`、转发来源名/群成员 displayName 的"未命名用户"兜底）、sdk 传输层诊断
+> （上层 `userMessage()` 会整体替换，不到达屏幕）、开发期 UI（免密登录/服务器地址）、拼音分组表。
 
 > **通话记录：被叫侧 `cancel` 文案「未接来电」→「对方已取消」（三端 + 设计文档，2026-09-27，与用户讨论后拍板）**：
 > `cancel`（主叫主动撤回）跟真正错过（`no_answer`/`busy`/`offline`）不是一回事，只改这一种 reason 的措辞，其余三种
@@ -61,13 +38,10 @@
 
 ## 下一步
 
-0e. **应用内多语言全量迁移**（P2，接上面「基础设施 + 两个试点模块」）：按模块继续把剩下约 279 个含中文
-   字面量的 `.kt` 文件（`data/`/`ui/`/`ui/screens/`/`ui/components/` 为主）接上
-   `IMServer/docs/i18n/strings.json`——参照本轮 `LoginScreen.kt`/`LanguageScreen.kt` 的方法（语义对得上
-   就复用 iOS 现有键，对不上就在文案表新增 Android 专属键，注意甄别"文案不同但意思一样"（可复用）与
-   "本端信息架构本来就跟 iOS 不同"（不该强行拉齐）两种情况，尤其留意像 `err.200002` 那样看似能复用、
-   实则会改变安全语义的陷阱）。做完后把 `IMServer/scripts/i18n/targets.json` 的 `sources.android`
-   接上（需要一个下划线转点号的反查映射，`check-i18n.mjs` 才能扫描 Android 侧的键引用漂移）。
+0e. **多语言 P3（服务端结构化字段消费）**：群系统消息 `sys_event`/`sys_args`、系统通知、回复快照
+   `reply_snapshot_kind`/`_args`（PROTOCOL §4.3/§6.6）本端尚未消费，这几类仍显示服务端落库的中文
+   （iOS `IMSysEventFormatter`/Web `sysEventRender.ts` 已做，可照搬）。另：本轮新建键的英文由子代理拟写，
+   真机扫一遍各页英文措辞/长度溢出（尤其群管理、收藏、自动下载设置）。
 0d. **群资料页「成员」tab 缺搜索入口**（2026-09-24 用户报后调研发现，未改代码）：`GroupApi.members()`
    已支持 `q` 参数、服务端本就能分页搜索，复用 `MentionComposerState`/`RtcInviteProvider` 的调用模式
    即可实现；参照 iOS `IMGroupMemberSearchViewController`（搜索框 + 服务端分页 + 下拉加载更多）。

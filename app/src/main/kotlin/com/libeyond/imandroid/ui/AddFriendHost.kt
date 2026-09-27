@@ -7,11 +7,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.ApiException
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.ui.screens.UserSearchScreen
 import kotlinx.coroutines.launch
 
@@ -54,7 +56,7 @@ fun AddFriendHost(
                     results = client.contacts.search(query.trim())
                     searched = true
                 } catch (e: ApiException) {
-                    error = if (e.isTransport) "网络请求失败" else e.message
+                    error = if (e.isTransport) Str.s(R.string.net_error_generic) else e.message
                 } finally { searching = false }
             }
         },

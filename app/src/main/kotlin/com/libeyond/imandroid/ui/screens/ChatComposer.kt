@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.SendHorizontal
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 // 聊天页底部输入栏。从 ChatScreen 拆出（CODING_STYLE §7②）：那个文件贴着 600 行硬闸，
@@ -94,7 +96,7 @@ private fun ComposerBar(
         ) {
             Image(
                 imageVector = Lucide.Plus,
-                contentDescription = "更多",
+                contentDescription = stringResource(R.string.common_more),
                 modifier = Modifier.size(24.dp),
                 colorFilter = ColorFilter.tint(c.textSecondary),
             )
@@ -111,7 +113,7 @@ private fun ComposerBar(
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
             if (input.text.isEmpty()) {
-                Text("发送消息…", color = c.textTertiary, fontSize = 15.sp)
+                Text(stringResource(R.string.chat_input_placeholder), color = c.textTertiary, fontSize = 15.sp)
             }
             BasicTextField(
                 value = input,
@@ -132,7 +134,7 @@ private fun ComposerBar(
         ) {
             Image(
                 imageVector = Lucide.SendHorizontal,
-                contentDescription = "发送",
+                contentDescription = stringResource(R.string.common_send),
                 modifier = Modifier.size(20.dp),
                 colorFilter = ColorFilter.tint(c.onAccent),
             )

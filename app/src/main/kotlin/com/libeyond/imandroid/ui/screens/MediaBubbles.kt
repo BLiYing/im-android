@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -31,6 +32,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Mic
 import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DownloadLabels
 import com.libeyond.imandroid.data.DownloadPhase
 import com.libeyond.imandroid.data.MediaDisplaySize
@@ -163,7 +165,7 @@ private fun ImageContent(
     ) {
         AsyncImage(
             model = model,
-            contentDescription = "图片",
+            contentDescription = stringResource(R.string.common_image),
             contentScale = ContentScale.Crop,
             placeholder = frosted,
             error = frosted,
@@ -172,7 +174,10 @@ private fun ImageContent(
         )
         // 自己发的不画门控层——它表达的是"要不要下载"；**失效那一档除外**（见上）
         if (!ungated) {
-            MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText = null, expiredCaption = "图片已失效")
+            MediaGateOverlay(
+                gate.state, msg.fileSize ?: 0L, durationText = null,
+                expiredCaption = stringResource(R.string.media_image_expired),
+            )
         }
     }
 }
@@ -206,7 +211,7 @@ private fun VideoContent(
         if (!poster.isNullOrBlank()) {
             AsyncImage(
                 model = MediaUrl.absolute(poster, host, useTls),
-                contentDescription = "视频封面",
+                contentDescription = stringResource(R.string.chat_media_alt_video_cover),
                 contentScale = ContentScale.Crop,
                 // 封面还在下载 / 下不动时，先给内嵌缩略的磨砂版（M4-7）
                 placeholder = frosted,
@@ -227,7 +232,7 @@ private fun VideoContent(
         // 失效那一档仍走门控层，显示「视频已失效」
         if (!gate.ready && !ungated) {
             // 没下下来：时长并进左上角那块胶囊（「大小 · 时长」），不另画一块（iOS `renderGatedDownloadUI`）
-            MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText, expiredCaption = "视频已失效")
+            MediaGateOverlay(gate.state, msg.fileSize ?: 0L, durationText, expiredCaption = stringResource(R.string.media_video_expired))
             return@Box
         }
         // 与相册宫格的视频格同一枚角标（VideoPlayBadge），两处才不会各画各的
@@ -264,7 +269,7 @@ internal fun VoiceContent(durationMs: Long?, waveform: String?) {
         Box(
             modifier = Modifier.size(28.dp).clip(CircleShape).background(c.accentSoft),
             contentAlignment = Alignment.Center,
-        ) { Image(Lucide.Mic, "语音", Modifier.size(14.dp), colorFilter = ColorFilter.tint(c.accent)) }
+        ) { Image(Lucide.Mic, stringResource(R.string.favorites_category_voice), Modifier.size(14.dp), colorFilter = ColorFilter.tint(c.accent)) }
         Spacer(Modifier.width(8.dp))
         // 真波形：waveform(base64) → 0~1 柱高。缺字段时 Waveform 自己退化成等高条纹
         // （协议允许的合法状态，不是错误）。桶内取**最大值**不是平均——取平均会把波形抹平。
@@ -296,6 +301,7 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp) {
     val toast = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     toast.value?.let { com.libeyond.imandroid.ui.components.IMToast(it) { toast.value = null } }
     val name = MediaUrl.displayFileName(msg.content, msg.fileName.orEmpty())
+    val localMissingRetryText = stringResource(R.string.chat_file_local_missing_retry)
     Row(
         modifier = Modifier.width(rowWidth).padding(vertical = 2.dp)
             // **就绪就能点开**（对齐 iOS：文件行/气泡在 ready 态点一下就是打开它）；
@@ -307,7 +313,7 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp) {
                     toast.value = if (f == null) {
                         // 缓存被清了：退回"点一下开始下载"，别报错
                         gate.onTap()
-                        "文件已不在本地，正在重新下载"
+                        localMissingRetryText
                     } else {
                         com.libeyond.imandroid.ui.OpenFile.open(context, f, name)
                     }

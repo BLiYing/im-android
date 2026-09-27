@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.GroupInfo
 
 /**
@@ -53,11 +55,11 @@ object GroupSettings {
     /** 界面文案。**与 im-web `GroupManagePanel.tsx` 逐字一致**——同一个开关两端叫法不同，
      *  用户在两个端上看到的就是两套规则。 */
     fun label(key: Key): String = when (key) {
-        Key.JoinApproval -> "进群确认"
-        Key.PermInvite -> "仅管理员可邀请"
-        Key.PermEditInfo -> "仅管理员可改群资料"
-        Key.PermPin -> "仅管理员可置顶消息"
-        Key.HistoryVisible -> "新成员仅可见入群后历史"
+        Key.JoinApproval -> Str.s(R.string.group_manage_join_approval)
+        Key.PermInvite -> Str.s(R.string.group_manage_perm_invite)
+        Key.PermEditInfo -> Str.s(R.string.group_manage_perm_edit_info)
+        Key.PermPin -> Str.s(R.string.group_manage_perm_pin)
+        Key.HistoryVisible -> Str.s(R.string.group_manage_history_visible)
     }
 
     /** 「加入与发言」那一组；其余归「成员权限」。分组同 im-web。 */

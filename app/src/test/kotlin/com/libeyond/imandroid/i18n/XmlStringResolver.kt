@@ -10,6 +10,7 @@ import org.w3c.dom.Element
  * `src/main/res/values/` 下的 XML（默认语言 = 简体中文），所以既有测试里的中文断言原样成立。
  */
 class XmlStringResolver : StringResolver {
+    override val languageTag = "zh-Hans"
     private val strings = HashMap<String, String>()
     private val plurals = HashMap<String, Map<String, String>>()
     private val stringNames: Map<Int, String> = namesOf(R.string::class.java)

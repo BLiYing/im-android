@@ -15,7 +15,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 
@@ -38,24 +41,24 @@ internal fun GroupMoreConfirmDialog(
 ) {
     when (action) {
         DetailMoreAction.ClearHistory -> IMConfirmDialog(
-            title = "清空聊天记录？",
+            title = stringResource(R.string.chat_detail_clear_history_confirm_title),
             // **「仅清空本机」这半句不能省**：群聊里少了它，用户会以为自己替全群删了历史
-            message = "仅清空本机记录，不影响其他成员。",
-            confirmText = "清空",
+            message = stringResource(R.string.chat_detail_clear_history_message_group),
+            confirmText = stringResource(R.string.chat_clear_ok),
             onConfirm = onClearHistory,
             onDismiss = onDismiss,
         )
         DetailMoreAction.LeaveGroup -> IMConfirmDialog(
-            title = "退出「$groupName」？",
-            message = "退出后将不再接收此群消息。",
-            confirmText = "退出",
+            title = stringResource(R.string.chat_detail_leave_group_confirm_title, groupName),
+            message = stringResource(R.string.chat_detail_leave_group_message),
+            confirmText = stringResource(R.string.group_info_leave_confirm),
             onConfirm = onLeave,
             onDismiss = onDismiss,
         )
         DetailMoreAction.DissolveGroup -> IMConfirmDialog(
-            title = "删除并解散「$groupName」？",
-            message = "所有成员将被移出，聊天记录无法恢复，此操作不可撤销。",
-            confirmText = "删除",
+            title = stringResource(R.string.chat_detail_dissolve_confirm_title, groupName),
+            message = stringResource(R.string.chat_detail_dissolve_confirm_message),
+            confirmText = stringResource(R.string.common_delete),
             onConfirm = onDissolve,
             onDismiss = onDismiss,
         )
@@ -77,9 +80,9 @@ internal fun GroupTransferConfirmDialog(
 ) {
     member ?: return
     IMConfirmDialog(
-        title = "转让群组",
-        message = "转让给「${member.displayName}」后你将立即变为普通成员，且不可撤销。",
-        confirmText = "转让",
+        title = stringResource(R.string.group_manage_transfer_group),
+        message = stringResource(R.string.group_info_transfer_confirm_message, member.displayName),
+        confirmText = stringResource(R.string.group_transfer_owner_confirm),
         destructive = true,
         onDismiss = onDismiss,
         onConfirm = { onConfirm(member) },
@@ -101,7 +104,7 @@ internal fun GroupTextViewDialog(title: String, content: String, onDismiss: () -
                 Text(content)
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) } },
     )
 }
 
@@ -118,16 +121,16 @@ internal fun GroupInfoSettingsDialogs(
 ) {
     if (settings.editingMyNickname) {
         IMTextPrompt(
-            title = "我在本群的昵称", initial = myNickname, maxLen = 30,
-            hint = "留空即清除，显示你的全局昵称。",
+            title = stringResource(R.string.chat_detail_my_group_nickname), initial = myNickname, maxLen = 30,
+            hint = stringResource(R.string.group_info_my_nickname_hint),
             onDismiss = settings::dismissMyNicknameEditor,
             onConfirm = { v -> settings.dismissMyNicknameEditor(); onConfirmMyNickname(v) },
         )
     }
     if (settings.editingRemark) {
         IMTextPrompt(
-            title = "群备注", initial = settings.remark, maxLen = 30,
-            hint = "仅你自己可见，用于区分同名群聊，不会通知其他成员。",
+            title = stringResource(R.string.chat_detail_group_remark), initial = settings.remark, maxLen = 30,
+            hint = stringResource(R.string.group_info_remark_hint),
             onDismiss = settings::dismissRemarkEditor,
             onConfirm = { v -> settings.setRemark(v); settings.dismissRemarkEditor() },
         )
@@ -158,31 +161,33 @@ internal fun GroupManagePrompts(
     val g = info
     when (action) {
         GroupManageAction.EditName -> IMTextPrompt(
-            title = "群名称", initial = g.name, maxLen = 30,
+            title = stringResource(R.string.group_create_name_label), initial = g.name, maxLen = 30,
             onDismiss = { onDismiss() },
             onConfirm = { v ->
                 onDismiss()
                 // 改群资料是**整体替换**：只改名字也要把头像和简介原样带回去，
                 // 否则会把它们清空（PROTOCOL §11 明说整体替换）。
-                runManage("修改群名") { client.groups.updateInfo(convId, v, g.avatarUrl, g.intro) }
+                runManage(Str.s(R.string.group_info_rename_title)) { client.groups.updateInfo(convId, v, g.avatarUrl, g.intro) }
             },
         )
         GroupManageAction.EditIntro -> IMTextPrompt(
-            title = "群简介", initial = g.intro, maxLen = 200, multiline = true,
+            title = stringResource(R.string.group_text_intro), initial = g.intro, maxLen = 200, multiline = true,
             onDismiss = { onDismiss() },
             onConfirm = { v ->
                 onDismiss()
-                runManage("修改群简介") { client.groups.updateInfo(convId, g.name, g.avatarUrl, v) }
+                runManage(Str.s(R.string.group_info_edit_intro_label)) { client.groups.updateInfo(convId, g.name, g.avatarUrl, v) }
             },
         )
         GroupManageAction.EditAnnouncement -> IMTextPrompt(
-            title = "群公告", initial = g.announcement, maxLen = 500, multiline = true,
-            hint = "留空即撤下公告。发布会在群里落一条系统消息。",
-            clearActionText = "撤下公告",
+            title = stringResource(R.string.group_text_announcement), initial = g.announcement, maxLen = 500, multiline = true,
+            hint = stringResource(R.string.group_manage_announcement_hint),
+            clearActionText = stringResource(R.string.group_ops_announcement_retract),
             onDismiss = { onDismiss() },
             onConfirm = { v ->
                 onDismiss()
-                runManage(if (v.isBlank()) "撤下公告" else "发布公告") {
+                runManage(
+                    if (v.isBlank()) Str.s(R.string.group_ops_announcement_retract) else Str.s(R.string.group_manage_announcement_publish_label),
+                ) {
                     client.groups.setAnnouncement(convId, v)
                 }
             },
@@ -190,16 +195,17 @@ internal fun GroupManagePrompts(
         GroupManageAction.ToggleMuteAll -> {
             val on = GroupPermissions.isMuteActive(g.muteUntil)
             IMConfirmDialog(
-                title = if (on) "解除全员禁言？" else "开启全员禁言？",
-                message = if (on) "解除后所有成员都可以发言。"
-                else "开启后只有群主和管理员可以发言，直到你手动解除。",
-                confirmText = if (on) "解除" else "开启",
+                title = stringResource(if (on) R.string.group_manage_mute_all_off_confirm_title else R.string.group_manage_mute_all_on_confirm_title),
+                message = stringResource(
+                    if (on) R.string.group_manage_mute_all_off_confirm_message else R.string.group_manage_mute_all_on_confirm_message,
+                ),
+                confirmText = stringResource(if (on) R.string.group_manage_mute_all_off_confirm else R.string.group_manage_mute_all_on_confirm),
                 destructive = !on,
                 onDismiss = { onDismiss() },
                 onConfirm = {
                     onDismiss()
                     // -1 = 永久（协议口径），0 = 解除
-                    runManage(if (on) "解除全员禁言" else "开启全员禁言") {
+                    runManage(Str.s(if (on) R.string.group_manage_mute_all_off_label else R.string.group_manage_mute_all_on_label)) {
                         client.groups.setMuteAll(convId, if (on) 0L else -1L)
                     }
                 },

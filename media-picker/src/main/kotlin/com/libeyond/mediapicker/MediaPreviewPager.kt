@@ -1,5 +1,6 @@
 package com.libeyond.mediapicker
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,6 +55,8 @@ internal fun MediaPreviewPager(
 ) {
     if (assets.isEmpty()) return
     val s = LocalMediaPickerSkin.current
+    val limitMsg = stringResource(R.string.mp_limit, MediaPick.LIMIT)
+    val unreadableMsg = stringResource(R.string.mp_unreadable)
     val state = rememberPagerState(
         initialPage = startIndex.coerceIn(0, assets.lastIndex),
         pageCount = { assets.size },
@@ -81,7 +84,7 @@ internal fun MediaPreviewPager(
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text0("▶ ${MediaPick.durationLabel(a.durationMs)} · 预览不播放", Color.White, 13.sp)
+                        Text0(stringResource(R.string.mp_video_preview_note, MediaPick.durationLabel(a.durationMs)), Color.White, 13.sp)
                     }
                 }
             }
@@ -95,7 +98,7 @@ internal fun MediaPreviewPager(
                 .padding(horizontal = s.space3, vertical = s.space3),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text0("返回", s.accent, 17.sp, Modifier.width(64.dp).clickable(onClick = onClose))
+            Text0(stringResource(R.string.mp_back), s.accent, 17.sp, Modifier.width(64.dp).clickable(onClick = onClose))
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text0("${state.currentPage + 1}/${assets.size}", Color.White, 15.sp)
             }
@@ -106,9 +109,9 @@ internal fun MediaPreviewPager(
                     .background(if (index > 0) s.accent else Color(0x66FFFFFF))
                     .clickable {
                         if (index == 0 && selected.size >= MediaPick.LIMIT) {
-                            onToast("最多选 ${MediaPick.LIMIT} 个")
+                            onToast(limitMsg)
                         } else if (!MediaPick.selectable(current)) {
-                            onToast("这个文件读不出来")
+                            onToast(unreadableMsg)
                         } else {
                             onToggle(current)
                         }
@@ -146,7 +149,7 @@ internal fun MediaPreviewPager(
                         .padding(horizontal = s.space4),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text0(if (n > 0) "发送($n)" else "发送", s.onAccent, 15.sp, weight = FontWeight.Medium)
+                    Text0(if (n > 0) stringResource(R.string.mp_send_count, n) else stringResource(R.string.mp_send), s.onAccent, 15.sp, weight = FontWeight.Medium)
                 }
             }
         }
@@ -184,7 +187,7 @@ private fun PreviewOriginalToggle(
         }
         Spacer(Modifier.width(s.space1))
         Text0(
-            if (checked && enabled) "原图 (${MediaPick.sizeLabel(totalBytes)})" else "原图",
+            if (checked && enabled) stringResource(R.string.mp_original_size, MediaPick.sizeLabel(totalBytes)) else stringResource(R.string.mp_original),
             if (enabled) Color.White else Color(0x88FFFFFF),
             14.sp,
         )

@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /**
  * 「整会话问题」该问谁 —— 本地 / 服务端 / 本地但降级。
  *
@@ -43,10 +46,10 @@ object ChatSearch {
     const val LOCAL_PAGE_LIMIT = 500
 
     /** 降级提示文案 —— **与 im-web `DEGRADED_SEARCH_NOTICE` 逐字一致**（同一处境不给两副说辞）。 */
-    const val DEGRADED_SEARCH_NOTICE = "离线：仅搜索已下载的消息"
+    val DEGRADED_SEARCH_NOTICE: String get() = Str.s(R.string.conv_query_offline_search)
 
     /** 有词但一条都没命中。 */
-    const val NO_MATCH_LABEL = "无匹配"
+    val NO_MATCH_LABEL: String get() = Str.s(R.string.chat_search_no_match)
 
     /**
      * 还没输入关键词时的提示。
@@ -54,7 +57,7 @@ object ChatSearch {
      * **不能在这里显示「无匹配」**——什么都没搜就说"没有匹配"，说的是一件没发生过的事。
      * im-web 是干脆把整条导航条藏掉；本端那条底栏是接替输入栏的位置，藏了会跳，所以改成给一句提示。
      */
-    const val EMPTY_QUERY_LABEL = "输入关键词搜索本会话"
+    val EMPTY_QUERY_LABEL: String get() = Str.s(R.string.chat_search_empty_query_hint)
 
     /**
      * @param complete 本地这个会话齐不齐（见 [isLocalComplete]）
@@ -147,7 +150,7 @@ object ChatSearch {
     fun hitLabel(idx: Int, count: Int, truncated: Boolean, hasQuery: Boolean = true): String = when {
         !hasQuery -> EMPTY_QUERY_LABEL
         count <= 0 -> NO_MATCH_LABEL
-        else -> "${clampHitIndex(idx, count) + 1} / $count${if (truncated) "+" else ""}"
+        else -> Str.s(R.string.chat_search_hit_position, clampHitIndex(idx, count) + 1, count, if (truncated) "+" else "")
     }
 
     /** 默认停在**最新一条命中**（贴合"找刚才那条"的直觉，同 iOS/Web）。命中集按 conv_seq 升序。 */

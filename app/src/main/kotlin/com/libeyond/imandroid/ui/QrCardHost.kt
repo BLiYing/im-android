@@ -17,9 +17,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.core.content.ContextCompat
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.QrEncode
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.QrCard
 import com.libeyond.imandroid.sdk.api.UserCard
@@ -55,7 +58,7 @@ fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
     LaunchedEffect(Unit) {
         runCatchingCancellable { client.qr.myCard() }
             .onSuccess { card = it; error = "" }
-            .onFailure { error = it.userMessage("获取二维码失败") }
+            .onFailure { error = it.userMessage(Str.s(R.string.qr_card_fetch_failed)) }
     }
 
     // 展示页要给别人扫：临时拉满屏幕亮度，离开页面还原（对齐 iOS boostBrightness）。
@@ -77,7 +80,7 @@ fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
         val code = card?.codeString.orEmpty()
         val matrix = QrEncode.encode(code)
         if (matrix == null) {
-            toast = "二维码还没准备好"
+            toast = Str.s(R.string.qr_card_not_ready)
             return
         }
         scope.launch {
@@ -93,25 +96,25 @@ fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
     ) { granted ->
         if (!pendingSave) return@rememberLauncherForActivityResult
         pendingSave = false
-        if (granted) saveNow() else toast = "没有存储权限，无法保存到相册"
+        if (granted) saveNow() else toast = Str.s(R.string.media_storage_permission_denied_save)
     }
 
     QrCardScreen(
         card = card,
-        title = "我的二维码",
+        title = stringResource(R.string.settings_info_my_qr),
         displayName = me?.displayName.orEmpty().ifBlank { client.myPublicName() },
         subtitle = me?.handle.orEmpty(),
         avatarUrl = me?.avatarUrl.orEmpty(),
         seed = client.uid.orEmpty(),
         error = error,
-        hint = "扫描二维码，加我为朋友\n该码长期有效，重置后旧码立即失效",
+        hint = stringResource(R.string.qr_card_my_hint),
         onCopyLink = {
             val code = card?.codeString.orEmpty()
             if (code.isEmpty()) {
-                toast = "链接还没准备好"
+                toast = Str.s(R.string.qr_card_link_not_ready)
             } else {
                 clipboard.setText(AnnotatedString(code))
-                toast = "已复制链接"
+                toast = Str.s(R.string.common_copied_link)
             }
         },
         onSave = {
@@ -129,7 +132,7 @@ fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
             val code = card?.codeString.orEmpty()
             val matrix = QrEncode.encode(code)
             if (matrix == null) {
-                toast = "二维码还没准备好"
+                toast = Str.s(R.string.qr_card_not_ready)
             } else {
                 scope.launch {
                     // 出图 **和写文件** 都在 IO 上：shareImage 会压一张 PNG 落到 cacheDir，
@@ -148,15 +151,15 @@ fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
 
     if (confirmReset) {
         IMConfirmDialog(
-            title = "重置二维码？",
+            title = stringResource(R.string.qr_card_reset_confirm_title),
             // 重置不可撤销且**影响外部世界**（旧码可能已经发出去了），所以强制二次确认
-            message = "重置后旧二维码立即失效，已经把码发出去的人将无法通过它加你。",
-            confirmText = "确认重置",
+            message = stringResource(R.string.qr_card_reset_user_message),
+            confirmText = stringResource(R.string.qr_confirm_reset),
             onConfirm = {
                 scope.launch {
                     runCatchingCancellable { client.qr.resetMyCard() }
-                        .onSuccess { card = it; error = ""; toast = "已重置，旧二维码已失效" }
-                        .onFailure { toast = it.userMessage("重置失败") }
+                        .onSuccess { card = it; error = ""; toast = Str.s(R.string.qr_card_reset_done) }
+                        .onFailure { toast = it.userMessage(Str.s(R.string.qr_card_reset_failed)) }
                 }
             },
             onDismiss = { confirmReset = false },

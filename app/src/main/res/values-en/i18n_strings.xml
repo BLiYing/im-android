@@ -60,6 +60,7 @@
     <string name="blocked_empty_subtitle">People you block from Contacts or a chat will show up here.</string>
     <string name="blocked_empty_title">No blocked users</string>
     <string name="blocked_hint">Blocked users can’t message you or see your profile.</string>
+    <string name="blocked_load_failed">Failed to load blocked users</string>
     <string name="blocked_title">Blocked users</string>
     <string name="blocked_unblock">Unblock</string>
     <string name="blocked_unblock_failed">Couldn’t unblock: %1$s</string>
@@ -86,12 +87,18 @@
     <string name="call_record_tail_duration">Duration %1$s</string>
     <string name="call_record_tail_ended">Ended</string>
     <string name="call_record_tail_no_answer">No answer</string>
+    <string name="call_record_unavailable">[Voice/video call] Unable to display</string>
     <string name="call_record_unsupported">[Voice/video call] Update the app to view it</string>
     <string name="call_record_who_peer">The other party</string>
     <string name="call_record_who_self">You</string>
+    <string name="card_contact_unavailable">[Contact card] Unable to display</string>
+    <string name="card_record_unavailable">[Chat history] Unable to display</string>
+    <string name="chat_archive_delete_failed_retry">Delete failed, please retry</string>
+    <string name="chat_attach_audio_video_unimplemented">Voice/video calling isn\'t available yet</string>
     <string name="chat_attach_av">Audio/Video</string>
     <string name="chat_attach_camera">Camera</string>
     <string name="chat_attach_contact_card">Contact card</string>
+    <string name="chat_attach_friends_load_failed">Couldn\'t load contacts</string>
     <string name="chat_attach_photo">Photos</string>
     <string name="chat_attach_title">Attach</string>
     <string name="chat_banner_all_pinned">All pinned messages</string>
@@ -106,6 +113,7 @@
     <string name="chat_banner_pinned">Pinned message</string>
     <string name="chat_banner_unpin_current">Unpin this message</string>
     <string name="chat_block_hint">You\'ve blocked this person. Messages from them will be rejected.</string>
+    <string name="chat_bubble_forward_from">Forwarded from %1$s</string>
     <string name="chat_clear_confirm">Clear chat history? All messages in this chat will be deleted from this device. This can’t be undone.</string>
     <string name="chat_clear_done">Chat history cleared</string>
     <string name="chat_clear_ok">Clear</string>
@@ -115,6 +123,7 @@
     </plurals>
     <string name="chat_detail_a11y_title">Chat details</string>
     <string name="chat_detail_a11y_with_name">%1$s\'s chat details</string>
+    <string name="chat_detail_add_friend_failed">Failed to send friend request</string>
     <string name="chat_detail_block_confirm_message">You won\'t receive messages from them anymore.</string>
     <string name="chat_detail_block_confirm_title">Block \"%1$s\"?</string>
     <string name="chat_detail_clear_history">Clear chat history</string>
@@ -187,8 +196,17 @@
     <string name="chat_error_invalid_uid">Enter a valid uid</string>
     <string name="chat_error_translate_failed">Translation failed: %1$s</string>
     <string name="chat_favorite_failed_detail">Couldn\'t favorite: %1$s</string>
+    <string name="chat_favorite_partial">Saved %1$d of %2$d items (%3$d failed)</string>
     <string name="chat_favorite_success">Saved to favorites</string>
+    <plurals name="chat_favorite_success_count">
+        <item quantity="one">Saved %1$d item</item>
+        <item quantity="other">Saved %1$d items</item>
+    </plurals>
     <string name="chat_file_expired">File expired</string>
+    <string name="chat_file_local_missing_retry">The file is no longer on this device. Downloading it again.</string>
+    <string name="chat_file_no_app_to_open">No app can open this file</string>
+    <string name="chat_file_not_downloaded">File isn\'t downloaded yet — download it first</string>
+    <string name="chat_file_open_failed">Couldn\'t open the file</string>
     <string name="chat_file_paused_tap_resume">Paused. Click to resume.</string>
     <string name="chat_file_size_tap_download">%1$s · Click to download</string>
     <string name="chat_file_tap_pause">Click to pause</string>
@@ -205,6 +223,10 @@
         <item quantity="other">(%1$d items expired, not forwarded)</item>
     </plurals>
     <string name="chat_forward_merged_success">Merged and forwarded</string>
+    <plurals name="chat_forward_merged_success_count">
+        <item quantity="other">Forwarded to %1$d chats</item>
+    </plurals>
+    <string name="chat_forward_none_forwardable">None of the selected messages can be forwarded</string>
     <string name="chat_header_back">‹ Chats</string>
     <string name="chat_header_call">Call</string>
     <plurals name="chat_header_member_count">
@@ -219,7 +241,6 @@
     <string name="chat_header_video_call">Video call</string>
     <string name="chat_header_view_group_profile">View group info</string>
     <string name="chat_header_view_profile">View profile</string>
-    <string name="chat_header_voice_call">Voice call</string>
     <string name="chat_input_disabled_mute_all">Everyone is muted in this group</string>
     <string name="chat_input_disabled_muted">You’ve been muted by an admin</string>
     <string name="chat_input_disabled_system">You can’t reply in this chat</string>
@@ -235,8 +256,10 @@
     <string name="chat_media_camera_permission_denied">Please allow camera access in Settings</string>
     <string name="chat_media_camera_unsupported">This device doesn\'t support camera capture</string>
     <string name="chat_media_cancel_send_confirm">Cancel sending this message?</string>
+    <string name="chat_media_contact_card_incomplete">This contact card is incomplete</string>
     <string name="chat_media_continue_send">Continue sending</string>
     <string name="chat_media_download_failed_retry">Download failed, please retry</string>
+    <string name="chat_media_downloading">Downloading…</string>
     <string name="chat_media_downloading_progress">Downloading %1$d%%</string>
     <string name="chat_media_file_expired_cant_save">This file has expired and can\'t be saved</string>
     <string name="chat_media_file_read_failed">Failed to read the file</string>
@@ -258,6 +281,7 @@
     <string name="chat_media_stage_failed">Failed to stage the file locally, please retry</string>
     <string name="chat_media_switched_to_original">Switched to the original video</string>
     <string name="chat_media_video_read_failed">Failed to read the recorded video</string>
+    <string name="chat_media_video_unplayable">This video can\'t be played</string>
     <string name="chat_media_view_original">View original video</string>
     <string name="chat_media_view_original_sized">View original video %1$s</string>
     <string name="chat_media_voice_hint">Press and hold the voice button to talk</string>
@@ -266,6 +290,7 @@
         <item quantity="one">  Notify %1$d person</item>
         <item quantity="other">  Notify %1$d people</item>
     </plurals>
+    <string name="chat_mention_notify_all_subtitle">Notify everyone in the group</string>
     <string name="chat_mention_remark_tail">  Note: %1$s</string>
     <string name="chat_mention_title">Mention who</string>
     <string name="chat_menu_delete_conversation">Delete chat</string>
@@ -297,6 +322,7 @@
     <string name="chat_msg_menu_transcribe_cancel">Cancel transcription</string>
     <string name="chat_msg_menu_translate">Translate</string>
     <string name="chat_msg_menu_unpin">Unpin</string>
+    <string name="chat_paste_limit_exceeded">You can paste up to %1$d images at once; the rest weren\'t kept</string>
     <string name="chat_paste_pending_image_alt">Image to send</string>
     <string name="chat_quote_original_fallback">Original message</string>
     <string name="chat_reader_copy">Copy full text</string>
@@ -304,8 +330,10 @@
     <string name="chat_reader_font_smaller">Smaller text</string>
     <string name="chat_reader_title">Full text · %1$s</string>
     <string name="chat_reply_cancel">Cancel reply</string>
+    <string name="chat_reply_cancel_a11y">Cancel reply</string>
     <string name="chat_reply_header">Reply to %1$s</string>
     <string name="chat_reply_self">yourself</string>
+    <string name="chat_reply_title_fallback">Reply</string>
     <string name="chat_reply_who">Reply to %1$s</string>
     <plurals name="chat_report_multi_title">
         <item quantity="one">Report %2$d message from %1$s</item>
@@ -313,10 +341,13 @@
     </plurals>
     <string name="chat_report_single_title">Report this message</string>
     <string name="chat_resend_content_lost">This message\'s content is missing and can\'t be resent</string>
+    <string name="chat_resend_upload_incomplete">Upload was interrupted. Please send it again.</string>
     <string name="chat_search_by_date">By date</string>
     <string name="chat_search_by_member">From a member</string>
     <string name="chat_search_calendar_month_label">%2$s %1$s</string>
     <string name="chat_search_clear_sender">Clear sender</string>
+    <string name="chat_search_date_jump_confirm">Jump</string>
+    <string name="chat_search_date_jump_dialog_title">Jump to date</string>
     <string name="chat_search_day_jump_nearest">No messages on %1$s. Jumped to the nearest day, %2$s.</string>
     <string name="chat_search_day_no_messages">No messages on or after %1$s</string>
     <string name="chat_search_day_no_messages_after">No messages on or after this date</string>
@@ -330,6 +361,7 @@
     <string name="chat_search_dow_tue">Tu</string>
     <string name="chat_search_dow_wed">We</string>
     <string name="chat_search_earliest">Earliest</string>
+    <string name="chat_search_empty_query_hint">Type to search this chat</string>
     <string name="chat_search_from_prefix">From:</string>
     <string name="chat_search_from_token">From: %1$s</string>
     <string name="chat_search_hit_position">%1$d of %2$d%3$s</string>
@@ -350,11 +382,25 @@
     <string name="chat_search_prev_month">Previous month</string>
     <string name="chat_search_today_jump_nearest">No messages today. Jumped to %1$s.</string>
     <string name="chat_search_today_no_messages_jumped_latest">No messages today — jumped to the most recent one</string>
+    <string name="chat_select_delete_confirm_message">Only deletes on this device; other devices and the other person can still see it.</string>
+    <plurals name="chat_select_delete_confirm_title">
+        <item quantity="other">Delete %1$d messages</item>
+    </plurals>
+    <plurals name="chat_select_delete_done">
+        <item quantity="other">Deleted %1$d</item>
+    </plurals>
+    <plurals name="chat_select_delete_failed_count">
+        <item quantity="other">%1$d failed to delete</item>
+    </plurals>
     <string name="chat_select_delete_for_me">Delete for me</string>
+    <plurals name="chat_select_forward_partial_skip">
+        <item quantity="other">%1$d couldn\'t be forwarded and were skipped</item>
+    </plurals>
     <plurals name="chat_select_max">
         <item quantity="one">You can select up to %1$d message</item>
         <item quantity="other">You can select up to %1$d messages</item>
     </plurals>
+    <string name="chat_select_none_favoritable">None of the selected messages can be added to favorites</string>
     <string name="chat_select_report_multi">You can only report messages from one person at a time</string>
     <string name="chat_select_report_own">You can\'t report your own messages</string>
     <plurals name="chat_select_selected">
@@ -377,6 +423,10 @@
     <string name="chat_typing">typing…</string>
     <string name="chat_typing_named">%1$s is typing…</string>
     <string name="chat_unread_divider">Unread messages</string>
+    <string name="chat_viewer_copy_failed_network">Copy failed, please check your network</string>
+    <string name="chat_viewer_copy_failed_too_large">Copy failed: image is too large</string>
+    <string name="chat_viewer_copy_no_url">This image has no location to copy</string>
+    <string name="chat_viewer_delete_unavailable">This message can\'t be deleted</string>
     <string name="chat_voice_cannot_preview_while_recording">Can\'t preview while recording</string>
     <string name="chat_voice_cannot_start">Can\'t start recording</string>
     <string name="chat_voice_content_empty">Voice message has no content</string>
@@ -414,10 +464,15 @@
     <string name="chat_voice_transcript_note">📝 Transcribed by the server. Results may not be fully accurate.</string>
     <string name="chat_voice_unplayed">Unplayed</string>
     <string name="chat_voice_unsupported">This browser can\'t record voice. Send it from the app instead.</string>
+    <string name="chat_webview_load_failed">Couldn\'t load the page. Check your network and try again.</string>
+    <string name="chat_webview_load_failed_cleartext">Couldn\'t load the page. This is an unencrypted http page that the app may not allow — try opening it in your browser instead.</string>
+    <string name="chat_window_gone_notice">That message is no longer here</string>
     <string name="chat_window_jump_offline">Offline — can\'t load this message</string>
     <string name="chat_window_jump_timeout">Loading timed out, please retry</string>
+    <string name="chat_window_locate_failed_notice">Couldn\'t locate that message. Please try again.</string>
     <string name="chat_window_no_older_messages">No earlier messages</string>
     <string name="common_action_failed">Action failed</string>
+    <string name="common_action_failed_code">Action failed (%1$d)</string>
     <string name="common_action_failed_detail">Action failed: %1$s</string>
     <string name="common_add">Add</string>
     <string name="common_add_friend">Add friend</string>
@@ -446,6 +501,7 @@
     <string name="common_emoji">Emoji</string>
     <string name="common_error_action_failed">Action failed: %1$s</string>
     <string name="common_error_not_logged_in">Not logged in</string>
+    <string name="common_error_network_unavailable_detail">%1$s: Network unavailable</string>
     <string name="common_everyone">Everyone</string>
     <string name="common_favorite">Favorite</string>
     <string name="common_file">File</string>
@@ -456,7 +512,9 @@
     <string name="common_image">Image</string>
     <string name="common_image_process_failed">Couldn’t process the image</string>
     <string name="common_invite">Invite</string>
+    <string name="common_link">Link</string>
     <string name="common_load_failed">Couldn\'t load</string>
+    <string name="common_load_more">Load more</string>
     <string name="common_load_more_results">Load more results</string>
     <string name="common_loading">Loading…</string>
     <string name="common_login_expired">Your session has expired. Log in again.</string>
@@ -465,12 +523,15 @@
     <string name="common_more">More</string>
     <string name="common_my_contacts">My contacts</string>
     <string name="common_next">Next</string>
+    <string name="common_no_app_for_link">No app found to open this link.</string>
+    <string name="common_no_selectable_people">No one to choose from</string>
     <string name="common_not_logged_in">Not logged in</string>
     <string name="common_notice">Notice</string>
     <string name="common_off">Off</string>
     <string name="common_offline">Offline</string>
     <string name="common_ok">OK</string>
     <string name="common_online">Online</string>
+    <string name="common_open_in_browser">Open in browser</string>
     <string name="common_pause">Pause</string>
     <plurals name="common_people_count">
         <item quantity="one">%1$d person</item>
@@ -483,6 +544,8 @@
     <string name="common_processing">Processing…</string>
     <string name="common_publish">Publish</string>
     <string name="common_pull_to_retry">Pull to retry</string>
+    <string name="common_refresh">Refresh</string>
+    <string name="common_refreshing">Refreshing</string>
     <string name="common_reject">Decline</string>
     <string name="common_remove">Remove</string>
     <string name="common_report">Report</string>
@@ -492,6 +555,7 @@
     <string name="common_save">Save</string>
     <string name="common_save_failed">Couldn\'t save</string>
     <string name="common_saved_messages">Saved messages</string>
+    <string name="common_saving">Saving…</string>
     <string name="common_search">Search</string>
     <string name="common_search_failed">Search failed</string>
     <string name="common_search_failed_detail">Search failed: %1$s</string>
@@ -509,11 +573,13 @@
     <string name="common_status">Status</string>
     <string name="common_stop">Stop</string>
     <string name="common_system_notice">System notifications</string>
+    <string name="common_tap_to_retry">Tap to retry</string>
     <string name="common_type">Type</string>
     <string name="common_unblock">Unblock</string>
     <string name="common_unknown">Unknown</string>
     <string name="common_unknown_device_kicked">a device</string>
     <string name="common_unknown_error">Unknown error</string>
+    <string name="common_unnamed_group">Unnamed group</string>
     <string name="common_unnamed_user">Unnamed user</string>
     <string name="common_unread">Unread</string>
     <string name="common_update_failed">Update failed</string>
@@ -545,12 +611,15 @@
     <string name="contact_card_row_shared_by">Shared by %1$s</string>
     <string name="contacts_action_block">Block</string>
     <string name="contacts_action_unblock">Unblock</string>
+    <string name="contacts_coming_soon">%1$s isn\'t available yet</string>
     <string name="contacts_empty">No friends yet. Tap + in the top right to find people.</string>
     <string name="contacts_entry_official_account">Official accounts</string>
     <string name="contacts_entry_service_account">Service accounts</string>
     <string name="contacts_friends_empty">No friends yet — search above to add one</string>
     <string name="contacts_friends_header_count">Friends (%1$d)</string>
     <string name="contacts_friends_header_filtered">Friends (%1$d/%2$d)</string>
+    <string name="contacts_friends_section_label">Friends</string>
+    <string name="contacts_groups_load_failed">Couldn\'t load the group list</string>
     <string name="contacts_row_handle_blocked">%1$s · Blocked</string>
     <string name="contacts_row_official_accounts">Official accounts</string>
     <string name="contacts_row_service_accounts">Service accounts</string>
@@ -581,6 +650,8 @@
     <string name="conv_list_recalled_member">%1$s recalled a message</string>
     <string name="conv_list_recalled_peer">The other person recalled a message</string>
     <string name="conv_list_recalled_self">You recalled a message</string>
+    <string name="conv_list_recalled_unknown">A message was recalled</string>
+    <string name="conv_list_sender_prefix">%1$s: %2$s</string>
     <string name="conv_locate_not_in_view">The original message isn’t in the current view</string>
     <string name="conv_locate_unavailable">Can’t locate this message</string>
     <string name="conv_menu_mark_read">Mark as read</string>
@@ -589,6 +660,7 @@
     <string name="conv_menu_new_group">New group chat</string>
     <string name="conv_menu_pin">Pin</string>
     <string name="conv_menu_scan">Scan</string>
+    <string name="conv_menu_scan_unavailable">Scan isn\'t available right now</string>
     <string name="conv_menu_unmute">Unmute</string>
     <string name="conv_menu_unpin">Unpin</string>
     <string name="conv_qr_join_approved">Your request to join has been approved. Go chat in the group!</string>
@@ -607,9 +679,12 @@
     <string name="detail_tab_empty_files">No files yet</string>
     <string name="detail_tab_empty_links">No links yet</string>
     <string name="detail_tab_empty_media">No media yet</string>
+    <string name="detail_tab_empty_members">No members yet</string>
     <string name="detail_tab_empty_voice">No voice messages yet</string>
     <string name="detail_tab_file_size_downloaded">%1$s · Downloaded</string>
     <string name="detail_tab_file_size_not_downloaded">%1$s · Not downloaded</string>
+    <string name="detail_tab_link_note">Links are scanned from messages already loaded on this device — the further back you scroll, the more complete this list gets. Tap one to open it in the app.</string>
+    <string name="detail_tab_voice_note">Playback isn\'t available here yet (long-press to locate in chat, forward, or delete).</string>
     <plurals name="device_active_days_ago">
         <item quantity="one">Active %1$d day ago</item>
         <item quantity="other">Active %1$d days ago</item>
@@ -623,6 +698,7 @@
         <item quantity="one">Active %1$d minute ago</item>
         <item quantity="other">Active %1$d minutes ago</item>
     </plurals>
+    <string name="device_default_name_android">Android device</string>
     <string name="device_detail_currently_online">Currently online</string>
     <string name="device_detail_fallback_name">This device</string>
     <string name="device_detail_last_active">Last active</string>
@@ -635,6 +711,7 @@
     <string name="device_detail_revoked_toast">Device logged out</string>
     <string name="device_detail_title">Device details</string>
     <string name="device_list_current_pill"> Current </string>
+    <string name="device_list_empty">No logged-in devices</string>
     <string name="device_list_revoke_all_action">Log out all other devices</string>
     <string name="device_list_revoke_all_confirm">Log out</string>
     <string name="device_list_revoke_all_footer">Once logged out, that device will need to log in again. If you don\'t recognize a device, log it out and change your password soon.</string>
@@ -646,6 +723,8 @@
     <string name="device_platform_desktop">Desktop</string>
     <string name="device_platform_unknown">Unknown device</string>
     <string name="device_platform_web">Web</string>
+    <string name="device_revoking">Logging out…</string>
+    <string name="device_row_current_tag">Current</string>
     <string name="download_network_cellular">Use cellular data</string>
     <string name="download_network_disabled">Disabled</string>
     <string name="download_network_summary">Video %1$s · File %2$s</string>
@@ -725,6 +804,11 @@
         <item quantity="other">You can select up to %1$d items</item>
     </plurals>
     <string name="favorites_pick_send_count">Send (%1$d)</string>
+    <plurals name="favorites_pick_sent_expired_suffix">
+        <item quantity="one">(%1$d item expired, not sent)</item>
+        <item quantity="other">(%1$d items expired, not sent)</item>
+    </plurals>
+    <string name="favorites_pick_sent_none_expired">The selected items have expired and can\'t be sent</string>
     <string name="favorites_pick_title">Send from Saved Messages</string>
     <string name="favorites_reader_title">Saved message</string>
     <string name="favorites_row_voice_fallback">Voice message</string>
@@ -763,8 +847,10 @@
     </plurals>
     <string name="friend_block_confirm">Block this contact? You won’t receive their messages anymore.</string>
     <string name="friend_block_done">Blocked</string>
+    <string name="friend_block_failed_toast">Couldn\'t block</string>
     <string name="friend_block_undone">Unblocked</string>
     <string name="friend_delete_confirm">Delete this friend? They’ll be removed from your contacts, but the chat history stays on this device.</string>
+    <string name="friend_delete_confirm_message">After deleting, you and %1$s will no longer be friends. Chat history is kept. This can\'t be undone.</string>
     <string name="friend_delete_done">Friend deleted</string>
     <string name="friend_menu_delete">Delete friend</string>
     <string name="friend_picker_default_empty">All your friends are already in this group</string>
@@ -779,8 +865,10 @@
     <string name="friend_request_became_friends">Added as a friend</string>
     <string name="friend_request_hello_label">Message (optional, visible to them)</string>
     <string name="friend_request_hello_placeholder">Say something so they know who you are</string>
+    <string name="friend_request_no_user_found">Couldn\'t find this user</string>
     <string name="friend_request_peer_fallback">this person</string>
     <string name="friend_request_placeholder">Say something so they know who you are</string>
+    <string name="friend_request_search_hint">Search matches an exact username or phone number to prevent bulk enumeration. Nicknames won\'t be found.</string>
     <string name="friend_request_send_failed">Couldn’t send the friend request</string>
     <string name="friend_request_send_to">Send to</string>
     <string name="friend_request_sending">Sending…</string>
@@ -836,6 +924,7 @@
     <string name="group_admin_list_revoke_confirm_message">Revoke admin status from %1$s\?</string>
     <string name="group_admin_list_revoke_done">Admin revoked</string>
     <string name="group_admin_picker_add_count">Add (%1$d/%2$d)</string>
+    <string name="group_admin_picker_empty">No regular members available to make admin</string>
     <string name="group_admin_picker_limit_note">You can add up to %1$d admins at a time.</string>
     <string name="group_admin_picker_limit_toast">You can add up to %1$d admins at a time</string>
     <string name="group_admin_picker_title">Add admins</string>
@@ -848,10 +937,12 @@
     <string name="group_bans_footer">Swipe left to unblock. Members are removed from the blocklist automatically once the cooldown ends.</string>
     <string name="group_bans_title">Blocklist (%1$d)</string>
     <string name="group_bans_unban">Unblock</string>
+    <string name="group_call_picker_title">Choose call members</string>
     <string name="group_create_add_more">+ Add</string>
     <string name="group_create_avatar_failed">Couldn’t upload the photo</string>
     <string name="group_create_avatar_slow">The photo is taking a while to upload. The group was created; you can set the photo later in group settings.</string>
     <string name="group_create_failed">Couldn’t create the group: %1$s</string>
+    <string name="group_create_limit_reached">This group has reached its member limit (%1$d). For more people, use a large group.</string>
     <string name="group_create_max_members">Up to %1$d members.</string>
     <string name="group_create_members_summary">Members · %1$d selected (%2$d including you)</string>
     <string name="group_create_min_friends">Select at least one friend</string>
@@ -860,13 +951,16 @@
     <string name="group_create_no_friends">No friends yet. Add some from Contacts first.</string>
     <string name="group_create_remove_member">Remove %1$s</string>
     <string name="group_create_select_friends">Select friends (%1$d selected)</string>
+    <string name="group_create_selected_count">%1$d/%2$d selected</string>
     <string name="group_create_set_avatar">Set group photo</string>
     <string name="group_create_title">Create group</string>
     <string name="group_error_not_admin">You’re no longer the group owner or an admin</string>
     <string name="group_event_dissolved">This group has been disbanded</string>
     <string name="group_event_join_request_new">New join request</string>
     <string name="group_event_removed">You’ve been removed from the group</string>
+    <string name="group_info_edit_intro_label">Edit group intro</string>
     <string name="group_info_invite_all_in">Everyone you selected is already in the group</string>
+    <string name="group_info_invite_friends">Invite friends to the group</string>
     <string name="group_info_invite_partial">Invited %1$d; the other %2$d were already in the group</string>
     <string name="group_info_leave">Leave group</string>
     <string name="group_info_leave_confirm">Leave</string>
@@ -874,35 +968,55 @@
     <string name="group_info_load_failed">Couldn’t load group info</string>
     <string name="group_info_members_failed">Couldn’t load members</string>
     <string name="group_info_members_title">Members (%1$d)</string>
+    <string name="group_info_my_nickname_hint">Leave empty to clear it and show your global nickname.</string>
     <string name="group_info_reinvite_blocked">This member was removed from the group and can’t be invited again for now</string>
+    <string name="group_info_remark_hint">Only visible to you, to tell apart chats with the same name. Other members won\'t be notified.</string>
     <string name="group_info_rename_hint">1–30 characters</string>
     <string name="group_info_rename_title">Rename group</string>
+    <string name="group_info_super_note">Large group · 3 features disabled: no typing indicator, no double-check read receipts, no member online status. At a scale of 20,000 members, these would generate a flood of useless pushes.</string>
     <string name="group_info_title">Group info</string>
+    <string name="group_info_transfer_confirm_message">After transferring to %1$s, you\'ll immediately become a regular member. This can\'t be undone.</string>
     <string name="group_list_empty">You haven\'t joined any groups yet</string>
     <string name="group_list_empty_hint">You haven’t joined any groups. Tap + in the top right to create one.</string>
     <string name="group_list_i_am_owner">You\'re the owner</string>
     <string name="group_list_owner">Owner: %1$s</string>
     <string name="group_list_title">Groups (%1$d)</string>
+    <string name="group_manage_admin_count_value">%1$d</string>
     <string name="group_manage_announcement_footer">All members will be notified when published, and it will stay pinned at the top of the chat.</string>
+    <string name="group_manage_announcement_hint">Leave empty to retract the announcement. Publishing posts a system message in the group.</string>
     <string name="group_manage_announcement_placeholder">Type the announcement</string>
     <string name="group_manage_announcement_publish_failed">Couldn\'t publish</string>
+    <string name="group_manage_announcement_publish_label">Publish announcement</string>
     <string name="group_manage_announcement_published">Published</string>
     <string name="group_manage_announcement_published_toast">Announcement published</string>
     <string name="group_manage_announcement_retracted_toast">Announcement retracted</string>
     <string name="group_manage_announcement_unpublished">Not published</string>
     <string name="group_manage_ban_count">%1$d people</string>
     <string name="group_manage_blacklist">Blacklist</string>
+    <string name="group_manage_edit_my_nickname">Edit group nickname</string>
     <string name="group_manage_history_note">When “New members only see history from when they joined” is on, new members can\'t see chat history from before they joined.</string>
     <string name="group_manage_history_visible">New members only see history from when they joined</string>
     <string name="group_manage_intro_empty">Not filled in</string>
     <string name="group_manage_intro_footer">The intro appears on the group info page and the join preview page.</string>
     <string name="group_manage_intro_label">Intro</string>
     <string name="group_manage_intro_placeholder">Describe this group</string>
+    <string name="group_manage_invite_members">Invite to group</string>
     <string name="group_manage_join_approval">Approve new members</string>
     <string name="group_manage_join_speak_footer">Approve new members: joining by QR code requires admin approval. Mute everyone: only the owner and admins can post.</string>
     <string name="group_manage_mute_all">Mute everyone</string>
+    <string name="group_manage_mute_all_off_confirm">Turn off</string>
+    <string name="group_manage_mute_all_off_confirm_message">Once turned off, all members can post.</string>
+    <string name="group_manage_mute_all_off_confirm_title">Turn off mute all?</string>
+    <string name="group_manage_mute_all_off_label">Turn off mute all</string>
     <string name="group_manage_mute_all_off_toast">Mute everyone turned off</string>
+    <string name="group_manage_mute_all_on_confirm">Turn on</string>
+    <string name="group_manage_mute_all_on_confirm_message">Once turned on, only the owner and admins can post until you turn it off.</string>
+    <string name="group_manage_mute_all_on_confirm_title">Turn on mute all?</string>
+    <string name="group_manage_mute_all_on_label">Turn on mute all</string>
     <string name="group_manage_mute_all_on_toast">Mute everyone turned on</string>
+    <string name="group_manage_op_failed">%1$s failed</string>
+    <string name="group_manage_op_failed_with_code">%1$s failed (%2$d)</string>
+    <string name="group_manage_op_succeeded">%1$s succeeded</string>
     <string name="group_manage_pending_count">%1$d pending</string>
     <string name="group_manage_pending_none">None</string>
     <string name="group_manage_perm_edit_info">Only admins can edit group info</string>
@@ -928,6 +1042,7 @@
     <string name="group_member_tab_label">Members</string>
     <string name="group_member_action_make_admin">Make admin</string>
     <string name="group_member_action_mute">Mute…</string>
+    <string name="group_member_action_mute_toggle">Mute</string>
     <string name="group_member_action_remove">Remove from group</string>
     <string name="group_member_action_remove_and_ban">Remove and block from rejoining</string>
     <string name="group_member_action_remove_and_ban_confirm_message">Remove %1$s and block them from rejoining?</string>
@@ -962,14 +1077,18 @@
     <string name="group_ops_remark_save_failed">Couldn\'t save the remark: %1$s</string>
     <string name="group_ops_revoke_admin_confirm">Revoke %1$s\'s admin role?</string>
     <string name="group_ops_revoke_admin_done">Admin role revoked</string>
+    <string name="group_ops_revoke_admin_failed">Failed to revoke admin</string>
     <string name="group_ops_transfer_confirm_message">Transfer ownership to %1$s\? You\'ll become a regular member after the transfer. This can\'t be undone.</string>
     <string name="group_ops_unban_done">Unbanned</string>
     <string name="group_ops_unban_failed">Couldn\'t unban: %1$s</string>
+    <string name="group_pick_no_other_members">No one else in this group yet</string>
     <string name="group_picker_no_match">No matching members</string>
     <string name="group_picker_no_others">No other members in this group yet</string>
     <string name="group_picker_search_failed">Search failed. Please try again.</string>
     <string name="group_picker_search_hint">Type to search group members</string>
     <string name="group_picker_search_placeholder">Search members</string>
+    <string name="group_qr_hint_code">Invite friends to scan the QR code to join this group.\nThe code is valid for 7 days; resetting it invalidates the old one.</string>
+    <string name="group_qr_hint_link">Copy the link to share with friends — scanning or tapping it joins this group.\nThe link is valid for 7 days; resetting it invalidates the old one.</string>
     <string name="group_role_admin">Admin</string>
     <string name="group_role_owner">Owner</string>
     <string name="group_text_announcement">Group announcement</string>
@@ -982,6 +1101,7 @@
     <string name="group_text_super_notice_2">2. Read receipts, typing indicators, and member online status are turned off.</string>
     <string name="group_text_super_notice_3">3. Members joining or leaving no longer post group messages (such as “X joined the group” or “A removed B from the group”).</string>
     <string name="group_text_super_notice_4">4. This is due to the group’s size, and it can’t be changed back to a regular group.</string>
+    <string name="group_text_unnamed">Unnamed group</string>
     <string name="group_transfer_owner_confirm">Transfer</string>
     <string name="group_transfer_owner_confirm_message_full">Transfer ownership to %1$s\?\nYou\'ll become a regular member immediately after the transfer. This can\'t be undone.</string>
     <string name="group_transfer_owner_done">Transferred to %1$s</string>
@@ -1014,19 +1134,23 @@
     <string name="login_error_host_required">Enter the server address</string>
     <string name="login_error_login_failed">Login failed</string>
     <string name="login_error_nickname_required">Enter a nickname (this is the name others will see)</string>
+    <string name="login_error_param_invalid">Invalid input</string>
     <string name="login_error_register_failed">Sign-up failed</string>
     <string name="login_error_register_login_failed">Signed up, but login failed</string>
     <string name="login_error_register_requirements">Username is required and the password must be at least 6 characters</string>
     <string name="login_error_username_required">Enter a username</string>
+    <string name="login_error_wrong_username_or_password">Incorrect username or password</string>
     <string name="login_host_placeholder">Server address host:port</string>
     <string name="login_nickname">Nickname</string>
     <string name="login_nickname_placeholder">Nickname (for sign-up, up to 32 characters)</string>
     <string name="login_password">Password</string>
     <string name="login_password_placeholder">Password (at least 6 characters)</string>
     <string name="login_reconnect_failed_confirm">%1$s. Tap OK to log in again, or Cancel to keep viewing your local chat history.</string>
+    <string name="login_register_format_hint">Username: 5–32 lowercase letters, digits, or underscores. Password: at least 6 characters.</string>
     <string name="login_registering">Signing up…</string>
     <string name="login_relogin">Log in again</string>
     <string name="login_restoring">Restoring your session…</string>
+    <string name="login_revoked_notice">You\'ve signed in elsewhere, or this device was removed.</string>
     <string name="login_session_revoked">This device has been signed out. Please log in again.</string>
     <string name="login_submitting">Logging in…</string>
     <string name="login_tab_password">Password login</string>
@@ -1038,13 +1162,16 @@
     <string name="media_download_a11y_failed">Download failed. Double-tap to retry</string>
     <string name="media_download_a11y_paused">Paused. Double-tap to resume</string>
     <string name="media_download_a11y_progress">Downloading %1$d%%</string>
+    <string name="media_download_a11y_resume">Resume download</string>
     <string name="media_download_a11y_start">Download</string>
     <string name="media_download_a11y_start_size">Download, %1$s</string>
     <string name="media_download_a11y_start_sized">Download, %1$s</string>
     <string name="media_download_failed">Download failed</string>
     <string name="media_download_failed_tap_retry">Download failed. Tap to retry</string>
+    <string name="media_download_paused">Paused</string>
     <string name="media_download_tap_to_download">Tap to download</string>
     <string name="media_download_tap_to_open">Tap to open</string>
+    <string name="media_file_open_needs_download">This file isn\'t downloaded yet. Download it first.</string>
     <string name="media_image_expired">Image expired</string>
     <plurals name="media_picker_selected_count">
         <item quantity="one">%1$d item selected</item>
@@ -1052,7 +1179,15 @@
     </plurals>
     <string name="media_picker_send_original">Send original</string>
     <string name="media_placeholder_expired">Expired</string>
+    <string name="media_save_failed_network_storage">Save failed — check your network and storage space</string>
+    <string name="media_save_failed_too_large">Save failed: file is too large</string>
+    <string name="media_save_gallery_not_writable">Save failed: gallery isn\'t writable</string>
+    <string name="media_save_no_url">This media has no URL</string>
+    <string name="media_save_write_failed">Save failed: couldn\'t write the file</string>
     <string name="media_settings_save_failed">Save failed: %1$s</string>
+    <string name="media_share_failed">Share failed</string>
+    <string name="media_share_qr_chooser_title">Share QR code</string>
+    <string name="media_storage_permission_denied_save">Storage permission denied — can\'t save to gallery</string>
     <string name="media_upload_compressing">Compressing %1$d%%</string>
     <string name="media_upload_preparing">Preparing…</string>
     <string name="media_upload_waiting">Waiting…</string>
@@ -1063,6 +1198,7 @@
     <string name="media_viewer_image_unsupported">This browser can\'t preview this image format (e.g. HEIC).</string>
     <string name="media_viewer_locate">Show in chat</string>
     <string name="media_viewer_next">Next (→)</string>
+    <string name="media_viewer_offline_partial_notice">No network. You can only browse what\'s already loaded.</string>
     <string name="media_viewer_prev">Previous (←)</string>
     <string name="media_viewer_video_expired">This video has expired and was removed from the server.</string>
     <string name="media_viewer_video_unsupported">This browser can\'t play this video format (e.g. HEVC).</string>
@@ -1146,6 +1282,7 @@
     <string name="net_fallback_transcribe_failed">Voice-to-text failed</string>
     <string name="net_fallback_transfer_failed">Couldn’t transfer ownership</string>
     <string name="net_fallback_translate_failed">Translation failed</string>
+    <string name="net_fallback_unblock_failed">Failed to unblock</string>
     <string name="net_fallback_unmute_failed">Couldn’t undo</string>
     <string name="net_fallback_user_resolve_failed">Couldn’t read the user profile</string>
     <string name="net_fallback_username_change">Couldn’t change the username</string>
@@ -1153,14 +1290,18 @@
     <string name="notify_body_default">[Message]</string>
     <string name="notify_body_missed_call">[Missed call]</string>
     <string name="password_error_account_banned">This account is banned and can\'t change its password</string>
+    <string name="password_error_empty_old">Enter your old password</string>
     <string name="password_error_generic_failed">Couldn\'t change the password. Please try again later.</string>
     <string name="password_error_min_length">New password must be at least 6 characters</string>
     <string name="password_error_mismatch">The two entries don\'t match</string>
     <string name="password_error_same_as_old">New password can\'t be the same as the old one</string>
     <string name="password_error_session_expired">Your login session has expired</string>
     <string name="password_error_session_expired_retry">Session expired. Please log in again.</string>
+    <string name="password_error_too_long">New password is too long (72 bytes max)</string>
     <string name="password_error_weak">Password is too weak (at least 6 characters)</string>
     <string name="password_error_wrong_old">Incorrect old password</string>
+    <string name="password_eye_hide">Hide password</string>
+    <string name="password_eye_show">Show password</string>
     <string name="password_field_confirm">Re-enter new password</string>
     <string name="password_field_new">New password (≥6 characters)</string>
     <string name="password_field_old">Old password</string>
@@ -1169,6 +1310,14 @@
     <string name="password_success_toast">✓ Password changed. Other devices have been logged out.</string>
     <string name="pinned_title">Pinned messages (%1$d)</string>
     <string name="pinned_unpin">Unpin</string>
+    <plurals name="presence_days_ago">
+        <item quantity="one">Last seen %1$d day ago</item>
+        <item quantity="other">Last seen %1$d days ago</item>
+    </plurals>
+    <plurals name="presence_hours_ago">
+        <item quantity="one">Last seen %1$d hour ago</item>
+        <item quantity="other">Last seen %1$d hours ago</item>
+    </plurals>
     <string name="presence_just_now">Last seen just now</string>
     <string name="presence_last_month">Online within a month</string>
     <string name="presence_last_week">Online within a week</string>
@@ -1192,18 +1341,22 @@
     <string name="preview_video_captioned">[Video] %1$s</string>
     <string name="preview_voice">[Voice]</string>
     <string name="preview_voice_duration">[Voice] %1$s</string>
+    <string name="profile_avatar_change_a11y">Change avatar</string>
     <string name="profile_avatar_change_hint">Tap avatar to change</string>
     <string name="profile_avatar_saved_hint">Avatar updated — remember to save</string>
     <string name="profile_field_tags_label">Tags</string>
     <string name="profile_field_tags_placeholder">Tags (space or comma separated)</string>
     <string name="profile_field_username_placeholder">a-z, 0-9, underscore, ≥5 characters</string>
     <string name="profile_nickname_required">Nickname can\'t be empty</string>
+    <string name="profile_nickname_too_long">Nickname can be up to %1$d characters</string>
     <string name="profile_not_logged_in_retry">Not logged in yet — please wait and try again</string>
     <string name="profile_readonly_phone_label">Phone</string>
     <string name="profile_save_failed">Save failed: %1$s</string>
     <string name="profile_saved_toast">Saved</string>
     <string name="profile_title_view">My profile</string>
     <string name="profile_username_change_failed">Couldn\'t update username: %1$s</string>
+    <string name="profile_username_invalid_format">Username can only contain lowercase letters, numbers, and underscores, 5–32 characters</string>
+    <string name="profile_username_required">Username can\'t be empty</string>
     <string name="ps_account_protection_footer">With a second factor enabled, your account stays safe even if your password leaks.</string>
     <string name="ps_chat_privacy_footer">New chats you start will have disappearing messages on by default.</string>
     <string name="ps_coming_soon_hint">Coming soon</string>
@@ -1361,9 +1514,11 @@
     <string name="qr_scan_cancel_pick">Cancel and pick another image</string>
     <string name="qr_scan_choose_image">Choose image</string>
     <string name="qr_scan_drop_title">Drop an image with a QR code here</string>
+    <string name="qr_scan_flashlight">Flashlight</string>
     <string name="qr_scan_frame_hint">Place the QR code in the frame to scan automatically</string>
     <string name="qr_scan_image_read_failed">Couldn’t read this image</string>
     <string name="qr_scan_label_group">Group QR code (this app)</string>
+    <string name="qr_scan_label_login">Login code (this app)</string>
     <string name="qr_scan_label_url">Link · %1$s</string>
     <string name="qr_scan_label_user">Contact code (this app)</string>
     <string name="qr_scan_multi_sheet_message">Choose the one to open</string>
@@ -1410,9 +1565,15 @@
     <string name="receipts_title">Read receipts</string>
     <string name="record_chat_history">Chat history</string>
     <string name="record_dirty_card">[Contact card]</string>
+    <string name="record_dirty_record">[Chat history]</string>
+    <string name="rtc_error_id_empty">%1$s is empty</string>
+    <string name="rtc_error_id_has_whitespace">%1$s contains whitespace: %2$s</string>
+    <string name="rtc_error_id_too_long">%1$s exceeds %2$d bytes</string>
     <string name="rtc_error_no_callees">Select members to call</string>
     <string name="rtc_error_not_started">The call service isn’t running. Please log in again.</string>
     <string name="rtc_invite_in_call">In a call</string>
+    <string name="rtc_kind_group_id">Group ID</string>
+    <string name="rtc_kind_peer_id">Peer ID</string>
     <string name="scene_kicked_logged_out">This account was logged out on another device. Please log in again.</string>
     <string name="search_global_placeholder">Search chats, contacts, and messages</string>
     <plurals name="search_result_member_count">
@@ -1438,12 +1599,12 @@
     <string name="settings_info_username">Username</string>
     <string name="settings_language_current_system">Follow system (%1$s)</string>
     <string name="settings_language_footer">Changing the language does not affect the content of messages already sent.</string>
-    <string name="settings_language_footer_call_only">Only the call screen supports English for now; the rest of the app remains in Chinese.</string>
     <string name="settings_language_option_en">English</string>
     <string name="settings_language_option_system">Follow system</string>
     <string name="settings_language_option_zh_hans">简体中文</string>
     <string name="settings_language_title">Language</string>
     <string name="settings_logout">Log out</string>
+    <string name="settings_logout_confirm_message">You\'ll need to log in again after signing out. Chat history already downloaded to this device will be kept.</string>
     <string name="settings_password_changed_toast">✓ Password changed. Other devices have been signed out.</string>
     <string name="settings_row_animations">Animations &amp; performance</string>
     <string name="settings_row_data_storage">Data &amp; storage</string>
@@ -1456,6 +1617,7 @@
     <string name="settings_title">Settings</string>
     <string name="sidebar_tab_chats">Messages</string>
     <string name="sidebar_tab_unread_aria">Unread messages</string>
+    <string name="storage_clear_cache_failed">Couldn\'t clear the cache</string>
     <string name="storage_clear_confirm_message_empty">There\'s no cache to clear.</string>
     <string name="storage_clear_confirm_message_with_size">This will delete %1$s of cached downloads on this device; cloud copies stay and can be re-downloaded.</string>
     <string name="storage_clear_confirm_title">Clear cache</string>
@@ -1504,4 +1666,7 @@
     <string name="web_login_password_placeholder">At least 6 characters</string>
     <string name="web_login_title">IM Web login</string>
     <string name="web_login_username_placeholder">a–z, 0–9, underscore; at least 5 characters</string>
+    <string name="webview_link_unopenable">Couldn\'t open this link</string>
+    <string name="webview_no_app_for_link">No app can open this link</string>
+    <string name="webview_ssl_error">This page\'s security certificate has a problem. Loading was stopped.</string>
 </resources>

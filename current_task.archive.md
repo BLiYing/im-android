@@ -1,3 +1,44 @@
+## 2026-09-27 应用内多语言：基础设施 + 两个试点（已被全量迁移取代）
+
+> **应用内多语言：搭基础设施 + 迁两个试点模块（语言设置页、登录页），复用 iOS 现有翻译（2026-09-27）**：
+> 接上一轮「im-rtc 2.1.0 通话 Kit 多语言」之后，这轮把本端应用自己的界面文案也接上了
+> `IMServer/docs/i18n/strings.json`（`scripts/i18n/targets.json` 的 Android 目标 `enabled` 已从 `false`
+> 翻正、跑生成器产出 `res/values(-en)/i18n_strings.xml`）。运行时切换靠**直接调平台
+> `LocaleManager.applicationLocales`**（`data/LanguageStore.kt` 的 `setPref()`/`init()` 里调，API 33+，
+> 本端 minSdk 26 故 <33 设备暂不支持免重启切换），不用像 iOS `IMLocalization` 那样手写 bundle 查表。
+> ⚠️ **真机踩坑记录（2026-09-27，Android 15/API 35 OPPO 机型实测才发现）**：一开始按 androidx 官方文档
+> 用的是 `AppCompatDelegate.setApplicationLocales`（配 `androidx.appcompat` 依赖 +
+> `AppLocalesMetadataHolderService`），编译、单测全过，但**真机上点了完全没反应**——`adb shell cmd
+> locale get-app-locales` 恒为空、调用本身不抛异常。改成直接调 `Context.getSystemService(LocaleManager
+> ::class.java).applicationLocales = ...` 后当场生效（同一台机器验证）。怀疑是本端全仓没有任何
+> `AppCompatActivity`（`MainActivity` 是 `ComponentActivity`）导致 `AppCompatDelegate` 内部拿不到有效
+> 引用，但没有去读 androidx 源码坐实，只确认了现象与解法。**已改用直连方案，`androidx.appcompat`
+> 依赖与相关 manifest service 已移除**（不必要的依赖，且不生效）。另外**必须**声明
+> `android:localeConfig="@xml/locales_config"` + `res/xml/locales_config.xml`——没有这个文件时
+> `LocaleManager` 的调用同样悄无声息地不生效，这是 Android 13+/targetSdk 34+ 的硬性要求。
+> **已在真机上完整走通全流程并截图确认**：「我」页语言行→语言设置页选 English→Activity 重建→
+> 「我」页与语言设置页文案变英文（含 `settings.language.current_system` 占位符渲染）；退出登录→
+> 登录页确认按钮/输入框标签/tab 全部变英文；免密登录（开发）登回同一账号验证会话数据无损；
+> 切回简体中文全部复原。**试点一**：语言设置页（`LanguageScreen.kt`/`MeScreen.kt` 语言行）直接复用刚好现成的
+> `settings.language.*` 键；`LanguageStore` 里手写的 `displayName()`/`currentLabel()` 挪到 UI 层
+> （`ui/screens/LanguageScreen.kt` 的 `languagePrefDisplayName()`/`languageCurrentLabel()`，因为要用
+> `@Composable` 的 `stringResource()`，`data/` 层不该依赖 Compose）。**试点二**：登录页
+> （`LoginScreen.kt` 的按钮/输入框标签、`LoginError.kt` 的错误文案）复用 `login.*`/`err.*` 键；
+> **刻意不复用**的两处都有明确理由——① 密码错误文案不改用共享表的 `err.200002`（"密码错误"，会暴露
+> "用户名对了只是密码错"），保留本端已有的用户名枚举防护措辞"用户名或密码错误"；② 登录页两个页签是
+> "登录/注册"（按操作分），与 iOS 的"密码登录/扫码登录"（按登录方式分）信息架构不同，不强行拉齐，
+> 新增了一个 Android 专属键 `login.tab_register`。另新增 Android 专属键
+> `settings.language.footer_call_only`（语言页脚注，因为本端还没做全量迁移，措辞与 iOS 的
+> `settings.language.footer` 不同义）。`LoginError.friendly()` 改吃注入的 `Strings` 接口而不是直接吃
+> `Context`——本仓 JVM 单测没接 Robolectric，真 `Context.getString` 在纯 JUnit 里会因为 `android.jar`
+> 是桩实现直接抛异常，`LoginErrorTest.kt` 已按新签名改写并核对文案表当前值。
+> `./scripts/test.sh` 全量 **891/891 绿**；`IMServer` 的 `node scripts/i18n/gen-i18n.mjs --check`
+> 与 `check-i18n.mjs`/`i18n.test.mjs` 全绿（新增的两个 Android 专属键按预期报"暂无端上引用" warn，
+> 不是 error）。**范围收窄**（用户已确认这轮只做这些）：其余 281 个含中文字面量的 `.kt` 文件仍未迁移，
+> 量级与 iOS 当年的 P2 相当，留作后续多轮任务；`check-i18n` 的 `sources` 漂移扫描也还没接 Android
+> （`R.string.foo_bar` 下划线转回点号键需要额外映射，留到全量迁移时做）。
+
+
 # current_task 归档（只读）
 
 > `current_task.md` 是**一屏活快照**，超出的历史焦点块移到这里，**不再回流**。

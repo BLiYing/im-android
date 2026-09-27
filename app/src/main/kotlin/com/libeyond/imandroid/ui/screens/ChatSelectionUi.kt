@@ -24,9 +24,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.libeyond.imandroid.R
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Forward
 import com.composables.icons.lucide.Lucide
@@ -106,13 +108,14 @@ internal fun SelectionBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        SelectionAction(Lucide.Forward, "转发", any, any, c.textPrimary, onForward)
+        SelectionAction(Lucide.Forward, stringResource(R.string.common_forward), any, any, c.textPrimary, onForward)
         SelectionAction(
-            Lucide.MessageSquareWarning, "举报", looksEnabled = canReport, clickable = any, tint = c.textPrimary,
+            Lucide.MessageSquareWarning, stringResource(R.string.common_report),
+            looksEnabled = canReport, clickable = any, tint = c.textPrimary,
             onClick = if (canReport) onReport else onReportBlocked,
         )
-        SelectionAction(Lucide.Bookmark, "收藏", any, any, c.textPrimary, onFavorite)
-        SelectionAction(Lucide.Trash2, "删除", any, any, c.danger, onDelete)
+        SelectionAction(Lucide.Bookmark, stringResource(R.string.common_favorite), any, any, c.textPrimary, onFavorite)
+        SelectionAction(Lucide.Trash2, stringResource(R.string.common_delete), any, any, c.danger, onDelete)
     }
 }
 

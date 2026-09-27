@@ -28,9 +28,11 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.ui.rememberFrostedPainter
@@ -244,7 +246,11 @@ private fun AlbumTileView(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，所以选完立刻有图、
             // 不用等上传完；自己发的那几格（gate 为 null）同样按地址直出。
             model = if (ungated) MediaUrl.absolute(m.url, host, useTls) else gate?.model,
-            contentDescription = if (m.contentType == ContentType.VIDEO) "视频" else "图片",
+            contentDescription = if (m.contentType == ContentType.VIDEO) {
+                stringResource(R.string.common_video)
+            } else {
+                stringResource(R.string.common_image)
+            },
             contentScale = ContentScale.Crop,
             // 磨砂占位（M4-7）：宫格逐格都要有，不然一屏九张全是空底
             placeholder = frosted,

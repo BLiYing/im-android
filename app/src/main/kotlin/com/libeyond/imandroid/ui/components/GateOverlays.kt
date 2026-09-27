@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,7 @@ import com.libeyond.imandroid.data.DownloadLabels.FileSlot
 import com.libeyond.imandroid.data.DownloadLabels.Glyph
 import com.libeyond.imandroid.data.DownloadPhase
 import com.libeyond.imandroid.data.DownloadState
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 // 未下载媒体的门控外观（2026-09-10 用户报 #5–#8，照 iOS 逐态对齐）。
@@ -80,14 +82,14 @@ fun BoxScope.MediaGateOverlay(
                 modifier = Modifier.size(MEDIA_RING_SIDE),
             )
         }
-        glyphVector(DownloadLabels.glyphOf(state.phase))?.let { (icon, label) ->
+        glyphVector(DownloadLabels.glyphOf(state.phase))?.let { (icon, labelRes) ->
             // iOS 用 `arrow.down.circle.fill` 这类实心圆符号：白圆、字形镂空。Lucide 没有实心版，
             // 用白圆 + 深色字形拼出同一个观感
             Box(
                 Modifier.size(44.dp).clip(CircleShape).background(c.onMedia.copy(alpha = 0.95f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Image(icon, label, Modifier.size(22.dp), colorFilter = ColorFilter.tint(c.overlayStrong))
+                Image(icon, stringResource(labelRes), Modifier.size(22.dp), colorFilter = ColorFilter.tint(c.overlayStrong))
             }
         }
     }
@@ -115,7 +117,7 @@ fun BoxScope.AlbumTileGate(state: DownloadState, sizeBytes: Long) {
     Box(Modifier.matchParentSize().background(c.overlay))
     if (state.phase == DownloadPhase.Expired) {
         Image(
-            Lucide.Ban, "已失效", Modifier.align(Alignment.Center).size(22.dp),
+            Lucide.Ban, stringResource(R.string.media_placeholder_expired), Modifier.align(Alignment.Center).size(22.dp),
             colorFilter = ColorFilter.tint(c.onMedia),
         )
         return
@@ -130,8 +132,8 @@ fun BoxScope.AlbumTileGate(state: DownloadState, sizeBytes: Long) {
                 modifier = Modifier.size(TILE_RING_SIDE),
             )
         }
-        glyphVector(DownloadLabels.glyphOf(state.phase))?.let { (icon, label) ->
-            Image(icon, label, Modifier.size(15.dp), colorFilter = ColorFilter.tint(c.onMedia))
+        glyphVector(DownloadLabels.glyphOf(state.phase))?.let { (icon, labelRes) ->
+            Image(icon, stringResource(labelRes), Modifier.size(15.dp), colorFilter = ColorFilter.tint(c.onMedia))
         }
     }
     DownloadLabels.tileCaption(state, sizeBytes)?.let { text ->
@@ -169,7 +171,7 @@ fun FileGateSlot(state: DownloadState, sizeBytes: Long, fileName: String, side: 
                 Modifier.size(ringRadius * 2).clip(CircleShape).background(c.accent),
                 contentAlignment = Alignment.Center,
             ) {
-                Image(Lucide.ArrowDown, "下载", Modifier.size(18.dp * k), colorFilter = ColorFilter.tint(c.onAccent))
+                Image(Lucide.ArrowDown, stringResource(R.string.common_download), Modifier.size(18.dp * k), colorFilter = ColorFilter.tint(c.onAccent))
             }
             FileSlot.RingPause, FileSlot.RingResume -> {
                 DownloadRing(
@@ -181,15 +183,16 @@ fun FileGateSlot(state: DownloadState, sizeBytes: Long, fileName: String, side: 
                 )
                 val pause = slot == FileSlot.RingPause
                 Image(
-                    if (pause) Lucide.Pause else Lucide.ArrowDown, if (pause) "暂停" else "继续下载",
+                    if (pause) Lucide.Pause else Lucide.ArrowDown,
+                    stringResource(if (pause) R.string.common_pause else R.string.media_download_a11y_resume),
                     Modifier.size(16.dp * k), colorFilter = ColorFilter.tint(c.accent),
                 )
             }
             FileSlot.Retry -> Image(
-                Lucide.RotateCw, "重试", Modifier.size(20.dp * k), colorFilter = ColorFilter.tint(c.danger),
+                Lucide.RotateCw, stringResource(R.string.common_retry), Modifier.size(20.dp * k), colorFilter = ColorFilter.tint(c.danger),
             )
             FileSlot.Expired -> Image(
-                Lucide.OctagonX, "文件已失效", Modifier.size(22.dp * k), colorFilter = ColorFilter.tint(c.danger),
+                Lucide.OctagonX, stringResource(R.string.chat_file_expired), Modifier.size(22.dp * k), colorFilter = ColorFilter.tint(c.danger),
             )
         }
     }
@@ -254,9 +257,9 @@ private fun DownloadRing(fraction: Float, radius: Dp, track: Color, progress: Co
     }
 }
 
-private fun glyphVector(g: Glyph): Pair<ImageVector, String>? = when (g) {
-    Glyph.Download -> Lucide.ArrowDown to "下载"
-    Glyph.Pause -> Lucide.Pause to "暂停"
-    Glyph.Retry -> Lucide.RotateCw to "重试"
+private fun glyphVector(g: Glyph): Pair<ImageVector, Int>? = when (g) {
+    Glyph.Download -> Lucide.ArrowDown to R.string.common_download
+    Glyph.Pause -> Lucide.Pause to R.string.common_pause
+    Glyph.Retry -> Lucide.RotateCw to R.string.common_retry
     Glyph.None -> null
 }

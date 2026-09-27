@@ -94,10 +94,11 @@ object MediaStoreSource {
             return emptyList()
         }
         if (total == 0) return emptyList()
-        val all = MediaBucket(MediaPick.ALL_BUCKET, "全部", total, globalCover)
+        val unnamed = context.getString(R.string.mp_unnamed)
+        val all = MediaBucket(MediaPick.ALL_BUCKET, context.getString(R.string.mp_all), total, globalCover)
         val rest = count.keys
             .sortedByDescending { newest[it] ?: 0L }
-            .map { MediaBucket(it, name[it]?.ifBlank { "未命名" } ?: "未命名", count[it] ?: 0, cover[it] ?: "") }
+            .map { MediaBucket(it, name[it]?.ifBlank { unnamed } ?: unnamed, count[it] ?: 0, cover[it] ?: "") }
         log.d("mediastore_buckets", "buckets" to rest.size, "total" to total)
         return listOf(all) + rest
     }

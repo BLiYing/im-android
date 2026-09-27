@@ -15,8 +15,10 @@ import com.imrtc.engine.webrtc.IMWebRTCAdapter
 import com.imrtc.uikit.IMCallKit
 import com.imrtc.uikit.IMCallKitConfig
 import com.imrtc.uikit.IMLocale
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.data.ResolvedLanguage
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 
 /**
@@ -140,7 +142,7 @@ object RtcCall {
     /** 单聊一对一通话。返回 null 表示已交给 Kit；否则是给用户看的原因。 */
     fun placeSingle(peerUid: String, video: Boolean): String? {
         unavailableReason()?.let { return it }
-        RtcIds.problem("对方 id", peerUid)?.let { return it }
+        RtcIds.problem(Str.s(R.string.rtc_kind_peer_id), peerUid)?.let { return it }
         profileResolver?.groupId = ""
         IMCallKit.placeCall(listOf(peerUid), mediaType(video), isGroup = false)
         return null
@@ -152,8 +154,8 @@ object RtcCall {
      */
     fun placeGroup(chatGroupId: String, calleeUids: List<String>): String? {
         unavailableReason()?.let { return it }
-        RtcIds.problem("群号", chatGroupId)?.let { return it }
-        if (calleeUids.isEmpty()) return "请选择要呼叫的成员"
+        RtcIds.problem(Str.s(R.string.rtc_kind_group_id), chatGroupId)?.let { return it }
+        if (calleeUids.isEmpty()) return Str.s(R.string.rtc_error_no_callees)
         profileResolver?.groupId = chatGroupId
         IMCallKit.placeCall(
             calleeUids, mediaType(video = true),
@@ -181,11 +183,12 @@ object RtcCall {
 
     private fun mediaType(video: Boolean) = if (video) "video" else "audio"
 
+    // 联调期专用诊断：local.properties 缺配置只会在开发机上出现，不译（同 IMLog 只给开发看的口径）。
     private fun unavailableReason(): String? = when {
         engine != null -> null
         !RtcConfig.fromBuild().isUsable ->
             "通话未配置：local.properties 缺 " + RtcConfig.fromBuild().missing.joinToString("、")
-        else -> "通话服务未启动（请重新登录）"
+        else -> Str.s(R.string.rtc_error_not_started)
     }
 
     /** 票的唯一来源。联调期本机签调试票；接了后台换票接口之后这里改成调接口。 */

@@ -4,6 +4,8 @@ import com.imrtc.uikit.IMInviteCandidate
 import com.imrtc.uikit.IMInviteCandidatesCallback
 import com.imrtc.uikit.IMInviteContext
 import com.imrtc.uikit.IMInviteMemberProvider
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.sdk.api.GroupMembersPage
@@ -47,7 +49,7 @@ class RtcInviteProvider(
                 fetch(ctx.chatGroupId, cursor.orEmpty(), query.trim())
             } catch (e: Exception) {
                 log.w("rtc_invite_candidates_failed", "err" to e.javaClass.simpleName)
-                callback.onError("加载失败")
+                callback.onError(Str.s(R.string.common_load_failed))
                 return@launch
             }
             sources.putMembers(ctx.chatGroupId, page.items.map(::memberRow))
@@ -77,7 +79,7 @@ class RtcInviteProvider(
                     avatarUrl = m.avatarUrl.takeIf { it.isNotBlank() }?.let(absolute)?.takeIf { it.isNotBlank() },
                     subtitle = m.handle.takeIf { it.isNotEmpty() },
                     selectable = !busy,
-                    unselectableReason = if (busy) "已在通话中" else null,
+                    unselectableReason = if (busy) Str.s(R.string.rtc_invite_in_call) else null,
                 )
             }
         }

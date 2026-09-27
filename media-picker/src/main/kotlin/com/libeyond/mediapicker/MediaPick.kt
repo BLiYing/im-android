@@ -66,11 +66,11 @@ object MediaPick {
      * 入参假定已按 dateAdded 倒序（MediaStore 查询就是这么排的），但这里**不依赖**该假定，
      * 桶内自己再取一次最大值——依赖调用方的排序是隐形契约，改查询语句就会悄悄坏掉。
      */
-    fun buckets(assets: List<MediaAsset>): List<MediaBucket> {
+    fun buckets(assets: List<MediaAsset>, allName: String, unnamedName: String): List<MediaBucket> {
         if (assets.isEmpty()) return emptyList()
         val all = MediaBucket(
             id = ALL_BUCKET,
-            name = "全部",
+            name = allName,
             count = assets.size,
             coverUri = assets.maxBy { it.dateAddedSec }.uri,
         )
@@ -79,7 +79,7 @@ object MediaPick {
                 val newest = items.maxBy { it.dateAddedSec }
                 MediaBucket(
                     id = id,
-                    name = newest.bucketName.ifBlank { "未命名" },
+                    name = newest.bucketName.ifBlank { unnamedName },
                     count = items.size,
                     coverUri = newest.uri,
                 )

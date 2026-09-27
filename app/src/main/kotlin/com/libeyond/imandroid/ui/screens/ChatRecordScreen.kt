@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -86,7 +88,7 @@ internal fun ChatRecordScreen(
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
             .systemBarsPadding(),
     ) {
-        IMTopBar(title = doc?.title ?: "聊天记录", onLeft = onBack)
+        IMTopBar(title = doc?.title ?: stringResource(R.string.record_chat_history), onLeft = onBack)
         val items = doc?.items.orEmpty()
         LazyColumn(Modifier.fillMaxSize()) {
             itemsIndexed(items) { i, item ->
@@ -202,7 +204,7 @@ private fun RecordBody(item: CardContent.RecordItem, host: String, useTls: Boole
                 if (!isVideo && item.content.isNotBlank()) {
                     AsyncImage(
                         model = MediaUrl.absolute(item.content, host, useTls),
-                        contentDescription = "图片",
+                        contentDescription = stringResource(R.string.common_image),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -212,7 +214,12 @@ private fun RecordBody(item: CardContent.RecordItem, host: String, useTls: Boole
                         Modifier.size(40.dp).clip(CircleShape).background(c.overlay),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Image(Lucide.Play, "播放", Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.onMedia))
+                        Image(
+                            Lucide.Play,
+                            stringResource(R.string.common_play),
+                            Modifier.size(18.dp),
+                            colorFilter = ColorFilter.tint(c.onMedia),
+                        )
                     }
                 }
             }
@@ -220,12 +227,16 @@ private fun RecordBody(item: CardContent.RecordItem, host: String, useTls: Boole
         }
         ContentType.FILE -> {
             val name = item.fileName.ifBlank { MediaUrl.displayFileName(item.content) }
+            // buildAnnotatedString 的 lambda 不是 @Composable，取兜底文案要在外层先算好
+            val fileFallback = stringResource(R.string.preview_file)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FileTypeIcon(name, size = 24.dp)
                 Spacer(Modifier.width(6.dp))
                 Text(
                     buildAnnotatedString {
-                        withStyle(SpanStyle(color = c.accent, fontSize = 16.sp)) { append(name.ifBlank { "[文件]" }) }
+                        withStyle(SpanStyle(color = c.accent, fontSize = 16.sp)) {
+                            append(name.ifBlank { fileFallback })
+                        }
                         if (item.fileSize > 0) {
                             withStyle(SpanStyle(color = c.textSecondary, fontSize = 13.sp)) {
                                 append(" · " + MediaUrl.formatSize(item.fileSize))
@@ -238,12 +249,12 @@ private fun RecordBody(item: CardContent.RecordItem, host: String, useTls: Boole
             if (item.caption.isNotBlank()) Text(item.caption, color = c.textPrimary, fontSize = 15.sp)
         }
         ContentType.CONTACT -> if (CardContent.parseContact(item.content) == null) {
-            Text("[个人名片]", color = c.textTertiary, fontSize = 16.sp)
+            Text(stringResource(R.string.record_dirty_card), color = c.textTertiary, fontSize = 16.sp)
         } else {
             RecordCardFrame { ContactCardContent(item.content, width = RECORD_CARD_INNER) }
         }
         ContentType.CHAT_RECORD -> if (CardContent.parseRecord(item.content) == null) {
-            Text("[聊天记录]", color = c.textTertiary, fontSize = 16.sp)
+            Text(stringResource(R.string.record_dirty_record), color = c.textTertiary, fontSize = 16.sp)
         } else {
             RecordCardFrame { ChatRecordCardContent(item.content, width = RECORD_CARD_INNER, previewLines = 2) }
         }

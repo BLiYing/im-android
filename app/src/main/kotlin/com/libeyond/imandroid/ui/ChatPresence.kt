@@ -8,6 +8,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.sendWatch
@@ -55,10 +57,11 @@ internal fun rememberChatSubtitle(client: IMClient, conv: ConversationEntity): S
         onDispose { client.messages.sendWatch(emptySet(), force = true) }
     }
 
+    val typingLabel = stringResource(R.string.chat_typing)
     val subtitle = remember(conv.convId, presenceMap, typingMap, tick) {
         val who = client.presence.typingIn(conv.convId, tick)
         when {
-            who != null -> "正在输入…"
+            who != null -> typingLabel
             conv.isGroup -> ""
             else -> {
                 val p = client.presence.snapshotOf(conv.peerUid)

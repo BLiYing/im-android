@@ -12,7 +12,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ProfileEdit
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.ui.components.IMToast
@@ -82,10 +84,10 @@ fun MyProfileHost(
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            toast = "上传中…"
+            toast = Str.s(R.string.common_uploading)
             val bytes = withContext(Dispatchers.IO) { AvatarPrepare.fromUri(context, uri) }
             if (bytes == null) {
-                toast = "图片处理失败，换一张试试"
+                toast = Str.s(R.string.common_image_process_failed)
                 return@launch
             }
             runCatchingCancellable { client.upload.uploadAvatar(bytes) }
@@ -93,9 +95,9 @@ fun MyProfileHost(
                     avatarUrl = it.url
                     // 只更新预览，**不立刻提交**——与 iOS 同：头像跟着「保存」一起生效，
                     // 用户选错了还能点取消退回去
-                    toast = "头像已更新，记得保存"
+                    toast = Str.s(R.string.profile_avatar_saved_hint)
                 }
-                .onFailure { toast = it.userMessage("头像上传失败") }
+                .onFailure { toast = it.userMessage(Str.s(R.string.net_error_avatar_upload_failed)) }
         }
     }
 
@@ -118,7 +120,7 @@ fun MyProfileHost(
                     phone = form.phone.trim(),
                     tags = ProfileEdit.tagsFrom(form.tags),
                 )
-            }.onFailure { error = it.userMessage("保存失败") }
+            }.onFailure { error = it.userMessage(Str.s(R.string.common_save_failed)) }
                 .getOrNull()
             if (updated == null) { saving = false; return@launch }
 
@@ -126,7 +128,7 @@ fun MyProfileHost(
                 runCatchingCancellable { client.changeUsername(form.username.trim()) }
                     .onFailure {
                         // 资料已存上，别谎称全盘失败；留在编辑态让用户换个名重试
-                        error = it.userMessage("用户名未能修改")
+                        error = it.userMessage(Str.s(R.string.net_fallback_username_change))
                         saving = false
                         return@launch
                     }
@@ -138,7 +140,7 @@ fun MyProfileHost(
             onChanged(fresh)
             saving = false
             editing = false
-            toast = "已保存"
+            toast = Str.s(R.string.profile_saved_toast)
         }
     }
 

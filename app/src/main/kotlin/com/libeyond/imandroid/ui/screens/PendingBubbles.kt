@@ -24,12 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.File
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.ui.components.TimeFormat
@@ -74,7 +76,7 @@ internal fun PendingMediaBubble(
                 // 本地 content:// URI，Coil 直接能加载（视频靠 coil-video 出首帧；
                 // 没注册解码器时是空白底，不崩）
                 model = localUri,
-                contentDescription = if (isVideo) "视频" else "图片",
+                contentDescription = if (isVideo) stringResource(R.string.common_video) else stringResource(R.string.common_image),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.width(AlbumLayout.WIDTH.dp).height(AlbumLayout.SINGLE_ROW_HEIGHT.dp),
             )
@@ -110,7 +112,7 @@ internal fun PendingMediaBubble(
                     // 渲染这类符号，会变成一个橙色方块，看着像坏了。VideoPlayer 里同样的坑。
                     androidx.compose.foundation.Image(
                         imageVector = Lucide.Play,
-                        contentDescription = "视频",
+                        contentDescription = stringResource(R.string.common_video),
                         modifier = Modifier.size(16.dp),
                         colorFilter = ColorFilter.tint(c.onMedia),
                     )

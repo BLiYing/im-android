@@ -23,8 +23,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.MemberProfile
 import com.libeyond.imandroid.sdk.api.UserCard
@@ -86,7 +88,7 @@ fun UserProfileScreen(
                 if (presenceLabel.isNotEmpty()) {
                     Text(
                         presenceLabel,
-                        color = if (presenceLabel == "在线") c.online else c.textSecondary,
+                        color = if (presenceLabel == stringResource(R.string.common_online)) c.online else c.textSecondary,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -101,14 +103,18 @@ fun UserProfileScreen(
                 .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
         ) {
             // 标识行为空时**整行隐藏**——不显示「用户名：未设置」，更不回退内部 ID
-            if (card.handle.isNotEmpty()) InfoRow("用户名", card.handle)
+            if (card.handle.isNotEmpty()) InfoRow(stringResource(R.string.settings_info_username), card.handle)
             if (isFriend) {
                 Divider()
-                InfoRow("备注名", card.remark.ifBlank { "未设置" }, onClick = onSetRemark)
+                InfoRow(
+                    stringResource(R.string.chat_detail_remark_name),
+                    card.remark.ifBlank { stringResource(R.string.settings_info_not_set) },
+                    onClick = onSetRemark,
+                )
             }
             if (card.tags.isNotEmpty()) {
                 Divider()
-                InfoRow("标签", card.tags.joinToString("、"))
+                InfoRow(stringResource(R.string.profile_field_tags_label), card.tags.joinToString("、"))
             }
         }
 
@@ -117,22 +123,22 @@ fun UserProfileScreen(
         Column(Modifier.padding(horizontal = d.space4)) {
             when {
                 isFriend -> {
-                    IMPrimaryButton("发消息", onSendMessage)
+                    IMPrimaryButton(stringResource(R.string.qr_action_send_message), onSendMessage)
                     Spacer(Modifier.height(d.cardGap))
-                    IMSecondaryButton("删除好友", onRemoveFriend)
+                    IMSecondaryButton(stringResource(R.string.friend_menu_delete), onRemoveFriend)
                 }
                 relation == "requested" -> Text(
-                    "好友申请已发出，等待对方确认",
+                    stringResource(R.string.err_200105),
                     color = c.textSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                relation == "pending" -> IMPrimaryButton("同意添加", onAddFriend)
-                relation == "blocked" -> Text("已拉黑", color = c.textTertiary)
+                relation == "pending" -> IMPrimaryButton(stringResource(R.string.common_agree), onAddFriend)
+                relation == "blocked" -> Text(stringResource(R.string.common_blocked), color = c.textTertiary)
                 // 看自己（从群成员列表点到自己头上）：不给任何关系操作。
                 // 给自己显示一个「加好友」按钮是本页最容易漏掉的一种荒谬状态。
                 relation == MemberProfile.RELATION_SELF -> Unit
                 // 陌生人：只给这一个入口
-                else -> IMPrimaryButton("加好友", onAddFriend)
+                else -> IMPrimaryButton(stringResource(R.string.contacts_search_action_add), onAddFriend)
             }
         }
         Spacer(Modifier.height(32.dp))

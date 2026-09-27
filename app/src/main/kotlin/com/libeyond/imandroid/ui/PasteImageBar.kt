@@ -35,7 +35,10 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.PasteImage
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.theme.IMTheme
 import com.libeyond.mediapicker.PickedMedia
@@ -118,7 +121,7 @@ internal fun PasteImages.consumeFrom(
         if (m == null) reject(f.uri) else { claimed += f; picked += m }
     }
     if (picked.isEmpty()) return value
-    if (add(picked)) onNotice("最多粘 ${PasteImage.MAX_PENDING} 张，多出来的没收下")
+    if (add(picked)) onNotice(Str.s(R.string.chat_paste_limit_exceeded, PasteImage.MAX_PENDING))
     val text = PasteImage.removing(value.text, claimed)
     return TextFieldValue(text, selection = androidx.compose.ui.text.TextRange(text.length))
 }
@@ -179,7 +182,7 @@ internal fun PasteImageBar(images: PasteImages) {
                 Box(Modifier.size(48.dp)) {
                     AsyncImage(
                         model = m.uri,
-                        contentDescription = "待发送的图片",
+                        contentDescription = stringResource(R.string.chat_paste_pending_image_alt),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp)).background(c.subtleFill),
                     )
@@ -192,7 +195,7 @@ internal fun PasteImageBar(images: PasteImages) {
                         contentAlignment = Alignment.Center,
                     ) {
                         Image(
-                            Lucide.X, "移除", Modifier.size(10.dp),
+                            Lucide.X, stringResource(R.string.common_remove), Modifier.size(10.dp),
                             colorFilter = ColorFilter.tint(Color.White),
                         )
                     }

@@ -15,7 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.QrMatrix
 import com.libeyond.imandroid.ui.theme.IMTheme
 import kotlin.math.floor
@@ -36,7 +38,7 @@ fun QrCodeView(matrix: QrMatrix?, size: Dp, modifier: Modifier = Modifier) {
     ) {
         if (matrix == null) {
             Text(
-                "二维码加载中…",
+                stringResource(R.string.qr_card_loading),
                 color = IMTheme.colors.textSecondary,
                 style = MaterialTheme.typography.bodySmall,
             )

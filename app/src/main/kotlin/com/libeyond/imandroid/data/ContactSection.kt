@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import androidx.annotation.StringRes
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import java.text.Collator
 import java.util.Locale
 
@@ -210,11 +213,14 @@ data class ContactGroup<T>(val key: String, val items: List<T>)
  *
  * 顺序即显示顺序。iOS 那侧数组第一个显示在最靠近屏幕边缘的一侧，本端从右往左排，语义一致。
  */
-enum class FriendAction(val label: String, val destructive: Boolean = false) {
+enum class FriendAction(@StringRes private val labelRes: Int, val destructive: Boolean = false) {
     /** 不可撤销 —— 本端**加了二次确认**，理由见 `docs/UI_PARITY_IOS.md` §4.5.1。 */
-    Delete("删除", destructive = true),
-    Block("拉黑"),
-    Unblock("解除拉黑"),
+    Delete(R.string.common_delete, destructive = true),
+    Block(R.string.common_block),
+    Unblock(R.string.common_unblock),
+    ;
+
+    val label: String get() = Str.s(labelRes)
 }
 
 object FriendActions {

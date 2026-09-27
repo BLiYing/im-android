@@ -23,8 +23,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Rect
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailAction
 import com.libeyond.imandroid.data.DetailMoreAction
@@ -117,7 +119,10 @@ internal fun ChatDetailScreen(
         // 会话媒体库的标题是**「图片与视频」**，不是会话名——逐字对齐 iOS
         // `IMConversationMediaViewController.viewDidLoad` 的 `self.title = @"图片与视频"`
         // （2026-09-17 用户报：本端显的是会话名）。
-        IMTopBar(title = if (galleryOnly) GALLERY_TITLE else "聊天信息", onLeft = onBack)
+        IMTopBar(
+            title = if (galleryOnly) GALLERY_TITLE else stringResource(R.string.chat_detail_title_user),
+            onLeft = onBack,
+        )
 
         // 页签内容是可滚动的长列表，头部/卡片作为它的头几项 —— 整页一条滚动轴，
         // 与 iOS 的 tableHeaderView + sections 同构（不是"上面固定、下面单独滚"）。
@@ -152,7 +157,9 @@ internal fun ChatDetailScreen(
                 Spacer(Modifier.height(d.cardGap))
                 Card {
                     Text(
-                        "这是官方通知会话，用于发送登录提醒、账号安全等系统事件。你不能回复此会话。",
+                        stringResource(R.string.chat_detail_system_notice_prefix) +
+                            stringResource(R.string.chat_detail_system_notice_bold) +
+                            stringResource(R.string.chat_detail_system_notice_suffix),
                         color = c.textSecondary,
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(horizontal = IMTheme.dimens.space4, vertical = 14.dp),
@@ -163,10 +170,14 @@ internal fun ChatDetailScreen(
                 // —— 信息（对齐 iOS 的 IMDetailSectionInfo：备注名 + 用户名）——
                 Spacer(Modifier.height(d.cardGap))
                 Card {
-                    Row2("备注名", remark.ifBlank { "未设置" }, onClick = onSetRemark)
+                    Row2(
+                        stringResource(R.string.chat_detail_remark_name),
+                        remark.ifBlank { stringResource(R.string.settings_info_not_set) },
+                        onClick = onSetRemark,
+                    )
                     if (handle.isNotEmpty()) {
                         Divider()
-                        Row2("用户名", handle)
+                        Row2(stringResource(R.string.settings_info_username), handle)
                     }
                 }
             }
@@ -176,9 +187,9 @@ internal fun ChatDetailScreen(
                 Card {
                     // 两项都走 PUT /conversations/{id}/settings，而那是**整体替换**三项，
                     // 所以改一项也要把另外两项原样带回（Host 里做）。
-                    SwitchRow("置顶聊天", pinned, onTogglePinned)
+                    SwitchRow(stringResource(R.string.chat_detail_pinned), pinned, onTogglePinned)
                     Divider()
-                    SwitchRow("消息免打扰", muted, onToggleMuted)
+                    SwitchRow(stringResource(R.string.chat_detail_muted), muted, onToggleMuted)
                     // 「查找聊天记录 / 清空聊天记录」**不在这张卡上**：iOS 把它们放在头部
                     // 操作排的「搜索」与「更多 → 清空聊天记录」里。摆两处等于同一件事有两个入口，
                     // 而其中一个还写着"还没做"。

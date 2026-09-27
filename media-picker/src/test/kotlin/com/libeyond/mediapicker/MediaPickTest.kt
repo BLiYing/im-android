@@ -81,7 +81,7 @@ class MediaPickTest {
     @Test
     fun `全部恒在首位且计数是总数`() {
         val list = listOf(asset(1, "b1"), asset(2, "b2"), asset(3, "b2"))
-        val buckets = MediaPick.buckets(list)
+        val buckets = MediaPick.buckets(list, "全部", "未命名")
         assertEquals(MediaPick.ALL_BUCKET, buckets.first().id)
         assertEquals("全部", buckets.first().name)
         assertEquals(3, buckets.first().count)
@@ -96,7 +96,7 @@ class MediaPickTest {
             asset(3, "shots", "Screenshots", date = 102),
             asset(4, "cam", "Camera", date = 999),
         )
-        val real = MediaPick.buckets(list).drop(1)
+        val real = MediaPick.buckets(list, "全部", "未命名").drop(1)
         assertEquals(listOf("Camera", "Screenshots"), real.map { it.name })
         assertEquals(3, real.last().count)
     }
@@ -108,28 +108,28 @@ class MediaPickTest {
             asset(2, "cam", date = 500),
             asset(3, "cam", date = 300),
         )
-        val cam = MediaPick.buckets(list).first { it.id == "cam" }
+        val cam = MediaPick.buckets(list, "全部", "未命名").first { it.id == "cam" }
         assertEquals("content://media/2", cam.coverUri)
         // 「全部」的封面同样是全局最新的那张，两处不能讲两个故事
-        assertEquals("content://media/2", MediaPick.buckets(list).first().coverUri)
+        assertEquals("content://media/2", MediaPick.buckets(list, "全部", "未命名").first().coverUri)
     }
 
     @Test
     fun `入参不按时间排序也要排对`() {
         // 不能依赖「调用方已经排好序」这种隐形契约——改一句 SQL 就会悄悄坏掉
         val list = listOf(asset(1, "cam", date = 100), asset(2, "cam", date = 900))
-        assertEquals("content://media/2", MediaPick.buckets(list).first { it.id == "cam" }.coverUri)
+        assertEquals("content://media/2", MediaPick.buckets(list, "全部", "未命名").first { it.id == "cam" }.coverUri)
     }
 
     @Test
     fun `桶名为空回落未命名`() {
-        val b = MediaPick.buckets(listOf(asset(1, "x", bucketName = "  "))).first { it.id == "x" }
+        val b = MediaPick.buckets(listOf(asset(1, "x", bucketName = "  ")), "全部", "未命名").first { it.id == "x" }
         assertEquals("未命名", b.name)
     }
 
     @Test
     fun `空相册不产出全部桶`() {
-        assertTrue(MediaPick.buckets(emptyList()).isEmpty())
+        assertTrue(MediaPick.buckets(emptyList(), "全部", "未命名").isEmpty())
     }
 
     // —— 过滤与还原 ——

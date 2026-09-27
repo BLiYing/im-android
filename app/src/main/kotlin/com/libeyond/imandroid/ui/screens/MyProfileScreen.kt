@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import com.composables.icons.lucide.Camera
 import com.composables.icons.lucide.Lucide
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMErrorText
 import com.libeyond.imandroid.ui.components.IMKeyValueRow
@@ -81,10 +83,14 @@ fun MyProfileScreen(
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
         IMTopBar(
-            title = if (editing) "编辑资料" else "我的资料",
+            title = if (editing) stringResource(R.string.settings_edit_profile) else stringResource(R.string.profile_title_view),
             onLeft = if (editing) onCancelEdit else onBack,
-            leftDescription = if (editing) "取消" else "返回",
-            actionText = if (editing) (if (saving) "保存中" else "保存") else "编辑",
+            leftDescription = if (editing) stringResource(R.string.common_cancel) else stringResource(R.string.common_back),
+            actionText = if (editing) {
+                if (saving) stringResource(R.string.common_saving) else stringResource(R.string.common_save)
+            } else {
+                stringResource(R.string.common_edit)
+            },
             actionEnabled = !saving,
             onAction = if (editing) onSave else onEnterEdit,
         )
@@ -120,16 +126,20 @@ private fun ReadonlyBody(
         Text(displayName, color = c.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         // 本人页：自己永远在线，不必查 presence（与 iOS 同）
-        Text("在线", color = c.textSecondary, style = MaterialTheme.typography.bodyLarge)
+        Text(stringResource(R.string.common_online), color = c.textSecondary, style = MaterialTheme.typography.bodyLarge)
         Spacer(Modifier.height(24.dp))
     }
     IMSettingsGroup {
         // 没填手机号就整行不占位（Telegram 同款），不显示「未设置」
         if (phone.isNotEmpty()) {
-            IMKeyValueRow("手机", phone, valueColor = c.accent)
+            IMKeyValueRow(stringResource(R.string.profile_readonly_phone_label), phone, valueColor = c.accent)
             IMRowDivider(insetStart = d.space4)
         }
-        IMKeyValueRow("用户名", handle.ifEmpty { "未设置" }, valueColor = c.accent)
+        IMKeyValueRow(
+            stringResource(R.string.settings_info_username),
+            handle.ifEmpty { stringResource(R.string.settings_info_not_set) },
+            valueColor = c.accent,
+        )
     }
 }
 
@@ -161,7 +171,7 @@ private fun EditBody(
             ) {
                 Image(
                     imageVector = Lucide.Camera,
-                    contentDescription = "更换头像",
+                    contentDescription = stringResource(R.string.profile_avatar_change_a11y),
                     modifier = Modifier.size(14.dp),
                     colorFilter = ColorFilter.tint(c.onAccent),
                 )
@@ -169,7 +179,7 @@ private fun EditBody(
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            "点击头像更换",
+            stringResource(R.string.profile_avatar_change_hint),
             color = c.accent,
             style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
@@ -178,11 +188,11 @@ private fun EditBody(
     }
 
     Spacer(Modifier.height(d.space4))
-    Field("昵称", form.nickname) { onChange(form.copy(nickname = it)) }
+    Field(stringResource(R.string.login_nickname), form.nickname) { onChange(form.copy(nickname = it)) }
     Spacer(Modifier.height(d.space3))
     // 用户名（公开句柄）与昵称是两回事：前者是别人搜到我的凭据、也是登录名，规则严格
     Field(
-        label = "用户名（a-z、0-9、下划线，≥5 位）",
+        label = stringResource(R.string.login_username_placeholder),
         value = form.username,
         // 不设 None 的话输入法会自动首字母大写，而服务端只收小写——
         // 用户敲完点保存才被拒，错在输入法，怪到用户头上
@@ -192,11 +202,11 @@ private fun EditBody(
         ),
     ) { onChange(form.copy(username = it)) }
     Spacer(Modifier.height(d.space3))
-    Field("手机号", form.phone, KeyboardOptions(keyboardType = KeyboardType.Phone)) {
+    Field(stringResource(R.string.settings_info_phone), form.phone, KeyboardOptions(keyboardType = KeyboardType.Phone)) {
         onChange(form.copy(phone = it))
     }
     Spacer(Modifier.height(d.space3))
-    Field("标签（空格或逗号分隔）", form.tags) { onChange(form.copy(tags = it)) }
+    Field(stringResource(R.string.profile_field_tags_placeholder), form.tags) { onChange(form.copy(tags = it)) }
     }
 }
 

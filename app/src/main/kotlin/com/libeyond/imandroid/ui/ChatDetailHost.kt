@@ -2,6 +2,7 @@ package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -23,6 +24,8 @@ import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.rtc.RtcCall
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -226,8 +229,8 @@ fun ChatDetailHost(
                     DetailAction.GroupCall -> Unit // 单聊不会出这个 pill
                     DetailAction.AddFriend -> scope.launch {
                         runCatching { client.contacts.request(conv.peerUid) }
-                            .onSuccess { toast = "好友申请已发出" }
-                            .onFailure { toast = it.userMessage("加好友失败") }
+                            .onSuccess { toast = Str.s(R.string.friend_request_sent) }
+                            .onFailure { toast = it.userMessage(Str.s(R.string.chat_detail_add_friend_failed)) }
                     }
                     // 已经在这个会话里了，这两个不会出现在 pills 里
                     DetailAction.Message, DetailAction.More -> Unit
@@ -239,8 +242,8 @@ fun ChatDetailHost(
                     DetailMoreAction.Report -> reporting = true
                     DetailMoreAction.Unblock -> scope.launch {
                         runCatching { client.contacts.unblock(conv.peerUid) }
-                            .onSuccess { toast = "已取消拉黑"; friend = friend?.copy(blocked = false) }
-                            .onFailure { toast = it.userMessage("操作失败") }
+                            .onSuccess { toast = Str.s(R.string.friend_block_undone); friend = friend?.copy(blocked = false) }
+                            .onFailure { toast = it.userMessage(Str.s(R.string.common_action_failed)) }
                     }
                     // 其余都要二次确认（拉黑/清空/删好友都不可撤销或代价大）
                     else -> confirm = m
@@ -249,7 +252,7 @@ fun ChatDetailHost(
             host = client.host,
             useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
             // 语音行的发送者名。单聊只有两个人：我自己显「你自己」（同 iOS），对方显本机显示名
-            senderNameOf = { uid -> if (uid == owner) "你自己" else remark.ifBlank { conv.title } },
+            senderNameOf = { uid -> if (uid == owner) Str.s(R.string.chat_detail_you) else remark.ifBlank { conv.title } },
             waveformOf = { seq -> voiceWaveforms[seq] },
             galleryOnly = galleryOnly,
             isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
@@ -277,49 +280,49 @@ fun ChatDetailHost(
     val peerName = remark.ifBlank { conv.title }
     when (confirm) {
         DetailMoreAction.Block -> IMConfirmDialog(
-            title = "拉黑「$peerName」？",
-            message = "拉黑后不再收到对方消息。可随时取消。",
-            confirmText = "拉黑",
+            title = stringResource(R.string.chat_detail_block_confirm_title, peerName),
+            message = stringResource(R.string.chat_detail_block_confirm_message),
+            confirmText = stringResource(R.string.common_block),
             onConfirm = {
                 confirm = null
                 scope.launch {
                     runCatching { client.contacts.block(conv.peerUid) }
-                        .onSuccess { toast = "已拉黑"; friend = friend?.copy(blocked = true) }
-                        .onFailure { toast = it.userMessage("拉黑失败") }
+                        .onSuccess { toast = Str.s(R.string.common_blocked); friend = friend?.copy(blocked = true) }
+                        .onFailure { toast = it.userMessage(Str.s(R.string.friend_block_failed_toast)) }
                 }
             },
             onDismiss = { confirm = null },
         )
         DetailMoreAction.ClearHistory -> IMConfirmDialog(
-            title = "清空聊天记录？",
-            message = "将删除此会话在本机的全部消息，且无法恢复。",
-            confirmText = "清空",
+            title = stringResource(R.string.chat_detail_clear_history_confirm_title),
+            message = stringResource(R.string.chat_detail_clear_history_message_dm),
+            confirmText = stringResource(R.string.chat_clear_ok),
             onConfirm = {
                 confirm = null
                 scope.launch {
                     // **只删本机**（同 iOS `clearMessagesForConv:`）：服务端没有、也不该有
                     // 「替所有人删历史」的接口
                     client.repo.clearConversation(owner, conv.convId)
-                    toast = "聊天记录已清空"
+                    toast = Str.s(R.string.chat_detail_clear_history_done)
                 }
             },
             onDismiss = { confirm = null },
         )
         DetailMoreAction.RemoveFriend -> IMConfirmDialog(
-            title = "删除好友「$peerName」？",
-            message = "将从通讯录移除，聊天记录仍保留在本机。",
-            confirmText = "删除",
+            title = stringResource(R.string.chat_detail_remove_friend_confirm_title, peerName),
+            message = stringResource(R.string.chat_detail_remove_friend_confirm_message),
+            confirmText = stringResource(R.string.common_delete),
             onConfirm = {
                 confirm = null
                 scope.launch {
                     runCatching { client.contacts.remove(conv.peerUid) }
                         .onSuccess {
-                            toast = "已删除好友"
+                            toast = Str.s(R.string.friend_delete_done)
                             // **不退页**：重拉关系后本页自然切成非好友视图，用户当场看得到关系已变
                             runCatching { client.contacts.friends() }
                                 .onSuccess { l -> friend = l.firstOrNull { it.userId == conv.peerUid } }
                         }
-                        .onFailure { toast = it.userMessage("删除失败") }
+                        .onFailure { toast = it.userMessage(Str.s(R.string.net_fallback_delete_failed)) }
                 }
             },
             onDismiss = { confirm = null },
@@ -329,7 +332,7 @@ fun ChatDetailHost(
 
     if (reporting) {
         IMTextPrompt(
-            title = "举报「$peerName」", initial = "", maxLen = 200, multiline = true,
+            title = stringResource(R.string.chat_detail_report_confirm_title, peerName), initial = "", maxLen = 200, multiline = true,
             onDismiss = { reporting = false },
             onConfirm = { reason ->
                 reporting = false
@@ -337,8 +340,8 @@ fun ChatDetailHost(
                     // target_type=user：举报**这个人**。聊天页长按那个是 target_type=message，
                     // 两个入口互补，别合并（iOS 合并消息侧两项时差点丢掉人侧那个）。
                     runCatching { client.contacts.report("user", conv.peerUid, conv.convId, reason) }
-                        .onSuccess { toast = "举报已提交，感谢反馈。" }
-                        .onFailure { toast = it.userMessage("举报失败") }
+                        .onSuccess { toast = Str.s(R.string.chat_detail_report_submitted) }
+                        .onFailure { toast = it.userMessage(Str.s(R.string.net_fallback_report_failed)) }
                 }
             },
         )
@@ -371,7 +374,7 @@ fun ChatDetailHost(
                             )
                         }
                     }
-                    toast = if (targets.size > 1) "已发送到 ${targets.size} 个会话" else "已发送"
+                    toast = if (targets.size > 1) Str.p(R.plurals.common_sent_to_chats, targets.size, targets.size) else Str.s(R.string.common_sent)
                 }
             },
         )

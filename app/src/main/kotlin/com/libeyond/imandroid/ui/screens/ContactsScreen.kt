@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +48,7 @@ import com.composables.icons.lucide.Headphones
 import com.composables.icons.lucide.Megaphone
 import com.composables.icons.lucide.UserPlus
 import com.composables.icons.lucide.Users
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMTopBar
@@ -89,8 +91,14 @@ fun ContactsScreen(
         // 标题居中 + 右上角圆形「添加朋友」钮，对齐 iOS（`person.badge.plus` 圆钮 → `IMUserSearchViewController`）。
         // 此前是左对齐的大标题 + 一枚主色裸放大镜，点进去标题叫「找人」（2026-09-15 用户报）
         IMTopBar(
-            title = "通讯录",
-            right = { TopBarCircleButton(icon = Lucide.UserPlus, description = "添加朋友", onClick = onAddFriend) },
+            title = stringResource(R.string.contacts_title),
+            right = {
+                TopBarCircleButton(
+                    icon = Lucide.UserPlus,
+                    description = stringResource(R.string.contacts_search_title),
+                    onClick = onAddFriend,
+                )
+            },
         )
 
         // 按拼音首字母分组（判据在 ContactSection，与 iOS IMContactSectionIndex 同一套规则）
@@ -108,21 +116,26 @@ fun ContactsScreen(
         // 滑开第二行时第一行自动收起、敞着的行点内容只收起不进详情。
         var openedId by remember { mutableStateOf<String?>(null) }
 
+        val officialLabel = stringResource(R.string.contacts_entry_official_account)
+        val serviceLabel = stringResource(R.string.contacts_entry_service_account)
         Box(Modifier.fillMaxSize()) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 // 四个入口**共占一个 LazyColumn item**——ENTRY_ITEMS 记的就是这个 1，
                 // 索引尺的偏移全靠它。以后在字母组之前再插 item，这里和 groupStartIndices 一起改
                 item {
-                    EntryRow(Lucide.Users, ENTRY_GROUPS, "群聊", 0, onOpenGroups)
-                    EntryRow(Lucide.UserPlus, ENTRY_NEW_FRIENDS, "新的朋友", pendingCount, onOpenNewFriends)
-                    EntryRow(Lucide.Megaphone, ENTRY_OFFICIAL, "公众号", 0) { onComingSoon("公众号") }
-                    EntryRow(Lucide.Headphones, ENTRY_SERVICE, "服务号", 0) { onComingSoon("服务号") }
+                    EntryRow(Lucide.Users, ENTRY_GROUPS, stringResource(R.string.common_group_chat), 0, onOpenGroups)
+                    EntryRow(
+                        Lucide.UserPlus, ENTRY_NEW_FRIENDS,
+                        stringResource(R.string.friend_requests_title), pendingCount, onOpenNewFriends,
+                    )
+                    EntryRow(Lucide.Megaphone, ENTRY_OFFICIAL, officialLabel, 0) { onComingSoon(officialLabel) }
+                    EntryRow(Lucide.Headphones, ENTRY_SERVICE, serviceLabel, 0) { onComingSoon(serviceLabel) }
                 }
                 if (friends.isEmpty()) {
                     item {
-                        SectionLabel("好友")
+                        SectionLabel(stringResource(R.string.contacts_friends_section_label))
                         Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            Text("还没有好友，点右上角添加朋友", color = c.textTertiary,
+                            Text(stringResource(R.string.contacts_empty), color = c.textTertiary,
                                 style = MaterialTheme.typography.bodyMedium)
                         }
                     }
@@ -259,7 +272,7 @@ private fun FriendRow(f: FriendEntry, onClick: () -> Unit) {
                 Text(f.handle, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
             }
         }
-        if (f.blocked) Text("已拉黑", color = c.textTertiary, fontSize = 11.sp)
+        if (f.blocked) Text(stringResource(R.string.common_blocked), color = c.textTertiary, fontSize = 11.sp)
     }
     Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
 }

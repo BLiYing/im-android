@@ -21,7 +21,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.GroupBan
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -46,12 +48,15 @@ internal fun GroupBanListScreen(
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        IMTopBar(title = "黑名单", onLeft = onBack)
+        IMTopBar(title = stringResource(R.string.group_manage_blacklist), onLeft = onBack)
         when {
-            loading && bans.isEmpty() -> Empty("加载中…")
-            bans.isEmpty() -> Empty("黑名单是空的")
+            loading && bans.isEmpty() -> Empty(stringResource(R.string.common_loading))
+            bans.isEmpty() -> Empty(stringResource(R.string.group_bans_empty))
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 items(bans, key = { it.userId }) { b ->
+                    // buildString 的 lambda 不是 @Composable，取文案要在外层先算好
+                    val permanentLabel = stringResource(R.string.common_permanent)
+                    val coolingLabel = stringResource(R.string.group_bans_cooling)
                     Column {
                         Row(
                             Modifier.fillMaxWidth().background(c.surface)
@@ -65,7 +70,7 @@ internal fun GroupBanListScreen(
                                     style = MaterialTheme.typography.bodyLarge)
                                 Text(
                                     buildString {
-                                        append(if (b.isPermanent) "永久" else "冷却中")
+                                        append(if (b.isPermanent) permanentLabel else coolingLabel)
                                         if (b.bannedAt > 0) append(" · ${TimeFormat.conversationTime(b.bannedAt)}")
                                     },
                                     color = c.textSecondary, style = MaterialTheme.typography.bodyMedium,
@@ -76,7 +81,7 @@ internal fun GroupBanListScreen(
                                     .clickable(enabled = busyUid != b.userId) { onUnban(b.userId) }
                                     .padding(horizontal = 14.dp, vertical = 6.dp),
                             ) {
-                                Text("解除", color = c.accent, style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(R.string.group_bans_unban), color = c.accent, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                         Box(Modifier.fillMaxWidth().padding(start = 68.dp)
@@ -106,13 +111,13 @@ internal fun GroupAdminListScreen(
     val d = IMTheme.dimens
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         IMTopBar(
-            title = "管理员",
+            title = stringResource(R.string.group_role_admin),
             onLeft = onBack,
-            actionText = if (canEdit) "添加" else "",
+            actionText = if (canEdit) stringResource(R.string.common_add) else "",
             onAction = if (canEdit) onAdd else null,
         )
         if (admins.isEmpty()) {
-            Empty("还没有设置管理员")
+            Empty(stringResource(R.string.group_admin_list_empty))
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
                 items(admins, key = { it.userId }) { m ->
@@ -132,7 +137,7 @@ internal fun GroupAdminListScreen(
                                         .clickable(enabled = busyUid != m.userId) { onRevoke(m) }
                                         .padding(horizontal = 14.dp, vertical = 6.dp),
                                 ) {
-                                    Text("撤销", color = c.danger, style = MaterialTheme.typography.bodyMedium)
+                                    Text(stringResource(R.string.group_admin_list_revoke_btn), color = c.danger, style = MaterialTheme.typography.bodyMedium)
                                 }
                             }
                         }
@@ -142,7 +147,7 @@ internal fun GroupAdminListScreen(
                 }
             }
         }
-        Footnote("管理员可审批入群、禁言与移出普通成员，但不能设置管理员或转让群组。")
+        Footnote(stringResource(R.string.group_manage_permission_note))
     }
 }
 

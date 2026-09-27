@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +72,7 @@ import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.data.db.PendingMessageEntity
 import com.libeyond.imandroid.data.db.SendState
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.components.TopBarAvatar
 import com.libeyond.imandroid.ui.components.TimeFormat
@@ -286,13 +288,16 @@ fun ChatScreen(
             IMTopBar(
                 title = ChatSelection.titleOf(selection.size),
                 onLeft = onCancelSelection,
-                leftLabel = "取消",
+                leftLabel = stringResource(R.string.common_cancel),
             )
         } else {
             IMTopBar(
                 title = title,
                 subtitle = subtitle,
-                subtitleAccent = subtitle == "在线",
+                // subtitle 由调用方传入（在线状态文案），与它比对的判据必须用**同一个键**渲出的文案，
+                // 否则英文界面下 subtitle 永远是 "Online" 而不是 "在线"，绿色高亮会失效
+                // （上游若也改用 R.string.common_online 才成立，见本批报告）
+                subtitleAccent = subtitle == stringResource(R.string.common_online),
                 onLeft = onBack,
                 // 标题也保留可点（iOS 就是点标题进详情），但**可见入口是右边那个头像**
                 onTitleClick = onOpenInfo,
@@ -453,7 +458,7 @@ fun ChatScreen(
             ) {
                 Image(
                     imageVector = Lucide.ChevronDown,
-                    contentDescription = "回到最新",
+                    contentDescription = stringResource(R.string.chat_jump_to_latest),
                     modifier = Modifier.size(20.dp),
                     colorFilter = ColorFilter.tint(c.accent),
                 )

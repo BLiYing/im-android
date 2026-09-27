@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.X
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -89,7 +91,7 @@ fun IMSearchField(
         if (value.isNotEmpty()) {
             Image(
                 imageVector = Lucide.X,
-                contentDescription = "清空",
+                contentDescription = stringResource(R.string.common_clear),
                 modifier = Modifier.size(16.dp).clickable { onValueChange("") },
                 colorFilter = ColorFilter.tint(c.textTertiary),
             )

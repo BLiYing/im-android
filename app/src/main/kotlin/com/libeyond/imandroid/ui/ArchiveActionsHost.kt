@@ -8,6 +8,8 @@ import com.libeyond.imandroid.data.ArchiveActions
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DownloadPhase
 import com.libeyond.imandroid.data.SelectionActions
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -140,7 +142,7 @@ internal fun runArchiveAction(
                     onChanged()
                 }
                 .onFailure {
-                    onToast("删除失败，请重试")
+                    onToast(Str.s(R.string.chat_archive_delete_failed_retry))
                     IMLog.tag("IM.Detail").w("archive_hide_failed", "seq" to target.convSeq)
                 }
         }

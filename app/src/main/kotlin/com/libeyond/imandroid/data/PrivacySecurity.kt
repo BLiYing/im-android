@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /**
  * 「我 ▸ 隐私与安全」的页面结构（对齐 iOS `IMPrivacySecurityViewController` 的 `buildGroups`，
  * Web `PrivacySecurityPanel` 同一张表；设计见 `../IMServer/docs/design/PRIVACY_SECURITY_DESIGN.md`）。
@@ -34,53 +37,57 @@ data class PrivacyRow(
 data class PrivacyGroup(val header: String = "", val footer: String = "", val rows: List<PrivacyRow>)
 
 object PrivacySecurity {
-    const val TITLE = "隐私与安全"
-    const val BLOCKED_TITLE = "已屏蔽的用户"
+    // 惰性取值（[Str.s]）：不能再是编译期 `const val`，切语言要能拿到新文案。
+    val TITLE: String get() = Str.s(R.string.settings_row_privacy)
+    val BLOCKED_TITLE: String get() = Str.s(R.string.blocked_title)
 
     /** 第一组的组尾，也是「已屏蔽的用户」页顶部那行说明（iOS 两处同文）。 */
-    const val BLOCKED_HINT = "已屏蔽的用户不能给你发消息，也看不到你的资料。"
-    const val BLOCKED_EMPTY_TITLE = "暂无已屏蔽的用户"
-    const val BLOCKED_EMPTY_SUBTITLE = "你在通讯录或聊天页拉黑对方后，会出现在这里。"
-    const val UNBLOCK = "取消屏蔽"
+    val BLOCKED_HINT: String get() = Str.s(R.string.blocked_hint)
+    val BLOCKED_EMPTY_TITLE: String get() = Str.s(R.string.blocked_empty_title)
+    val BLOCKED_EMPTY_SUBTITLE: String get() = Str.s(R.string.blocked_empty_subtitle)
+    val UNBLOCK: String get() = Str.s(R.string.blocked_unblock)
 
-    val groups: List<PrivacyGroup> = listOf(
+    // 惰性求值：**禁止在顶层 val 初始化时求值文案**，改成 get()，每次访问现烤，切语言立刻生效。
+    val groups: List<PrivacyGroup> get() = listOf(
         PrivacyGroup(
             footer = BLOCKED_HINT,
             rows = listOf(
                 PrivacyRow(BLOCKED_TITLE, PrivacyIcon.Blocked, PrivacyTint.Red, action = PrivacyAction.Blocked),
-                PrivacyRow("修改密码", PrivacyIcon.Key, PrivacyTint.Blue, action = PrivacyAction.ChangePassword),
+                PrivacyRow(Str.s(R.string.settings_change_password), PrivacyIcon.Key, PrivacyTint.Blue, action = PrivacyAction.ChangePassword),
             ),
         ),
         PrivacyGroup(
-            header = "账号保护",
-            footer = "绑定第二因子后，即使密码泄露也无法登录你的账号。",
+            header = Str.s(R.string.ps_section_account_protection),
+            footer = Str.s(R.string.ps_account_protection_footer),
             rows = listOf(
-                PrivacyRow("两步验证", PrivacyIcon.TwoStep, PrivacyTint.Gray, "关闭"),
-                PrivacyRow("通行密钥", PrivacyIcon.Passkey, PrivacyTint.Purple, "关闭"),
-                PrivacyRow("邮箱登录", PrivacyIcon.Mail, PrivacyTint.Teal),
+                PrivacyRow(Str.s(R.string.ps_row_two_factor), PrivacyIcon.TwoStep, PrivacyTint.Gray, Str.s(R.string.common_off)),
+                PrivacyRow(Str.s(R.string.ps_row_passkey), PrivacyIcon.Passkey, PrivacyTint.Purple, Str.s(R.string.common_off)),
+                PrivacyRow(Str.s(R.string.ps_row_email_login), PrivacyIcon.Mail, PrivacyTint.Teal),
             ),
         ),
         PrivacyGroup(
-            header = "会话隐私",
-            footer = "为你开始的每个新会话默认开启阅后自删。",
-            rows = listOf(PrivacyRow("自动删除消息", PrivacyIcon.Timer, PrivacyTint.Orange, "关闭")),
-        ),
-        PrivacyGroup(
-            header = "谁能看到",
-            footer = "这些设置决定他人在你的资料页看到多少。",
+            header = Str.s(R.string.ps_section_chat_privacy),
+            footer = Str.s(R.string.ps_chat_privacy_footer),
             rows = listOf(
-                PrivacyRow("手机号码", PrivacyIcon.Phone, PrivacyTint.Green, "我的联系人"),
-                PrivacyRow("上次上线", PrivacyIcon.LastSeen, PrivacyTint.Blue, "我的联系人"),
-                PrivacyRow("头像", PrivacyIcon.Avatar, PrivacyTint.Purple, "所有人"),
-                PrivacyRow("个人简介", PrivacyIcon.Bio, PrivacyTint.Yellow, "所有人"),
-                PrivacyRow("生日", PrivacyIcon.Birthday, PrivacyTint.Pink, "我的联系人"),
+                PrivacyRow(Str.s(R.string.ps_row_auto_delete_messages), PrivacyIcon.Timer, PrivacyTint.Orange, Str.s(R.string.common_off)),
             ),
         ),
         PrivacyGroup(
-            header = "数据",
+            header = Str.s(R.string.ps_section_who_can_see),
+            footer = Str.s(R.string.ps_who_can_see_footer),
             rows = listOf(
-                PrivacyRow("清除所有对话", PrivacyIcon.Trash, PrivacyTint.Gray),
-                PrivacyRow("导出我的数据", PrivacyIcon.Export, PrivacyTint.Blue),
+                PrivacyRow(Str.s(R.string.ps_row_phone_number), PrivacyIcon.Phone, PrivacyTint.Green, Str.s(R.string.common_my_contacts)),
+                PrivacyRow(Str.s(R.string.ps_row_last_seen), PrivacyIcon.LastSeen, PrivacyTint.Blue, Str.s(R.string.common_my_contacts)),
+                PrivacyRow(Str.s(R.string.ps_row_avatar), PrivacyIcon.Avatar, PrivacyTint.Purple, Str.s(R.string.common_everyone)),
+                PrivacyRow(Str.s(R.string.ps_row_bio), PrivacyIcon.Bio, PrivacyTint.Yellow, Str.s(R.string.common_everyone)),
+                PrivacyRow(Str.s(R.string.ps_row_birthday), PrivacyIcon.Birthday, PrivacyTint.Pink, Str.s(R.string.common_my_contacts)),
+            ),
+        ),
+        PrivacyGroup(
+            header = Str.s(R.string.ps_section_data),
+            rows = listOf(
+                PrivacyRow(Str.s(R.string.ps_row_clear_all_chats), PrivacyIcon.Trash, PrivacyTint.Gray),
+                PrivacyRow(Str.s(R.string.ps_row_export_data), PrivacyIcon.Export, PrivacyTint.Blue),
             ),
         ),
     )

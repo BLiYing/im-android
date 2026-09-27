@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- media-picker 模块自带文案（本模块看不到 app 的 R，不走 IMServer strings.json 生成）。改这里要中英两份一起改。 -->
+<resources>
+    <string name="mp_all">All</string>
+    <string name="mp_unnamed">Untitled</string>
+    <string name="mp_too_large">Over %1$s</string>
+    <string name="mp_unreadable">Can\'t read this file</string>
+    <string name="mp_cancel">Cancel</string>
+    <string name="mp_partial_access">Only photos you allowed are shown · Manage</string>
+    <string name="mp_preview">Preview</string>
+    <string name="mp_original_size">Original (%1$s)</string>
+    <string name="mp_original">Original</string>
+    <string name="mp_send_count">Send (%1$d)</string>
+    <string name="mp_send">Send</string>
+    <string name="mp_empty_partial">Nothing in the photos you allowed</string>
+    <string name="mp_empty">No photos or videos</string>
+    <string name="mp_manage_access">Manage allowed photos</string>
+    <string name="mp_limit">You can select up to %1$d</string>
+    <string name="mp_video_preview_note">▶ %1$s · Not played in preview</string>
+    <string name="mp_back">Back</string>
+</resources>

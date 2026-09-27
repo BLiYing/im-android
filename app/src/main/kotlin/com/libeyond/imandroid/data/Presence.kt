@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+
 /** 服务端下发的粗化档位（PROTOCOL §5.5）。 */
 object PresenceStatus {
     const val ONLINE = "online"
@@ -74,13 +77,13 @@ object Presence {
 
     /** 渲染成聊天页副标题的文案。与 iOS/Web 同一档位划分。 */
     fun label(display: PresenceDisplay, now: Long): String = when (display) {
-        is PresenceDisplay.Online -> "在线"
+        is PresenceDisplay.Online -> Str.s(R.string.common_online)
         is PresenceDisplay.Hidden -> ""
         is PresenceDisplay.Coarse -> when (display.status) {
-            PresenceStatus.RECENTLY -> "最近在线"
-            PresenceStatus.LAST_WEEK -> "一周内在线"
-            PresenceStatus.LAST_MONTH -> "一月内在线"
-            else -> "很久以前在线"
+            PresenceStatus.RECENTLY -> Str.s(R.string.presence_recently)
+            PresenceStatus.LAST_WEEK -> Str.s(R.string.presence_last_week)
+            PresenceStatus.LAST_MONTH -> Str.s(R.string.presence_last_month)
+            else -> Str.s(R.string.presence_long_ago)
         }
         is PresenceDisplay.LastSeen -> lastSeenLabel(display.atMillis, now)
     }
@@ -88,11 +91,20 @@ object Presence {
     private fun lastSeenLabel(at: Long, now: Long): String {
         val diff = now - at
         return when {
-            diff < 60_000 -> "刚刚在线"
-            diff < 60 * 60_000 -> "${diff / 60_000} 分钟前在线"
-            diff < 24 * 60 * 60_000 -> "${diff / (60 * 60_000)} 小时前在线"
-            diff < 7L * 24 * 60 * 60_000 -> "${diff / (24 * 60 * 60_000)} 天前在线"
-            else -> "很久以前在线"
+            diff < 60_000 -> Str.s(R.string.presence_just_now)
+            diff < 60 * 60_000 -> {
+                val m = (diff / 60_000).toInt()
+                Str.p(R.plurals.presence_minutes_ago, m, m)
+            }
+            diff < 24 * 60 * 60_000 -> {
+                val h = (diff / (60 * 60_000)).toInt()
+                Str.p(R.plurals.presence_hours_ago, h, h)
+            }
+            diff < 7L * 24 * 60 * 60_000 -> {
+                val d = (diff / (24 * 60 * 60_000)).toInt()
+                Str.p(R.plurals.presence_days_ago, d, d)
+            }
+            else -> Str.s(R.string.presence_long_ago)
         }
     }
 }

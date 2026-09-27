@@ -9,6 +9,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.DeviceDisplay
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.DeviceSession
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
@@ -48,7 +51,7 @@ fun DevicesHost(client: IMClient, onBack: () -> Unit) {
                 // 刷新失败**保留当前内容**（与 iOS 同）：把已经看到的列表清空换一行报错，
                 // 只会让用户以为设备都没了。
                 if (devices == null) devices = emptyList()
-                error = it.userMessage("加载设备列表失败")
+                error = it.userMessage(Str.s(R.string.net_fallback_devices_load))
             }
     }
 
@@ -88,20 +91,19 @@ fun DevicesHost(client: IMClient, onBack: () -> Unit) {
     val one = confirmOne
     if (one != null) {
         IMConfirmDialog(
-            title = "退出该设备登录？",
-            message = "「${DeviceDisplay.deviceName(one)}」将立即下线并需重新登录。" +
-                "若这不是你的设备，退出后建议顺手改密码。",
-            confirmText = "退出登录",
+            title = stringResource(R.string.device_detail_revoke_confirm_title),
+            message = stringResource(R.string.device_detail_revoke_confirm_message, DeviceDisplay.deviceName(one)),
+            confirmText = stringResource(R.string.settings_logout),
             onConfirm = {
                 revoking = one.sessionId
                 scope.launch {
                     runCatchingCancellable { client.devices.revoke(one.sessionId) }
                         .onSuccess {
                             detail = null // 详情页的那台已经没了，留在页内没有意义
-                            toast = "已退出该设备"
+                            toast = Str.s(R.string.device_detail_revoked_toast)
                             reload()
                         }
-                        .onFailure { toast = it.userMessage("退出设备失败") }
+                        .onFailure { toast = it.userMessage(Str.s(R.string.device_detail_revoke_failed)) }
                     revoking = ""
                 }
             },
@@ -111,15 +113,15 @@ fun DevicesHost(client: IMClient, onBack: () -> Unit) {
 
     if (confirmOthers) {
         IMConfirmDialog(
-            title = "退出其他所有设备",
-            message = "除这台设备外，其余设备都将立即下线并需重新登录。",
-            confirmText = "退出",
+            title = stringResource(R.string.device_list_revoke_all_action),
+            message = stringResource(R.string.device_list_revoke_all_message),
+            confirmText = stringResource(R.string.device_list_revoke_all_confirm),
             onConfirm = {
                 revoking = REVOKE_ALL
                 scope.launch {
                     runCatchingCancellable { client.devices.revokeOthers() }
-                        .onSuccess { toast = "已退出其他所有设备"; reload() }
-                        .onFailure { toast = it.userMessage("退出其他设备失败") }
+                        .onSuccess { toast = Str.s(R.string.device_list_revoked_other_toast); reload() }
+                        .onFailure { toast = it.userMessage(Str.s(R.string.device_list_revoke_other_failed)) }
                     revoking = ""
                 }
             },

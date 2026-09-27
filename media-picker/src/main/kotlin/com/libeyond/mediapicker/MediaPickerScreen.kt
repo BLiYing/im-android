@@ -1,5 +1,6 @@
 package com.libeyond.mediapicker
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -83,7 +84,9 @@ fun MediaPickerScreen(
     /** 预览态：null = 不在预览；否则是要从第几张开始翻 + 翻哪一组。 */
     var preview by remember { mutableStateOf<PreviewTarget?>(null) }
 
-    val title = buckets.firstOrNull { it.id == bucketId }?.name ?: "全部"
+    val title = buckets.firstOrNull { it.id == bucketId }?.name ?: stringResource(R.string.mp_all)
+    val tooLargeMsg = stringResource(R.string.mp_too_large, MediaPick.sizeLabel(MediaPick.MAX_BYTES))
+    val unreadableMsg = stringResource(R.string.mp_unreadable)
     val gridState = rememberLazyGridState()
 
     // 滑到倒数一屏就续页。**不能在 item 的 composable 里触发**——
@@ -127,9 +130,9 @@ fun MediaPickerScreen(
                                 if (!MediaPick.selectable(a)) {
                                     onToast(
                                         if (a.sizeBytes > MediaPick.MAX_BYTES) {
-                                            "超过 ${MediaPick.sizeLabel(MediaPick.MAX_BYTES)}"
+                                            tooLargeMsg
                                         } else {
-                                            "这个文件读不出来"
+                                            unreadableMsg
                                         },
                                     )
                                 } else {
@@ -199,7 +202,7 @@ private fun PickerTopBar(
             .padding(horizontal = s.space3, vertical = s.space3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text0("取消", s.accent, 17.sp, Modifier.width(64.dp).clickable(onClick = onCancel))
+        Text0(stringResource(R.string.mp_cancel), s.accent, 17.sp, Modifier.width(64.dp).clickable(onClick = onCancel))
         Row(
             modifier = Modifier.weight(1f).clickable(enabled = canSwitch, onClick = onToggleBuckets),
             horizontalArrangement = Arrangement.Center,
@@ -321,13 +324,13 @@ private fun PickerBottomBar(
         if (access == MediaPermission.Access.Partial && onManagePhotos != null) {
             // 部分授权时相册天然「少」，不给入口用户只会以为是 bug
             Text0(
-                "只能看到你授权的照片 · 管理", s.accent, 13.sp,
+                stringResource(R.string.mp_partial_access), s.accent, 13.sp,
                 Modifier.fillMaxWidth().clickable(onClick = onManagePhotos).padding(bottom = s.space2),
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text0(
-                "预览",
+                stringResource(R.string.mp_preview),
                 if (selectedCount > 0) s.accent else s.textSecondary,
                 15.sp,
                 Modifier.clickable(enabled = selectedCount > 0, onClick = onPreview).padding(end = s.space4),
@@ -375,7 +378,7 @@ private fun OriginalToggle(
         }
         Spacer(Modifier.width(s.space1))
         Text0(
-            if (checked && enabled) "原图 (${MediaPick.sizeLabel(totalBytes)})" else "原图",
+            if (checked && enabled) stringResource(R.string.mp_original_size, MediaPick.sizeLabel(totalBytes)) else stringResource(R.string.mp_original),
             if (enabled) s.textPrimary else s.textSecondary,
             14.sp,
         )
@@ -395,7 +398,7 @@ private fun SendButton(count: Int, onSend: () -> Unit) {
             .padding(horizontal = s.space4),
         contentAlignment = Alignment.Center,
     ) {
-        Text0(if (enabled) "发送($count)" else "发送", s.onAccent, 15.sp, weight = FontWeight.Medium)
+        Text0(if (enabled) stringResource(R.string.mp_send_count, count) else stringResource(R.string.mp_send), s.onAccent, 15.sp, weight = FontWeight.Medium)
     }
 }
 
@@ -408,12 +411,12 @@ private fun PickerEmpty(access: MediaPermission.Access, onManagePhotos: (() -> U
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text0(
-            if (access == MediaPermission.Access.Partial) "你授权的照片里没有内容" else "相册里没有照片或视频",
+            stringResource(if (access == MediaPermission.Access.Partial) R.string.mp_empty_partial else R.string.mp_empty),
             s.textSecondary, 15.sp,
         )
         if (onManagePhotos != null) {
             Spacer(Modifier.height(s.space3))
-            Text0("管理授权的照片", s.accent, 15.sp, Modifier.clickable(onClick = onManagePhotos))
+            Text0(stringResource(R.string.mp_manage_access), s.accent, 15.sp, Modifier.clickable(onClick = onManagePhotos))
         }
     }
 }

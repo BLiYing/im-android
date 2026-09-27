@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.GroupMember
 
@@ -48,17 +50,17 @@ object GroupPick {
     }
 
     fun title(purpose: PickPurpose): String = when (purpose) {
-        PickPurpose.AddAdmin -> "添加管理员"
-        PickPurpose.Transfer -> "选择新群主"
-        PickPurpose.Invite -> "邀请入群"
-        PickPurpose.Call -> "选择通话成员"
+        PickPurpose.AddAdmin -> Str.s(R.string.group_admin_picker_title)
+        PickPurpose.Transfer -> Str.s(R.string.group_transfer_owner_title)
+        PickPurpose.Invite -> Str.s(R.string.friend_picker_default_title)
+        PickPurpose.Call -> Str.s(R.string.group_call_picker_title)
     }
 
     fun emptyText(purpose: PickPurpose): String = when (purpose) {
-        PickPurpose.AddAdmin -> "没有可设为管理员的普通成员"
-        PickPurpose.Transfer -> "群里还没有别人"
-        PickPurpose.Invite -> "好友都已在群里"
-        PickPurpose.Call -> "群里还没有别人"
+        PickPurpose.AddAdmin -> Str.s(R.string.group_admin_picker_empty)
+        PickPurpose.Transfer -> Str.s(R.string.group_pick_no_other_members)
+        PickPurpose.Invite -> Str.s(R.string.friend_picker_default_empty)
+        PickPurpose.Call -> Str.s(R.string.group_pick_no_other_members)
     }
 
     /** 邀请与群通话是多选（攒够了按右上角确认）；另两件事都是**选中即执行**。 */

@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -24,7 +26,7 @@ internal fun openArchiveItem(
     if (item.contentType == ContentType.FILE) {
         val local = client.downloads.localFile(item.content)
         if (local == null) {
-            onToast("文件不在本地，请先下载")
+            onToast(Str.s(R.string.media_file_open_needs_download))
             return
         }
         OpenFile.open(context, local, MediaUrl.displayFileName(item.content, item.fileName))
@@ -40,5 +42,5 @@ internal fun openInBrowser(context: Context, url: String, onToast: (String) -> U
         context.startActivity(
             Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
-    }.onFailure { onToast("没有能打开这个链接的应用") }
+    }.onFailure { onToast(Str.s(R.string.common_no_app_for_link)) }
 }

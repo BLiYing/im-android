@@ -53,7 +53,7 @@ class QuoteSnapshotTest {
     fun `没有冻结快照时按本地原消息现算`() {
         val original = msg(1, type = ContentType.VIDEO, content = "/uploads/a.mp4")
         val m = msg(2, replyTo = 1)
-        assertEquals("[视频]", quoteSnapshotFor(rows(original, m), m))
+        assertEquals("[video]", quoteSnapshotFor(rows(original, m), m)) // 与服务端冻结快照同一形态，显示时再本地化
     }
 
     /** 第三档：原消息不在本地窗口里 → 「原消息」（同 iOS 的兜底文案），而不是空白。 */
@@ -68,6 +68,6 @@ class QuoteSnapshotTest {
     fun `空串快照不算数`() {
         val original = msg(1, type = ContentType.FILE, content = "/uploads/req-1__报表.xlsx")
         val m = msg(2, replyTo = 1, snapshot = "")
-        assertEquals("[文件] 报表.xlsx", quoteSnapshotFor(rows(original, m), m))
+        assertEquals("[file] 报表.xlsx", quoteSnapshotFor(rows(original, m), m))
     }
 }

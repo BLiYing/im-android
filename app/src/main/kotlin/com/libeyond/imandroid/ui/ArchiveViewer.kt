@@ -8,7 +8,9 @@ import com.libeyond.imandroid.data.ArchiveActions
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.MediaTimeline
 import com.libeyond.imandroid.data.ViewerMedia
+import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.data.toViewerMedia
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -94,7 +96,7 @@ internal fun ArchiveMediaViewer(
         downloads = client.downloads,
         onSave = onSave,
         // 归档这一页的取数失败了：翻页只能停在已拉到的那几页，说一句（§4.9「少了要说出来」）
-        notice = if (archive.failed) "网络不通，只能翻已加载的部分" else null,
+        notice = if (archive.failed) stringResource(R.string.media_viewer_offline_partial_notice) else null,
         moreActionsFor = { vm ->
             archiveViewerMoreItems(
                 client = client, convId = convId, isGroup = isGroup, iAmManager = iAmManager,

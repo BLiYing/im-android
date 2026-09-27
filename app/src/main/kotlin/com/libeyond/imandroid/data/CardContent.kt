@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import java.text.SimpleDateFormat
@@ -55,8 +57,8 @@ object CardContent {
 
     /** 名片在**别处**（会话列表预览、合并转发条目）的一行摘要。 */
     fun contactPreview(content: String): String {
-        val c = parseContact(content) ?: return "[个人名片]"
-        return "[个人名片] ${c.displayName}"
+        val c = parseContact(content) ?: return Str.s(R.string.quote_snapshot_contact)
+        return Str.s(R.string.quote_snapshot_contact_named, c.displayName)
     }
 
     /**
@@ -66,7 +68,7 @@ object CardContent {
      */
     fun parseRecord(content: String, maxLines: Int = 3): Record? {
         val o = asObject(content) ?: return null
-        val title = o.str("t").ifBlank { "聊天记录" }
+        val title = o.str("t").ifBlank { Str.s(R.string.record_chat_history) }
         val items = (o["items"] as? kotlinx.serialization.json.JsonArray) ?: return Record(title, emptyList(), 0)
         val lines = if (maxLines <= 0) emptyList() else items.take(maxLines).mapNotNull { el ->
             val it = el as? JsonObject ?: return@mapNotNull null
@@ -121,7 +123,7 @@ object CardContent {
                 waveform = it.str("w"),
             )
         }
-        return RecordDoc(o.str("t").ifBlank { "聊天记录" }, items)
+        return RecordDoc(o.str("t").ifBlank { Str.s(R.string.record_chat_history) }, items)
     }
 
     /** 嵌套记录能不能点进去：内容得真是一条记录，空串/坏数据不下钻（iOS 同判据）。 */
@@ -141,9 +143,11 @@ object CardContent {
         val now = Calendar.getInstance(zone).apply { timeInMillis = nowMs }
         val today = at.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
             at.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
-        val fmt = SimpleDateFormat(if (today) "HH:mm" else "M月d日 HH:mm", Locale.CHINA)
-        fmt.timeZone = zone
-        return fmt.format(Date(timestampMs))
+        val timeFmt = SimpleDateFormat("HH:mm", Locale.US)
+        timeFmt.timeZone = zone
+        val time = timeFmt.format(Date(timestampMs))
+        if (today) return time
+        return "${Str.s(R.string.time_month_day, Str.monthArg(at), at.get(Calendar.DAY_OF_MONTH))} $time"
     }
 
     /**
@@ -164,20 +168,25 @@ object CardContent {
             return if (cap.length > 60) cap.take(60) + "…" else cap
         }
         return when (ct) {
-            ContentType.IMAGE -> "[图片]"
-            ContentType.VIDEO -> "[视频]"
+            ContentType.IMAGE -> Str.s(R.string.preview_image)
+            ContentType.VIDEO -> Str.s(R.string.preview_video)
             ContentType.FILE -> {
                 val fn = it.str("fn").ifBlank { c.substringAfterLast('/') }
-                if (fn.isBlank()) "[文件]" else "[文件] $fn"
+                if (fn.isBlank()) Str.s(R.string.preview_file) else Str.s(R.string.quote_snapshot_file_named, fn)
             }
             ContentType.CONTACT -> contactPreview(c)
             ContentType.VOICE, "audio" -> {
                 val ms = (it["d"]?.jsonPrimitive?.longOrNull) ?: 0L
-                if (ms <= 0) "[语音]" else "[语音] ${ms / 1000 / 60}:%02d".format(ms / 1000 % 60)
+                if (ms <= 0) {
+                    Str.s(R.string.preview_voice)
+                } else {
+                    Str.s(R.string.preview_voice_duration, "${ms / 1000 / 60}:%02d".format(ms / 1000 % 60))
+                }
             }
             ContentType.CHAT_RECORD -> {
                 val t = parseRecord(c, maxLines = 0)?.title.orEmpty()
-                if (t.isNotBlank() && t != "聊天记录") "[聊天记录] $t" else "[聊天记录]"
+                val fallback = Str.s(R.string.record_chat_history)
+                if (t.isNotBlank() && t != fallback) Str.s(R.string.quote_snapshot_chat_record_titled, t) else Str.s(R.string.quote_snapshot_chat_record)
             }
             else -> c
         }

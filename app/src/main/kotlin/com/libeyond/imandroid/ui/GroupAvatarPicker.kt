@@ -5,6 +5,8 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.logging.IMLog
@@ -43,20 +45,20 @@ internal fun rememberGroupAvatarPicker(
         val g0 = info()
         if (uri == null || g0 == null) return@rememberLauncherForActivityResult
         scope.launch {
-            onToast("上传中…")
+            onToast(Str.s(R.string.common_uploading))
             val bytes = withContext(Dispatchers.IO) { AvatarPrepare.fromUri(context, uri) }
             if (bytes == null) {
-                onToast("图片处理失败，换一张试试")
+                onToast(Str.s(R.string.common_image_process_failed))
                 return@launch
             }
             val up = runCatching { client.upload.uploadAvatar(bytes) }
             val url = up.getOrNull()?.url
             if (url == null) {
-                onToast("头像上传失败")
+                onToast(Str.s(R.string.net_error_avatar_upload_failed))
                 IMLog.tag("IM.Group").w("group_avatar_upload_failed")
                 return@launch
             }
-            runManage("修改群头像") { client.groups.updateInfo(convId, g0.name, url, g0.intro) }
+            runManage(Str.s(R.string.group_avatar_change)) { client.groups.updateInfo(convId, g0.name, url, g0.intro) }
         }
     }
     return { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }

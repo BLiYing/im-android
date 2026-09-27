@@ -139,7 +139,7 @@ fun LoginScreen(
             if (tab == LoginTab.Register) {
                 IMTextField(nickname, { nickname = it }, stringResource(R.string.login_nickname), enabled = !busy)
                 Text(
-                    "用户名 5–32 位小写字母/数字/下划线；密码至少 6 位",
+                    stringResource(R.string.login_register_format_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = c.textTertiary,
                 )

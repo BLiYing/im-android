@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.sdk.api
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.http.HttpClient
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -117,7 +119,7 @@ data class JoinRequest(
     val isPending: Boolean get() = status == "pending"
 
     /** 列表显示名。**末级绝不是 user_id**（那是 10 位内部 ID）。 */
-    val displayName: String get() = nickname.ifBlank { "未命名用户" }
+    val displayName: String get() = nickname.ifBlank { Str.s(R.string.common_unnamed_user) }
 }
 
 @Serializable private data class JoinRequestsResp(val requests: List<JoinRequest> = emptyList())
@@ -135,7 +137,7 @@ data class GroupBan(
 ) {
     /** 显示名。**末级绝不是 user_id**（那是 10 位内部 ID）。 */
     val displayName: String
-        get() = nickname.ifBlank { if (username.isBlank()) "未命名用户" else "@$username" }
+        get() = nickname.ifBlank { if (username.isBlank()) Str.s(R.string.common_unnamed_user) else "@$username" }
 
     val isPermanent: Boolean get() = expiresAt <= 0
 }

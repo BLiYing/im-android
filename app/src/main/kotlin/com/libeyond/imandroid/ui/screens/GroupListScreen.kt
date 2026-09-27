@@ -22,10 +22,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMTopBar
@@ -54,11 +56,11 @@ internal fun GroupListScreen(
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         IMTopBar(
-            title = "群聊",
+            title = stringResource(R.string.common_group_chat),
             onLeft = onBack,
             right = {
                 Image(
-                    Lucide.Plus, "创建群聊",
+                    Lucide.Plus, stringResource(R.string.group_create_title),
                     Modifier.size(22.dp).clickable(onClick = onCreate),
                     colorFilter = ColorFilter.tint(c.accent),
                 )
@@ -66,8 +68,8 @@ internal fun GroupListScreen(
         )
 
         when {
-            groups.isEmpty() && loading -> Hint("加载中…")
-            groups.isEmpty() -> Hint("还没有加入群聊，点右上角 + 创建")
+            groups.isEmpty() && loading -> Hint(stringResource(R.string.common_loading))
+            groups.isEmpty() -> Hint(stringResource(R.string.group_list_empty_hint))
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 items(groups, key = { it.convId }) { g ->
                     Row(
@@ -80,7 +82,7 @@ internal fun GroupListScreen(
                         Spacer(Modifier.width(d.space3))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                g.name.ifBlank { "未命名群聊" }, color = c.textPrimary,
+                                g.name.ifBlank { stringResource(R.string.group_text_unnamed) }, color = c.textPrimary,
                                 style = MaterialTheme.typography.titleMedium,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
@@ -89,14 +91,19 @@ internal fun GroupListScreen(
                             // 口径逐字对齐 iOS `configureWithGroup:mine:`。
                             Text(
                                 if (g.owner == myUid) {
-                                    "我是群主"
+                                    stringResource(R.string.group_list_i_am_owner)
                                 } else {
-                                    "群主 " + (
+                                    stringResource(
+                                        R.string.group_list_owner,
                                         localNameOf(g.owner)
                                             ?: g.ownerNickname.ifBlank {
-                                                if (g.ownerUsername.isBlank()) "未命名用户" else "@" + g.ownerUsername
-                                            }
-                                        )
+                                                if (g.ownerUsername.isBlank()) {
+                                                    stringResource(R.string.common_unnamed_user)
+                                                } else {
+                                                    "@" + g.ownerUsername
+                                                }
+                                            },
+                                    )
                                 },
                                 color = c.textSecondary,
                                 style = MaterialTheme.typography.bodyMedium,

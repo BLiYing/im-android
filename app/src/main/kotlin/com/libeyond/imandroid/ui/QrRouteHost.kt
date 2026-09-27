@@ -12,7 +12,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.WebLinks
 import com.libeyond.imandroid.data.qrGroupActionFor
 import com.libeyond.imandroid.data.qrRelationToProfileRelation
@@ -26,6 +28,7 @@ import com.libeyond.imandroid.sdk.api.QrResolved
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.protocol.ErrCode
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.LocalOpenLink
 import com.libeyond.imandroid.ui.components.LocalOpenQrScan
@@ -70,11 +73,11 @@ internal fun QrRouteHost(
             is QrResolved.User -> {
                 val card = resolved.card
                 if (card.userId.isEmpty()) {
-                    toast = "二维码内容有误"
+                    toast = Str.s(R.string.qr_result_bad_content)
                 } else if (card.relation == "self") {
                     // 扫自己的码：不给「加好友」，这里只提示——本端「我的二维码」另有独立入口，
                     // 不在扫码结果里重复跳一次（同 iOS 的「大概率是想给别人看」判断，只是不强行带它去那页）。
-                    toast = "这是你自己的名片码"
+                    toast = Str.s(R.string.qr_result_own_card)
                 } else {
                     profile = QrProfileSeed(
                         userId = card.userId,
@@ -87,12 +90,12 @@ internal fun QrRouteHost(
                 }
             }
             is QrResolved.Group -> {
-                if (resolved.card.groupId.isEmpty()) toast = "二维码内容有误"
+                if (resolved.card.groupId.isEmpty()) toast = Str.s(R.string.qr_result_bad_content)
                 else groupPreview = resolved.card to raw
             }
             is QrResolved.Login -> {
                 if (resolved.ticket.isEmpty()) {
-                    toast = "二维码内容有误"
+                    toast = Str.s(R.string.qr_result_bad_content)
                 } else {
                     // 先 /qr/login/scan 拿 Web 端设备/IP/位置，再进确认页——对齐 iOS `routeLogin:`。
                     // resolve 已校验票据可用；scan 若并发过期/被抢会回 200110，走统一失效弹窗。
@@ -101,12 +104,12 @@ internal fun QrRouteHost(
                             .onSuccess { loginConfirm = it }
                             .onFailure { e ->
                                 if (e is ApiException && e.code == ErrCode.QR_EXPIRED) expiredAlert = true
-                                else toast = e.userMessage("识别登录码失败")
+                                else toast = e.userMessage(Str.s(R.string.qr_login_confirm_recognize_failed))
                             }
                     }
                 }
             }
-            is QrResolved.Unknown -> unknownText = resolved.text.ifEmpty { "未能识别该二维码" }
+            is QrResolved.Unknown -> unknownText = resolved.text.ifEmpty { Str.s(R.string.qr_result_unrecognized) }
         }
     }
 
@@ -116,7 +119,7 @@ internal fun QrRouteHost(
                 .onSuccess { route(it, raw) }
                 .onFailure { e ->
                     if (e is ApiException && e.code == ErrCode.QR_EXPIRED) expiredAlert = true
-                    else toast = e.userMessage("识别失败")
+                    else toast = e.userMessage(Str.s(R.string.qr_result_recognize_failed))
                 }
         }
     }
@@ -156,9 +159,9 @@ internal fun QrRouteHost(
                                 }
                                 .onFailure { e ->
                                     toast = if (e is ApiException && e.code == ErrCode.GROUP_JOIN_PENDING) {
-                                        "入群申请已提交，等待管理员审批"
+                                        Str.s(R.string.qr_toast_join_requested)
                                     } else {
-                                        e.userMessage("加群失败")
+                                        e.userMessage(Str.s(R.string.net_fallback_group_join))
                                     }
                                 }
                         }
@@ -199,10 +202,10 @@ internal fun QrRouteHost(
             val domain = remember(text) { qrUnknownDomain(text) }
             AlertDialog(
                 onDismissRequest = { unknownText = null },
-                title = { Text("扫描结果", color = IMTheme.colors.textPrimary, style = MaterialTheme.typography.titleMedium) },
+                title = { Text(stringResource(R.string.qr_result_title), color = IMTheme.colors.textPrimary, style = MaterialTheme.typography.titleMedium) },
                 text = {
                     Text(
-                        if (domain != null) "$text\n\n链接来自二维码，可能是钓鱼站点。确认域名「$domain」无误再打开。" else text,
+                        if (domain != null) stringResource(R.string.qr_result_phishing_message, text, domain) else text,
                         color = IMTheme.colors.textSecondary,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -212,16 +215,16 @@ internal fun QrRouteHost(
                         TextButton(onClick = {
                             unknownText = null
                             clipboard.setText(AnnotatedString(text))
-                            toast = "已复制"
-                        }) { Text("复制内容", color = IMTheme.colors.accent) }
+                            toast = Str.s(R.string.common_copied)
+                        }) { Text(stringResource(R.string.qr_result_copy_content), color = IMTheme.colors.accent) }
                         if (domain != null) {
                             TextButton(onClick = { unknownText = null; fallbackOpenLink?.invoke(text) }) {
-                                Text("在浏览器中打开", color = IMTheme.colors.accent)
+                                Text(stringResource(R.string.qr_result_open_in_browser), color = IMTheme.colors.accent)
                             }
                         }
                     }
                 },
-                dismissButton = { TextButton(onClick = { unknownText = null }) { Text("取消", color = IMTheme.colors.textSecondary) } },
+                dismissButton = { TextButton(onClick = { unknownText = null }) { Text(stringResource(R.string.common_cancel), color = IMTheme.colors.textSecondary) } },
                 containerColor = IMTheme.colors.surfaceElevated,
             )
         }
@@ -229,16 +232,16 @@ internal fun QrRouteHost(
         if (expiredAlert) {
             AlertDialog(
                 onDismissRequest = { expiredAlert = false },
-                title = { Text("二维码已失效", color = IMTheme.colors.textPrimary, style = MaterialTheme.typography.titleMedium) },
+                title = { Text(stringResource(R.string.qr_invalid_title), color = IMTheme.colors.textPrimary, style = MaterialTheme.typography.titleMedium) },
                 text = {
                     Text(
-                        "该二维码已过期或被重置，请向对方索取新的二维码。",
+                        stringResource(R.string.qr_invalid_note),
                         color = IMTheme.colors.textSecondary,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 },
                 confirmButton = {
-                    TextButton(onClick = { expiredAlert = false }) { Text("我知道了", color = IMTheme.colors.accent) }
+                    TextButton(onClick = { expiredAlert = false }) { Text(stringResource(R.string.common_got_it), color = IMTheme.colors.accent) }
                 },
                 containerColor = IMTheme.colors.surfaceElevated,
             )

@@ -17,7 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Forward
 import com.composables.icons.lucide.Lucide
@@ -216,7 +219,7 @@ internal fun FavoritesHost(
             Favorites.matches(f, FavoriteCategory.Record) -> recordNav.push(f.content)
             Favorites.matches(f, FavoriteCategory.Contact) -> CardContent.parseContact(f.content)?.let { card ->
                 // 名片里是我自己：本端「我」页就是资料入口，没有另一页可去，说一句（iOS 进编辑资料）
-                if (card.uid == owner) toast = "这是你自己的名片" else profileUid = card.uid
+                if (card.uid == owner) toast = Str.s(R.string.qr_result_own_card) else profileUid = card.uid
             }
             Favorites.matches(f, FavoriteCategory.Text) -> reading = f.content
             // 语音：本端整个 App 还没有播放器（同详情页语音签），点了不做事
@@ -304,7 +307,7 @@ internal fun FavoritesHost(
             MediaViewerScreen(
                 pages = pages,
                 startSeq = f.id,
-                title = "收藏消息",
+                title = stringResource(R.string.common_saved_messages),
                 host = client.host,
                 useTls = useTls,
                 localFileOf = { vm -> client.downloads.localFile(vm.content, vm.isVideo) },
@@ -318,7 +321,7 @@ internal fun FavoritesHost(
     menuFor?.let { f ->
         FavoriteMenu(
             client = client, target = f, anchor = menuAnchor, scope = scope,
-            onCopy = { text -> clipboard.setText(AnnotatedString(text)); toast = "已复制" },
+            onCopy = { text -> clipboard.setText(AnnotatedString(text)); toast = Str.s(R.string.common_copied) },
             onForward = { forwarding = it },
             onDeleted = { id ->
                 val (left, total) = Favorites.afterDelete(list.items, list.total, id)
@@ -393,7 +396,7 @@ private fun FavoriteMenu(
                         runCatchingCancellable { client.favorites.delete(target.id) }
                             .onSuccess { onDeleted(target.id) }
                             .onFailure {
-                                onToast("删除失败")
+                                onToast(Str.s(R.string.net_fallback_delete_failed))
                                 log.w("favorite_delete_failed", "id" to target.id)
                             }
                     }

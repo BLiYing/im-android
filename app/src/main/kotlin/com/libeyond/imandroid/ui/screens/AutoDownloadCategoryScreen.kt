@@ -10,9 +10,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.CategoryRule
 import com.libeyond.imandroid.data.DownloadCategory
 import com.libeyond.imandroid.data.DownloadSettingsUi
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.ui.components.IMRowDivider
 import com.libeyond.imandroid.ui.components.IMSectionFooter
 import com.libeyond.imandroid.ui.components.IMSectionHeader
@@ -45,31 +48,40 @@ fun AutoDownloadCategoryScreen(
         IMTopBar(title = category.title, onLeft = onBack)
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            IMSectionHeader("自动下载${category.title}")
+            IMSectionHeader(stringResource(R.string.autodl_cat_header_prefix, category.title))
             IMSettingsGroup {
-                IMSwitchRow(title = "单聊", checked = rule.single, onCheckedChange = onSingleChange)
+                IMSwitchRow(
+                    title = stringResource(R.string.common_private_chat),
+                    checked = rule.single,
+                    onCheckedChange = onSingleChange,
+                )
                 IMRowDivider(insetStart = d.space4)
-                IMSwitchRow(title = "群聊", checked = rule.group, onCheckedChange = onGroupChange)
+                IMSwitchRow(
+                    title = stringResource(R.string.common_group_chat),
+                    checked = rule.group,
+                    onCheckedChange = onGroupChange,
+                )
             }
 
             if (!category.hasSizeLimit) {
-                IMSectionFooter("图片体积小，建议保持自动下载（无大小上限）。")
+                IMSectionFooter(stringResource(R.string.autodl_cat_image_footer))
             } else {
                 val saved = DownloadSettingsUi.sizeStopIndex(rule.maxBytes)
-                IMSectionHeader("大小上限")
+                IMSectionHeader(stringResource(R.string.autodl_cat_size_limit_header))
                 IMSettingsGroup {
                     IMStepSlider(
                         // 停在已保存那一档时显示**真实值**：服务端的值不一定正好在档位上（iOS 进页同样先显示原值）
+                        // title 是普通 (Int) -> String，非 @Composable，取文案走 Str.s（同 IMStepSlider 签名约束）
                         title = { i ->
                             val bytes = if (i == saved) rule.maxBytes else DownloadSettingsUi.SIZE_STOPS[i]
-                            "上限 ${DownloadSettingsUi.sizeLabel(bytes)}"
+                            Str.s(R.string.autodl_cat_limit_prefix, DownloadSettingsUi.sizeLabel(bytes))
                         },
                         index = saved,
                         count = DownloadSettingsUi.SIZE_STOPS.size,
                         onCommit = onCommitSize,
                     )
                 }
-                IMSectionFooter("超过上限的媒体不自动下载，卡片显“未下载”，可手动点 ↓。上限设为“关”即完全手动。")
+                IMSectionFooter(stringResource(R.string.autodl_cat_size_limit_footer))
             }
             Spacer(Modifier.height(d.sectionGap))
         }
