@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.voice.VoiceMiniPlayer
+import com.libeyond.imandroid.ui.voice.VoiceSource
+import com.libeyond.imandroid.voice.VoiceRules
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -113,15 +116,11 @@ internal fun Modifier.archiveItemGestures(
  * （发送者名 / 迷你播放器（波形 + 时长）/ 完整时间，行高 106pt）：
  *
  * 1. **发送者名**——此前本端整行只有"时长 + 相对时间"，看不出是谁发的，而语音恰恰最需要这个；
- * 2. **波形**：直接复用聊天页语音气泡那一份 [VoiceContent]（iOS 那侧同样是复用
- *    `IMVoiceMiniPlayerView`）。两份实现必然在柱数/归一化上分叉，而那没有任何自动手段能发现；
+ * 2. **迷你播放器** [VoiceMiniPlayer]（iOS `IMVoiceMiniPlayerView`，资料页 / 收藏 / 合并转发记录三处同一个组件）：
+ *    ▶ 与波形都能就地播，同页只播一条；
  * 3. **完整年月日时分**（[TimeFormat.fileDateTime]，同 iOS `IMFormatFileDateTime`）。
  *
- * **仍与 iOS 差一条：点不响。** iOS 那行的 ▶ 与波形都能就地播（`IMVoicePlayer sharedPlayer`），
- * 本端**整个 App 还没有语音播放器**（聊天页的语音气泡同样只画波形），
- * 所以这里刻意不画播放按钮——画一个按下去没反应的 ▶ 比没有更糟。页签脚注 [VOICE_TAB_NOTE] 如实说了这件事。
- *
- * 长按仍可用：定位回聊天、转发、删除。
+ * 长按：定位回聊天、转发、删除。
  *
  * @param senderName 发送者显示名；空则不画第一行（拿不到成员表时，比如超级群）。
  * @param waveform   振幅指纹。**服务端归档接口不回带这个字段**，由调用方从本地消息表按
@@ -130,6 +129,9 @@ internal fun Modifier.archiveItemGestures(
 @Composable
 internal fun VoiceRow(
     item: ConvMediaItem,
+    /** 播放器里的标识与所属会话：资料页用 [VoiceRules.playableId]（与聊天气泡同一个，红点才同步），收藏用收藏 id。 */
+    playId: String,
+    convId: String,
     senderName: String = "",
     waveform: String? = null,
     /** 「来自X」那一行（收藏页）；空串不画。 */
@@ -157,7 +159,10 @@ internal fun VoiceRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                VoiceContent(item.duration.toLong(), waveform)
+                VoiceMiniPlayer(
+                    VoiceSource(playId, convId, item.content, item.duration.toLong(), waveform),
+                    Modifier.padding(vertical = 4.dp),
+                )
                 Text(
                     TimeFormat.fileDateTime(item.timestamp),
                     color = c.textTertiary, style = MaterialTheme.typography.bodySmall,

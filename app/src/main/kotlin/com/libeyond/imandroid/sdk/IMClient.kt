@@ -106,6 +106,12 @@ class IMClient(context: Context) {
     )
 
     /**
+     * 语音播放器（VOICE_MESSAGE_DESIGN §6）：**进程内一份、一次只播一条**，与 [downloads] 同理放这里——
+     * 气泡 / 资料页 / 收藏 / 记录页四处必须共用同一个播放器，才能「点这条就停那条」。
+     */
+    val voice = com.libeyond.imandroid.voice.VoicePlayer(context, downloads) { session.uid.orEmpty() }
+
+    /**
      * 自动下载策略（M4-7）。**进程内一份**：门控每渲染一格媒体读一次 [downloadSettings]，
      * 「数据和存储」设置页订阅 [DownloadSettingsStore.state]。
      * 什么时候重拉见 init：真正连上时、收到 `capabilities_update` 时；另有 AppRoot 登录后拉一次。

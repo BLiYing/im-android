@@ -82,6 +82,17 @@ data class IMColors(
     val swipePositive: Color,
     val avatarRing: Color,
 
+    // --- 语音气泡 / 迷你播放器（VOICE_MESSAGE_DESIGN §6.1，对齐 iOS `IMVoiceBubbleCell` 取色）---
+    /** 己方气泡上的播放键底：浅绿气泡上要压得住的深绿（iOS 同值）；对方气泡上用 [accent]。 */
+    val voicePlayMine: Color,
+    /** 对方气泡波形**未播放段**：次要文字色 α0.28（iOS 曾 0.45 偏深、扫过看不出，2026-08-27 修）。 */
+    val voiceWaveInactive: Color,
+    /** 己方气泡波形未播放段：正文色 α0.32（已播放段直接用 [textPrimary]）。 */
+    val voiceWaveInactiveMine: Color,
+    /** 倍速胶囊底：强调色 α0.14（对方）/ 正文色 α0.14（己方），与波形同一取色逻辑。 */
+    val voiceSpeedBg: Color,
+    val voiceSpeedBgMine: Color,
+
     /** 是否深色取值——只用于必须分叉的少数场合（如选图标资源），别拿它到处写 if。 */
     val isDark: Boolean,
 )
@@ -133,6 +144,11 @@ val LightIMColors = IMColors(
     swipeNeutral = Color(0xFF8E8E93),
     swipePositive = Color(0xFF34C759),
     avatarRing = Color(0x381D2129),
+    voicePlayMine = Color(0xFF1F7A2E),
+    voiceWaveInactive = Color(0x478A929C),
+    voiceWaveInactiveMine = Color(0x521D2129),
+    voiceSpeedBg = Color(0x244CA64C),
+    voiceSpeedBgMine = Color(0x241D2129),
 
     isDark = false,
 )
@@ -184,6 +200,12 @@ val DarkIMColors = IMColors(
     swipeNeutral = Color(0xFF8E8E93),
     swipePositive = Color(0xFF30D158),
     avatarRing = Color(0x52FFFFFF),
+    // 深色己方气泡是深绿底（0xFF1F4D2E），iOS 那枚深绿键压上去几乎看不见——深色下退回强调色
+    voicePlayMine = Color(0xFF4CA64C),
+    voiceWaveInactive = Color(0x47A0A7B0),
+    voiceWaveInactiveMine = Color(0x52E6E8EB),
+    voiceSpeedBg = Color(0x244CA64C),
+    voiceSpeedBgMine = Color(0x24E6E8EB),
 
     isDark = true,
 )

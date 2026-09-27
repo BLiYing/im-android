@@ -65,8 +65,7 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  * 长按菜单不出（iOS pick 模式同样禁掉上下文菜单与左滑删除）。**点行 / 点格仍是打开**，
  * 选中只走勾选框——判据在 [com.libeyond.imandroid.data.FavoritePick]。
  *
- * 与 iOS 的差异（未做，见 im-android `current_task.md`）：「以聊天模式查看」（按来源会话分组）、
- * 语音就地播放（本端整个 App 还没有播放器）。
+ * 与 iOS 的差异（未做，见 im-android `current_task.md`）：「以聊天模式查看」（按来源会话分组）。
  */
 @Composable
 internal fun FavoritesScreen(
@@ -235,7 +234,8 @@ private fun LazyListScope.favoriteItems(
         FavoriteCategory.Voice -> items(shown, key = { it.id }) { f ->
             // 收藏快照自带波形（`im_favorite.waveform`），不用像详情页那样从本地消息表兜底
             VoiceRow(
-                item = Favorites.toConvMediaItem(f), waveform = f.waveform.ifBlank { null },
+                item = Favorites.toConvMediaItem(f), playId = "fav:${f.id}", convId = f.sourceConvId,
+                waveform = f.waveform.ifBlank { null },
                 source = sourceNameOf(f), onLongPress = longPressOf(f), trailing = check(f),
             )
         }

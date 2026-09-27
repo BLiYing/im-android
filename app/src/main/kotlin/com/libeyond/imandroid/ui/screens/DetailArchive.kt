@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.voice.VoiceRules
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -82,9 +83,6 @@ internal val LINK_TAB_NOTE: String
     // 读法不用变——只是从编译期常量变成运行时按当前语言取。
     @Composable get() = stringResource(R.string.detail_tab_link_note)
 
-/** 语音页签的脚注。如实写清楚这一格现在能做什么、不能做什么。 */
-internal val VOICE_TAB_NOTE: String
-    @Composable get() = stringResource(R.string.detail_tab_voice_note)
 
 /**
  * 会话媒体库页的标题。**逐字取自 iOS** `IMConversationMediaViewController.viewDidLoad`
@@ -150,6 +148,8 @@ internal fun LoadMore(onLoadMore: () -> Unit) {
  */
 internal fun LazyListScope.archiveTab(
     tab: DetailTab,
+    /** 所属会话：语音行的播放标识与已播红点按会话分（见 [VoiceRules.playableId]）。 */
+    convId: String,
     archive: List<ConvMediaItem>,
     /** `null` = 本地还没扫完。 */
     linkMessages: List<Pair<MessageEntity, String>>?,
@@ -193,11 +193,11 @@ internal fun LazyListScope.archiveTab(
             }
         }
         DetailTab.Voice -> {
-            item { Footnote(VOICE_TAB_NOTE) }
             archiveList(archive, loading, hasMore, tab, onLoadMore) { item ->
                 val wave = waveformOf(item.convSeq)
                 VoiceRow(
-                    item, senderName = senderNameOf(item.sender), waveform = wave,
+                    item, playId = VoiceRules.playableId(item.convSeq, "").orEmpty(), convId = convId,
+                    senderName = senderNameOf(item.sender), waveform = wave,
                     // 波形一并带进菜单目标：从这一格转发出去的语音才不会丢波形
                     onLongPress = { r -> onLongPressArchive(item.toArchiveTarget().copy(waveform = wave), r) },
                 )

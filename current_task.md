@@ -66,8 +66,11 @@
    （系统图片选择器多级页面盲点坐标屡次踩偏），也没有第二台设备/账号可以扮演"收端"；只验证到
    "提及渲染可点 + 点了跳资料页"这条基础设施是通的，`mentions` 随转发存活只有单测覆盖。
    另外**"对方撤回"的两种文案**（"XX/对方撤回了一条消息"）同样因为单设备单账号测不出来，只测了"自己撤回"。
-1. **语音播放整端缺失**：聊天页气泡与归档语音行都只画波形、点不响（全 App 没有播放器，也没有录音）。
-   iOS 那行的 ▶ 与波形都能就地播（`IMVoicePlayer sharedPlayer`）。这是本端与 iOS 最后一处**能力差**。
+1. **语音消息（按设计稿 VOICE_MESSAGE_DESIGN + 草图 v2.5 分三期）**：① 播放 ✅ 2026-09-28（`voice/VoicePlayer` +
+   `ui/voice/VoiceViews`，气泡 / 资料页 / 收藏 / 记录页，倍速、scrub、红点、接力，真机实测）；② **录制**（输入栏 🎙/➤ 原地换脸、
+   按住大圆钮 + 振幅环、左滑 40% 取消、上滑磁吸锁定、锁定行 🗑|计时+波形|⏸|➤、暂停即试听、5min 上限两种处理、中断转锁定暂停、
+   AAC 16k 单声道 24kbps、分段拼接、`sendMedia` 带 waveform）；③ **转文字**（REST `/voice/transcripts` + `voice_transcript` 帧 +
+   气泡下展开面板 + CHAT_UX「就地变高补进视口」）。设计与现行实现的差异见下方已知坑。
 2. **Android 离线积压整套未启动**（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 / §5 B3a）：
    建议先让 sync 带 `max_gap`；另缺区间清单、`conv_bump` 被丢弃、sync/window 路径不回 `delivered`；
    C4 未做；会话内检索只取一页。
@@ -80,6 +83,11 @@
 9. **群成员头像图**：首字母色块对，但无头像缓存；要先做 `POST /users/batch` 解析器。
 
 ## 已知坑 / 限制
+
+- **语音布局以 iOS/Web 现行实现为准，不以草图 v2.5 字面为准**（2026-09-28 核对）：草图写「时长 · HH:mm ✓✓」同一行、红点在 meta 行左，
+  但 2026-08-27 用户拍板「时间独立一行」、设计文档 §7（08-30）定「红点右上角」，iOS `IMVoiceBubbleCell` / Web `VoiceBubble` 均已照此。
+  **播放标识用 `seq:<conv_seq>`**（iOS 用 serverMsgID）：资料页归档条目只有 conv_seq，这样两处红点 / 播放态同步。
+  Web 录的分片 MP4 `MediaPlayer.duration` 读出 11ms——分母一律回落消息 `duration`（`VoiceRules.effectiveDurationMs`）。
 
 - **合并转发记录里的名片 →「发消息」不能真正换会话**（2026-09-25 真机回归发现，未修）：`ChatHost.kt`
   把 `ChatRecordLayer` 内名片卡片的「发消息」接到同一份 `openUser` 状态，点了只 `onCloseUser()`

@@ -193,6 +193,8 @@ fun AppRoot(client: IMClient) {
                     onWifi = rememberOnWifi(),
                     myUid = { client.uid.orEmpty() },
                 ),
+                // 语音播放器：整棵树共用一份（气泡 / 资料页 / 收藏 / 记录页点这条就停那条）
+                com.libeyond.imandroid.ui.voice.LocalVoicePlayer provides client.voice,
             ) {
                 // 应用内浏览器盖在整个主界面之上：聊天 / 详情 / 群资料 / 聊天记录里点开的链接都走它
                 WebLinkHost {

@@ -121,6 +121,7 @@ internal fun FavoritesHost(
     val owner = client.uid.orEmpty()
     val useTls = com.libeyond.imandroid.BuildConfig.USE_TLS
 
+    com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave() // 离开收藏页暂停语音（保留位点）
     val list = remember { FavoriteList() }
     var tab by remember { mutableStateOf<FavoriteCategory?>(null) }
     var query by remember { mutableStateOf("") }
@@ -222,7 +223,7 @@ internal fun FavoritesHost(
                 if (card.uid == owner) toast = Str.s(R.string.qr_result_own_card) else profileUid = card.uid
             }
             Favorites.matches(f, FavoriteCategory.Text) -> reading = f.content
-            // 语音：本端整个 App 还没有播放器（同详情页语音签），点了不做事
+            // 语音：行内迷你播放器自己就地播（点 ▶ / 波形），点行其余位置不另开页面（iOS 同）
             else -> Unit
         }
     }

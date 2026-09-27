@@ -227,6 +227,8 @@ fun ChatHost(
     val messages = loadedMessages.orEmpty()
     val pending = loadedPending.orEmpty()
     val rowsReady = loadedMessages != null && loadedPending != null
+    com.libeyond.imandroid.ui.voice.VoiceRelayEffect(conv.convId, messages, owner) // 接力连播（语音 §6.4）
+    com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave()
 
     // **进会话那一刻的快照，之后不再跟随**。
     //

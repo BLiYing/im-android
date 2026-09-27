@@ -46,6 +46,12 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // App 切后台即暂停语音（保留位点，回来接着听）：本 App 没有后台音频能力，
+        // 不主动转成暂停的话回到前台气泡还显示「播放中」、进度却不动（iOS `handleEnterBackground:` 同理）
+        lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
+            override fun onStop(owner: androidx.lifecycle.LifecycleOwner) = client.voice.pause()
+        })
+
         setContent {
             IMAppTheme {
                 CompositionLocalProvider(

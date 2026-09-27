@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.voice.VoiceMiniPlayer
+import com.libeyond.imandroid.ui.voice.VoiceSource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -77,6 +79,7 @@ internal fun ChatRecordScreen(
     onOpenMedia: (RecordMedia) -> Unit,
 ) {
     val c = IMTheme.colors
+    com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave() // 离开本页暂停语音（保留位点）
     val doc = remember(content) { CardContent.parseRecordDoc(content) }
     // 记录里的文件在 App 内打开（宿主 WebLinkHost；iOS 同样交给应用内浏览器 SFSafariViewController）
     val openLink = com.libeyond.imandroid.ui.components.LocalOpenLink.current
@@ -258,7 +261,11 @@ private fun RecordBody(item: CardContent.RecordItem, host: String, useTls: Boole
         } else {
             RecordCardFrame { ChatRecordCardContent(item.content, width = RECORD_CARD_INNER, previewLines = 2) }
         }
-        ContentType.VOICE, "audio" -> VoiceContent(item.durationMs, item.waveform)
+        // 合并转发条目没有消息 id：用地址当播放标识（同一段音频在记录页里本就只该有一个播放态）
+        ContentType.VOICE, "audio" -> VoiceMiniPlayer(
+            VoiceSource("rec:${item.content}", convId = "record", url = item.content, durationMs = item.durationMs, waveform = item.waveform),
+            Modifier.width(RECORD_CARD_INNER),
+        )
         else -> Text(item.content, color = c.textPrimary, fontSize = 16.sp)
     }
 }

@@ -667,7 +667,6 @@
     <string name="detail_tab_file_size_downloaded">%1$s · 已下载</string>
     <string name="detail_tab_file_size_not_downloaded">%1$s · 未下载</string>
     <string name="detail_tab_link_note">链接由本机已加载的聊天记录扫出，往上翻得越多、这里越全。点一条在 App 内打开。</string>
-    <string name="detail_tab_voice_note">归档里暂不能播放（长按可定位回聊天、转发或删除）。</string>
     <plurals name="device_active_days_ago">
         <item quantity="other">%1$d 天前活跃</item>
     </plurals>

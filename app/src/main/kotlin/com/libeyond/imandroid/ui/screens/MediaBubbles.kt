@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.voice.VoiceBubbleBody
+import com.libeyond.imandroid.ui.voice.VoiceSource
+import com.libeyond.imandroid.voice.VoiceRules
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -95,7 +98,14 @@ fun MediaContent(
     when (msg.contentType) {
         "image" -> ImageContent(msg, shape, host, useTls, isGroup, mine, onOpenMedia)
         "video" -> VideoContent(msg, shape, host, useTls, isGroup, mine, onOpenMedia)
-        "voice" -> VoiceContent(msg.duration?.toLong(), msg.waveform)
+        "voice" -> VoiceBubbleBody(
+            VoiceSource(
+                id = VoiceRules.playableId(msg).orEmpty(), convId = msg.convId, url = msg.content,
+                durationMs = (msg.duration ?: 0).toLong(), waveform = msg.waveform,
+            ),
+            mine = mine,
+            horizontalInset = IMTheme.dimens.bubblePaddingH,
+        )
         else -> FileContent(msg, isGroup, fileRowWidth)
     }
 }
@@ -254,44 +264,6 @@ private fun VideoContent(
     }
 }
 
-/** 语音行。聊天记录详情页也用（那里只有时长与波形，没有整条消息）。 */
-@Composable
-internal fun VoiceContent(durationMs: Long?, waveform: String?) {
-    val c = IMTheme.colors
-    // 宽度按时长走，与 iOS `IMVoiceBubbleCell` 同一个式子：MIN(240, MAX(160, 96 + dur*3.6))。
-    // **下限是 160 不是 96**——本端一开始写成 96，一秒的语音气泡只有 iOS 的一半宽。
-    val secs = ((durationMs ?: 0L) / 1000f)
-    val w = minOf(240f, maxOf(160f, 96f + secs * 3.6f)).dp
-    Row(
-        modifier = Modifier.width(w).padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier.size(28.dp).clip(CircleShape).background(c.accentSoft),
-            contentAlignment = Alignment.Center,
-        ) { Image(Lucide.Mic, stringResource(R.string.favorites_category_voice), Modifier.size(14.dp), colorFilter = ColorFilter.tint(c.accent)) }
-        Spacer(Modifier.width(8.dp))
-        // 真波形：waveform(base64) → 0~1 柱高。缺字段时 Waveform 自己退化成等高条纹
-        // （协议允许的合法状态，不是错误）。桶内取**最大值**不是平均——取平均会把波形抹平。
-        val bars = remember(waveform) { Waveform.barsOf(waveform, BAR_COUNT) }
-        Row(
-            Modifier.weight(1f).height(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            bars.forEach { h ->
-                Box(
-                    Modifier.padding(end = 2.dp).width(2.dp)
-                        // 最低 3dp：振幅为 0 的静音段也要看得见柱子，否则波形中间会"断掉"
-                        .height((3f + h * 15f).dp)
-                        .background(c.accent.copy(alpha = 0.7f), RoundedCornerShape(1.dp)),
-                )
-            }
-        }
-        Spacer(Modifier.width(6.dp))
-        Text(MediaUrl.formatDuration(durationMs?.toInt()), color = c.textSecondary, fontSize = 11.sp)
-    }
-}
-
 @Composable
 private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp) {
     val c = IMTheme.colors
@@ -349,7 +321,6 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp) {
 }
 
 /** 语音波形柱数。与气泡宽度无关（下采样已按比例取），够看出起伏即可。 */
-private const val BAR_COUNT = 24
 
 /**
  * 媒体气泡右下角的时间 + 状态胶囊（对齐 iOS `IMImageCell` 的 `_metaWrap`：高 18、圆角 9、左右 6）。

@@ -111,6 +111,7 @@ internal fun ChatDetailScreen(
     onBack: () -> Unit,
 ) {
     val c = IMTheme.colors
+    com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave() // 离开本页暂停语音（保留位点）
     val d = IMTheme.dimens
     val tabs = DetailTabs.visible(isGroup = false)
     val showBody = !galleryOnly && !isSystemPeer
@@ -204,6 +205,7 @@ internal fun ChatDetailScreen(
             // 系统通知会话没有可归档的媒体/文件/链接，整段不渲染（对齐 Web `showDetailBody`）。
             if (!isSystemPeer) archiveTab(
                 tab = tab,
+                convId = conv.convId,
                 archive = archive,
                 linkMessages = linkMessages,
                 loading = loading,

@@ -133,6 +133,7 @@ fun GroupInfoScreen(
     galleryOnly: Boolean = false,
 ) {
     val c = IMTheme.colors
+    com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave() // 离开本页暂停语音（保留位点）
     val d = IMTheme.dimens
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
@@ -317,6 +318,7 @@ fun GroupInfoScreen(
                 }
                 else -> archiveTab(
                     tab = tab,
+                    convId = info.convId,
                     archive = archive,
                     linkMessages = linkMessages,
                     loading = archiveLoading,
