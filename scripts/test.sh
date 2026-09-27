@@ -59,7 +59,20 @@ step "4/4 单测"
 # **不写 :app:** —— 裸任务名会在所有模块上跑。2026-09-07 拆出 :media-picker 后
 # 这里若还写死 :app:，模块里的 6 个测试类会一条都不跑，而输出照样是绿的。
 if [ -n "${ONLY:-}" ]; then
-  ./gradlew testDebugUnitTest --console=plain --tests "*${ONLY}*" || { echo "✗ 单测失败"; exit 1; }
+  # 过滤器只交给**含匹配测试的模块**：裸任务名会把 --tests 套到每个模块，没匹配的模块直接报
+  # "No tests found for given includes" 让整次失败（:media-picker 拆出后 ONLY= 就一直是坏的，2026-09-27 修）。
+  # **按文件名而不是文件内容**匹配——грep 文件内容会被注释/字符串里恰好出现同名子串骗过
+  # （比如某模块的测试只在一句注释里提到了 ONLY 值），选中一个其实没有匹配用例的模块，
+  # `--tests` 落到它头上照样报 "No tests found for given includes"，等于这条修复白修。
+  # Kotlin 一文件一公开类的约定下，文件名与类名同源，比内容子串精确得多。
+  tasks=""
+  for m in */src/test; do
+    mod=${m%%/*}
+    find "$m" -name "*.kt" | grep -qF "${ONLY%%.*}" && tasks="$tasks :$mod:testDebugUnitTest"
+  done
+  [ -n "$tasks" ] || { echo "✗ ONLY=${ONLY}：各模块 src/test 下都没有匹配的测试"; exit 1; }
+  # shellcheck disable=SC2086
+  ./gradlew $tasks --console=plain --tests "*${ONLY}*" || { echo "✗ 单测失败"; exit 1; }
 else
   ./gradlew testDebugUnitTest --console=plain || { echo "✗ 单测失败"; exit 1; }
 fi
@@ -71,9 +84,13 @@ fi
 # 于是按残留 XML 求和会**少报**（那次把 182 报成了 141，连报了四次）。
 # 所以下面同时数一遍源码里的测试类，两边对不上就明说——**宁可吵，也不要报一个假数字**。
 python3 - <<'PY' 2>/dev/null || true
-import glob, re
+import glob, os, re
 t = f = e = s = 0
+only = os.environ.get('ONLY', '').split('.')[0]
 files = glob.glob('*/build/test-results/testDebugUnitTest/*.xml')
+# ONLY 模式：目录里还躺着上次全量的报告，只数名字匹配的那几个，也不拿源码类数来比
+if only:
+    files = [p for p in files if only in os.path.basename(p)]
 for p in files:
     h = open(p).read(2000)
     t += int(re.search(r'tests="(\d+)"', h).group(1))
@@ -88,7 +105,7 @@ for path in glob.glob('*/src/test/**/*.kt', recursive=True):
 print(f"\n用例 {t} · 失败 {f} · 错误 {e} · 跳过 {s} （{len(files)} 个测试类）")
 if t == 0:
     print("⚠ 一条用例都没跑到——检查 --tests 过滤或源集配置。")
-elif len(files) != len(src):
+elif not only and len(files) != len(src):
     print(f"⚠ 报告里 {len(files)} 个测试类，源码里 {len(src)} 个——**这个用例数不可信**。")
     print("  多半是上一次失败留下的残留报告 + 本次 UP-TO-DATE 没重写。")
     print("  跑 `rm -rf */build/test-results && ./scripts/test.sh` 拿真实数字。")
