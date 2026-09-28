@@ -61,6 +61,11 @@ fun MeHost(
                 onOpenChat = onOpenChat,
                 onBack = { page = MePage.List },
             )
+            MePage.CallHistory -> CallHistoryHost(
+                client = client,
+                onOpenChat = onOpenChat,
+                onBack = { page = MePage.List },
+            )
             MePage.Devices -> DevicesHost(client = client, onBack = { page = MePage.List })
             MePage.DataStorage -> DataStorageHost(client = client, onBack = { page = MePage.List })
             MePage.Privacy -> PrivacySecurityHost(client = client, onBack = { page = MePage.List })
@@ -86,6 +91,7 @@ fun MeHost(
                         onOpenDataStorage = { page = MePage.DataStorage },
                         onOpenPrivacy = { page = MePage.Privacy },
                         onOpenFavorites = { page = MePage.Favorites },
+                        onOpenCallHistory = { page = MePage.CallHistory },
                         onOpenLanguage = { page = MePage.Language },
                         onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                         onLogout = { confirmLogout = true },

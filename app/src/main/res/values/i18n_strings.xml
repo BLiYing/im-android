@@ -64,6 +64,12 @@
     <string name="blocked_title">已屏蔽的用户</string>
     <string name="blocked_unblock">取消屏蔽</string>
     <string name="blocked_unblock_failed">取消屏蔽失败：%1$s</string>
+    <string name="call_history_empty">暂无通话记录</string>
+    <string name="call_history_group_summary">%1$s · %2$d人</string>
+    <string name="call_history_group_video">群视频通话</string>
+    <string name="call_history_group_voice">群语音通话</string>
+    <string name="call_history_tab_all">全部</string>
+    <string name="call_history_tab_missed">未接</string>
     <string name="call_record_cancelled">已取消</string>
     <string name="call_record_cancelled_by_peer">对方已取消</string>
     <string name="call_record_declined">已拒绝</string>

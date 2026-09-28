@@ -64,6 +64,12 @@
     <string name="blocked_title">Blocked users</string>
     <string name="blocked_unblock">Unblock</string>
     <string name="blocked_unblock_failed">Couldn’t unblock: %1$s</string>
+    <string name="call_history_empty">No call history</string>
+    <string name="call_history_group_summary">%1$s · %2$d people</string>
+    <string name="call_history_group_video">Group video call</string>
+    <string name="call_history_group_voice">Group voice call</string>
+    <string name="call_history_tab_all">All</string>
+    <string name="call_history_tab_missed">Missed</string>
     <string name="call_record_cancelled">Cancelled</string>
     <string name="call_record_cancelled_by_peer">Cancelled</string>
     <string name="call_record_declined">Declined</string>
