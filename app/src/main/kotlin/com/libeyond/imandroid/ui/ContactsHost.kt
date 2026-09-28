@@ -164,6 +164,11 @@ fun ContactsHost(
                         onSendMessage = { u ->
                             onOpenChat(client.conversationStubFor(u.userId, u.displayName, u.avatarUrl))
                         },
+                        // 改完备注立即回填列表这份状态，否则退回好友列表那一行仍显编辑前的旧值
+                        // （`friends` 只在挂载 / 收到 friend 帧时才重拉，与 ChatDetailHost 同一个坑）
+                        onRemarkChanged = { v ->
+                            friends = friends.map { if (it.userId == f.userId) it.copy(remark = v) else it }
+                        },
                         onBack = { page = ContactsPage.List },
                     )
                 }

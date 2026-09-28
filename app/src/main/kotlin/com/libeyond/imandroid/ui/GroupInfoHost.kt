@@ -109,6 +109,8 @@ fun GroupInfoHost(
     var pick by remember(convId) { mutableStateOf<PickPurpose?>(null) }
     var picked by remember(convId) { mutableStateOf<Set<String>>(emptySet()) }
     var friends by remember(convId) { mutableStateOf<List<FriendEntry>>(emptyList()) }
+    // 成员资料页改备注的本机覆盖：`knownFriends` 整会话只拉一次，不接会显旧值（同 ChatDetailHost 的坑）
+    var remarkOverrides by remember(convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     var confirmTransfer by remember(convId) { mutableStateOf<GroupMember?>(null) }
     // 头部操作排「更多」里那几件要二次确认的事（清空/退群/解散）
     var confirmMore by remember(convId) { mutableStateOf<DetailMoreAction?>(null) }
@@ -319,7 +321,7 @@ fun GroupInfoHost(
             onBack = { joinReqs = null },
         )
     } else if (mp != null) {
-        val f = knownFriends[mp.userId]
+        val f = knownFriends[mp.userId]?.let { fe -> fe.copy(remark = remarkOverrides[mp.userId] ?: fe.remark) }
         UserProfileHost(
             client = client,
             userId = mp.userId,
@@ -330,6 +332,7 @@ fun GroupInfoHost(
                 memberProfile = null
                 onOpenChat(client.conversationStubFor(card.userId, card.displayName, card.avatarUrl))
             },
+            onRemarkChanged = { v -> remarkOverrides = remarkOverrides + (mp.userId to v) },
             onBack = { memberProfile = null },
         )
     } else if (viewing != null) {
