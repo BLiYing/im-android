@@ -12,14 +12,15 @@ package com.libeyond.imandroid.data
  * **一个按当前页派发的 `when`**：枚举加一个值，`when` 就编译不过，漏不掉。
  * 同 `ChatOverlays.topmost` 的思路。
  */
-enum class GroupInfoPage { Pick, JoinRequests, Bans, Admins, MemberProfile, Media, Manage, Qr, Detail }
+enum class GroupInfoPage { Pick, JoinRequests, Bans, Admins, MemberProfile, MemberSearch, Media, Manage, Qr, Detail }
 
 object GroupInfoNav {
 
     /**
      * 当前页。**顺序即层级**，由深到浅：
      * 选人页（从管理员页/管理页进，最深）> 待审申请 / 黑名单 / 管理员（都从管理页进）>
-     * 成员资料（从详情进）> 媒体归档（从详情进）> 管理页 > 详情。
+     * 成员资料（从详情**或**成员搜索页进——两者都能点开一个人）> 成员搜索（从详情进）>
+     * 媒体归档（从详情进）> 管理页 > 详情。
      */
     fun current(
         pickOpen: Boolean,
@@ -27,6 +28,8 @@ object GroupInfoNav {
         bansOpen: Boolean,
         adminsOpen: Boolean,
         memberProfileOpen: Boolean,
+        /** 群成员搜索页（大群专用，`GroupMemberSearch.shouldOffer` 门控入口）开着。 */
+        memberSearchOpen: Boolean = false,
         /** 媒体**查看器**开着（不是归档页——2026-09-09 起归档是详情页里的内联页签，不再是独立一页）。 */
         mediaOpen: Boolean,
         managing: Boolean,
@@ -38,6 +41,7 @@ object GroupInfoNav {
         bansOpen -> GroupInfoPage.Bans
         adminsOpen -> GroupInfoPage.Admins
         memberProfileOpen -> GroupInfoPage.MemberProfile
+        memberSearchOpen -> GroupInfoPage.MemberSearch
         mediaOpen -> GroupInfoPage.Media
         managing -> GroupInfoPage.Manage
         qrOpen -> GroupInfoPage.Qr
@@ -59,6 +63,7 @@ object GroupInfoNav {
         GroupInfoPage.Admins -> GroupInfoPage.Manage
         GroupInfoPage.JoinRequests -> GroupInfoPage.Manage
         GroupInfoPage.MemberProfile -> GroupInfoPage.Detail
+        GroupInfoPage.MemberSearch -> GroupInfoPage.Detail
         GroupInfoPage.Media -> GroupInfoPage.Detail
         GroupInfoPage.Manage -> GroupInfoPage.Detail
         GroupInfoPage.Qr -> GroupInfoPage.Detail

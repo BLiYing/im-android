@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Search
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
@@ -42,6 +43,7 @@ import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailAction
 import com.libeyond.imandroid.data.DetailTab
 import com.libeyond.imandroid.data.DetailTabs
+import com.libeyond.imandroid.data.GroupMemberSearch
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.data.DetailMoreAction
@@ -74,6 +76,8 @@ fun GroupInfoScreen(
     members: List<GroupMember>,
     hasMoreMembers: Boolean,
     onLoadMoreMembers: () -> Unit,
+    /** 大群「搜索成员」入口（`GroupMemberSearch.shouldOffer` 门控，超过阈值才显示）。 */
+    onOpenMemberSearch: () -> Unit,
     onOpenMember: (GroupMember) -> Unit,
     onBack: () -> Unit,
     /** 我的 uid——权限判定要用（不能踢自己、不能给自己设管理员）。 */
@@ -301,6 +305,9 @@ fun GroupInfoScreen(
             // —— 页签内容 ——
             when (tab) {
                 DetailTab.Members -> {
+                    if (GroupMemberSearch.shouldOffer(info.memberCount, members.size)) {
+                        item(key = "member_search_entry") { MemberSearchEntryRow(onClick = onOpenMemberSearch) }
+                    }
                     items(members, key = { it.userId }) { m ->
                         MemberRow(m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) })
                     }
@@ -344,7 +351,7 @@ fun GroupInfoScreen(
 
 @Composable
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-private fun MemberRow(m: GroupMember, onClick: () -> Unit, onLongClick: () -> Unit) {
+internal fun MemberRow(m: GroupMember, onClick: () -> Unit, onLongClick: () -> Unit) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Row(
@@ -375,6 +382,28 @@ private fun MemberRow(m: GroupMember, onClick: () -> Unit, onLongClick: () -> Un
                 Text(m.handle, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
             }
         }
+    }
+    Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
+}
+
+/** 「搜索成员」入口行——只在大群（`GroupMemberSearch.shouldOffer`）显示，摆在成员列表最上面。 */
+@Composable
+private fun MemberSearchEntryRow(onClick: () -> Unit) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    Row(
+        modifier = Modifier.fillMaxWidth().background(c.pageBackground).clickable(onClick = onClick)
+            .padding(horizontal = d.space4, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Image(
+            imageVector = Lucide.Search,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.textSecondary),
+        )
+        Spacer(Modifier.width(d.space3))
+        Text(stringResource(R.string.group_member_search), color = c.textSecondary, style = MaterialTheme.typography.bodyLarge)
     }
     Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
 }

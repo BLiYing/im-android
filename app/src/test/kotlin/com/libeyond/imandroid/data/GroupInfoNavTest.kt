@@ -40,6 +40,24 @@ class GroupInfoNavTest {
     }
 
     /**
+     * 成员搜索页排在「成员资料」之后（从搜索结果也能点开一个人，资料要盖在搜索之上）、
+     * 「媒体归档」之前。
+     */
+    @Test
+    fun `成员搜索页排在成员资料之后、媒体归档之前`() {
+        assertEquals(
+            GroupInfoPage.MemberProfile,
+            GroupInfoNav.current(pickOpen = false, joinRequestsOpen = false, bansOpen = false, adminsOpen = false,
+                memberProfileOpen = true, memberSearchOpen = true, mediaOpen = true, managing = true),
+        )
+        assertEquals(
+            GroupInfoPage.MemberSearch,
+            GroupInfoNav.current(pickOpen = false, joinRequestsOpen = false, bansOpen = false, adminsOpen = false,
+                memberProfileOpen = false, memberSearchOpen = true, mediaOpen = true, managing = true),
+        )
+    }
+
+    /**
      * 群二维码/邀请链接页排在「管理页」之后、「详情」之前——`managing` 与 `qrOpen`
      * 结构上互斥（渲染层同一时刻只出一个整页替换分支），但 `current()` 的优先级
      * 仍要显式钉住：`managing=true` 时哪怕 `qrOpen` 也是 true，也该出 `Manage`。
@@ -72,6 +90,7 @@ class GroupInfoNavTest {
     @Test
     fun `成员资料、媒体归档、管理页都退回详情`() {
         assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.MemberProfile))
+        assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.MemberSearch))
         assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.Media))
         assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.Manage))
         assertEquals(GroupInfoPage.Detail, GroupInfoNav.back(GroupInfoPage.Qr))

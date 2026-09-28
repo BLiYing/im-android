@@ -7,6 +7,24 @@
 
 ## 当前焦点
 
+> **群资料页「成员」tab 补搜索入口 ✅（2026-09-28，大群专用，未做真机验证）**：`GroupApi.members()`
+> 早已支持服务端 `?q=` 分页搜索，本轮接上。判据 `data/GroupMemberSearch.kt`（阈值/去抖/续拉/去重，
+> 逐条对齐 iOS `IMGroupMemberSearchViewController` 顶部那组 C 函数，有单测）；新页面
+> `ui/GroupMemberSearchHost.kt`（去抖走 `LaunchedEffect` 换 key 自动取消在途请求，不用像 iOS 那样
+> 手记 search token）+ `ui/screens/GroupMemberSearchScreen.kt`（复用 `IMSearchField`/`MemberRow`）。
+> 群总人数 > 50 时「成员」tab 顶部才出现入口行，恒走服务端过滤不做本地过滤（超级群本地只有已翻到
+> 的那几页，本地过滤会悄悄搜错）。**顺手做的拆分**：`GroupInfoHost.kt` 已贴到 600 行硬闸，把
+> 成员分页那簇状态（`members/cursor/hasMore/loading` + 四处调用点）抽成 `ui/GroupMembersState.kt`
+> （CODING_STYLE §7①），才腾出线程加新页面，改完降到 574 行。新增 `GroupInfoPage.MemberSearch`
+> 枚举页（返回键走既有"一处派发"机制，`GroupInfoNavTest` 补两条层级断言）。
+> **已知简化**：① 未做搜索结果命中高亮（iOS 有，这里判定为纯装饰，跳过）；② 从搜索结果点开一个人的
+> 资料页、又退回来时，搜索词与结果会清空（因为这条路复用 `GroupInfoHost` 顶层"整页替换"导航，
+> 资料页与搜索页互斥、不共存于同一份组合状态里；iOS 用 push/pop 天然不丢，本端要接住得让搜索页
+> 常驻组合树、资料页浮在它上面，超出本轮范围，留作后续小优化）。`./scripts/test.sh` **960/960 绿**
+> （新增 `GroupMemberSearchTest` 7 例 + `GroupInfoNavTest` 补 1 例，均先见红过）。**未做真机验证**：
+> 没有现成的 50+ 人测试群，也没有 Android 端的屏幕自动化工具可用，只验证了编译与 JVM 单测；
+> 入口显隐、搜索/翻页/选人整条链路需要用户真机跑一遍。
+
 > **好友/群成员备注编辑：回填补齐到通讯录列表与群成员资料页 ✅（2026-09-28，`d4cc22e`，已推送）**：
 > `UserProfileHost.onRemarkChanged` 此前只接了 `ChatDetailHost` 一条路（`/code-review` 抓出的坑：
 > 改完备注退回上级页仍显旧值）。补齐两处真正会复现的：`ContactsHost`（好友列表点进资料页改备注，
@@ -79,9 +97,8 @@
 
 ## 下一步
 
-0d. **群资料页「成员」tab 缺搜索入口**（2026-09-24 用户报后调研发现，未改代码）：`GroupApi.members()`
-   已支持 `q` 参数、服务端本就能分页搜索，复用 `MentionComposerState`/`RtcInviteProvider` 的调用模式
-   即可实现；参照 iOS `IMGroupMemberSearchViewController`（搜索框 + 服务端分页 + 下拉加载更多）。
+0d. **群资料页「成员」tab 搜索入口的真机验证**（2026-09-28 已实现，见「当前焦点」，未测）：入口显隐
+   门槛（>50 人）、搜索/去抖/翻页、选中后跳资料页整条链路，需要一个 50+ 人的测试群。
 0b. **上几批仍欠的真机回归**（这两轮没动到、也没回归）：归档查看器「更多」五项、合并转发记录页内翻页、
    长按预览里点图/点链接只关菜单、以及 2026-09-15/16 那两批的清单（见 `current_task.archive.md` 顶部）。
 0c. **本批（2026-09-23）真机回归**——📅/👤/撤回实时刷新/非 UTC+8 时区换算均已测过（见 archive），
