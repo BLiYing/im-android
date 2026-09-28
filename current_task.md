@@ -7,22 +7,20 @@
 
 ## 当前焦点
 
-> **转场没接的几处：第一小块已落地 ✅（`ChatDetailHost` 的 Detail↔Profile，2026-09-28，未做真机验证）**：
-> 上一轮勘察 + 拆分方案见下一段与「下一步 2」。这一块确认过没有数据置空问题（`profile` 只是布尔，
-> `Profile` 分支读的 `conv`/`remark`/`knownFriends` 关闭时都不会被清），所以**不用改数据模型**，
-> 只是把原来 `when (page) { Media -> …; Profile -> …; Detail -> … }` 三分支拆成
-> `if (page == Media) { … } else { PushTransition(targetState = profile, depthOf = { if (it) 1 else 0 })
-> { isProfile -> if (isProfile) UserProfileHost(...) else ChatDetailScreen(...) } }`——**`Media` 刻意
-> 排除在外**（`viewing` 关闭即置空，套进来会引入新的半路变白回归，留给下一块单独处理）。
-> 行为不变，`BackHandler`/`page` 计算/回调参数原样保留，只重排了渲染结构。`./scripts/test.sh`
-> **964/964 绿**（纯渲染层重排，无新增可测分支——Compose 转场动画本仓一贯测不到，见
-> `CLAUDE.md`"单测测不到 Compose 布局与滚动时序"）。**未做真机验证**：改动是否真的产生 iOS 式
-> 滑动效果、有没有意外的入场闪烁，需要真机点「聊天信息」进出资料页看一遍。
-
-> **转场没接的几处：勘察 + 拆分方案（2026-09-28）**：根因是 `PushTransition.kt` 需要
-> 退场页在滑出动画期间仍按冻结的 `state` 渲染，而「没接」的几处是"关闭即置空数据"，套上去会半路
-> 变白；实际横跨三种不同导航形态（互斥枚举页/`ChatHost` 覆盖层栈/用户资料转场并入前者），
-> 不是一次改法通吃。完整诊断 + 建议顺序见「下一步 2」（已更新为最新进度）。
+> **转场没接的几处：第二小块已落地 ✅（`ChatDetailHost` 的 `Media` 查看器，2026-09-28，未做真机验证）**：
+> 上一轮先做了 Detail↔Profile（无数据置空问题，直接套 `PushTransition`）；这一轮补 `Media`——它真的有
+> 置空问题：`viewing: ConvMediaItem?` 身兼"开不开"与"看哪张"两职，关闭时 `viewing = null` 把两者
+> 一起清空。改法：拆成 `viewingOpen: Boolean` + `viewingData: ConvMediaItem?`，关闭（`onClose`/
+> `onLocateInChat`/`BackHandler` 的 Media 分支）只翻 `viewingOpen = false`，`viewingData` 留着不清
+> （下次点开新图/视频才覆盖，见 `onOpenArchive`）；`ChatDetailPage` 加 `depth`（`Detail(0)`/
+> `Profile(1)`/`Media(1)`——Media 与 Profile 都只从 Detail 直接进、彼此没有真实跳转路径，并列同深，
+> 同 `data/PushNav.kt` 里 `ChatsPage`/`ContactsPage` 的写法）；三个分支合并进同一个
+> `PushTransition(targetState = page, depthOf = { it.depth })`，`Media` 不再单独摘出去渲染。
+> `ChatDetailNavTest` 补 1 例钉住三态深度值。`./scripts/test.sh` **965/965 绿**（"关闭不清空数据"
+> 这条本身是 Compose 状态管理写法，不是可单测的纯逻辑，靠代码审查 + 真机验证）。**未做真机验证**：
+> 查看器进出是否真的滑动、`viewingData` 保留旧值这一步有没有意外副作用（比如退出动画途中再次点开
+> 另一张图会不会撞车），需要真机跑一遍。`GroupInfoHost` 的 9 个分支仍是拆分方案里最大的一块，
+> 留给后续。根因诊断与三种导航形态的完整拆分方案见「下一步 2」。
 
 > **离线积压 C2：sync 带 max_gap 闸门 ✅（2026-09-28，只做了 Android 审计建议的第一小块，未做真机验证）**：
 > `../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 审计发现 Android C1~C6 全未启动、
@@ -174,7 +172,7 @@
      （如 `ChatDetailHost` 的 `onClose = { viewing = null }`），退场那一刻数据已经没了，分支渲染出
      空白——套上去就是文档说的"半路变白"，不是简单包一层就行。
    - **实际是三种不同形态，不是一次改法通吃**：
-     ① **互斥枚举页 + 关闭置空数据**的 host（`GroupInfoHost` 8 个分支；`ChatDetailHost` 的 `Media`/
+     ① **互斥枚举页 + 关闭置空数据**的 host（`GroupInfoHost` 9 个分支；`ChatDetailHost` 的 `Media`/
      `viewing` 那支）：改法 = 把"是否打开"和"显示什么数据"拆成两个变量，关闭只翻布尔、数据留着
      （下次打开才覆盖），`when` 改成吃 `PushTransition` 传入的冻结 `state`，不直接读外部活变量。
      ② `ChatHost` 的 `Set<Layer>` 覆盖层栈（`ChatOverlays.kt`：Viewer/UserProfile/**ChatRecord
@@ -186,15 +184,18 @@
      子页导航（`RemarkEditDialog` 是弹窗，不需要滑动转场），这一条实际指的是 `ContactsHost`/
      `ChatDetailHost`/`GroupInfoHost` 各自"进用户资料页"那条边，并入①。
    - **建议顺序（从最小最安全开始）**：
-     1. ✅ **已做（2026-09-28，见「当前焦点」）**：`ChatDetailHost` 的 `Detail↔Profile`——没有数据
-        置空问题，不改数据模型，只重排渲染结构。`PushTransition` 接进已在跑的 host 没撞见其它坑
-        （`ChatDetailNav`/`BackHandler` 的 exhaustive when 原样不动；这条边没用到
-        `stateHolder`/`rememberSaveable`，因为 `ChatDetailScreen`/`UserProfileHost` 本来就没有
-        "退出再进入要保住滚动位置"的既有状态，PushTransition 没让这块变得更差，也没让它变好）。
-     2. `ChatDetailHost` 的 `Media`（`viewing`）与 `GroupInfoHost` 的 8 个分支：都要先做①的
-        "open 标志/data 分离、关闭不清 data"模型改造，一个分支一个分支来；`GroupInfoHost.kt` 574 行
-        还有点余量但刚做过手术，改动别一次铺太开。
-     3. `ChatHost` 覆盖层栈（②）：动手前先跟用户确认要不要做，范围最大且是产品判断。
+     1. ✅ **已做（2026-09-28）**：`ChatDetailHost` 的 `Detail↔Profile`——没有数据置空问题，不改
+        数据模型，只重排渲染结构。
+     2. ✅ **已做（2026-09-28，见「当前焦点」）**：`ChatDetailHost` 的 `Media`——按①的"open 标志/
+        data 分离、关闭不清 data"模型改造（`viewingOpen`/`viewingData`），三分支合并进同一个
+        `PushTransition`。`ChatDetailHost` 这个 host 的转场至此**全部接完**。
+     3. `GroupInfoHost` 的 9 个分支（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/
+        Media/Manage/Qr，注：`GroupInfoPage` 目前 9 个值，`Detail` 不算转场目标）：同样是①的模型
+        改造，但分支数是 `ChatDetailHost` 的 3 倍——一个分支一个分支来，别一次性全改；
+        `GroupInfoHost.kt` 574 行还有点余量但这轮没有再碰它，先摸清单个分支改起来的成本再决定
+        节奏。`GroupInfoHost` 里已经有 `Media`（`viewing`）分支，判据可以直接照抄
+        `ChatDetailHost` 这轮的写法。
+     4. `ChatHost` 覆盖层栈（②）：动手前先跟用户确认要不要做，范围最大且是产品判断。
 3. **卡片弹层推广**：@提及、选文件、已读详情、日期跳转、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`。
 4. **收藏的剩余项**：「以聊天模式查看」（按来源会话分组下钻）、来源名到群昵称级（现只到好友备注/昵称/补拉名片）；**长按菜单缺项**：举报、翻译。
 5. **宫格**按 `IMAlbumRowPattern` 重写布局 + 五道防跳版闸；相册宫格逐格勾选。

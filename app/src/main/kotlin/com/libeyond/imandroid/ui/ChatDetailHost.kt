@@ -74,7 +74,11 @@ fun ChatDetailHost(
     val owner = client.uid.orEmpty()
 
     var profile by remember(conv.convId) { mutableStateOf(false) }
-    var viewing by remember(conv.convId) { mutableStateOf<ConvMediaItem?>(null) }
+    // 拆成两个变量（而不是用 `viewing: ConvMediaItem?` 的非空身兼"开不开"）：关闭时只翻
+    // `viewingOpen`，`viewingData` 留着不清——退场动画那 300ms 里 `PushTransition` 仍按冻结的
+    // `page` 渲染 Media 分支，若这时数据已经被清空就会半路变白（UI_PARITY_IOS.md §4 第 316 行）。
+    var viewingOpen by remember(conv.convId) { mutableStateOf(false) }
+    var viewingData by remember(conv.convId) { mutableStateOf<ConvMediaItem?>(null) }
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
     val saveMedia = rememberMediaSaver { toast = it }
 
@@ -121,11 +125,11 @@ fun ChatDetailHost(
     // 语音页签的波形：服务端归档接口不回带，从本地消息表按 conv_seq 兜底（见 rememberVoiceWaveforms）
     val voiceWaveforms = rememberVoiceWaveforms(client, conv.convId, active = tab == DetailTab.Voice)
 
-    val page = ChatDetailNav.current(mediaOpen = viewing != null, profileOpen = profile)
+    val page = ChatDetailNav.current(mediaOpen = viewingOpen, profileOpen = profile)
     // 返回键一处派发（同 GroupInfoHost；理由见 ChatDetailPage 的注释）
     BackHandler {
         when (page) {
-            ChatDetailPage.Media -> viewing = null
+            ChatDetailPage.Media -> viewingOpen = false
             ChatDetailPage.Profile -> profile = false
             ChatDetailPage.Detail -> onBack()
         }
@@ -146,30 +150,27 @@ fun ChatDetailHost(
         }
     }
 
-    if (page == ChatDetailPage.Media) {
-        viewing?.let { m ->
-            // 翻页 / 「更多」/ 转发都在 ArchiveViewer.kt 里，与群资料那侧共用
-            ArchiveMediaViewer(
-                client = client, convId = conv.convId, isGroup = false, iAmManager = false,
-                archive = archive, current = m, scope = scope,
-                // 查看器标题＝会话名（iOS `IMMediaPagerViewController.conversationTitle`）
-                title = conv.title,
-                onSave = saveMedia,
-                onForwardPicker = { archiveForward = it },
-                onLocateInChat = { seq -> viewing = null; onLocateInChat(seq) },
-                onChanged = { archive.reload() },
-                onToast = { toast = it },
-                onClose = { viewing = null },
-            )
-        }
-    } else {
-        // Detail ↔ Profile：iOS 式 push/pop 滑动转场（UI_PARITY_IOS.md §4 第 316 行）。
-        // **Media 刻意不包进来**：那支的 `viewing` 一关就置空，套进 PushTransition 会在退场动画
-        // 期间读到空值、半路变白——留给后续单独处理（拆分方案见 current_task.md「下一步 2」）。
-        // 这条边没有同类问题：`profile` 只是个布尔标志，Profile 分支读的 `conv`/`remark`/
-        // `knownFriends` 关闭时都不会被清空，可以直接拿它当 targetState。
-        PushTransition(targetState = profile, depthOf = { if (it) 1 else 0 }) { isProfile ->
-            if (isProfile) {
+    // Media / Profile / Detail 三态统一走 iOS 式 push/pop 滑动转场（UI_PARITY_IOS.md §4 第 316 行）。
+    // Media 这支能接进来，靠的是上面把 `viewing` 拆成了 `viewingOpen`/`viewingData`——退场动画
+    // 期间 `page` 虽已冻结成 Media，`viewingData` 也还留着最后那张图，不会半路变白。
+    PushTransition(targetState = page, depthOf = { it.depth }) { state ->
+        when (state) {
+            ChatDetailPage.Media -> viewingData?.let { m ->
+                // 翻页 / 「更多」/ 转发都在 ArchiveViewer.kt 里，与群资料那侧共用
+                ArchiveMediaViewer(
+                    client = client, convId = conv.convId, isGroup = false, iAmManager = false,
+                    archive = archive, current = m, scope = scope,
+                    // 查看器标题＝会话名（iOS `IMMediaPagerViewController.conversationTitle`）
+                    title = conv.title,
+                    onSave = saveMedia,
+                    onForwardPicker = { archiveForward = it },
+                    onLocateInChat = { seq -> viewingOpen = false; onLocateInChat(seq) },
+                    onChanged = { archive.reload() },
+                    onToast = { toast = it },
+                    onClose = { viewingOpen = false },
+                )
+            }
+            ChatDetailPage.Profile -> {
                 val f = knownFriends[conv.peerUid]
                 UserProfileHost(
                     client = client,
@@ -187,7 +188,8 @@ fun ChatDetailHost(
                     onRemarkChanged = { v -> remark = v },
                     onBack = { profile = false },
                 )
-            } else {
+            }
+            ChatDetailPage.Detail -> {
                 ChatDetailScreen(
                     conv = conv,
                     title = conv.title.ifBlank { conv.peerUid },
@@ -203,7 +205,9 @@ fun ChatDetailHost(
                     hasMore = archive.hasMore,
                     onLoadMore = { archive.loadMore() },
                     onOpenArchive = { item ->
-                        openArchiveItem(client, context, item, onToast = { toast = it }) { viewing = it }
+                        openArchiveItem(client, context, item, onToast = { toast = it }) {
+                            viewingData = it; viewingOpen = true
+                        }
                     },
                     onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
                     onOpenLink = { url -> openLink?.invoke(url) },

@@ -23,6 +23,17 @@ class ChatDetailNavTest {
         assertEquals(3, ChatDetailPage.entries.size)
     }
 
+    /**
+     * `depth` 供 `PushTransition` 判转场方向（`ui/ChatDetailHost.kt`）：`Media`/`Profile` 都只从
+     * `Detail` 直接进、互相之间没有真实跳转路径，深度同为 1——钉住这个约定，改错了转场方向会错。
+     */
+    @Test
+    fun `Media 与 Profile 深度相同、都比 Detail 深一层`() {
+        assertEquals(0, ChatDetailPage.Detail.depth)
+        assertEquals(1, ChatDetailPage.Profile.depth)
+        assertEquals(1, ChatDetailPage.Media.depth)
+    }
+
     @Test
     fun `媒体与资料都退回详情`() {
         assertEquals(ChatDetailPage.Detail, ChatDetailNav.back(ChatDetailPage.Media))
