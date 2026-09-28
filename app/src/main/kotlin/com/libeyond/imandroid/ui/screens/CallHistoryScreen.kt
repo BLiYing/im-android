@@ -188,8 +188,8 @@ private fun subtitleOf(record: IMCallHistoryRecord, outgoing: Boolean): String {
 /** 群通话行副标题/兜底名：「群语音通话 · N人」/「群视频通话 · N人」。 */
 @Composable
 private fun groupSummary(record: IMCallHistoryRecord): String {
-    val kind = stringResource(if (record.mediaType == "video") R.string.call_history_group_video else R.string.call_history_group_voice)
-    return stringResource(R.string.call_history_group_summary, kind, CallHistory.groupMemberCount(record))
+    val kind = stringResource(if (record.mediaType == "video") R.string.call_record_kind_video else R.string.call_record_kind_voice)
+    return stringResource(R.string.call_history_group_subtitle, kind, CallHistory.groupMemberCount(record))
 }
 
 /** 群通话统一的渐变底图标（不是群头像——通话参与者 ≠ 群成员，设计文档 §2）。 */
