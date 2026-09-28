@@ -17,6 +17,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import com.libeyond.imandroid.data.ChatEntry
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
@@ -239,7 +244,8 @@ internal fun ChatListSync(
             marks.locatingUntil = 0L // 自己发了东西就该回到最新，刚才那次跳转作废
         }
         marks.outgoing = outgoingKeys
-        val grew = rows.size > marks.rowsSize
+        val previousRowsSize = marks.rowsSize
+        val grew = rows.size > previousRowsSize
         marks.rowsSize = rows.size
         // 刚跳到某条：换锚点窗让行数变了，这时跟底会把刚居中的目标甩走
         if (SystemClock.uptimeMillis() < marks.locatingUntil) return@LaunchedEffect
@@ -250,7 +256,11 @@ internal fun ChatListSync(
         // 只在**变多**时跟：ack 把待发换成已确认、行数不变，那时 animateScrollToItem 会把比屏高的最后一行滚回开头
         if (!grew) return@LaunchedEffect
         val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-        if (ChatEntry.shouldAutoScroll(last, rows.size)) {
+        // 「贴不贴底」要拿长出来**之前**的总行数去比，不能拿长出来之后的新总数——
+        // new_msg 一条条来时新增 1 行，2 行的容差（NEAR_BOTTOM_SLACK）盖得住这点测量延迟，看着像没事；
+        // 断线重连补收 / 连发好几条一次性长出 ≥3 行时，拿新总数一比，明明贴着旧的底也会跌出容差，
+        // 判成「在翻历史」不跟，表现为「聊天页收到新消息，列表没滚到最新那条」（2026-09-28 用户报）。
+        if (ChatEntry.shouldAutoScroll(last, previousRowsSize)) {
             listState.animateScrollToItem(rows.size - 1)
         }
     }
@@ -322,3 +332,35 @@ internal suspend fun centerItem(listState: LazyListState, index: Int) {
     val delta = ChatScroll.centerDeltaPx(info.offset, info.size, layout.viewportStartOffset, layout.viewportEndOffset)
     if (delta != 0) listState.scrollBy(delta.toFloat())
 }
+
+private const val SCROLLBAR_WIDTH_DP = 3
+private const val SCROLLBAR_TRAILING_MARGIN_DP = 1
+
+/**
+ * 聊天列表右侧的细滚动条。判据在 [ChatScroll.scrollbarThumb]，这里只画——
+ * Compose Foundation 在 Android 上没有现成的滚动条（Web/iOS 都是系统白送的，
+ * 本端此前一直没有，聊天页翻长会话时完全没有"大概翻到哪了"的提示）。
+ */
+internal fun Modifier.chatScrollbar(listState: LazyListState, color: Color): Modifier =
+    drawWithContent {
+        drawContent()
+        val layout = listState.layoutInfo
+        val visible = layout.visibleItemsInfo
+        if (visible.isEmpty()) return@drawWithContent
+        val averageRowHeightPx = visible.sumOf { it.size } / visible.size.toFloat()
+        val first = visible.first()
+        val thumb = ChatScroll.scrollbarThumb(
+            totalRows = layout.totalItemsCount,
+            firstVisibleIndex = first.index,
+            firstVisibleOffset = first.offset,
+            averageRowHeightPx = averageRowHeightPx,
+            viewportHeightPx = layout.viewportSize.height.toFloat(),
+        ) ?: return@drawWithContent
+        val widthPx = SCROLLBAR_WIDTH_DP.dp.toPx()
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(size.width - widthPx - SCROLLBAR_TRAILING_MARGIN_DP.dp.toPx(), thumb.topPx),
+            size = Size(widthPx, thumb.heightPx),
+            cornerRadius = CornerRadius(widthPx / 2f, widthPx / 2f),
+        )
+    }

@@ -564,7 +564,8 @@ class MessageRepository(
 
     // ————————————————— 内部 —————————————————
 
-    private suspend fun bumpConversation(
+    /** internal 不是 private：[MessageSync.bumpConversationFromLatest] 要复用同一份 bump 逻辑。 */
+    internal suspend fun bumpConversation(
         owner: String,
         convId: String,
         row: MessageEntity,

@@ -64,6 +64,9 @@ internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData)
     val nextCursors = mutableListOf<SyncCursorItem>()
     for (c in resp.conversations) {
         val firstFailed = repo.onIncomingBatch(owner, c.messages)
+        // 补收的这一页要跟着 bump 会话列表快照，否则重连补收的消息只进聊天页、
+        // 不进列表排序（见 MessageRepository.bumpConversationFromLatest 的注释）。
+        if (c.messages.isNotEmpty()) repo.bumpConversationFromLatest(owner, c.convId)
         repo.advanceCursor(owner, c.convId, c.coveredConvSeq, firstFailed)
         log.i(
             "sync_page_applied",
@@ -83,6 +86,21 @@ internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData)
     }
     // 同步完刷一次会话列表，未读数以服务端为准
     refreshConversations()
+}
+
+/**
+ * 用某会话此刻已落库的最新一条 bump 会话列表快照（预览文案 / `lastTimestamp` / `lastConvSeq`），
+ * **不碰未读**——未读走上面 [applySync] 末尾 `refreshConversations()` 的服务端权威值，这里瞎加会跟它打架。
+ *
+ * 断线重连补收（`sync_resp`）专用：[MessageRepository.onIncomingBatch] 只管落 `message` 表，
+ * 从不碰 `conversation` 表，于是补收的这批消息只进得了聊天页、进不了会话列表排序——会话不上移、
+ * 预览还停在断线前那条（2026-09-28 用户报「收到新消息，会话没有上移到前面」）。
+ * `window_resp`（锚点开窗，见 [MessageService] 的 `WINDOW_RESP` 分支）**不该**调用这个：
+ * 那是翻历史，把很久以前的锚点消息当"最新一条"bump 会把会话错误地顶到最前面。
+ */
+internal suspend fun MessageRepository.bumpConversationFromLatest(owner: String, convId: String) {
+    val latest = messages.latestWindow(owner, convId, 1).firstOrNull() ?: return
+    bumpConversation(owner, convId, latest)
 }
 
 /** 重连后把在途未确认的消息按同一 client_msg_id 重发。 */

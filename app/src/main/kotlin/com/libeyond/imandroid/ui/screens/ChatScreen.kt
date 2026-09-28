@@ -374,7 +374,8 @@ fun ChatScreen(
                     onClosePanel = { attachOpen = false },
                     onDismissKeyboard = { focusManager.clearFocus() },
                 )
-                .padding(horizontal = d.chatAvatarLeading),
+                .padding(horizontal = d.chatAvatarLeading)
+                .chatScrollbar(listState, c.textTertiary.copy(alpha = 0.4f)),
             // 行距 5、最后一条距输入栏 3：iOS 的间距全长在 cell 里（顶 2 底 3），换成列表的说法就是这三个数
             contentPadding = PaddingValues(top = d.chatListPaddingTop, bottom = d.chatListPaddingBottom),
             verticalArrangement = Arrangement.spacedBy(d.chatRowGap),
