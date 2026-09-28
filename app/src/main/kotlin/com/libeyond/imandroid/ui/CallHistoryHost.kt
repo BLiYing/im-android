@@ -49,7 +49,8 @@ internal class CallHistoryList {
     var loading by mutableStateOf(true)
     var loadingMore by mutableStateOf(false)
     var failed by mutableStateOf(false)
-    var unauthorized by mutableStateOf(false)
+    /** 首页拉取失败时的错误详情；翻页失败不存（UX 稿 §04-B：翻页失败静默，仅首页失败才占满屏）。 */
+    var lastError by mutableStateOf<IMRTCError?>(null)
 
     val hasMore: Boolean get() = nextCursor != null
 
@@ -60,8 +61,11 @@ internal class CallHistoryList {
         generation++
         val gen = generation
         loading = true
+        // reload 让在途的 loadMore（若有）作废（generation 已变），但那条请求的 finally 不会再跑到——
+        // 这里顺手清掉 loadingMore，否则它会卡 true 到本次 Composable 生命周期结束（/code-review 2026-09-29 发现）。
+        loadingMore = false
         failed = false
-        unauthorized = false
+        lastError = null
         scope.launch {
             val (page, error) = fetch(null)
             if (gen != generation) return@launch
@@ -71,7 +75,7 @@ internal class CallHistoryList {
                 nextCursor = page.nextCursor
             } else {
                 failed = true
-                unauthorized = error?.code == RTC_TOKEN_INVALID
+                lastError = error
                 log.w("call_history_load_failed", "code" to (error?.code ?: -1))
             }
         }
@@ -190,7 +194,18 @@ internal fun CallHistoryHost(
 
     val shown = if (tab == CallHistoryTab.Missed) CallHistory.missedOnly(list.items, owner) else list.items
     val groups = CallHistory.groupByDay(shown, System.currentTimeMillis(), TimeFormat::dayLabel)
-    val errorText = stringResource(if (list.unauthorized) R.string.rtc_error_not_started else R.string.common_load_failed)
+    // 三档文案（/code-review 2026-09-29：原先不管什么错误都归成"未登录/通用失败"两档，把引擎未起来的
+    // 具体原因（如 local.properties 缺配置）吞掉了）：
+    // ① 服务端判定登录票据失效 → 复用既有的"登录已失效"文案，别的错误不许套这句；
+    // ② 引擎压根没起来（本机 RtcCall 自己拼的 IMRTCError，message 是 host 自己给的、可直接显示，
+    //    不是 SDK 的 message——SDK 的 message 只给开发者看，见 IMRTCError 文档注释）；
+    // ③ 其它（真实网络/服务端错误）→ 通用「加载失败，点击重试」，不透传 SDK message 给用户。
+    val engineNotStartedReason = list.lastError?.takeIf { it.name == "rtc_not_started" }?.message
+    val errorText = when {
+        list.lastError?.code == RTC_TOKEN_INVALID -> stringResource(R.string.common_login_expired)
+        !engineNotStartedReason.isNullOrBlank() -> engineNotStartedReason
+        else -> stringResource(R.string.call_history_load_failed)
+    }
 
     CallHistoryScreen(
         me = owner,
