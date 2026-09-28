@@ -94,6 +94,12 @@
 
 ## 已知坑 / 限制
 
+- **语音转文字 code review 跳过的两条小优化（2026-09-28，均不影响行为，留作后续）**：
+  ① `VoiceTranscriptStore.putText` 每写一条都把整份 FIFO 顺序表（最多 2000 条）`joinToString` 后重写
+  SharedPreferences——填满缓存近似 O(n²)，量小暂不改；要改可只在淘汰时写顺序表，或改落 Room。
+  ② `PendingBubbles.kt` 的 `PendingVoiceBubble` 里 `bubbleWidthDp(...).dp.coerceAtLeast(160.dp)` 是多余的
+  （`VoiceRules.bubbleWidthDp` 已保证 ≥160），可删。
+
 - **`MessageService.resend`（点红❗重试）此前对 `Failed` 状态的行完全无效**（2026-09-28 随语音录制一起修）：
   它查 `repo.inFlight()`，而那个方法只挑 `state=Sending` 的行——`Failed` 的行永远查不到，点了跟没点一样，
   过去没人发现是因为没人真的手测过这条路径。已改成 `pendingByClientId` 按 `clientMsgId` 直查、不按状态过滤。
