@@ -7,7 +7,6 @@ import com.imrtc.engine.IMCallEngine
 import com.imrtc.engine.IMCallEngineListener
 import com.imrtc.engine.IMCallOptions
 import com.imrtc.engine.IMCallSummary
-import com.imrtc.engine.IMDebugTokenGenerator
 import com.imrtc.engine.IMKickedOutReason
 import com.imrtc.engine.log.IMRTCLog
 import com.imrtc.engine.media.IMVideoProfile
@@ -19,21 +18,33 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.data.ResolvedLanguage
 import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.sdk.api.RtcApi
+import com.libeyond.imandroid.sdk.api.RtcTokenResult
+import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.logging.IMLog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * im-rtc 通话的宿主侧接入点（**只有主线程调用**）。
  *
- * - [start]：用户进入主界面（IM 已登录）时调用——建引擎、本机签调试票、登录 im-rtc，此后能拨也能接。
+ * - [start]：用户进入主界面（IM 已登录）时调用——建引擎、向 IMServer 换票、登录 im-rtc，此后能拨也能接。
  * - [stop]：退出 / 被踢 / 被封离开主界面时调用——销毁引擎、断开 im-rtc。**不停的话换账号会有两条连接，服务端踢掉其中一条。**
  * - [placeSingle] / [placeGroup]：业务入口调用，界面全部由 Kit 接管。
  *
- * 票从哪来（调试签票 / 后台接口）只在 [signToken] 一处，以后加开关只改这里。
+ * 票从哪来只在 [signToken] 一处（调 IMServer `POST /api/v1/rtc/token` 代为向 im-rtc-server
+ * 换票，本端不知道任何签名密钥）。对端：iOS `IMRtcCall.m`、im-web `src/rtc/rtcEngine.ts`。
  */
 object RtcCall {
 
     private val log = IMLog.tag("IM.Rtc")
     private val main = Handler(Looper.getMainLooper())
+
+    /** 只用于换票这类"回调触发、需要挂起"的场景（续票 / 被踢后重签）；本身长期存活，跟随进程。 */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var appContext: Context? = null
     private var engine: IMCallEngine? = null
@@ -44,6 +55,9 @@ object RtcCall {
 
     /** 每次 start/stop 加一：旧引擎迟到的回调（stale）一律不算数，别改动新一代的状态。 */
     private var generation = 0L
+
+    /** 上一次 [start] 是否因换票失败而没能登录（引擎已回收）；[unavailableReason] 据此给出更准的提示。 */
+    @Volatile private var tokenFetchFailed = false
 
     /**
      * 通话结束后该落一条通话记录时的回调（只对**主叫**触发，见 [RtcCallRecords]）。
@@ -59,11 +73,14 @@ object RtcCall {
      *
      * **同一账号同一设备重复调用是空操作**：宿主 Activity 重建（转屏 / 被系统回收再起）时界面状态会重跑一遍
      * 「进入主界面」，这时不能把正在进行的通话连引擎一起销毁。
+     *
+     * `rtcApi` 来自调用方持有的 `IMClient.rtc`——换票要用它，本端不持有全局单例。
      */
     fun start(
         context: Context,
         uid: String,
         deviceId: String,
+        rtcApi: RtcApi,
         profiles: RtcProfileResolver? = null,
         invites: com.imrtc.uikit.IMInviteMemberProvider? = null,
         config: RtcConfig = RtcConfig.fromBuild(),
@@ -78,6 +95,7 @@ object RtcCall {
         RtcIds.problem("device_id", deviceId)?.let { log.w("rtc_disabled", "reason" to it); return }
 
         installSdkLog()
+        tokenFetchFailed = false
         val ctx = context.applicationContext
         appContext = ctx
         this.uid = uid
@@ -86,7 +104,7 @@ object RtcCall {
         val instance = IMCallEngine(
             IMCallEngine.Config(url = config.wsUrl, deviceId = deviceId),
             // Kit 包一层：宿主的 listener 照常收到全部回调，Kit 只是搭个便车。
-            IMCallKit.wrap(HostListener(gen, config)),
+            IMCallKit.wrap(HostListener(gen, rtcApi, config)),
             // 采集画质 1080p：换档位要换适配器实例（即重登），不能通话中改。
             IMWebRTCAdapter(ctx, IMVideoProfile.P1080),
         )
@@ -101,10 +119,23 @@ object RtcCall {
             inviteMemberProvider = invites
             locale = imLocaleOf(LanguageStore.resolved)
         })
-        val token = signToken(config)
-        log.i("rtc_start", "uid" to uid, "app" to config.appId, "url" to config.wsUrl)
-        instance.login(token) { _, error ->
-            if (error != null) log.w("rtc_login_failed", "code" to error.code, "name" to error.name)
+        log.i("rtc_start", "uid" to uid, "url" to config.wsUrl)
+        scope.launch {
+            val token = signToken(rtcApi)
+            // 换票是异步网络请求：这段时间里可能又 stop 了（登出/切账号），generation 变了就不该
+            // 再对一个已经被销毁的 engine 发 login（同 HostListener 的 stale 判定同一个思路）。
+            if (gen != generation) return@launch
+            if (token == null) {
+                // 换票失败：引擎已经建好但从未登录过，必须回收——否则 isStarted 会一直是 true，
+                // 且 start() 顶部「同账号同设备重复调用是空操作」的幂等判断会挡住下次重试，
+                // 通话功能会卡死到下次账号切换 / 重启 App 为止。
+                tokenFetchFailed = true
+                stop()
+                return@launch
+            }
+            instance.login(token) { _, error ->
+                if (error != null) log.w("rtc_login_failed", "code" to error.code, "name" to error.name)
+            }
         }
     }
 
@@ -186,18 +217,42 @@ object RtcCall {
     // 联调期专用诊断：local.properties 缺配置只会在开发机上出现，不译（同 IMLog 只给开发看的口径）。
     private fun unavailableReason(): String? = when {
         engine != null -> null
+        tokenFetchFailed -> Str.s(R.string.rtc_error_token_fetch_failed)
         !RtcConfig.fromBuild().isUsable ->
             "通话未配置：local.properties 缺 " + RtcConfig.fromBuild().missing.joinToString("、")
         else -> Str.s(R.string.rtc_error_not_started)
     }
 
-    /** 票的唯一来源。联调期本机签调试票；接了后台换票接口之后这里改成调接口。 */
-    private fun signToken(config: RtcConfig): String = IMDebugTokenGenerator.generateDebugToken(
-        appId = config.appId, keyId = config.keyId, secret = config.secret,
-        uid = uid, deviceId = deviceId,
-    )
+    /**
+     * 票的唯一来源：调 IMServer 代为向 im-rtc-server 换票，本端不需要也不该知道任何签名密钥。
+     * `rtcApi` 内部的 `HttpClient` 已经带着当前 IM 会话的 Bearer token（跟项目里其它业务接口
+     * 同一套鉴权），换票失败（未登录 / 未配置 / 网络异常）只记日志、返回 null——调用方据此把
+     * 通话入口当"不可用"静默处理，不打扰主流程。
+     */
+    private suspend fun signToken(rtcApi: RtcApi): String? {
+        val result = try {
+            Result.success(rtcApi.fetchToken())
+        } catch (e: CancellationException) {
+            throw e // 协程取消必须透传，裸 catch(Exception) 会把它也吞掉（本仓 runCatchingCancellable 同款教训）。
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+        val token = rtcTokenFrom(result)
+        if (token == null) {
+            when (val err = result.exceptionOrNull()) {
+                is ApiException -> log.w("rtc_sign_failed", "code" to err.code, "msg" to err.message)
+                null -> log.w("rtc_sign_failed", "reason" to "响应缺少 token")
+                else -> log.w("rtc_sign_failed", "err" to err.javaClass.simpleName, "msg" to (err.message ?: ""))
+            }
+        }
+        return token
+    }
 
-    private class HostListener(private val gen: Long, private val config: RtcConfig) : IMCallEngineListener {
+    private class HostListener(
+        private val gen: Long,
+        private val rtcApi: RtcApi,
+        private val config: RtcConfig,
+    ) : IMCallEngineListener {
         private val stale: Boolean get() = gen != generation
 
         override fun onConnected(sessionId: String, resumed: Boolean) {
@@ -234,8 +289,13 @@ object RtcCall {
             log.w("rtc_kicked_out", "reason" to reason.name)
             val ctx = appContext ?: return
             when (reason) {
-                // 票不好使：本机再签一张重来，用户无感。
-                IMKickedOutReason.AUTH_EXPIRED -> main.post { start(ctx, uid, deviceId, profileResolver, inviteProvider, config) }
+                // 票不好使：本机再换一张重来，用户无感。**必须先 stop()**：start() 顶部「同账号同
+                // 设备重复调用是空操作」的幂等判断只看 engine 是否非空，这里 engine 还在（没人调过
+                // stop），不先清掉的话下面这次 start() 会被当成空操作直接跳过，换票重登永远不会发生。
+                IMKickedOutReason.AUTH_EXPIRED -> main.post {
+                    stop()
+                    start(ctx, uid, deviceId, rtcApi, profileResolver, inviteProvider, config)
+                }
                 // 别处登录 / 被吊销 / 参数被拒：换票救不了，也不自动重连，停下来等人看日志。
                 IMKickedOutReason.TAKEN_OVER, IMKickedOutReason.CONFIG_REJECTED -> main.post { stop() }
             }
@@ -243,9 +303,14 @@ object RtcCall {
 
         override fun onTokenWillExpire(expiresAtMs: Long) {
             if (stale) return
-            // 下一次重连生效，不打断当前通话。
-            engine?.updateToken(signToken(config), 0L)
-            log.i("rtc_token_renewed")
+            // 下一次重连生效，不打断当前通话。换票是异步的，回来时可能已经 stop 过（同上方
+            // start 的 generation 判定）。
+            scope.launch {
+                val token = signToken(rtcApi) ?: return@launch
+                if (stale) return@launch
+                engine?.updateToken(token, 0L)
+                log.i("rtc_token_renewed")
+            }
         }
 
         override fun onError(code: Int, name: String, message: String, forType: String) {
@@ -253,3 +318,13 @@ object RtcCall {
         }
     }
 }
+
+/**
+ * 从 `POST /api/v1/rtc/token` 的换票结果推导最终可用的 token：失败或响应缺 token 都是 null。
+ *
+ * **故意是包级顶层函数，不放进 `object RtcCall`**：`RtcCall` 的类初始化里有
+ * `Handler(Looper.getMainLooper())`，纯 JVM 单测环境（没有 Robolectric）下访问 `RtcCall`
+ * 的任何成员都会触发该初始化并抛异常——这个纯函数要被单测覆盖，必须避开那条路径。
+ */
+internal fun rtcTokenFrom(result: Result<RtcTokenResult>): String? =
+    result.getOrNull()?.token?.takeIf { it.isNotEmpty() }

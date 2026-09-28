@@ -8,8 +8,9 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// im-rtc 联调配置：只读 local.properties（已被 .gitignore 忽略），缺了就是空串，
+// im-rtc 信令地址：只读 local.properties（已被 .gitignore 忽略），缺了就是空串，
 // 此时 RtcConfig.isUsable=false、通话入口给出提示，不影响其他功能。
+// 接入票改由 IMServer 的 POST /api/v1/rtc/token 代为换取，这里不再需要 appId/keyId/debugSecret。
 val localProps = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
@@ -30,11 +31,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // im-rtc 联调配置（值来自 local.properties，见上）。**secret 不进源码。**
+        // im-rtc 信令地址（值来自 local.properties，见上）。
         buildConfigField("String", "RTC_WS_URL", "\"${rtcProp("rtc.wsUrl")}\"")
-        buildConfigField("String", "RTC_APP_ID", "\"${rtcProp("rtc.appId")}\"")
-        buildConfigField("String", "RTC_KEY_ID", "\"${rtcProp("rtc.keyId")}\"")
-        buildConfigField("String", "RTC_DEBUG_SECRET", "\"${rtcProp("rtc.debugSecret")}\"")
     }
 
     buildTypes {

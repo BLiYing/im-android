@@ -5,37 +5,25 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
 
 /**
- * im-rtc 联调配置。值来自 `local.properties`（已被 .gitignore 忽略）→ `BuildConfig`，**secret 不进源码**。
+ * im-rtc 接入配置。值来自 `local.properties`（已被 .gitignore 忽略）→ `BuildConfig`。
  *
- * 联调期用「调试密钥」在本机签接入票（im-rtc-server `docs/design/DEBUG_KEY_DESIGN.md`）；
- * 上线前换成 IMServer 换票接口，那时 [secret] 整个删掉。
+ * 接入票不再由本端签发，改由 IMServer 的 `POST /api/v1/rtc/token` 代为向 im-rtc-server 换票
+ * （见 `RtcCall.signToken`）——本端既不需要也不该知道 SDKAppID / SDKSecretKey。
  */
 data class RtcConfig(
     /** 信令地址，`ws://` 或 `wss://`。真机别填 127.0.0.1（那指的是手机自己）。 */
     val wsUrl: String,
-    val appId: String,
-    /** 调试密钥 ID，形如 `dbg-1`。 */
-    val keyId: String,
-    val secret: String,
 ) {
     /** 缺哪几项（配置名，给人看的）。空 = 可用。 */
     val missing: List<String>
         get() = buildList {
             if (wsUrl.isBlank()) add("rtc.wsUrl")
-            if (appId.isBlank()) add("rtc.appId")
-            if (keyId.isBlank()) add("rtc.keyId")
-            if (secret.isBlank()) add("rtc.debugSecret")
         }
 
     val isUsable: Boolean get() = missing.isEmpty()
 
     companion object {
-        fun fromBuild() = RtcConfig(
-            wsUrl = BuildConfig.RTC_WS_URL,
-            appId = BuildConfig.RTC_APP_ID,
-            keyId = BuildConfig.RTC_KEY_ID,
-            secret = BuildConfig.RTC_DEBUG_SECRET,
-        )
+        fun fromBuild() = RtcConfig(wsUrl = BuildConfig.RTC_WS_URL)
     }
 }
 

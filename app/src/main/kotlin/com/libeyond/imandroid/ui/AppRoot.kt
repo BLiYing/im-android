@@ -119,6 +119,7 @@ fun AppRoot(client: IMClient) {
                 }
                 RtcCall.start(
                     appContext, client.uid.orEmpty(), DeviceIdentity(appContext).deviceId,
+                    rtcApi = client.rtc,
                     profiles = profiles,
                     invites = RtcProfileResolver.inviteProviderFor(client, profiles),
                 )
