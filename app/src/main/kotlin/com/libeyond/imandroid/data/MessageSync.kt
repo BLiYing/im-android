@@ -99,8 +99,15 @@ internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData)
  * 那是翻历史，把很久以前的锚点消息当"最新一条"bump 会把会话错误地顶到最前面。
  */
 internal suspend fun MessageRepository.bumpConversationFromLatest(owner: String, convId: String) {
-    val latest = messages.latestWindow(owner, convId, 1).firstOrNull() ?: return
-    bumpConversation(owner, convId, latest)
+    // 落一层保护：DB 读/写偶发失败（磁盘压力等）不该掀翻整页 sync_resp——
+    // 那会连累这一页里排在后面的会话全部推进不了游标（applySync 没有外层 try/catch，
+    // 一异常整个 for 循环连 advanceCursor 都不做了）。失败只跳过这一次 bump，不影响主流程。
+    try {
+        val latest = messages.latestWindow(owner, convId, 1).firstOrNull() ?: return
+        bumpConversation(owner, convId, latest)
+    } catch (e: Exception) {
+        log.w("conv_bump_from_latest_failed", "convId" to convId, "err" to e.javaClass.simpleName)
+    }
 }
 
 /** 重连后把在途未确认的消息按同一 client_msg_id 重发。 */
