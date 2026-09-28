@@ -107,6 +107,11 @@ fun ChatHost(
     LaunchedEffect(conv.convId) {
         runCatching { client.contacts.friends() }.onSuccess { l -> friendsByUid = l.associateBy { it.userId } }
     }
+    // 语音转文字失败提示（REST 失败 / WS status=failed 共用同一条文案，见 VoiceTranscriber.errors 的 KDoc）。
+    // code review 抓出：这个 SharedFlow 建好之后从没被订阅过——识别失败时面板悄悄收起，用户不知道发生了什么。
+    LaunchedEffect(conv.convId) {
+        client.voiceTranscriber.errors.collect { toast = it }
+    }
     var menuFor by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
     /** 成员表（群资料里拉）：名字、角色、头像，uid 为键。超级群只有我自己。 */
     var memberNames by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }

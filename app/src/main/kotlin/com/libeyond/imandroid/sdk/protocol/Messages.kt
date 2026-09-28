@@ -368,6 +368,22 @@ data class MsgHiddenData(
 )
 
 /**
+ * voice_transcript 下行（§6.10），也是 `POST /voice/transcripts` REST 响应的 `data`（同一套字段，
+ * 端上一套分支就够，见 `voice/VoiceTranscriber.kt`）。**只推给请求者本人**——别人没点「转文字」
+ * 不会收到这一帧，他点的时候会命中服务端缓存秒出。带 `(convId, convSeq)` 而非音频路径：
+ * 同一段音频可能在多个会话被请求转写，各自要按自己的坐标把结果贴回对的那条气泡。
+ */
+@Serializable
+data class VoiceTranscriptData(
+    @SerialName("conv_id") val convId: String = "",
+    @SerialName("conv_seq") val convSeq: Long = 0,
+    /** pending | done | failed */
+    val status: String = "",
+    val text: String = "",
+    val lang: String = "",
+)
+
+/**
  * capabilities_update 下行（§6.9）：账号级能力（目前只有自动下载策略）有变。
  * **只带版本号**，不在帧里复制整份配置——收端据版本去重后重拉 `GET /api/v1/download-settings`。
  */

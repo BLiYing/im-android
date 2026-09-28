@@ -197,6 +197,8 @@ fun AppRoot(client: IMClient) {
                 com.libeyond.imandroid.ui.voice.LocalVoicePlayer provides client.voice,
                 // 录音机：同理进程内一份（中断后回到原会话锁定行还在）
                 com.libeyond.imandroid.ui.voice.LocalVoiceRecorder provides client.recorder,
+                // 语音转文字：同理进程内一份（展开态、长按菜单「转文字/取消转文字」都读它）
+                com.libeyond.imandroid.ui.voice.LocalVoiceTranscriber provides client.voiceTranscriber,
             ) {
                 // 应用内浏览器盖在整个主界面之上：聊天 / 详情 / 群资料 / 聊天记录里点开的链接都走它
                 WebLinkHost {

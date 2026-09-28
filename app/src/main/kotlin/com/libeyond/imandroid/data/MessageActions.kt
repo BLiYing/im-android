@@ -13,6 +13,10 @@ enum class MessageAction(@StringRes private val labelRes: Int, val destructive: 
     Forward(R.string.common_forward),
     /** 收藏（M4-4）：内容快照存到服务端，原消息撤回/删除后仍在。 */
     Favorite(R.string.common_favorite),
+    /** 语音转文字（服务端识别，见 `voice/VoiceTranscriber.kt`）。仅对语音消息出现。 */
+    Transcribe(R.string.chat_msg_menu_transcribe),
+    /** 转写面板已展开时同一位置换成这项——只收本地面板，不删服务端结果（会话内共享）。 */
+    TranscribeOff(R.string.chat_msg_menu_transcribe_cancel),
     /** 进入多选态（判据在 [ChatSelection]）。 */
     MultiSelect(R.string.chat_msg_menu_multi_select),
     Recall(R.string.chat_msg_menu_recall, destructive = true),
@@ -49,6 +53,11 @@ object MessageActions {
         isGroup: Boolean,
         iAmManager: Boolean,
         now: Long = System.currentTimeMillis(),
+        /**
+         * 这条语音的转写面板**当前**是不是展开着（[com.libeyond.imandroid.voice.VoiceTranscriber.isExpanded]）。
+         * 决定语音消息这一项显「转文字」还是「取消转文字」；非语音消息忽略此参数。
+         */
+        hasTranscript: Boolean = false,
     ): List<MessageAction> {
         // 撤回墓碑上什么都不给——正文已被服务端脱敏，复制/引用都没有意义
         if (msg.recalledAt != null && msg.recalledAt > 0) return emptyList()
@@ -60,6 +69,12 @@ object MessageActions {
 
         val mine = msg.sender == myUid
         val out = mutableListOf<MessageAction>()
+
+        // 语音转文字：放在最前（对齐 iOS/Web 长按菜单顶部靠前的位置）。只对语音消息出现，
+        // 已展开 → 换成「取消转文字」，同一个位置不占两行。
+        if (msg.contentType == ContentType.VOICE) {
+            out += if (hasTranscript) MessageAction.TranscribeOff else MessageAction.Transcribe
+        }
 
         // 复制什么、给不给复制，都归 [copyKindOf]（对齐 iOS `copyMessageToPasteboard:` 那张矩阵）
         if (copyKindOf(msg) != null) out += MessageAction.Copy

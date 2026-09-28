@@ -13,8 +13,10 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -72,6 +74,9 @@ import kotlin.math.roundToInt
  * 全 App 共用的语音播放器（`IMClient.voice`），由 AppRoot 提供。没提供（@Preview / 测试）时语音只画不响。
  */
 val LocalVoicePlayer = staticCompositionLocalOf<VoicePlayer?> { null }
+
+/** 语音转文字，由 AppRoot 提供（同 [LocalVoicePlayer]）。没提供（@Preview / 测试）时长按菜单不出该项。 */
+val LocalVoiceTranscriber = staticCompositionLocalOf<com.libeyond.imandroid.voice.VoiceTranscriber?> { null }
 
 /** 一条语音的播放入口参数——聊天气泡、资料页、收藏、合并转发记录四处的公约数。 */
 data class VoiceSource(
@@ -316,6 +321,36 @@ internal fun VoiceMiniPlayer(src: VoiceSource, modifier: Modifier = Modifier) {
                 MediaUrl.formatDuration(VoiceRules.shownMillis(src.durationMs, pb?.progress ?: 0f, pb != null).toInt()),
                 color = c.textSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
             )
+        }
+    }
+}
+
+/**
+ * 语音转写面板（服务端识别，`VOICE_TRANSCRIBE_DESIGN.md`）：左侧引用线 + 文本 + 尾行隐私说明，
+ * 与 iOS `IMVoiceBubbleCell` 的转写面板、Web `.voice-transcript` 同一视觉语系（左侧竖线借用
+ * 既有 [com.libeyond.imandroid.ui.screens.QuoteBlock] 的 `IntrinsicSize.Min` 撑满高度写法）。
+ * 挂在气泡**外面**（同一条消息列，气泡下方），不是气泡内的一部分——同 Web `msg-item` 的结构。
+ */
+@Composable
+internal fun VoiceTranscriptPanel(
+    transcript: com.libeyond.imandroid.voice.VoiceTranscript,
+    modifier: Modifier = Modifier,
+) {
+    val c = IMTheme.colors
+    Row(modifier = modifier.padding(top = 6.dp).height(IntrinsicSize.Min)) {
+        Box(Modifier.width(2.dp).fillMaxHeight().background(c.accent))
+        Spacer(Modifier.width(6.dp))
+        Column {
+            Text(
+                text = when (transcript) {
+                    is com.libeyond.imandroid.voice.VoiceTranscript.Loading -> stringResource(R.string.chat_voice_transcribing)
+                    is com.libeyond.imandroid.voice.VoiceTranscript.Done -> transcript.text
+                },
+                color = c.textPrimary, fontSize = 14.sp,
+            )
+            if (transcript is com.libeyond.imandroid.voice.VoiceTranscript.Done) {
+                Text(stringResource(R.string.chat_voice_transcript_note), color = c.textSecondary, fontSize = 10.sp)
+            }
         }
     }
 }

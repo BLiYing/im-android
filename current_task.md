@@ -7,48 +7,34 @@
 
 ## 当前焦点
 
-> **语音消息 P2 录制 ✅（2026-09-28，OPPO 真机实测核心手势）**：按设计稿 `VOICE_MESSAGE_DESIGN.md` +
-> 草图 v2.5 分三期，① 播放已于同日早些时候完成（见下一条）；这次是 ② 录制。新增 `voice/VoiceRecorder.kt`
-> （AAC-LC 单声道 16kHz 24kbps；暂停=收尾当前段可试听、继续=新起一段，`voice/VoiceSegments.kt` 用
-> MediaExtractor/MediaMuxer 按时间戳顺延拼接）与 `ui/voice/VoiceRecordUi.kt`（手势/悬浮层/锁定行/事件
-> 分派）。手势判定全落在 `VoiceRules.kt` 的纯函数上（`lockPhase`/`cancelReady`/`slideHint`/
-> `countdownSeconds`/`encodeWaveform`/`amplitudeOf`/`amplitudeByte`，`VoiceRulesTest` 新增 7 例先见红）。
-> UI 用 `awaitEachGesture` 手写按下/拖拽/松手（不用 `detectDragGestures`，因为要**从按下瞬间**而非
-> 越过触摸容差才响应）；手势节点在按住→录制（未锁定）期间**必须是同一个 Composable 调用点**——
-> 一旦被外层 `if/else` 分支切换成别的位置，Compose 会把正在追踪的那次拖拽连带协程一起销毁重建。
-> 输入栏 🎙/➤ 原地换脸（空输入显 🎙）；按住大圆钮 58dp 跟手+振幅呼吸环；锁钮 36×52dp 固定在按下点
-> 上方 86dp（70dp 高亮/34dp 到位即锁，含"手指飞过锁钮"兜底）；左滑 40% 行宽取消（提示文字位移×0.4
-> +渐隐 1.0→0.2，过阈值整行转红居中「松开 取消」）；锁定行 🗑|胶囊(录制中跑马灯波形/暂停后迷你播放器,
-> 复用既有 `VoicePlayer.toggleFile` 试听)|⏸⇄▶|➤；5min 双态（按住到点转锁定暂停等用户决定/锁定到点
-> 自动发送+toast）；切后台（`MainActivity.onStop`）/离开会话页（`PauseRecordingOnLeave`）均转中断暂停。
-> **顺手修了一个真实 bug**：`MessageService.resend` 原先按 `repo.inFlight()`（只挑 `state=Sending`）
-> 找待发行——但点红❗重试要找的正是 `Failed` 状态那一条，**这条判据错了导致点重试完全无效**（点了跟
-> 没点一样，之前没被发现是因为没人真的手测过这条路径）。改成按 `clientMsgId` 直查
-> （`MessageRepository.pendingByClientId`，不按状态过滤）；顺带堵上「语音重传前先复位 Failed→Sending」
-> （`markPendingSending`）与「图片/视频本地 uri 找不回字节时改标失败而不是误发 `content://` 给对端」两处。
-> `./scripts/test.sh` **934/934 绿**。真机（OPPO）实测：按住原地松手发送、左滑取消、上滑锁定、
-> 锁定行暂停/试听/试听播放、删除二次确认（>10s 才问）全部走通，端到端到服务端 ack 且能回放。
-> **未做 / 已知限制**：5min 上限两种处理与中断转暂停只做了代码走查——adb 合成"边持续触摸边切后台"
-> 的手势不稳定，没能在真机复现（不影响：两处都是对已验证过的 `pause()`/`interrupt()`/`stopAndSend()`
-> 调用的**外层触发条件**，逻辑本身走查无误）；发送成功后本地 `voice_pending/` 缓存文件不清理（TODO，
-> 需要等到确认 ack 而不是仅仅"上传成功"才能安全删，属于独立的小任务）；未验证 RECORD_AUDIO 被拒绝
-> 的真机提示（测试机的通话功能早就申请过这个权限，天然已授权，测不出"首次请求"/"被拒绝"两条分支，
-> 只做了代码走查）；表情面板本端本就没做（沿用既有限制，未扩大范围）。
-> **`/code-review --fix` 已跑（2026-09-28），抓出 8 条、已修 7 条**：① `VoiceRecorder` 硬闸
-> （`setMaxDuration`）与软闸（tick）目标时长相同、硬闸几乎总赢，此前硬闸直接 `finish(ReachedMax)`
-> 会被 UI 当 `UserSend` 处理——**按住态到点转锁定暂停从没真正生效过，一直被强制发送**；改成硬闸也走
-> `pause()`+统一的 `Event.ReachedMax` 通知，两条闸门收敛到 `VoiceRecordEvents` 一个决策点；
-> ② `resendInFlight`（重连自动补发）漏了语音的本地文件特判、且没透传 `waveform`，与手动 `resend`
-> 不对称，已同步补上；③ `MediaSendFlow.sendVoice` 读本地文件没有 try/catch，读失败会让协程崩溃、
-> 待发行卡死在"发送中"，已补上（对齐 `reuploadVoice` 的处理）；④ `reuploadVoice` 的 `catch (e:
-> Exception)` 吞了 `CancellationException`（违反 CODING_STYLE §5），已改成先接 `CancellationException`
-> 重抛；⑤ 麦克风"问过一次"标记另开了一份裸 `SharedPreferences`，与 `PrefsVoiceKv` 包的是同一个文件，
-> 改用后者；⑥ `encodeWaveform` 与 `data/Waveform.bars` 重复实现了同一套按桶取最大值下采算法（该文件
-> 头注释明写这类重复最容易两端漂移），改成复用 `Waveform.bars`；⑦ `finish()`/`discard()` 重复五步收尾
-> 逻辑，抽了 `teardown()`。**跳过 1 条**：`MediaRecorder.prepare/start/stop` 在主线程同步跑，
-> 短语音（≤5min、24kbps）实测无感知卡顿，改成异步要重构 start/pause/resume/cancel/stopAndSend
-> 的调用形态、牵动 UI 层多处调用点，风险与收益不对等，记在这里留作后续单独任务。修完 `./scripts/test.sh`
-> 仍 **934/934 绿**，真机重新过了一遍按住发送与锁定+暂停+发送两条路径。**仍未提交，等用户过一遍。**
+> **语音消息三期全部完成，尚未提交（2026-09-28，三端对齐，详情见 `../IMServer/docs/CLIENT_PARITY.md`
+> voice P0/P1 两行 Android 列）**：① 播放（`voice/VoicePlayer`+`ui/voice/VoiceViews`）、② 录制
+> （`voice/VoiceRecorder`+`ui/voice/VoiceRecordUi`，手势/悬浮层/锁定行/暂停试听/5min 上限/中断转
+> 暂停全套，`/code-review --fix` 修 7 条 + 用户真机复测又报的 2 条 bug 均已修——完整清单见
+> `current_task.archive.md` 2026-09-28 条目——**这部分已提交**）、③ **转文字**（本轮新增，见下，
+> **未提交**）。上滑锁定的悬浮层顺手又补了一条：锁钮里**加了呼吸上箭头**（`Lucide.ChevronUp`，
+> `position.y` 上下 4dp、0.7s、线性、无限往复，对齐 iOS `IMVoicePressOverlay.restartArrowBreathe`
+> 逐参数抄的——之前只把锁钮渲染出来了，没照 iOS 补这个"往上滑到这里"的动效提示，用户对照 iOS 截图
+> 指出后补上），真机 adb 分帧摆拍确认箭头在两帧之间有位移。
+>
+> **③ 转文字**：长按菜单「转文字」（仅语音、`convSeq>0`）→ `voice/VoiceApi.transcribe` 调
+> `POST /voice/transcripts`（只传消息坐标不传音频路径）→ 气泡下方展开面板（左侧引用线+文本+隐私
+> 说明尾行，同 iOS/Web 视觉语系）；命中缓存秒出，未命中先显「识别中…」，结果经 `voice_transcript`
+> 帧（`MessageService.voiceTranscripts` → `VoiceTranscriber.applyRemote`）到达。新增
+> `voice/VoiceTranscriber.kt`（展开态 `StateFlow`）+ `voice/VoiceTranscriptStore`（`PrefsVoiceKv`
+> 持久化：文本按**音频内容**缓存、折叠态按 mid 落盘，两条判据对齐 iOS `IMVoiceTranscriber`，
+> FIFO 封顶 2000/500）；`MessageActions`/`ChatMessageMenu` 补「转文字」/「取消转文字」互斥对。
+> **调研纠偏**：动手前一度误判 iOS/Web 都没做这个新方案（分别被 Objective-C 文件后缀、CLIENT_PARITY
+> 里一条已废弃的旧设计行带偏），用户当场指出后重新核实——iOS `IMVoiceTranscriber`(.h/.m)+
+> `IMChatViewController+Menu.m`/`+Voice.m`、Web `useVoiceTranscript.ts` 其实都已实现且完整，
+> 本轮 Android 实现直接照抄两边的判据（内容去重缓存、折叠态持久化、识别中途取消不被迟到结果撑开）。
+> `VoiceTranscriberTest` 8 例 + `VoiceTranscriptStore` 4 例 + `MessageActionsTest` 1 例（均先见红，
+> 含一例用 `CompletableDeferred` 钉住"请求真在途时取消"的竞态）。`MessageRepository.kt` 顺手拆分
+> （新增 `MessageRepositorySend.kt`，600 行硬闸触顶所致，纯平移无逻辑改动）。`./scripts/test.sh`
+> **948/948 绿**；OPPO 真机对着真实识别引擎（本机已装 `install-transcribe.sh`）实测通过：菜单→
+> 识别中→文本落地（含隐私说明尾行）→取消转文字收起，全链路走通。
+> **已知简化**：面板撑高后「补进视口」只做了近似（历史中间某条转写可能需要用户自己再滑一下，
+> 不像 iOS/Web 那样按行几何精确计算），多数场景（末条是语音）够用，留作后续小优化。
 
 > **多语言 P3 全部完成 ✅（2026-09-27，OPPO 真机中↔英实测通过）**——① `sys_event`/`sys_args`：新增
 > `data/SysEvents.kt`（对齐 iOS `IMSysEventFormatter`/Web `sysEventRender.ts`）——群系统消息按事件表拼出与
@@ -95,21 +81,16 @@
    （系统图片选择器多级页面盲点坐标屡次踩偏），也没有第二台设备/账号可以扮演"收端"；只验证到
    "提及渲染可点 + 点了跳资料页"这条基础设施是通的，`mentions` 随转发存活只有单测覆盖。
    另外**"对方撤回"的两种文案**（"XX/对方撤回了一条消息"）同样因为单设备单账号测不出来，只测了"自己撤回"。
-1. **语音消息（按设计稿 VOICE_MESSAGE_DESIGN + 草图 v2.5 分三期）**：① 播放 ✅ 2026-09-28（`voice/VoicePlayer` +
-   `ui/voice/VoiceViews`，气泡 / 资料页 / 收藏 / 记录页，倍速、scrub、红点、接力，真机实测）；② 录制 ✅ 2026-09-28
-   （`voice/VoiceRecorder` + `ui/voice/VoiceRecordUi`，手势/悬浮层/锁定行/暂停试听/5min 上限/中断转暂停全套，
-   真机实测核心路径，详见「当前焦点」；**未提交，等待 code review**）；③ **转文字**（REST `/voice/transcripts` +
-   `voice_transcript` 帧 + 气泡下展开面板 + CHAT_UX「就地变高补进视口」，下一步要做）。设计与现行实现的差异见下方已知坑。
-2. **Android 离线积压整套未启动**（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 / §5 B3a）：
+1. **Android 离线积压整套未启动**（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 / §5 B3a）：
    建议先让 sync 带 `max_gap`；另缺区间清单、`conv_bump` 被丢弃、sync/window 路径不回 `delivered`；
    C4 未做；会话内检索只取一页。
-3. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：群资料 / 聊天信息内部子页读的是已置空的状态。
-4. **卡片弹层推广**：@提及、选文件、已读详情、日期跳转、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`。
-5. **收藏的剩余项**：「以聊天模式查看」（按来源会话分组下钻）、来源名到群昵称级（现只到好友备注/昵称/补拉名片）；**长按菜单缺项**：举报、翻译。
-6. **宫格**按 `IMAlbumRowPattern` 重写布局 + 五道防跳版闸；相册宫格逐格勾选。
-7. 按 `docs/UI_PARITY_IOS.md` 剩下的 🔴（📅/👤 已于 2026-09-23 收口）：水滴头部形变、语音页签内播放、「名片」页签、隐私页无障碍。
-8. 按 `CLIENT_PARITY` 追 iOS：消息编辑（M4-5）→ 设置页其余 6 项 → 头像裁切页 → 推送（M5）。
-9. **群成员头像图**：首字母色块对，但无头像缓存；要先做 `POST /users/batch` 解析器。
+2. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：群资料 / 聊天信息内部子页读的是已置空的状态。
+3. **卡片弹层推广**：@提及、选文件、已读详情、日期跳转、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`。
+4. **收藏的剩余项**：「以聊天模式查看」（按来源会话分组下钻）、来源名到群昵称级（现只到好友备注/昵称/补拉名片）；**长按菜单缺项**：举报、翻译。
+5. **宫格**按 `IMAlbumRowPattern` 重写布局 + 五道防跳版闸；相册宫格逐格勾选。
+6. 按 `docs/UI_PARITY_IOS.md` 剩下的 🔴（📅/👤 已于 2026-09-23 收口）：水滴头部形变、「名片」页签、隐私页无障碍（语音页签内播放已于 2026-09-28 随语音 P1 完成，见 CLIENT_PARITY）。
+7. 按 `CLIENT_PARITY` 追 iOS：消息编辑（M4-5）→ 设置页其余 6 项 → 头像裁切页 → 推送（M5）。
+8. **群成员头像图**：首字母色块对，但无头像缓存；要先做 `POST /users/batch` 解析器。
 
 ## 已知坑 / 限制
 

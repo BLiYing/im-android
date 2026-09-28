@@ -1,3 +1,59 @@
+## 2026-09-28 语音消息 P2 录制 + code review 修复 + 两个真机 bug 修复
+
+> **语音消息 P2 录制 ✅（OPPO 真机实测核心手势）**：按设计稿 `VOICE_MESSAGE_DESIGN.md` +
+> 草图 v2.5 分三期，① 播放已于同日早些时候完成；这次是 ② 录制。新增 `voice/VoiceRecorder.kt`
+> （AAC-LC 单声道 16kHz 24kbps；暂停=收尾当前段可试听、继续=新起一段，`voice/VoiceSegments.kt` 用
+> MediaExtractor/MediaMuxer 按时间戳顺延拼接）与 `ui/voice/VoiceRecordUi.kt`（手势/悬浮层/锁定行/事件
+> 分派）。手势判定全落在 `VoiceRules.kt` 的纯函数上（`lockPhase`/`cancelReady`/`slideHint`/
+> `countdownSeconds`/`encodeWaveform`/`amplitudeOf`/`amplitudeByte`，`VoiceRulesTest` 新增 7 例先见红）。
+> UI 用 `awaitEachGesture` 手写按下/拖拽/松手（不用 `detectDragGestures`，因为要**从按下瞬间**而非
+> 越过触摸容差才响应）；手势节点在按住→录制（未锁定）期间**必须是同一个 Composable 调用点**——
+> 一旦被外层 `if/else` 分支切换成别的位置，Compose 会把正在追踪的那次拖拽连带协程一起销毁重建。
+> 输入栏 🎙/➤ 原地换脸（空输入显 🎙）；按住大圆钮 58dp 跟手+振幅呼吸环；锁钮 36×52dp 固定在按下点
+> 上方 86dp（70dp 高亮/34dp 到位即锁，含"手指飞过锁钮"兜底）；左滑 40% 行宽取消（提示文字位移×0.4
+> +渐隐 1.0→0.2，过阈值整行转红居中「松开 取消」）；锁定行 🗑|胶囊(录制中跑马灯波形/暂停后迷你播放器,
+> 复用既有 `VoicePlayer.toggleFile` 试听)|⏸⇄▶|➤；5min 双态（按住到点转锁定暂停等用户决定/锁定到点
+> 自动发送+toast）；切后台（`MainActivity.onStop`）/离开会话页（`PauseRecordingOnLeave`）均转中断暂停。
+> **顺手修了一个真实 bug**：`MessageService.resend` 原先按 `repo.inFlight()`（只挑 `state=Sending`）
+> 找待发行——但点红❗重试要找的正是 `Failed` 状态那一条，**这条判据错了导致点重试完全无效**（点了跟
+> 没点一样，之前没被发现是因为没人真的手测过这条路径）。改成按 `clientMsgId` 直查
+> （`MessageRepository.pendingByClientId`，不按状态过滤)；顺带堵上「语音重传前先复位 Failed→Sending」
+> （`markPendingSending`）与「图片/视频本地 uri 找不回字节时改标失败而不是误发 `content://` 给对端」两处。
+> **未做 / 已知限制**：5min 上限两种处理与中断转暂停只做了代码走查；发送成功后本地 `voice_pending/`
+> 缓存文件不清理（TODO，需要等到确认 ack 而不是仅仅"上传成功"才能安全删）；未验证 RECORD_AUDIO
+> 被拒绝的真机提示（测试机早已授权，测不出"首次请求"/"被拒绝"两条分支）；表情面板本端本就没做。
+>
+> **`/code-review --fix` 抓出 8 条、已修 7 条**：① `VoiceRecorder` 硬闸（`setMaxDuration`）与软闸
+> （tick）目标时长相同、硬闸几乎总赢，此前硬闸直接 `finish(ReachedMax)` 会被 UI 当 `UserSend`
+> 处理——**按住态到点转锁定暂停从没真正生效过，一直被强制发送**；改成硬闸也走 `pause()`+统一的
+> `Event.ReachedMax` 通知，两条闸门收敛到 `VoiceRecordEvents` 一个决策点；② `resendInFlight`
+> （重连自动补发）漏了语音的本地文件特判、且没透传 `waveform`，与手动 `resend` 不对称，已同步补上；
+> ③ `MediaSendFlow.sendVoice` 读本地文件没有 try/catch，读失败会让协程崩溃、待发行卡死在"发送中"，
+> 已补上（对齐 `reuploadVoice` 的处理）；④ `reuploadVoice` 的 `catch (e: Exception)` 吞了
+> `CancellationException`（违反 CODING_STYLE §5），已改成先接重抛；⑤ 麦克风"问过一次"标记另开了
+> 一份裸 `SharedPreferences`，改用既有 `PrefsVoiceKv`；⑥ `encodeWaveform` 与 `data/Waveform.bars`
+> 重复实现了同一套按桶取最大值下采算法，改成复用；⑦ `finish()`/`discard()` 重复五步收尾逻辑，抽了
+> `teardown()`。**跳过 1 条**：`MediaRecorder.prepare/start/stop` 在主线程同步跑，短语音实测无感知
+> 卡顿，改成异步要重构调用形态、牵动 UI 层多处调用点，风险与收益不对等，留作后续单独任务。
+>
+> 用户随后真机复测又报 2 条真实 bug，均已修：⑨ **上滑锁定看不到锁钮反馈**——`VoiceHoldOverlay`
+> 套了层 `Box(Modifier.size(0.dp))` 当"零尺寸锚点"，指望子项都用负 offset 飘出去；实际 Compose
+> 量这层 Box 时把 `(0,0)` 的约束**连带传给了子项**，子项 `.size(58.dp)`/`.size(36.dp,52.dp)` 被
+> 顶成 0×0——大圆钮、锁钮**真机上从头到尾都没画出来过**（不是被挡住，是根本没渲染；adb
+> `input motionevent DOWN/MOVE/UP` 分步摆拍验证的，`input swipe` 一步到位摆不出中间帧）。改成
+> `VoiceHoldOverlay` 是 `BoxScope` 扩展、两个子项直接画在调用方（`ComposerBar`）那个本来就有真实
+> 尺寸的 `Box` 里，不再单独包一层；顺手把锁钮的合成顺序挪到大圆钮之后（原来圆钮跟手飘到锁钮位置
+> 会整个盖住锁钮，恰好盖住最需要看反馈的那一刻）。⑩ **语音发送先闪一下文本气泡再变语音气泡**——
+> `Bubbles.kt` 的 `isMedia` 判据是 `msg != null && msg.contentType in MEDIA_TYPES`，**没有 `msg`
+> 时（ack 落地前的待发行）恒为 false**，于是待发语音落到最后的 `else -> Text(...)` 分支，画出一条
+> 写着 `file:///.../xxx.m4a` 的文本气泡，ack 落地后才"跳变"成正常语音气泡——图片/视频/文件早年
+> 就在 `PendingBubbles.kt` 踩过同一个坑，唯独语音这次新增漏补。新增 `PendingVoiceBubble`（播放走
+> 本地文件预览 `VoicePlayer.toggleFile`），`ChatRowView.kt` 补 `isVoice` 分支。
+>
+> `./scripts/test.sh` 全程保持绿（最终 934/934）。真机（OPPO）adb 摆拍全部验证过：按住原地松手
+> 发送、左滑取消、上滑锁定+锁钮反馈不被遮挡、锁定行暂停/试听/试听播放、删除二次确认、松手直接进
+> 语音气泡（不再闪文本）。commit：`feat(voice): 语音消息录制（第 2 期）+ code review 修复`。
+
 ## 2026-09-27 通话记录：被叫侧 cancel 文案改「对方已取消」
 
 > **通话记录：被叫侧 `cancel` 文案「未接来电」→「对方已取消」（三端 + 设计文档，2026-09-27，与用户讨论后拍板）**：

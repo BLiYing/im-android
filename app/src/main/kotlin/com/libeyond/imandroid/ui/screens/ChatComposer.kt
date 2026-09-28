@@ -29,6 +29,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
@@ -112,6 +113,14 @@ private fun ComposerBar(
     var rowWidthPx by remember { mutableStateOf(0f) }
     val effectiveLocked = locked || recState.phase == VoiceRecorder.Phase.Paused
 
+    // 悬浮层（大圆钮/锁钮）要挂在**麦克风/发送键的真实屏幕位置**，不是外层这个铺满整行的 Box 的
+    // 右下角——那个角在屏幕最右边缘（Row 自己还有 [IMTheme.dimens.inputBarEdge] 内边距，
+    // 按钮也不是贴在 Row 底部而是垂直居中），直接拿 Box 角当锚点会让锁钮明显偏右、贴边
+    // （2026-09-28 用户对照真机报的）。改成真测两点在屏幕坐标系里的位置，作差得到锚点偏移。
+    var micCenterInWindow by remember { mutableStateOf(Offset.Zero) }
+    var boxBottomEndInWindow by remember { mutableStateOf(Offset.Zero) }
+    val anchorOffsetPx = micCenterInWindow - boxBottomEndInWindow
+
     VoiceRecordEvents(
         convId = convId,
         locked = effectiveLocked,
@@ -121,7 +130,13 @@ private fun ComposerBar(
         onLocked = { locked = true },
     )
 
-    Box(Modifier.fillMaxWidth()) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned {
+                boxBottomEndInWindow = it.positionInWindow() + Offset(it.size.width.toFloat(), it.size.height.toFloat())
+            },
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -188,12 +203,14 @@ private fun ComposerBar(
                     onLocked = { locked = true },
                     onDrag = { dragOffset = it },
                     rowWidthPx = { rowWidthPx },
+                    onGlobalCenter = { micCenterInWindow = it },
                 )
             }
         }
         // 按住未锁定期间的悬浮层（大圆钮/呼吸环/锁钮），浮在输入栏之上、聊天内容零遮挡（草图 §03）。
+        // **必须直接画在这个 Box 里**（不能再包一层单独的 Box）——见 VoiceHoldOverlay 的类注释。
         if (recState.phase == VoiceRecorder.Phase.Recording && !locked) {
-            VoiceHoldOverlay(recState, dragOffset, modifier = Modifier.align(Alignment.BottomEnd))
+            VoiceHoldOverlay(recState, dragOffset, anchorOffsetPx)
         }
     }
 }

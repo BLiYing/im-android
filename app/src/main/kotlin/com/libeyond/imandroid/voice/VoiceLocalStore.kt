@@ -64,3 +64,81 @@ class VoiceRateStore(private val kv: VoiceKv) {
         kv.put("rate.${convId.ifBlank { "na" }}", VoiceRules.normalizeRate(rate).toString())
     }
 }
+
+/**
+ * 语音「转文字」的本地持久态（VOICE_TRANSCRIBE_DESIGN.md），对齐 iOS `IMVoiceTranscriber`
+ * 的两条不变式（**不是代码形状，是必须跨端一致的判据**，SYMMETRY 的精神）：
+ *
+ * 1. **文本缓存按音频内容（`content`）去重，不按消息坐标**——同一段语音被转发/收藏出多条，
+ *    只该转写一次；服务端 `im_voice_transcript` 主键同样是音频路径，端上跟服务端同口径才能
+ *    「缓存命中零延迟展开」。
+ * 2. **「取消转文字」的折叠态要落盘**——只在内存里的话，杀进程重进会话，文本缓存还在、
+ *    折叠态却丢了，用户明明点过「取消」的面板又冒出来（iOS 2026-08-26 实测过的坑）。
+ *
+ * 两张表都是**内容寻址、永久缓存**，量随使用线性增长，FIFO 封顶防止无限膨胀
+ * （文本 [CACHE_MAX] 条，折叠名单 [COLLAPSED_MAX] 条——折叠是"这条不想看"的一次性偏好，
+ * 名单本身不需要很大）。
+ */
+class VoiceTranscriptStore(private val kv: VoiceKv) {
+    private val textCache = HashMap<String, String>()
+    private val collapsed = LinkedHashSet<String>().apply {
+        kv.get(COLLAPSED_KEY)?.split('\n')?.filter { it.isNotEmpty() }?.let(::addAll)
+    }
+    private val cacheOrder = LinkedHashSet<String>().apply {
+        kv.get(ORDER_KEY)?.split('\n')?.filter { it.isNotEmpty() }?.let(::addAll)
+    }
+
+    /** 命中缓存直接回文本；没转过 / 已被 FIFO 挤掉都是 null（调用方据此决定要不要发起识别）。 */
+    @Synchronized
+    fun cachedText(content: String): String? {
+        if (content.isBlank()) return null
+        textCache[content]?.let { return it.ifEmpty { null } }
+        val t = kv.get(textKey(content)).orEmpty()
+        textCache[content] = t
+        return t.ifEmpty { null }
+    }
+
+    @Synchronized
+    fun putText(content: String, text: String) {
+        if (content.isBlank() || text.isBlank()) return
+        textCache[content] = text
+        kv.put(textKey(content), text)
+        if (!cacheOrder.add(content)) return
+        while (cacheOrder.size > CACHE_MAX) {
+            val oldest = cacheOrder.first()
+            cacheOrder.remove(oldest)
+            textCache.remove(oldest)
+            kv.put(textKey(oldest), "") // VoiceKv 只有 get/put 没有 delete：空串等效清空（cachedText 把空串当无值）
+        }
+        kv.put(ORDER_KEY, cacheOrder.joinToString("\n"))
+    }
+
+    /** `mid` 是否被本地折叠过（[com.libeyond.imandroid.voice.VoiceRules.playableId]）。 */
+    @Synchronized
+    fun isCollapsed(mid: String): Boolean = mid.isNotBlank() && mid in collapsed
+
+    /** 「取消转文字」：先移再加，保证重复折叠时刷到队尾（FIFO 淘汰按最久未折叠）。 */
+    @Synchronized
+    fun collapse(mid: String) {
+        if (mid.isBlank()) return
+        collapsed.remove(mid)
+        collapsed.add(mid)
+        while (collapsed.size > COLLAPSED_MAX) collapsed.remove(collapsed.first())
+        kv.put(COLLAPSED_KEY, collapsed.joinToString("\n"))
+    }
+
+    /** 取消折叠（缓存命中时点「转文字」= 只需重新展开）。 */
+    @Synchronized
+    fun expand(mid: String) {
+        if (collapsed.remove(mid)) kv.put(COLLAPSED_KEY, collapsed.joinToString("\n"))
+    }
+
+    private fun textKey(content: String) = "transcript.$content"
+
+    companion object {
+        const val CACHE_MAX = 2000
+        const val COLLAPSED_MAX = 500
+        private const val COLLAPSED_KEY = "transcript_collapsed"
+        private const val ORDER_KEY = "transcript_order"
+    }
+}

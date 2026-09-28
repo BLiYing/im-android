@@ -6,6 +6,7 @@ import com.libeyond.imandroid.BuildConfig
 import com.libeyond.imandroid.sdk.api.AuthApi
 import com.libeyond.imandroid.data.MessageRepository
 import com.libeyond.imandroid.data.MessageService
+import com.libeyond.imandroid.data.messageAt
 import com.libeyond.imandroid.data.PresenceStore
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.IMDatabase
@@ -87,6 +88,8 @@ class IMClient(context: Context) {
     val groups = GroupApi(http)
     val profile = ProfileApi(http)
     val qr = QrApi(http)
+    /** 语音转文字（VOICE_TRANSCRIBE_DESIGN §3.1）：目前只有这一个接口。 */
+    private val voiceApi = com.libeyond.imandroid.sdk.api.VoiceApi(http)
     /** 上传。**公开**：除消息媒体外，改头像也要用它（「我」页编辑资料）。 */
     val upload = UploadApi(http) { session.token }
     private val downloadSettingsApi = DownloadSettingsApi(http)
@@ -145,6 +148,17 @@ class IMClient(context: Context) {
      * 见 [ThumbBackfill] 的注释。
      */
     val thumbBackfill = ThumbBackfill(repo, mediaCache)
+
+    /**
+     * 语音转文字（VOICE_TRANSCRIBE_DESIGN.md）：**进程内一份**，与 [voice]/[recorder] 同理——
+     * 长按菜单、气泡下的转写面板都要读同一份展开态。`contentLookup` 反查 `MessageRepository`
+     * 拿音频地址，`voice/` 包本身不越层直连仓库（见类注释）。
+     */
+    val voiceTranscriber = com.libeyond.imandroid.voice.VoiceTranscriber(
+        transcribe = { convId, convSeq -> voiceApi.transcribe(convId, convSeq) },
+        kv = com.libeyond.imandroid.voice.PrefsVoiceKv(context),
+        contentLookup = { convId, convSeq -> repo.messageAt(session.uid.orEmpty(), convId, convSeq)?.content },
+    )
 
     val presence = PresenceStore()
 
@@ -274,6 +288,11 @@ class IMClient(context: Context) {
         }
         scope.launch {
             messages.capabilityUpdates.collect { downloadSettingsStore.onPushed(it) }
+        }
+
+        // 语音转文字结果下行（§6.10），只推给请求者本人——见 VoiceTranscriber 类注释。
+        scope.launch {
+            messages.voiceTranscripts.collect { voiceTranscriber.applyRemote(it) }
         }
     }
 

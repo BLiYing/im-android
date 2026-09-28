@@ -27,8 +27,8 @@ class MessageActionsTest {
         timestamp = ts, recalledAt = recalledAt,
     )
 
-    private fun actions(m: MessageEntity, isGroup: Boolean = false, manager: Boolean = false) =
-        MessageActions.availableFor(m, ME, isGroup, manager, NOW)
+    private fun actions(m: MessageEntity, isGroup: Boolean = false, manager: Boolean = false, hasTranscript: Boolean = false) =
+        MessageActions.availableFor(m, ME, isGroup, manager, NOW, hasTranscript)
 
     /** 撤回墓碑上什么都不给——正文已被服务端脱敏，复制/引用都没意义。 */
     @Test
@@ -137,6 +137,22 @@ class MessageActionsTest {
     fun `系统消息不可引用`() {
         assertFalse(MessageAction.Reply in actions(msg(type = ContentType.SYSTEM)))
         assertTrue(MessageAction.Reply in actions(msg()))
+    }
+
+    /**
+     * 语音转文字：只对语音消息出现，同一位置按 `hasTranscript` 在「转文字」/「取消转文字」间切换
+     * （对齐 iOS `im_hasVoiceTranscript:`、Web `menus.ts` 的 transcribe/transcribeOff 互斥对）。
+     */
+    @Test
+    fun `转文字只对语音消息出现，按展开态切换文案`() {
+        val voice = msg(type = ContentType.VOICE, content = "/uploads/x.m4a")
+        assertTrue(MessageAction.Transcribe in actions(voice))
+        assertFalse(MessageAction.TranscribeOff in actions(voice))
+        assertTrue(MessageAction.TranscribeOff in actions(voice, hasTranscript = true))
+        assertFalse(MessageAction.Transcribe in actions(voice, hasTranscript = true))
+        // 非语音消息：无论 hasTranscript 传什么都不出现
+        assertFalse(MessageAction.Transcribe in actions(msg(), hasTranscript = true))
+        assertFalse(MessageAction.TranscribeOff in actions(msg(), hasTranscript = true))
     }
 }
 

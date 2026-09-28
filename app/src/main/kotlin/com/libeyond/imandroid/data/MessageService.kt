@@ -21,6 +21,7 @@ import com.libeyond.imandroid.sdk.protocol.ReceiptData
 import com.libeyond.imandroid.sdk.protocol.ReplyToData
 import com.libeyond.imandroid.sdk.protocol.SendMsgData
 import com.libeyond.imandroid.sdk.protocol.TypingData
+import com.libeyond.imandroid.sdk.protocol.VoiceTranscriptData
 import com.libeyond.imandroid.sdk.protocol.WatchData
 import com.libeyond.imandroid.sdk.protocol.PresenceFrame
 import com.libeyond.imandroid.sdk.protocol.SyncRespData
@@ -77,6 +78,10 @@ class MessageService(
     private val _friendEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     /** 好友关系有变（收到 friend 帧）。UI 据此重拉 /friends。 */
     val friendEvents: SharedFlow<Unit> = _friendEvents.asSharedFlow()
+
+    private val _voiceTranscripts = MutableSharedFlow<VoiceTranscriptData>(extraBufferCapacity = 8)
+    /** 收到 `voice_transcript` 帧（§6.10）。只推给请求者本人，见 [com.libeyond.imandroid.voice.VoiceTranscriber]。 */
+    val voiceTranscripts: SharedFlow<VoiceTranscriptData> = _voiceTranscripts.asSharedFlow()
 
     private val _capabilityUpdates = MutableSharedFlow<Long>(extraBufferCapacity = 8)
     /**
@@ -173,6 +178,10 @@ class MessageService(
             FrameType.MSG_HIDDEN -> data?.let { el ->
                 val d = ProtocolJson.decodeFromJsonElement(MsgHiddenData.serializer(), el)
                 repo.applyMsgHidden(owner, d.convId, d.convSeq)
+            }
+
+            FrameType.VOICE_TRANSCRIPT -> data?.let { el ->
+                _voiceTranscripts.tryEmit(ProtocolJson.decodeFromJsonElement(VoiceTranscriptData.serializer(), el))
             }
 
             // 收到任意 friend 帧即重拉列表，event 只作语义/日志（PROTOCOL §6.5）

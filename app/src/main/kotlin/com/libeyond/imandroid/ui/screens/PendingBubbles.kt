@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,13 +36,19 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.File
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.FileTypeIcon
+import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.passThroughTap
 import com.libeyond.imandroid.ui.theme.IMTheme
+import com.libeyond.imandroid.ui.voice.LocalVoicePlayer
+import com.libeyond.imandroid.ui.voice.WaveformBars
+import com.libeyond.imandroid.voice.VoiceRules
 
 /**
  * 待发消息的气泡（发送中 / 失败）。
@@ -189,6 +201,84 @@ internal fun PendingFileBubble(
                 fontSize = 10.sp,
                 modifier = Modifier.align(Alignment.End),
             )
+        }
+    }
+}
+
+/**
+ * 待发**语音**气泡。与图片/视频/文件同一个坑（本文件头两个函数的注释）：语音待发行的 `content`
+ * 是本地 `file://` 路径，按文本画就会在屏幕上出现一条写着 `file:///data/user/0/.../xxx.m4a`
+ * 的绿气泡、ack 落地后又"跳变"成正常语音气泡——录制功能上线后用户在真机上报的第一个问题
+ * （2026-09-28）。播放走本地文件预览（[VoicePlayer.toggleFile]），不是确认气泡 `VoiceBubbleBody`
+ * 那条「按服务端地址找下载缓存」的路——这条消息还没上传完，压根没有服务端地址。
+ * `id` 用 `voice-pending:` 前缀而非 [VoiceRules.playableId]，刻意避免撞上 ack 落地那一刻
+ * 确认气泡的 id（`cid:$clientMsgId`）——两边是两条独立的播放态，没必要也不该共用。
+ */
+@Composable
+internal fun PendingVoiceBubble(
+    clientMsgId: String,
+    convId: String,
+    localUri: String,
+    durationMs: Long,
+    waveform: String?,
+    timestamp: Long,
+    sending: Boolean,
+    failed: Boolean,
+    progress: Int?,
+    onRetry: () -> Unit,
+) {
+    val c = IMTheme.colors
+    val player = LocalVoicePlayer.current
+    val previewId = remember(clientMsgId) { "voice-pending:$clientMsgId" }
+    val pb = player?.state?.collectAsState()?.value?.takeIf { it.id == previewId }
+    var toast by remember { mutableStateOf<String?>(null) }
+    toast?.let { IMToast(it) { toast = null } }
+    val width = VoiceRules.bubbleWidthDp(durationMs).dp.coerceAtLeast(160.dp)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (failed) RetryMark(onRetry)
+        Column(
+            modifier = Modifier
+                .width(width)
+                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
+                .background(c.bubbleMe)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .passThroughTap {
+                    val f = java.io.File(localUri.removePrefix("file://"))
+                    if (f.exists()) player?.toggleFile(previewId, convId, f, durationMs) { toast = it }
+                },
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(34.dp).clip(CircleShape).background(c.voicePlayMine), contentAlignment = Alignment.Center) {
+                    Image(
+                        if (pb?.playing == true) Lucide.Pause else Lucide.Play, null, Modifier.size(15.dp),
+                        colorFilter = ColorFilter.tint(c.onAccent),
+                    )
+                }
+                Spacer(Modifier.width(9.dp))
+                WaveformBars(
+                    waveform = waveform, progress = pb?.progress ?: 0f,
+                    active = c.textPrimary, inactive = c.voiceWaveInactiveMine,
+                    modifier = Modifier.weight(1f).height(24.dp),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    MediaUrl.formatDuration(VoiceRules.shownMillis(durationMs, pb?.progress ?: 0f, pb?.playing == true).toInt()),
+                    color = c.textSecondary, fontSize = 11.sp,
+                )
+                Spacer(Modifier.weight(1f))
+                if (progress != null && sending) {
+                    Text("$progress%", color = c.textSecondary, fontSize = 10.sp)
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(TimeFormat.bubbleTime(timestamp), color = c.textSecondary, fontSize = 10.sp)
+            }
         }
     }
 }

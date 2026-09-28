@@ -3,12 +3,19 @@ package com.libeyond.imandroid.ui.voice
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,11 +46,14 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Mic
@@ -104,13 +114,20 @@ internal fun VoiceMicOrSendButton(
     onLocked: () -> Unit,
     onDrag: (Offset) -> Unit,
     rowWidthPx: () -> Float,
+    /** 这一格此刻的屏幕中心（窗口坐标）——[VoiceHoldOverlay] 靠它把悬浮层锚在真实按钮位置上，
+     * 不是外层那个铺满整行的容器的角（见 [ComposerBar] 里的说明）。 */
+    onGlobalCenter: (Offset) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
+    val reportCenter = Modifier.onGloballyPositioned {
+        onGlobalCenter(it.positionInWindow() + Offset(it.size.width / 2f, it.size.height / 2f))
+    }
     if (!showMic) {
         Box(
             modifier = modifier
+                .then(reportCenter)
                 .size(d.inputControl)
                 .clip(CircleShape)
                 .background(if (canSend) c.accent else c.neutralControl)
@@ -136,6 +153,7 @@ internal fun VoiceMicOrSendButton(
     }
     Box(
         modifier = modifier
+            .then(reportCenter)
             .size(d.inputControl)
             .pointerInput(recorder, convId) {
                 val lockAbovePx = LOCK_ABOVE.toPx()
@@ -197,45 +215,83 @@ internal fun VoiceMicOrSendButton(
 
 /**
  * 按住态悬浮层（草图 §03）：大圆钮跟手 + 振幅呼吸环 + 小锁钮（固定在按下点正上方）。
- * 只在「录制中且未锁定」时由 [ComposerBar] 挂出来，位置以调用方对齐的锚点为原点。
+ * 只在「录制中且未锁定」时由 [ComposerBar] 挂出来。
+ *
+ * **必须是 `BoxScope` 扩展、直接画在调用方那个已有的 `Box` 里**——之前套了一层
+ * `Box(Modifier.size(0.dp))` 想当"零尺寸锚点"，指望子项都用负 offset 飘出去，
+ * 结果 Compose 量这层 Box 时把 `(0,0)` 的约束**连带传给了子项**，子项的 `.size(58.dp)`/
+ * `.size(36.dp,52.dp)` 被外层的 0 约束顶到 0×0——大圆钮、锁钮全都量出 0 大小，
+ * 真机上**整个悬浮层从头到尾都没画出来过**（2026-09-28 用户报"上滑锁定看不到锁定 icon 交互"，
+ * 一路 adb 摆拍到「手指按下→上滑→锁定」全程都没能截到大圆钮或锁钮，最后定位到这层 0dp 包装）。
+ * 直接把两个子项摆进调用方那个本来就有真实尺寸（输入栏那一行）的 `Box`，`align(BottomEnd)`
+ * 算的 space 就是那一行的真实大小，子项不再被顶成 0，位置数值（[LOCK_ABOVE] 等）不用改。
  */
 @Composable
-internal fun VoiceHoldOverlay(state: VoiceRecorder.State, dragOffset: Offset, modifier: Modifier = Modifier) {
+internal fun BoxScope.VoiceHoldOverlay(
+    state: VoiceRecorder.State,
+    dragOffset: Offset,
+    /**
+     * 麦克风/发送键中心相对调用方那个 `Box` 右下角的真实像素偏移（[ComposerBar] 用两点
+     * `positionInWindow()` 作差实测出来的，不是硬编码 dp）。外层 `Box` 是铺满整行的容器，
+     * 它的右下角在屏幕最右边缘；按钮既不贴边（`Row` 自己还有 `inputBarEdge` 内边距）也不贴底
+     * （垂直居中），不加这个偏移量的话大圆钮/锁钮会明显偏右、几乎贴边（2026-09-28 用户对照
+     * 真机报的）。
+     */
+    anchorOffsetPx: Offset = Offset.Zero,
+) {
     val c = IMTheme.colors
     val density = LocalDensity.current
     val lockPhase = with(density) {
         VoiceRules.lockPhase(dragOffset.x, dragOffset.y, 0f, -LOCK_ABOVE.toPx(), LOCK_NEAR_R.toPx(), LOCK_SNAP_R.toPx())
     }
     val ringScale = 1f + minOf(0.35f, state.amplitude * 0.5f)
-    // 零尺寸锚点：子项全部用负 offset 悬浮，align 在 0 大小的父盒里对谁都一样，就是这个点本身。
-    Box(modifier = modifier.size(0.dp)) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .offset(y = -(LOCK_ABOVE + BIG_CIRCLE / 2))
-                .size(36.dp, 52.dp)
-                .scale(if (lockPhase != VoiceRules.LockPhase.None) 1.1f else 1f)
-                .clip(RoundedCornerShape(26.dp))
-                .background(c.surface),
-            contentAlignment = Alignment.Center,
-        ) {
-            VoiceIcon(Lucide.Lock, null, if (lockPhase != VoiceRules.LockPhase.None) c.accent else c.textSecondary, 18.dp)
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .offset(
-                    x = with(density) { dragOffset.x.toDp() }.coerceIn((-100).dp, 100.dp),
-                    y = with(density) { dragOffset.y.toDp() }.coerceIn((-160).dp, 20.dp) - BIG_CIRCLE / 2,
-                )
-                .size(BIG_CIRCLE)
-                .scale(ringScale)
-                .clip(CircleShape)
-                .background(c.accent),
-            contentAlignment = Alignment.Center,
-        ) {
-            VoiceIcon(Lucide.Mic, null, c.onAccent, 26.dp)
-        }
+    val anchorXDp = with(density) { anchorOffsetPx.x.toDp() }
+    val anchorYDp = with(density) { anchorOffsetPx.y.toDp() }
+    // **大圆钮必须先画**：手指上滑到锁定判定区时，圆钮的跟手位置与锁钮的固定位置本就重叠
+    // （两者的落点都在按下点上方 ~LOCK_ABOVE 附近）——Compose 同一 Box 里后画的盖住先画的，
+    // 锁钮若排在圆钮前面，恰恰会在最需要看见"锁钮高亮/放大"反馈的那一刻被圆钮整个盖住。
+    // 锁钮固定在同一个位置、圆钮跟手飘过，锁钮必须画在上层才能全程可见。
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .offset(
+                x = anchorXDp + with(density) { dragOffset.x.toDp() }.coerceIn((-100).dp, 100.dp),
+                y = anchorYDp + with(density) { dragOffset.y.toDp() }.coerceIn((-160).dp, 20.dp) - BIG_CIRCLE / 2,
+            )
+            .size(BIG_CIRCLE)
+            .scale(ringScale)
+            .clip(CircleShape)
+            .background(c.accent),
+        contentAlignment = Alignment.Center,
+    ) {
+        VoiceIcon(Lucide.Mic, null, c.onAccent, 26.dp)
+    }
+    // 上箭头呼吸（对齐 iOS `IMVoicePressOverlay.restartArrowBreathe`：position.y 上下 4pt 往复、
+    // 0.7s、线性、无限重复）——引导"往上滑到这里锁定"，2026-09-28 用户对照 iOS 报本端锁钮缺这个提示。
+    val arrowY by rememberInfiniteTransition(label = "lock-arrow").animateFloat(
+        initialValue = 0f, targetValue = -4f,
+        animationSpec = infiniteRepeatable(tween(700, easing = LinearEasing), RepeatMode.Reverse),
+        label = "lock-arrow-y",
+    )
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .offset(x = anchorXDp, y = anchorYDp - (LOCK_ABOVE + BIG_CIRCLE / 2))
+            .size(36.dp, 52.dp)
+            .scale(if (lockPhase != VoiceRules.LockPhase.None) 1.1f else 1f)
+            .clip(RoundedCornerShape(26.dp))
+            .background(c.surface),
+    ) {
+        // 锁图标在上（对齐按下点方向）、呼吸箭头在下（对齐 iOS：lockIcon center y=16，
+        // lockArrow center y=52-16=36，同一个 52pt 高胶囊里上下各占一截）。
+        VoiceIcon(
+            Lucide.Lock, null, if (lockPhase != VoiceRules.LockPhase.None) c.accent else c.textSecondary, 16.dp,
+            modifier = Modifier.align(Alignment.TopCenter).offset(y = 8.dp),
+        )
+        VoiceIcon(
+            Lucide.ChevronUp, null, c.textSecondary, 14.dp,
+            modifier = Modifier.align(Alignment.BottomCenter).offset(y = -8.dp + arrowY.dp),
+        )
     }
 }
 
@@ -445,11 +501,12 @@ private fun VoiceIcon(
     contentDescription: String?,
     tint: androidx.compose.ui.graphics.Color,
     size: androidx.compose.ui.unit.Dp = 20.dp,
+    modifier: Modifier = Modifier,
 ) {
     Image(
         imageVector = icon,
         contentDescription = contentDescription,
-        modifier = Modifier.size(size),
+        modifier = modifier.size(size),
         colorFilter = ColorFilter.tint(tint),
     )
 }

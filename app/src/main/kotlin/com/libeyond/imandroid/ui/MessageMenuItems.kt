@@ -19,6 +19,7 @@ import coil.compose.AsyncImage
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.CornerUpLeft
+import com.composables.icons.lucide.FileText
 import com.composables.icons.lucide.Forward
 import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
@@ -117,6 +118,7 @@ internal fun messageActionIcon(a: MessageAction) = when (a) {
     MessageAction.Reply -> Lucide.CornerUpLeft
     MessageAction.Forward -> Lucide.Forward
     MessageAction.Favorite -> Lucide.Bookmark
+    MessageAction.Transcribe, MessageAction.TranscribeOff -> Lucide.FileText
     MessageAction.MultiSelect -> Lucide.ListChecks
     MessageAction.Recall -> Lucide.Undo2
     MessageAction.DeleteForEveryone -> Lucide.Users
@@ -173,7 +175,11 @@ internal fun ChatMessageMenu(
     val owner = client.uid.orEmpty()
     val clipboard = LocalClipboardManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
-    val actions = MessageActions.availableFor(target, owner, conv.isGroup, iAmManager)
+    val transcriber = com.libeyond.imandroid.ui.voice.LocalVoiceTranscriber.current
+    val actions = MessageActions.availableFor(
+        target, owner, conv.isGroup, iAmManager,
+        hasTranscript = transcriber?.isExpanded(target.convSeq) == true,
+    )
     MessageContextMenu(
         anchor = anchor,
         mine = target.sender == owner,
@@ -257,6 +263,10 @@ internal fun ChatMessageMenu(
                     }
                     null -> Unit
                 }
+                // 转文字 / 取消转文字：同一个入口，VoiceTranscriber.toggle 按当前展开态分派
+                // （对齐 iOS `im_transcribeVoiceMessage:`、Web `transcribeMessage`）。
+                MessageAction.Transcribe, MessageAction.TranscribeOff ->
+                    transcriber?.toggle(conv.convId, target.convSeq, target.content)
                 MessageAction.Reply -> onReply(target)
                 MessageAction.Forward -> onForward(target)
                 // 挂宿主作用域（本函数 KDoc 的 scope 那条）：菜单一关，挂菜单自己身上的请求会被取消。

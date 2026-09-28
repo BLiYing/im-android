@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -362,6 +364,21 @@ internal fun Bubble(
                     if (flushMedia || isCard) return@Column
                     Spacer(Modifier.height(2.dp))
                     Box(Modifier.align(Alignment.End)) { timeMeta() }
+                }
+            }
+            // 语音转写面板：挂在气泡**外面**（这条消息列，气泡下方），不进气泡内——
+            // 同 Web `msg-item` 的结构，不是 `VoiceBubbleBody` 的一部分。
+            if (msg != null && msg.convSeq > 0 && msg.contentType == ContentType.VOICE && !recalled) {
+                val transcriber = com.libeyond.imandroid.ui.voice.LocalVoiceTranscriber.current
+                // convSeq > 0 已由上面的守卫保证，playableId 在这个分支恒不为 null。
+                val mid = com.libeyond.imandroid.voice.VoiceRules.playableId(msg.convSeq, msg.clientMsgId)!!
+                if (transcriber != null) {
+                    // 全会话共享同一张 Map（[VoiceTranscriber.state]）——直接 collectAsState 会让
+                    // 「随便哪条语音的转写状态变了」都重组本气泡；derivedStateOf 把订阅收窄到
+                    // 「只有这条（mid）自己的值变了才重组」，同屏多条语音气泡时避免互相拖累重组。
+                    val mapState = transcriber.state.collectAsState()
+                    val ts by remember(mid) { derivedStateOf { mapState.value[mid] } }
+                    ts?.let { com.libeyond.imandroid.ui.voice.VoiceTranscriptPanel(it, modifier = Modifier.widthIn(max = bubbleMax)) }
                 }
             }
         }

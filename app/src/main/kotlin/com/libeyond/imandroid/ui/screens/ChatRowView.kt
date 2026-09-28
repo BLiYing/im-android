@@ -253,6 +253,7 @@ internal fun ChatRowView(
             val isImage = r.msg.contentType == ContentType.IMAGE
             val isVideo = r.msg.contentType == ContentType.VIDEO
             val isFile = r.msg.contentType == ContentType.FILE
+            val isVoice = r.msg.contentType == ContentType.VOICE
             val pct = uploadProgress[r.msg.clientMsgId]
             if (r.msg.contentType == ContentType.CALL && CallRecord.parse(r.msg.content)?.isGroup == true) {
                 SystemNote(text = CallRecord.renderRaw(r.msg.content, viewerIsSender = true).text)
@@ -260,6 +261,19 @@ internal fun ChatRowView(
                 PendingMediaBubble(
                     localUri = r.msg.content,
                     isVideo = isVideo,
+                    timestamp = r.msg.createdAt,
+                    sending = r.msg.state == SendState.Sending.name,
+                    failed = r.msg.state == SendState.Failed.name,
+                    progress = pct,
+                    onRetry = { onRetry(r.msg.clientMsgId) },
+                )
+            } else if (isVoice) {
+                PendingVoiceBubble(
+                    clientMsgId = r.msg.clientMsgId,
+                    convId = r.msg.convId,
+                    localUri = r.msg.content,
+                    durationMs = (r.msg.duration ?: 0).toLong(),
+                    waveform = r.msg.waveform,
                     timestamp = r.msg.createdAt,
                     sending = r.msg.state == SendState.Sending.name,
                     failed = r.msg.state == SendState.Failed.name,
