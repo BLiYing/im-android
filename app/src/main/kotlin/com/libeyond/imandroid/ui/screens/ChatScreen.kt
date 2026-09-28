@@ -374,6 +374,10 @@ fun ChatScreen(
                     onClosePanel = { attachOpen = false },
                     onDismissKeyboard = { focusManager.clearFocus() },
                 )
+                // chatScrollbar 要排在 padding **之前**：画的时候按到这一步为止的尺寸算右边界，
+                // 排在 padding 后面会让它跟着内容一起缩进 12dp，贴不到屏幕真正的边（细滚动条应像
+                // iOS/Web 系统白送的那种，紧贴视口边缘，不随内容内边距内移）。
+                .chatScrollbar(listState, c.textTertiary.copy(alpha = 0.4f))
                 .padding(horizontal = d.chatAvatarLeading),
             // 行距 5、最后一条距输入栏 3：iOS 的间距全长在 cell 里（顶 2 底 3），换成列表的说法就是这三个数
             contentPadding = PaddingValues(top = d.chatListPaddingTop, bottom = d.chatListPaddingBottom),

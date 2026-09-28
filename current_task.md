@@ -99,6 +99,12 @@
   SharedPreferences——填满缓存近似 O(n²)，量小暂不改；要改可只在淘汰时写顺序表，或改落 Room。
   ② `PendingBubbles.kt` 的 `PendingVoiceBubble` 里 `bubbleWidthDp(...).dp.coerceAtLeast(160.dp)` 是多余的
   （`VoiceRules.bubbleWidthDp` 已保证 ≥160），可删。
+- **`applySync` 每页只要 `c.messages` 非空就调用 `bumpConversationFromLatest`，哪怕这批全是 `msg_op`/
+  墓碑这类非内容行**（2026-09-28，会话不上移/聊天页不跟底/补滚动条那批修复的 code review 发现，未改，
+  留作后续优化）：这批消息会被 `onIncomingBatch` 内部过滤成空，白白多打一次 `latestWindow` 查询——
+  影响可忽略（一次索引 SELECT），但要干净修得改 `onIncomingBatch` 的返回契约（让它顺带报"这批里有没有
+  真消息"），而它还被 `WINDOW_RESP`（锚点开窗，翻历史用）共用，改动会超出当时那次 diff 的范围。
+  见 `data/MessageSync.kt` 的 `applySync` / `bumpConversationFromLatest`。
 
 - **`MessageService.resend`（点红❗重试）此前对 `Failed` 状态的行完全无效**（2026-09-28 随语音录制一起修）：
   它查 `repo.inFlight()`，而那个方法只挑 `state=Sending` 的行——`Failed` 的行永远查不到，点了跟没点一样，

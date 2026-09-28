@@ -104,4 +104,39 @@ object ChatScroll {
 
     fun tapActionOf(panelOpen: Boolean): TapAction =
         if (panelOpen) TapAction.ClosePanelOnly else TapAction.DismissKeyboard
+
+    /** 滚动条滑块最矮几像素——内容特别长时，按比例算出来的滑块会细到看不见。 */
+    const val SCROLLBAR_MIN_THUMB_PX = 24f
+
+    /**
+     * 侧边滚动条滑块的位置与高度（像素，viewport 坐标系）。
+     *
+     * Compose Foundation 在 Android 上没有现成的滚动条（`rememberScrollbarAdapter` 只有桌面态有），
+     * 只能照 `LazyListLayoutInfo` 自己画。行高不等（图片/长文/宫格气泡），没法直接拿
+     * "总行数 × 单行高" 算内容总高，用**当前可见行的平均高**估算——是这一屏的真实平均，
+     * 比瞎猜一个常量准；用户越往下滚，估算跟着可见行刷新，越接近真实。
+     *
+     * @return null = 一屏放得下全部内容，不必画滚动条
+     */
+    fun scrollbarThumb(
+        totalRows: Int,
+        firstVisibleIndex: Int,
+        firstVisibleOffset: Int,
+        averageRowHeightPx: Float,
+        viewportHeightPx: Float,
+    ): ScrollbarThumb? {
+        if (totalRows <= 0 || averageRowHeightPx <= 0f || viewportHeightPx <= 0f) return null
+        val contentHeightPx = averageRowHeightPx * totalRows
+        val overflowPx = contentHeightPx - viewportHeightPx
+        if (overflowPx <= 0f) return null
+        val thumbHeightPx = (viewportHeightPx * viewportHeightPx / contentHeightPx)
+            .coerceIn(SCROLLBAR_MIN_THUMB_PX, viewportHeightPx)
+        val scrolledPastPx = (averageRowHeightPx * firstVisibleIndex - firstVisibleOffset)
+            .coerceIn(0f, overflowPx)
+        val maxTravelPx = viewportHeightPx - thumbHeightPx
+        val progress = scrolledPastPx / overflowPx
+        return ScrollbarThumb(topPx = maxTravelPx * progress, heightPx = thumbHeightPx)
+    }
+
+    data class ScrollbarThumb(val topPx: Float, val heightPx: Float)
 }

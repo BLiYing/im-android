@@ -383,7 +383,10 @@ class MessageRepository(
 
     // ————————————————— 内部 —————————————————
 
-    /** `internal`——`MessageRepositorySend.kt` 的 `onAck` 也要调它（ack 落库后 bump 会话）。 */
+    /**
+     * `internal` 不是 `private`：`MessageRepositorySend.kt` 的 `onAck`（ack 落库后 bump 会话）与
+     * `MessageSync.kt` 的 `bumpConversationFromLatest`（断线重连补收后 bump 会话）都要复用同一份逻辑。
+     */
     internal suspend fun bumpConversation(
         owner: String,
         convId: String,

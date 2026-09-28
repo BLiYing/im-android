@@ -139,4 +139,47 @@ class ChatScrollTest {
     fun `视口起点带内边距时按两端求中线`() {
         assertEquals(0, ChatScroll.centerDeltaPx(itemOffset = 450, itemSize = 100, viewportStart = -100, viewportEnd = 1100))
     }
+
+    // —— 侧边滚动条 ——
+
+    @Test
+    fun `一屏放得下全部内容不画滚动条`() {
+        assertNull(
+            ChatScroll.scrollbarThumb(
+                totalRows = 10, firstVisibleIndex = 0, firstVisibleOffset = 0,
+                averageRowHeightPx = 80f, viewportHeightPx = 2000f,
+            ),
+        )
+    }
+
+    /** 滚到底时滑块该停在轨道最下端，不能因为像素取整之类的差一点点停不到底。 */
+    @Test
+    fun `滚到底时滑块贴着轨道底`() {
+        // 100 行、平均行高 80px → 内容 8000px，视口 1000px，滑块高 = 1000*1000/8000 = 125px，可走 875px
+        val thumb = ChatScroll.scrollbarThumb(
+            totalRows = 100, firstVisibleIndex = 89, firstVisibleOffset = 0,
+            averageRowHeightPx = 80f, viewportHeightPx = 1000f,
+        )
+        assertEquals(125f, thumb!!.heightPx, 0.01f)
+        assertEquals(875f, thumb.topPx, 0.01f)
+    }
+
+    @Test
+    fun `滚到顶时滑块贴着轨道顶`() {
+        val thumb = ChatScroll.scrollbarThumb(
+            totalRows = 100, firstVisibleIndex = 0, firstVisibleOffset = 0,
+            averageRowHeightPx = 80f, viewportHeightPx = 1000f,
+        )
+        assertEquals(0f, thumb!!.topPx, 0.01f)
+    }
+
+    /** 内容特别长时按比例算出来的滑块会细到看不见，要托底一个最小高度。 */
+    @Test
+    fun `滑块不能细过最小高度`() {
+        val thumb = ChatScroll.scrollbarThumb(
+            totalRows = 100_000, firstVisibleIndex = 0, firstVisibleOffset = 0,
+            averageRowHeightPx = 80f, viewportHeightPx = 1000f,
+        )
+        assertEquals(ChatScroll.SCROLLBAR_MIN_THUMB_PX, thumb!!.heightPx, 0.01f)
+    }
 }
