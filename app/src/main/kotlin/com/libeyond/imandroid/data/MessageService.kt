@@ -8,6 +8,7 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.sdk.protocol.ErrCode
 import com.libeyond.imandroid.sdk.protocol.MentionSpan
 import com.libeyond.imandroid.sdk.protocol.ErrorData
 import com.libeyond.imandroid.sdk.protocol.FrameType
@@ -338,8 +339,11 @@ class MessageService(
         fileSize: Long,
         caption: String? = null,
         groupId: String? = null,
+        duration: Int? = null,
+        waveform: String? = null,
     ): String? = media.createPendingRow(
         convId, to, contentType, localPreviewUri, fileName, fileSize, caption, groupId,
+        duration, waveform,
     )
 
     /** 见 [MediaSendPipeline.attachThumb]。 */
@@ -366,10 +370,11 @@ class MessageService(
         duration: Int? = null,
         poster: String? = null,
         thumb: String? = null,
+        waveform: String? = null,
         pendingId: String? = null,
     ) = media.sendBytes(
         convId, to, bytes, fileName, mimeType, contentType, caption, localPreviewUri,
-        groupId, mediaW, mediaH, duration, poster, thumb, pendingId,
+        groupId, mediaW, mediaH, duration, poster, thumb, waveform, pendingId,
     )
 
     /** 见 [MediaSendPipeline.sendStream]。 */
@@ -395,10 +400,34 @@ class MessageService(
         localPreviewUri, groupId, mediaW, mediaH, duration, poster, thumb, pendingId,
     )
 
-    /** 重发（红❗点击 / 重连后补发）。**沿用同一个 client_msg_id**，服务端幂等去重。 */
+    /**
+     * 重发（红❗点击 / 重连后补发）。**沿用同一个 client_msg_id**，服务端幂等去重。
+     *
+     * 按 clientMsgId **不按状态**查（[MessageRepository.pendingByClientId]）——红❗点击要找的
+     * 正是 Failed 行，[MessageRepository.inFlight] 只挑 Sending 的会找不到它，点了跟没点一样。
+     */
     suspend fun resend(clientMsgId: String) {
         val owner = ownerProvider() ?: return
-        val p = repo.inFlight(owner).firstOrNull { it.clientMsgId == clientMsgId } ?: return
+        val p = repo.pendingByClientId(owner, clientMsgId) ?: return
+        if (isLocalUri(p.content)) {
+            // 正文仍是本地 uri：上传没走完就失败的残留。语音落在应用私有目录，进程重启后
+            // 依然读得到，能重新上传；图片/视频的本地 uri 是系统相册 content://，读权限随
+            // 发起进程一起没了，**绝不能原样 transmit**——那会把 content:// 当正文发给对端，
+            // 存进服务端后再也改不回来（同 MessageSync.resendInFlight 里 stale 分支的注释）。
+            if (p.contentType == ContentType.VOICE) {
+                media.reuploadVoice(p)
+            } else {
+                repo.onSendRejected(
+                    owner,
+                    ErrorData(
+                        code = ErrCode.PARAM_INVALID,
+                        message = Str.s(R.string.chat_resend_upload_incomplete),
+                        clientMsgId = clientMsgId,
+                    ),
+                )
+            }
+            return
+        }
         transmit(
             p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
             p.fileName, p.fileSize, p.caption, p.forwardFrom, p.groupId,

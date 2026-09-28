@@ -206,6 +206,7 @@ class MessageRepository(
         duration: Int? = null,
         poster: String? = null,
         thumb: String? = null,
+        waveform: String? = null,
     ) {
         val p = pending.byClientId(owner, cid) ?: return
         pending.put(
@@ -215,8 +216,20 @@ class MessageRepository(
                 duration = duration ?: p.duration,
                 poster = poster ?: p.poster,
                 thumb = thumb ?: p.thumb,
+                waveform = waveform ?: p.waveform,
             ),
         )
+    }
+
+    /**
+     * 把一条待发行标回「发送中」（语音重传前置步骤，见 [MediaSendPipeline.reuploadVoice]）。
+     *
+     * [MessageService.transmit] 从不改状态——它假定调用方在这之前已经是 Sending。
+     * 语音重传是从 Failed 状态**重新触发一次上传**（不是补发已上传的帧），
+     * 不先复位就会一直停在红❗，即使上传其实正在悄悄跑。
+     */
+    suspend fun markPendingSending(owner: String, cid: String) {
+        pending.markState(owner, cid, SendState.Sending.name, 0)
     }
 
     /**
@@ -235,6 +248,13 @@ class MessageRepository(
 
     /** 在途未确认的消息——重连后按同一 `client_msg_id` 重发。 */
     suspend fun inFlight(owner: String): List<PendingMessageEntity> = pending.inFlight(owner)
+
+    /**
+     * 按 `client_msg_id` 查一条待发行，**不按状态过滤**（[inFlight] 只挑 Sending 的，
+     * 找不到 Failed 行——手动点红❗重试要找的恰恰是 Failed 那一条，见 [MessageService.resend]）。
+     */
+    suspend fun pendingByClientId(owner: String, cid: String): PendingMessageEntity? =
+        pending.byClientId(owner, cid)
 
     /**
      * ack 到达：落真身、清待发、bump 会话。

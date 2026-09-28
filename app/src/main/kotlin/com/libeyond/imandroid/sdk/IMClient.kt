@@ -112,6 +112,13 @@ class IMClient(context: Context) {
     val voice = com.libeyond.imandroid.voice.VoicePlayer(context, downloads) { session.uid.orEmpty() }
 
     /**
+     * 录音（VOICE_MESSAGE_DESIGN §5）：同样**进程内一份**——中断（来电/切后台/离开聊天页）后
+     * 要停在暂停态、回到原会话锁定行还在，跨页面就得是同一个实例。依赖 [voice]：
+     * 开始录音要先停掉正在播的语音（抢麦克风前先放设备）。
+     */
+    val recorder = com.libeyond.imandroid.voice.VoiceRecorder(context, voice)
+
+    /**
      * 自动下载策略（M4-7）。**进程内一份**：门控每渲染一格媒体读一次 [downloadSettings]，
      * 「数据和存储」设置页订阅 [DownloadSettingsStore.state]。
      * 什么时候重拉见 init：真正连上时、收到 `capabilities_update` 时；另有 AppRoot 登录后拉一次。

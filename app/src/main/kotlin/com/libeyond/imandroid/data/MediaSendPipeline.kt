@@ -1,10 +1,14 @@
 package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.db.PendingMessageEntity
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 一条媒体消息从「选中」到「发出去」的完整链路：
@@ -28,6 +32,7 @@ internal class MediaSendPipeline(
         content: String, replyToConvSeq: Long?, fileName: String?, fileSize: Long?,
         caption: String?, forwardFrom: String?, groupId: String?,
         mediaW: Int?, mediaH: Int?, duration: Int?, poster: String?, thumb: String?,
+        waveform: String?,
     ) -> Unit,
     private val log: IMLog.Tagged,
 ) {
@@ -69,12 +74,19 @@ internal class MediaSendPipeline(
         fileSize: Long,
         caption: String? = null,
         groupId: String? = null,
+        /**
+         * 时长 / 波形指纹（仅 voice）：与图片/视频不同，语音**录完当场就知道**，
+         * 不用等异步解码，落行时就能一并写上，气泡首次渲染就有真实时长与波形。
+         */
+        duration: Int? = null,
+        waveform: String? = null,
     ): String? {
         val owner = ownerProvider() ?: return null
         return repo.createPending(
             owner = owner, convId = convId, to = to,
             content = localPreviewUri, contentType = contentType,
             groupId = groupId, fileName = fileName, fileSize = fileSize, caption = caption,
+            duration = duration, waveform = waveform,
         ).clientMsgId
     }
 
@@ -126,13 +138,15 @@ internal class MediaSendPipeline(
         poster: String? = null,
         /** 极小模糊缩略（[com.libeyond.imandroid.data.TinyThumb]），随消息带给收端做占位。 */
         thumb: String? = null,
+        /** 语音振幅指纹（仅 voice）。 */
+        waveform: String? = null,
         /** 已由 [createPendingRow] 落好的行；传 null 则在这里现落一条。 */
         pendingId: String? = null,
     ) {
         val owner = ownerProvider() ?: return
         val cid = pendingId?.also {
             // 行是发送前就落的，元数据此刻才算出来——**必须回写**，否则 resend 丢字段
-            repo.updatePendingMedia(owner, it, mediaW, mediaH, duration, poster, thumb)
+            repo.updatePendingMedia(owner, it, mediaW, mediaH, duration, poster, thumb, waveform)
             repo.updatePendingContent(owner, it, localPreviewUri, bytes.size.toLong())
         } ?: repo.createPending(
             owner = owner, convId = convId, to = to,
@@ -140,6 +154,7 @@ internal class MediaSendPipeline(
             groupId = groupId,
             fileName = fileName, fileSize = bytes.size.toLong(), caption = caption,
             mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster, thumb = thumb,
+            waveform = waveform,
         ).clientMsgId
         uploading += cid
         val r = try {
@@ -165,7 +180,7 @@ internal class MediaSendPipeline(
         transmit(
             cid, convId, to, contentType, r.url, null,
             fileName, r.size, caption, null, groupId,
-            mediaW, mediaH, duration, poster, thumb,
+            mediaW, mediaH, duration, poster, thumb, waveform,
         )
     }
 
@@ -239,7 +254,56 @@ internal class MediaSendPipeline(
         transmit(
             cid, convId, to, contentType, r.url, null,
             fileName, r.size, caption, null, groupId,
-            mediaW, mediaH, duration, poster, thumb,
+            mediaW, mediaH, duration, poster, thumb, null,
+        )
+    }
+
+    /**
+     * 语音重传（[MessageService.resend] 遇到失败且正文仍是本地 `file://` 路径时走这条）。
+     *
+     * 与图片/视频**刻意不同**：图片/视频的本地 uri 是系统相册的 `content://`，
+     * 读权限随发起进程一起没了，杀进程/断线后读不回来，只能标失败让用户重选
+     * （见 [MessageSync.resendInFlight] 的注释）。语音的本地文件落在**应用私有目录**
+     * （[VoiceRecorder.pendingDir]），是自己的字节，进程重启后依然读得到——
+     * 没有理由让用户重新说一遍话，直接重新上传即可（iOS `IMVoiceRecorder` 同一取舍）。
+     */
+    suspend fun reuploadVoice(p: PendingMessageEntity) {
+        val owner = ownerProvider() ?: return
+        val file = File(p.content.removePrefix("file://"))
+        if (!file.exists() || file.length() <= 0) {
+            repo.onSendRejected(
+                owner,
+                com.libeyond.imandroid.sdk.protocol.ErrorData(
+                    code = 0, message = Str.s(R.string.chat_voice_original_lost), clientMsgId = p.clientMsgId,
+                ),
+            )
+            log.w("voice_reupload_missing", "cid" to p.clientMsgId)
+            return
+        }
+        repo.markPendingSending(owner, p.clientMsgId)
+        val bytes = try {
+            withContext(Dispatchers.IO) { file.readBytes() }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 离开会话 / 退出登录取消了这次重传：状态留在「发送中」等下次机会，
+            // 不能吞掉——吞了协程取消就失效了（CODING_STYLE §5）。
+            throw e
+        } catch (e: Exception) {
+            repo.onSendRejected(
+                owner,
+                com.libeyond.imandroid.sdk.protocol.ErrorData(
+                    code = 0, message = Str.s(R.string.chat_voice_file_read_failed), clientMsgId = p.clientMsgId,
+                ),
+            )
+            log.w("voice_reupload_read_failed", "cid" to p.clientMsgId, "err" to e.javaClass.simpleName)
+            return
+        }
+        sendBytes(
+            convId = p.convId, to = p.to, bytes = bytes,
+            fileName = p.fileName ?: "voice.m4a", mimeType = "audio/mp4",
+            contentType = ContentType.VOICE, caption = p.caption,
+            localPreviewUri = p.content, groupId = p.groupId,
+            duration = p.duration, waveform = p.waveform,
+            pendingId = p.clientMsgId,
         )
     }
 }

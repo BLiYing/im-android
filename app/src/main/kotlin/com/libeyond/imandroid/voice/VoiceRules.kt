@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.voice
 
+import com.libeyond.imandroid.data.Waveform
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 
@@ -72,6 +73,91 @@ object VoiceRules {
     /** 播放/暂停中显**剩余**时间，其余显总时长（§6.2 进度记忆那条）。 */
     fun shownMillis(totalMs: Long, progress: Float, active: Boolean): Long =
         if (active) maxOf(0L, totalMs - (progress.coerceIn(0f, 1f) * totalMs).toLong()) else totalMs
+
+    // ————————————————— 录制（§5，iOS `IMVoiceRecorder` / `IMVoicePressOverlay` / `IMVoiceRecordingHUD`）—————————————————
+
+    /** <0.6s 松手按「说话时间太短」丢弃（§5.1）。 */
+    const val SHORT_MS = 600L
+
+    /** 上限 5min（§1 协议 `maxVoiceDurationMillis`）。 */
+    const val MAX_MS = 5 * 60 * 1000L
+
+    /** 4:50 起计时变红并倒数（草图 §12）。 */
+    const val COUNTDOWN_FROM_MS = MAX_MS - 10_000L
+
+    /** 波形样本上限 60（服务端上限 120 字节留一半余量，iOS `IMVoiceWaveformMaxSamples`）。 */
+    const val WAVEFORM_SAMPLES = 60
+
+    /** 左滑取消阈值：输入行宽的 40%（§5.2，iOS `kIMVoiceCancelThresholdRatio`）。 */
+    const val CANCEL_RATIO = 0.40f
+
+    /** 已录超过 10s 删除才二次确认（§5.3）。 */
+    const val DELETE_CONFIRM_MS = 10_000L
+
+    /**
+     * `MediaRecorder.getMaxAmplitude()`（0..32767，上次调用以来的峰值）→ 0..1。
+     * 与 iOS `10^(dB/20)` 同为**线性幅度**，只是取峰值而非均方根——语音条要的是「哪里在说话」的形状，够用。
+     */
+    fun amplitudeOf(maxAmplitude: Int): Float = (maxAmplitude / 32767f).coerceIn(0f, 1f)
+
+    /** 0..1 振幅 → 协议字节（0..100 的百分比）。 */
+    fun amplitudeByte(a: Float): Byte = (a.coerceIn(0f, 1f) * 100f).toInt().coerceIn(0, 100).toByte()
+
+    /**
+     * 录到的逐帧振幅（0..100）→ `waveform`（base64，≤[WAVEFORM_SAMPLES] 字节）。
+     * 超出按桶**取最大值**下采（保峰形），复用 [Waveform.bars] 的同一份算法——
+     * 收端解码也靠它按显示宽度再下采一次，两处各写一份桶边界/取值逻辑最容易悄悄漂移
+     * （见 `data/Waveform.kt` 文件头注释，2026-09-28 code review 抓出这里曾经重复实现）。
+     * 不超限直传原样字节，不补齐到 [WAVEFORM_SAMPLES]——协议允许变长，短录音没必要把体积撑大。
+     * 一帧没有 → null（收端退化等高条纹，合法状态）。
+     */
+    fun encodeWaveform(samples: ByteArray): String? {
+        if (samples.isEmpty()) return null
+        val raw = if (samples.size <= WAVEFORM_SAMPLES) {
+            samples
+        } else {
+            val amps = FloatArray(samples.size) { (samples[it].toInt() and 0xFF) / 100f }
+            val bars = Waveform.bars(amps, WAVEFORM_SAMPLES)
+            ByteArray(WAVEFORM_SAMPLES) { kotlin.math.round(bars[it] * 100f).toInt().coerceIn(0, 100).toByte() }
+        }
+        return java.util.Base64.getEncoder().encodeToString(raw)
+    }
+
+    /** 锁钮判定三态（iOS `IMVoiceLockPhase`）。 */
+    enum class LockPhase { None, Near, Locked }
+
+    /**
+     * 手指相对锁钮中心的判定：进 [nearR] 高亮、进 [snapR] 到位即锁（无需松手）；
+     * **越过兜底**——快速上滑时两次采样间能跳过 70pt，手指直接从锁下方到上方、永不入圈，
+     * 所以「高于锁中心且横向仍在 [nearR] 走廊内」也算锁定（iOS 2026-08 修过同一处）。
+     * 坐标系任意，只要三者一致（y 向下为正）。
+     */
+    fun lockPhase(fx: Float, fy: Float, lx: Float, ly: Float, nearR: Float, snapR: Float): LockPhase {
+        val dist = kotlin.math.hypot(fx - lx, fy - ly)
+        val flewPast = fy < ly && kotlin.math.abs(fx - lx) <= nearR
+        return when {
+            dist <= snapR || flewPast -> LockPhase.Locked
+            dist <= nearR -> LockPhase.Near
+            else -> LockPhase.None
+        }
+    }
+
+    /** 左滑位移（负数）是否过了取消阈值。判定只看手指原始位移，与提示文字的视觉位移分离（草图 §13）。 */
+    fun cancelReady(dx: Float, rowWidth: Float): Boolean = rowWidth > 0 && -dx >= rowWidth * CANCEL_RATIO
+
+    /**
+     * 「‹ 向左滑动取消」的跟手：位移 ×0.4 阻尼、按比例线性渐隐到 0.2 兜底（像素或 dp 同口径，140 为满程）；
+     * 过阈值后强制居中、不透明（草图 §13 v2.5）。返回 (横向偏移, 透明度)。
+     */
+    fun slideHint(dx: Float, cancelReady: Boolean): Pair<Float, Float> {
+        if (cancelReady) return 0f to 1f
+        val clamped = dx.coerceIn(-140f, 0f)
+        return clamped * 0.4f to (1f + clamped / 140f).coerceIn(0.2f, 1f)
+    }
+
+    /** 4:50 起倒数的剩余整秒（向上取整）；之前返回 null（显普通计时）。 */
+    fun countdownSeconds(elapsedMs: Long): Int? =
+        if (elapsedMs < COUNTDOWN_FROM_MS) null else (((MAX_MS - elapsedMs).coerceAtLeast(0) + 999) / 1000).toInt()
 
     /**
      * 接力连播（§6.4）：从刚播完那条往后找**同会话**第一条未播放的语音。

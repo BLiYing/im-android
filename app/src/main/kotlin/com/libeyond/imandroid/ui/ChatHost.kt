@@ -229,6 +229,7 @@ fun ChatHost(
     val rowsReady = loadedMessages != null && loadedPending != null
     com.libeyond.imandroid.ui.voice.VoiceRelayEffect(conv.convId, messages, owner) // 接力连播（语音 §6.4）
     com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave()
+    com.libeyond.imandroid.ui.voice.PauseRecordingOnLeave() // 离开聊天页即中断录音（设计 §5.4）
 
     // **进会话那一刻的快照，之后不再跟随**。
     //
@@ -385,6 +386,10 @@ fun ChatHost(
                 }
             }
         },
+        onSendVoice = { file, durationMs, waveform ->
+            scope.launch { mediaSend.sendVoice(file, durationMs, waveform) }
+        },
+        onToast = { toast = it },
         onBack = onBack,
         onRetry = { cid -> scope.launch { client.messages.resend(cid) } },
         onVisibleSeq = { seq -> scope.launch { client.messages.markRead(conv.convId, seq) } },

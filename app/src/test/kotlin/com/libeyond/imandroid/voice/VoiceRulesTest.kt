@@ -3,7 +3,9 @@ package com.libeyond.imandroid.voice
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** 语音播放纯规则（VOICE_MESSAGE_DESIGN §6/§7），对齐 iOS `IMVoicePlayer` / `IMChatViewController+Voice`。 */
@@ -73,5 +75,79 @@ class VoiceRulesTest {
         val list = listOf(m(1), m(2))
         assertNull(VoiceRules.nextRelay(list, "seq:9", myUid = "me") { false })
         assertNull(VoiceRules.nextRelay(list, "seq:2", myUid = "me") { false })
+    }
+
+    // ————————————————— 录制（§5）—————————————————
+
+    @Test
+    fun `振幅换算 0 到 1，越界钳位`() {
+        assertEquals(0f, VoiceRules.amplitudeOf(0))
+        assertEquals(1f, VoiceRules.amplitudeOf(32767))
+        assertEquals(1f, VoiceRules.amplitudeOf(40000)) // 越界钳位
+        assertEquals(0f, VoiceRules.amplitudeOf(-5))
+    }
+
+    @Test
+    fun `振幅转协议字节，百分比钳位到 0 到 100`() {
+        assertEquals(0, VoiceRules.amplitudeByte(0f).toInt())
+        assertEquals(100, VoiceRules.amplitudeByte(1f).toInt())
+        assertEquals(50, VoiceRules.amplitudeByte(0.5f).toInt())
+        assertEquals(100, VoiceRules.amplitudeByte(2f).toInt()) // 越界钳位
+    }
+
+    @Test
+    fun `波形编码——空数组返回 null，不超上限直传，超限按桶取最大值下采`() {
+        assertNull(VoiceRules.encodeWaveform(ByteArray(0)))
+        val short = byteArrayOf(10, 20, 30)
+        val decodedShort = java.util.Base64.getDecoder().decode(VoiceRules.encodeWaveform(short))
+        assertEquals(3, decodedShort.size)
+        // 120 帧下采到 60：偶数下标那半桶取最大值应为该桶内的较大值
+        val long = ByteArray(120) { (it % 10).toByte() }
+        val decodedLong = java.util.Base64.getDecoder().decode(VoiceRules.encodeWaveform(long))
+        assertEquals(VoiceRules.WAVEFORM_SAMPLES, decodedLong.size)
+    }
+
+    @Test
+    fun `锁定判定——距离内锁定、走廊内近距高亮、越过锁钮也算锁定`() {
+        // 手指原地未动：远离锁钮
+        assertEquals(VoiceRules.LockPhase.None, VoiceRules.lockPhase(0f, 0f, 0f, -200f, 70f, 34f))
+        // 进入高亮走廊但未到位
+        assertEquals(VoiceRules.LockPhase.Near, VoiceRules.lockPhase(0f, -150f, 0f, -200f, 70f, 34f))
+        // 到位即锁（无需松手）
+        assertEquals(VoiceRules.LockPhase.Locked, VoiceRules.lockPhase(0f, -190f, 0f, -200f, 70f, 34f))
+        // 快速上滑跳过锁钮：手指已高于锁中心、横向仍在走廊内 → 兜底判锁
+        assertEquals(VoiceRules.LockPhase.Locked, VoiceRules.lockPhase(10f, -260f, 0f, -200f, 70f, 34f))
+    }
+
+    @Test
+    fun `取消阈值——达到行宽 40 百分比才算过阈值`() {
+        assertFalse(VoiceRules.cancelReady(-39f, 100f))
+        assertTrue(VoiceRules.cancelReady(-40f, 100f))
+        assertFalse(VoiceRules.cancelReady(0f, 0f)) // 行宽未量到时不误判
+    }
+
+    @Test
+    fun `滑动提示——位移 0点4 阻尼、线性渐隐到 0点2 兜底，过阈值强制居中不透明`() {
+        val (offset0, alpha0) = VoiceRules.slideHint(0f, cancelReady = false)
+        assertEquals(0f, offset0)
+        assertEquals(1f, alpha0)
+        val (offset70, alpha70) = VoiceRules.slideHint(-70f, cancelReady = false)
+        assertEquals(-28f, offset70, 0.001f) // -70 * 0.4
+        assertEquals(0.5f, alpha70, 0.001f) // 1 + (-70/140)
+        val (offsetFar, alphaFar) = VoiceRules.slideHint(-500f, cancelReady = false) // 越过 -140 钳位
+        assertEquals(-56f, offsetFar, 0.001f) // clamp 到 -140 再 * 0.4
+        assertEquals(0.2f, alphaFar, 0.001f)
+        val (offsetReady, alphaReady) = VoiceRules.slideHint(-90f, cancelReady = true)
+        assertEquals(0f, offsetReady)
+        assertEquals(1f, alphaReady)
+    }
+
+    @Test
+    fun `倒数——4分50秒前不显示，之后向上取整显剩余秒数`() {
+        assertNull(VoiceRules.countdownSeconds(0))
+        assertNull(VoiceRules.countdownSeconds(VoiceRules.COUNTDOWN_FROM_MS - 1))
+        assertEquals(10, VoiceRules.countdownSeconds(VoiceRules.COUNTDOWN_FROM_MS))
+        assertEquals(1, VoiceRules.countdownSeconds(VoiceRules.MAX_MS - 1))
+        assertEquals(0, VoiceRules.countdownSeconds(VoiceRules.MAX_MS))
     }
 }

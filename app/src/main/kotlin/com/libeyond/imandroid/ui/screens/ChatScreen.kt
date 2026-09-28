@@ -135,6 +135,10 @@ fun ChatScreen(
     input: TextFieldValue,
     onInputChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
+    /** 一段语音录完（松手发送 / 锁定态自动发送）。文件已经在应用私有目录，Host 负责真正上传+发帧。 */
+    onSendVoice: (file: java.io.File, durationMs: Int, waveform: String?) -> Unit = { _, _, _ -> },
+    /** 一次性提示（语音录制的各种边界提示：太短/权限/达上限……）。由 Host 注入，screen 不持有 toast 状态。 */
+    onToast: (String) -> Unit = {},
     /** 输入栏上方的内联层（@成员面板 / 粘贴图预览条）。由 Host 注入——screen 不持有 IMClient。 */
     composerAbove: (@androidx.compose.runtime.Composable () -> Unit)? = null,
     /**
@@ -518,7 +522,10 @@ fun ChatScreen(
         // ➕ 面板与键盘互斥，面板开关态声明在顶上（列表的轻点也要读它）
         val keyboard = LocalSoftwareKeyboardController.current
         Composer(
+            convId = convId,
             input = input,
+            onSendVoice = onSendVoice,
+            onToast = onToast,
             onInputChange = {
                 // **只在正文真的变了时**上报「正在输入」。改成 TextFieldValue 之后，
                 // 光标移动（点一下中间改错别字）也会走这个回调——那时对端会看到一次

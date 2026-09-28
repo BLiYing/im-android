@@ -2,6 +2,7 @@ package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.protocol.ErrCode
 import com.libeyond.imandroid.sdk.protocol.ErrorData
 import com.libeyond.imandroid.sdk.protocol.FrameType
@@ -89,17 +90,21 @@ internal suspend fun MessageService.resendInFlight(owner: String) {
     val list = repo.inFlight(owner)
     if (list.isEmpty()) return
 
-    // **正文还是本地 uri 的媒体消息不能重发**：那是「上传没走完就被杀进程/断线」的残留。
-    // 原样发出去，服务端会把 `content://media/...` 当消息正文存下来，
-    // 收件人拿到一个**永远打不开的地址**——而且这条错误消息再也改不回来了。
-    // 字节已经不在内存里（Uri 的读权限也随进程没了），重发无从谈起，
-    // 只能标失败让用户重选一次。
+    // **正文还是本地 uri 的媒体消息不能原样重发**：那是「上传没走完就被杀进程/断线」的残留。
+    // 图片/视频的本地 uri 是系统相册 `content://`，读权限随发起进程一起没了，重发无从谈起，
+    // 原样发出去服务端会把这段地址当正文存下来，收件人拿到一个**永远打不开的地址**、还改不回来，
+    // 只能标失败让用户重选一次。**语音刻意不同**：本地文件在应用私有目录（`file://`），
+    // 进程重启后依然读得到，能重新上传，不必让用户重录（与 [MessageService.resend] 同一处理，
+    // 2026-09-28 code review 抓出：这里此前一律标失败，唯独漏了语音这一支，两处判据不对称）。
     // **正在上传的那几条既不重发也不标失败**——它们的上传协程还在跑，
     // 标失败会让用户看到红❗，而几秒后它自己又发出去了（见 MediaSendPipeline.uploading）。
     val inProgress = list.filter { isLocalUri(it.content) && media.isUploading(it.clientMsgId) }
     val rest = list - inProgress.toSet()
     if (inProgress.isNotEmpty()) log.i("resend_skipped_uploading", "count" to inProgress.size)
-    val (resendable, stale) = rest.partition { !isLocalUri(it.content) }
+    val (resendable, localUri) = rest.partition { !isLocalUri(it.content) }
+    val (voiceStale, stale) = localUri.partition { it.contentType == ContentType.VOICE }
+    voiceStale.forEach { media.reuploadVoice(it) }
+    if (voiceStale.isNotEmpty()) log.i("resend_voice_reupload", "count" to voiceStale.size)
     stale.forEach {
         repo.onSendRejected(
             owner,
@@ -118,7 +123,7 @@ internal suspend fun MessageService.resendInFlight(owner: String) {
         transmit(
             it.clientMsgId, it.convId, it.to, it.contentType, it.content, it.replyToConvSeq,
             it.fileName, it.fileSize, it.caption, it.forwardFrom, it.groupId,
-            it.mediaW, it.mediaH, it.duration, it.poster, it.thumb,
+            it.mediaW, it.mediaH, it.duration, it.poster, it.thumb, it.waveform,
             mentions = Mention.parseMentions(it.mentions),
             mentionAll = Mention.mentionAllFromSpans(it.mentionSpans),
             mentionSpans = Mention.parseSpans(it.mentionSpans),

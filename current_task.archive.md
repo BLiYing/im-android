@@ -1,3 +1,19 @@
+## 2026-09-27 通话记录：被叫侧 cancel 文案改「对方已取消」
+
+> **通话记录：被叫侧 `cancel` 文案「未接来电」→「对方已取消」（三端 + 设计文档，2026-09-27，与用户讨论后拍板）**：
+> `cancel`（主叫主动撤回）跟真正错过（`no_answer`/`busy`/`offline`）不是一回事，只改这一种 reason 的措辞，其余三种
+> 与推送文案不变；`tone`（红/计未读/推送）完全不变，纯文案改动。本端改动：`data/CallRecord.kt` 新增
+> `CANCELLED_BY_PEER_TEXT = "对方已取消"` 常量替换 `cancel` 被叫分支的 `MISSED_TEXT`（本端未接入 i18n
+> 表，是硬编码中文字面量，符合本端现状——`scripts/i18n/targets.json` 里 Android 目标仍 `enabled:false`）。
+> **顺手修了一个真实隐患**：`isMissedPreview` 原按字符串**后缀**匹配「未接来电」判断会话列表该不该标红
+> （`lastContent` 写库那一刻就烤好预览串，见 `MessagePreview.kt`），只改文案不改这个判据的话 `cancel`
+> 的会话列表预览会**悄悄丢红**——已改成同时匹配两种后缀，并在 `CallRecordTest.kt` 的
+> `onlyCalleeMissedPreviewIsRed` 补了专门锁住这条的用例。`./scripts/test.sh` 全量 **886/886 绿**
+> （用例数不变，因为是给既有测试方法加断言，不是新增方法）。三端共用向量 `docs/conformance/call_record.json`
+> 改的那条用例已同步拷贝进本仓 `app/src/test/resources/call_record.json`（防漂移测试
+> `resourceMatchesSourceOfTruthWhenPresent` 已过）。细节见 `../IMServer/current_task.md`。
+> **未做**：真机上实际走一遍"A 呼叫 B、A 取消"看会话列表预览是否真的标红（本次只验证了纯函数）。
+
 ## 2026-09-27 应用内多语言：基础设施 + 两个试点（已被全量迁移取代）
 
 > **应用内多语言：搭基础设施 + 迁两个试点模块（语言设置页、登录页），复用 iOS 现有翻译（2026-09-27）**：

@@ -47,9 +47,14 @@ class MainActivity : ComponentActivity() {
         }
 
         // App 切后台即暂停语音（保留位点，回来接着听）：本 App 没有后台音频能力，
-        // 不主动转成暂停的话回到前台气泡还显示「播放中」、进度却不动（iOS `handleEnterBackground:` 同理）
+        // 不主动转成暂停的话回到前台气泡还显示「播放中」、进度却不动（iOS `handleEnterBackground:` 同理）。
+        // 同一时机打断录音（§5.4）：切后台时录音机没有系统 AudioFocus 事件可依赖
+        // （麦克风没被别人抢，只是本 App 自己不在前台了），必须在这里主动 interrupt。
         lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
-            override fun onStop(owner: androidx.lifecycle.LifecycleOwner) = client.voice.pause()
+            override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
+                client.voice.pause()
+                client.recorder.interrupt()
+            }
         })
 
         setContent {

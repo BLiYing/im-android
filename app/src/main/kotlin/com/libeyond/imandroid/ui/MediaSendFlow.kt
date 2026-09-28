@@ -205,7 +205,55 @@ internal class MediaSendFlow(
     }
 
     /**
-     * 发个人名片（➕ 面板「个人名片」）。
+     * 发一条刚录好的语音（[com.libeyond.imandroid.voice.VoiceRecorder.Event.Stopped]）。
+     *
+     * 与图片/视频**刻意不同**：本地文件落在应用私有目录（`voice_pending/`），不是系统相册的
+     * `content://`——正文先存 `file://` 本地路径（[com.libeyond.imandroid.data.isLocalUri] 认得这个前缀），
+     * 上传成功后 [com.libeyond.imandroid.data.MediaSendPipeline.sendBytes] 自会换成服务端 url。
+     * 时长/波形录完当场就有，不用像图片宽高那样等异步解码。
+     */
+    suspend fun sendVoice(file: java.io.File, durationMs: Int, waveform: String?) {
+        if (!file.exists() || file.length() <= 0) {
+            log.w("voice_send_missing_file")
+            return
+        }
+        val localUri = "file://" + file.path
+        val pendingId = client.messages.createMediaPending(
+            convId = conv.convId,
+            to = to,
+            contentType = ContentType.VOICE,
+            localPreviewUri = localUri,
+            fileName = file.name,
+            fileSize = file.length(),
+            duration = durationMs,
+            waveform = waveform,
+        )
+        val bytes = try {
+            withContext(Dispatchers.IO) { file.readBytes() }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // 页面已经退出，别把取消吞成失败态（CODING_STYLE §5）
+        } catch (e: Exception) {
+            // 行已经落在屏幕上了（createMediaPending 刚建的那条），读不出来就得标失败，
+            // 否则那一格永远转圈——同 sendImage/sendVideo 读失败的处理（MediaSendPipeline.reuploadVoice 同款）。
+            log.w("voice_send_read_failed", "err" to e.javaClass.simpleName)
+            pendingId?.let { client.messages.markMediaFailed(it, message = Str.s(R.string.chat_voice_file_read_failed)) }
+            return
+        }
+        client.messages.sendMedia(
+            convId = conv.convId,
+            to = to,
+            bytes = bytes,
+            fileName = file.name,
+            mimeType = "audio/mp4",
+            contentType = ContentType.VOICE,
+            localPreviewUri = localUri,
+            duration = durationMs,
+            waveform = waveform,
+            pendingId = pendingId,
+        )
+    }
+
+    /** 发个人名片（➕ 面板「个人名片」）。
      *
      * **写进卡片的必须是公开名**（[DisplayName.publicNameOfFriend]）——
      * 这段 JSON 会原样发给第三个人，带备注就是把「我给他起的外号」发出去。

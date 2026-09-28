@@ -24,6 +24,16 @@ fun PauseVoiceOnLeave() {
 }
 
 /**
+ * 离开会话页即**中断录音**（设计 §5.4「离开聊天页」那一条，转入锁定暂停态，见 [VoiceRecorder.interrupt]）。
+ * 与 [PauseVoiceOnLeave] 同一粒度理由：录音机也是进程内单例、自己不知道正属于哪个页面。
+ */
+@Composable
+fun PauseRecordingOnLeave() {
+    val recorder = LocalVoiceRecorder.current ?: return
+    DisposableEffect(recorder) { onDispose { recorder.interrupt() } }
+}
+
+/**
  * 接力连播（设计 §6.4）：本会话一条语音**自然播完**，自动接着播后面第一条未播放的对方语音；
  * 遇到非语音消息即停。只有聊天气泡参与（迷你播放器与试听 `relayable=false`）。判据在 [VoiceRules.nextRelay]。
  *

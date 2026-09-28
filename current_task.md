@@ -7,6 +7,49 @@
 
 ## 当前焦点
 
+> **语音消息 P2 录制 ✅（2026-09-28，OPPO 真机实测核心手势）**：按设计稿 `VOICE_MESSAGE_DESIGN.md` +
+> 草图 v2.5 分三期，① 播放已于同日早些时候完成（见下一条）；这次是 ② 录制。新增 `voice/VoiceRecorder.kt`
+> （AAC-LC 单声道 16kHz 24kbps；暂停=收尾当前段可试听、继续=新起一段，`voice/VoiceSegments.kt` 用
+> MediaExtractor/MediaMuxer 按时间戳顺延拼接）与 `ui/voice/VoiceRecordUi.kt`（手势/悬浮层/锁定行/事件
+> 分派）。手势判定全落在 `VoiceRules.kt` 的纯函数上（`lockPhase`/`cancelReady`/`slideHint`/
+> `countdownSeconds`/`encodeWaveform`/`amplitudeOf`/`amplitudeByte`，`VoiceRulesTest` 新增 7 例先见红）。
+> UI 用 `awaitEachGesture` 手写按下/拖拽/松手（不用 `detectDragGestures`，因为要**从按下瞬间**而非
+> 越过触摸容差才响应）；手势节点在按住→录制（未锁定）期间**必须是同一个 Composable 调用点**——
+> 一旦被外层 `if/else` 分支切换成别的位置，Compose 会把正在追踪的那次拖拽连带协程一起销毁重建。
+> 输入栏 🎙/➤ 原地换脸（空输入显 🎙）；按住大圆钮 58dp 跟手+振幅呼吸环；锁钮 36×52dp 固定在按下点
+> 上方 86dp（70dp 高亮/34dp 到位即锁，含"手指飞过锁钮"兜底）；左滑 40% 行宽取消（提示文字位移×0.4
+> +渐隐 1.0→0.2，过阈值整行转红居中「松开 取消」）；锁定行 🗑|胶囊(录制中跑马灯波形/暂停后迷你播放器,
+> 复用既有 `VoicePlayer.toggleFile` 试听)|⏸⇄▶|➤；5min 双态（按住到点转锁定暂停等用户决定/锁定到点
+> 自动发送+toast）；切后台（`MainActivity.onStop`）/离开会话页（`PauseRecordingOnLeave`）均转中断暂停。
+> **顺手修了一个真实 bug**：`MessageService.resend` 原先按 `repo.inFlight()`（只挑 `state=Sending`）
+> 找待发行——但点红❗重试要找的正是 `Failed` 状态那一条，**这条判据错了导致点重试完全无效**（点了跟
+> 没点一样，之前没被发现是因为没人真的手测过这条路径）。改成按 `clientMsgId` 直查
+> （`MessageRepository.pendingByClientId`，不按状态过滤）；顺带堵上「语音重传前先复位 Failed→Sending」
+> （`markPendingSending`）与「图片/视频本地 uri 找不回字节时改标失败而不是误发 `content://` 给对端」两处。
+> `./scripts/test.sh` **934/934 绿**。真机（OPPO）实测：按住原地松手发送、左滑取消、上滑锁定、
+> 锁定行暂停/试听/试听播放、删除二次确认（>10s 才问）全部走通，端到端到服务端 ack 且能回放。
+> **未做 / 已知限制**：5min 上限两种处理与中断转暂停只做了代码走查——adb 合成"边持续触摸边切后台"
+> 的手势不稳定，没能在真机复现（不影响：两处都是对已验证过的 `pause()`/`interrupt()`/`stopAndSend()`
+> 调用的**外层触发条件**，逻辑本身走查无误）；发送成功后本地 `voice_pending/` 缓存文件不清理（TODO，
+> 需要等到确认 ack 而不是仅仅"上传成功"才能安全删，属于独立的小任务）；未验证 RECORD_AUDIO 被拒绝
+> 的真机提示（测试机的通话功能早就申请过这个权限，天然已授权，测不出"首次请求"/"被拒绝"两条分支，
+> 只做了代码走查）；表情面板本端本就没做（沿用既有限制，未扩大范围）。
+> **`/code-review --fix` 已跑（2026-09-28），抓出 8 条、已修 7 条**：① `VoiceRecorder` 硬闸
+> （`setMaxDuration`）与软闸（tick）目标时长相同、硬闸几乎总赢，此前硬闸直接 `finish(ReachedMax)`
+> 会被 UI 当 `UserSend` 处理——**按住态到点转锁定暂停从没真正生效过，一直被强制发送**；改成硬闸也走
+> `pause()`+统一的 `Event.ReachedMax` 通知，两条闸门收敛到 `VoiceRecordEvents` 一个决策点；
+> ② `resendInFlight`（重连自动补发）漏了语音的本地文件特判、且没透传 `waveform`，与手动 `resend`
+> 不对称，已同步补上；③ `MediaSendFlow.sendVoice` 读本地文件没有 try/catch，读失败会让协程崩溃、
+> 待发行卡死在"发送中"，已补上（对齐 `reuploadVoice` 的处理）；④ `reuploadVoice` 的 `catch (e:
+> Exception)` 吞了 `CancellationException`（违反 CODING_STYLE §5），已改成先接 `CancellationException`
+> 重抛；⑤ 麦克风"问过一次"标记另开了一份裸 `SharedPreferences`，与 `PrefsVoiceKv` 包的是同一个文件，
+> 改用后者；⑥ `encodeWaveform` 与 `data/Waveform.bars` 重复实现了同一套按桶取最大值下采算法（该文件
+> 头注释明写这类重复最容易两端漂移），改成复用 `Waveform.bars`；⑦ `finish()`/`discard()` 重复五步收尾
+> 逻辑，抽了 `teardown()`。**跳过 1 条**：`MediaRecorder.prepare/start/stop` 在主线程同步跑，
+> 短语音（≤5min、24kbps）实测无感知卡顿，改成异步要重构 start/pause/resume/cancel/stopAndSend
+> 的调用形态、牵动 UI 层多处调用点，风险与收益不对等，记在这里留作后续单独任务。修完 `./scripts/test.sh`
+> 仍 **934/934 绿**，真机重新过了一遍按住发送与锁定+暂停+发送两条路径。**仍未提交，等用户过一遍。**
+
 > **多语言 P3 全部完成 ✅（2026-09-27，OPPO 真机中↔英实测通过）**——① `sys_event`/`sys_args`：新增
 > `data/SysEvents.kt`（对齐 iOS `IMSysEventFormatter`/Web `sysEventRender.ts`）——群系统消息按事件表拼出与
 > `sys_segments` 同构的分段，喂回 `SystemNote` 原有的「本地显示名 + 可点」管线（邀请多人时被邀请者逐个出段、各自可点）；
@@ -40,20 +83,6 @@
 > `SelectionActions.chatRecordTitle`、转发来源名/群成员 displayName 的"未命名用户"兜底）、sdk 传输层诊断
 > （上层 `userMessage()` 会整体替换，不到达屏幕）、开发期 UI（免密登录/服务器地址）、拼音分组表。
 
-> **通话记录：被叫侧 `cancel` 文案「未接来电」→「对方已取消」（三端 + 设计文档，2026-09-27，与用户讨论后拍板）**：
-> `cancel`（主叫主动撤回）跟真正错过（`no_answer`/`busy`/`offline`）不是一回事，只改这一种 reason 的措辞，其余三种
-> 与推送文案不变；`tone`（红/计未读/推送）完全不变，纯文案改动。本端改动：`data/CallRecord.kt` 新增
-> `CANCELLED_BY_PEER_TEXT = "对方已取消"` 常量替换 `cancel` 被叫分支的 `MISSED_TEXT`（本端未接入 i18n
-> 表，是硬编码中文字面量，符合本端现状——`scripts/i18n/targets.json` 里 Android 目标仍 `enabled:false`）。
-> **顺手修了一个真实隐患**：`isMissedPreview` 原按字符串**后缀**匹配「未接来电」判断会话列表该不该标红
-> （`lastContent` 写库那一刻就烤好预览串，见 `MessagePreview.kt`），只改文案不改这个判据的话 `cancel`
-> 的会话列表预览会**悄悄丢红**——已改成同时匹配两种后缀，并在 `CallRecordTest.kt` 的
-> `onlyCalleeMissedPreviewIsRed` 补了专门锁住这条的用例。`./scripts/test.sh` 全量 **886/886 绿**
-> （用例数不变，因为是给既有测试方法加断言，不是新增方法）。三端共用向量 `docs/conformance/call_record.json`
-> 改的那条用例已同步拷贝进本仓 `app/src/test/resources/call_record.json`（防漂移测试
-> `resourceMatchesSourceOfTruthWhenPresent` 已过）。细节见 `../IMServer/current_task.md`。
-> **未做**：真机上实际走一遍"A 呼叫 B、A 取消"看会话列表预览是否真的标红（本次只验证了纯函数）。
-
 ## 下一步
 
 0d. **群资料页「成员」tab 缺搜索入口**（2026-09-24 用户报后调研发现，未改代码）：`GroupApi.members()`
@@ -67,10 +96,10 @@
    "提及渲染可点 + 点了跳资料页"这条基础设施是通的，`mentions` 随转发存活只有单测覆盖。
    另外**"对方撤回"的两种文案**（"XX/对方撤回了一条消息"）同样因为单设备单账号测不出来，只测了"自己撤回"。
 1. **语音消息（按设计稿 VOICE_MESSAGE_DESIGN + 草图 v2.5 分三期）**：① 播放 ✅ 2026-09-28（`voice/VoicePlayer` +
-   `ui/voice/VoiceViews`，气泡 / 资料页 / 收藏 / 记录页，倍速、scrub、红点、接力，真机实测）；② **录制**（输入栏 🎙/➤ 原地换脸、
-   按住大圆钮 + 振幅环、左滑 40% 取消、上滑磁吸锁定、锁定行 🗑|计时+波形|⏸|➤、暂停即试听、5min 上限两种处理、中断转锁定暂停、
-   AAC 16k 单声道 24kbps、分段拼接、`sendMedia` 带 waveform）；③ **转文字**（REST `/voice/transcripts` + `voice_transcript` 帧 +
-   气泡下展开面板 + CHAT_UX「就地变高补进视口」）。设计与现行实现的差异见下方已知坑。
+   `ui/voice/VoiceViews`，气泡 / 资料页 / 收藏 / 记录页，倍速、scrub、红点、接力，真机实测）；② 录制 ✅ 2026-09-28
+   （`voice/VoiceRecorder` + `ui/voice/VoiceRecordUi`，手势/悬浮层/锁定行/暂停试听/5min 上限/中断转暂停全套，
+   真机实测核心路径，详见「当前焦点」；**未提交，等待 code review**）；③ **转文字**（REST `/voice/transcripts` +
+   `voice_transcript` 帧 + 气泡下展开面板 + CHAT_UX「就地变高补进视口」，下一步要做）。设计与现行实现的差异见下方已知坑。
 2. **Android 离线积压整套未启动**（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 / §5 B3a）：
    建议先让 sync 带 `max_gap`；另缺区间清单、`conv_bump` 被丢弃、sync/window 路径不回 `delivered`；
    C4 未做；会话内检索只取一页。
@@ -84,6 +113,17 @@
 
 ## 已知坑 / 限制
 
+- **`MessageService.resend`（点红❗重试）此前对 `Failed` 状态的行完全无效**（2026-09-28 随语音录制一起修）：
+  它查 `repo.inFlight()`，而那个方法只挑 `state=Sending` 的行——`Failed` 的行永远查不到，点了跟没点一样，
+  过去没人发现是因为没人真的手测过这条路径。已改成 `pendingByClientId` 按 `clientMsgId` 直查、不按状态过滤。
+  顺带把「正文仍是本地 uri」的处理也理顺了：语音走 `MediaSendPipeline.reuploadVoice`（本地文件在应用私有
+  目录，进程重启后仍读得到，重新上传即可）；图片/视频的本地 uri 是系统相册 `content://`，读权限随发起进程
+  一起没了，读不回来，改成直接标失败（`chat_resend_upload_incomplete`），**不再有原来"会把 `content://`
+  当正文发给对端"的风险**（原风险仅存在于"点了对失败行确实生效"的前提下，而那个前提本身就不成立，
+  相当于一次修复顺带堵上一个从未真正暴露过的隐患）。
+- **语音发送成功后本地 `voice_pending/` 缓存文件不清理**（2026-09-28，TODO）：字节已经在服务端、也已经靠
+  `MediaCache.adopt` 进了本地缓存，理论上可以删源文件，但要等到**确认 ack**（不是仅仅"上传成功"）才安全删
+  ——现在没做，量小暂不影响使用，是独立的小任务，别顺手在别的改动里夹带。
 - **语音布局以 iOS/Web 现行实现为准，不以草图 v2.5 字面为准**（2026-09-28 核对）：草图写「时长 · HH:mm ✓✓」同一行、红点在 meta 行左，
   但 2026-08-27 用户拍板「时间独立一行」、设计文档 §7（08-30）定「红点右上角」，iOS `IMVoiceBubbleCell` / Web `VoiceBubble` 均已照此。
   **播放标识用 `seq:<conv_seq>`**（iOS 用 serverMsgID）：资料页归档条目只有 conv_seq，这样两处红点 / 播放态同步。
