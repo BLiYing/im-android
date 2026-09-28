@@ -37,6 +37,7 @@ import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMTextPrompt
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.LocalOpenLink
+import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.screens.ChatDetailScreen
 import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
 import com.libeyond.imandroid.ui.screens.linkUrlOf
@@ -145,8 +146,8 @@ fun ChatDetailHost(
         }
     }
 
-    when (page) {
-        ChatDetailPage.Media -> viewing?.let { m ->
+    if (page == ChatDetailPage.Media) {
+        viewing?.let { m ->
             // 翻页 / 「更多」/ 转发都在 ArchiveViewer.kt 里，与群资料那侧共用
             ArchiveMediaViewer(
                 client = client, convId = conv.convId, isGroup = false, iAmManager = false,
@@ -161,103 +162,112 @@ fun ChatDetailHost(
                 onClose = { viewing = null },
             )
         }
-        ChatDetailPage.Profile -> {
-            val f = knownFriends[conv.peerUid]
-            UserProfileHost(
-                client = client,
-                userId = conv.peerUid,
-                knownRelation = f?.status.orEmpty(),
-                seed = UserCard(
+    } else {
+        // Detail ↔ Profile：iOS 式 push/pop 滑动转场（UI_PARITY_IOS.md §4 第 316 行）。
+        // **Media 刻意不包进来**：那支的 `viewing` 一关就置空，套进 PushTransition 会在退场动画
+        // 期间读到空值、半路变白——留给后续单独处理（拆分方案见 current_task.md「下一步 2」）。
+        // 这条边没有同类问题：`profile` 只是个布尔标志，Profile 分支读的 `conv`/`remark`/
+        // `knownFriends` 关闭时都不会被清空，可以直接拿它当 targetState。
+        PushTransition(targetState = profile, depthOf = { if (it) 1 else 0 }) { isProfile ->
+            if (isProfile) {
+                val f = knownFriends[conv.peerUid]
+                UserProfileHost(
+                    client = client,
                     userId = conv.peerUid,
-                    nickname = conv.title,
-                    avatarUrl = conv.avatarUrl,
+                    knownRelation = f?.status.orEmpty(),
+                    seed = UserCard(
+                        userId = conv.peerUid,
+                        nickname = conv.title,
+                        avatarUrl = conv.avatarUrl,
+                        remark = remark,
+                    ),
+                    onSendMessage = { profile = false },
+                    // 在资料页里改的备注也要回填详情页自己的 `remark` state，否则退回来后
+                    // 标题/语音发送者名/拉黑确认框标题仍显编辑前的旧值（`/code-review` 抓出）
+                    onRemarkChanged = { v -> remark = v },
+                    onBack = { profile = false },
+                )
+            } else {
+                ChatDetailScreen(
+                    conv = conv,
+                    title = conv.title.ifBlank { conv.peerUid },
+                    handle = knownFriends[conv.peerUid]?.handle.orEmpty(),
                     remark = remark,
-                ),
-                onSendMessage = { profile = false },
-                // 在资料页里改的备注也要回填详情页自己的 `remark` state，否则退回来后
-                // 标题/语音发送者名/拉黑确认框标题仍显编辑前的旧值（`/code-review` 抓出）
-                onRemarkChanged = { v -> remark = v },
-                onBack = { profile = false },
-            )
+                    pinned = pinned,
+                    muted = muted,
+                    tab = tab,
+                    onTabChange = { tab = it },
+                    archive = archive.items,
+                    linkMessages = linkMessages,
+                    loading = archive.loading,
+                    hasMore = archive.hasMore,
+                    onLoadMore = { archive.loadMore() },
+                    onOpenArchive = { item ->
+                        openArchiveItem(client, context, item, onToast = { toast = it }) { viewing = it }
+                    },
+                    onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
+                    onOpenLink = { url -> openLink?.invoke(url) },
+                    onTogglePinned = { v -> pinned = v; pushSettings(v, muted) },
+                    onToggleMuted = { v -> muted = v; pushSettings(pinned, v) },
+                    // 页内弹窗编辑，不跳页（对齐 iOS `editRemark`；弹窗组件与用户资料页共用，见 RemarkEditDialog）
+                    onSetRemark = { editingRemark = true },
+                    onOpenProfile = { profile = true },
+                    actions = DetailActions.pillsFor(
+                        isGroup = false,
+                        isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
+                        peerIsFriend = friend?.status == FriendEntry.ACCEPTED,
+                        // 本页是从**聊天页**点头像进来的，会话已经开着——再给一个「消息」是废按钮。
+                        // 从通讯录/群成员进来的那条路走的是 UserProfileHost，不经这里。
+                        showsMessagePill = false,
+                    ),
+                    moreItems = DetailActions.moreFor(
+                        isGroup = false,
+                        isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
+                        iAmOwner = false,
+                        peerBlocked = friend?.blocked == true,
+                        peerIsFriend = friend?.status == FriendEntry.ACCEPTED,
+                    ),
+                    onAction = { a ->
+                        when (a) {
+                            // 与 iOS 同：pill 点了回聊天页进搜索态（SEARCH_DESIGN §4）
+                            DetailAction.Search -> onSearchInChat()
+                            // 通话界面整套由 im-rtc 的 Kit 接管；拨不出去（没配置 / 没上线）才回一句原因。
+                            DetailAction.Call -> RtcCall.placeSingle(conv.peerUid, video = false)?.let { toast = it }
+                            DetailAction.Video -> RtcCall.placeSingle(conv.peerUid, video = true)?.let { toast = it }
+                            DetailAction.GroupCall -> Unit // 单聊不会出这个 pill
+                            DetailAction.AddFriend -> scope.launch {
+                                runCatching { client.contacts.request(conv.peerUid) }
+                                    .onSuccess { toast = Str.s(R.string.friend_request_sent) }
+                                    .onFailure { toast = it.userMessage(Str.s(R.string.chat_detail_add_friend_failed)) }
+                            }
+                            // 已经在这个会话里了，这两个不会出现在 pills 里
+                            DetailAction.Message, DetailAction.More -> Unit
+                        }
+                    },
+                    onMore = { m ->
+                        when (m) {
+                            DetailMoreAction.ShareContact -> sharing = true
+                            DetailMoreAction.Report -> reporting = true
+                            DetailMoreAction.Unblock -> scope.launch {
+                                runCatching { client.contacts.unblock(conv.peerUid) }
+                                    .onSuccess { toast = Str.s(R.string.friend_block_undone); friend = friend?.copy(blocked = false) }
+                                    .onFailure { toast = it.userMessage(Str.s(R.string.common_action_failed)) }
+                            }
+                            // 其余都要二次确认（拉黑/清空/删好友都不可撤销或代价大）
+                            else -> confirm = m
+                        }
+                    },
+                    host = client.host,
+                    useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+                    // 语音行的发送者名。单聊只有两个人：我自己显「你自己」（同 iOS），对方显本机显示名
+                    senderNameOf = { uid -> if (uid == owner) Str.s(R.string.chat_detail_you) else remark.ifBlank { conv.title } },
+                    waveformOf = { seq -> voiceWaveforms[seq] },
+                    galleryOnly = galleryOnly,
+                    isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
+                    onBack = onBack,
+                )
+            }
         }
-        ChatDetailPage.Detail -> ChatDetailScreen(
-            conv = conv,
-            title = conv.title.ifBlank { conv.peerUid },
-            handle = knownFriends[conv.peerUid]?.handle.orEmpty(),
-            remark = remark,
-            pinned = pinned,
-            muted = muted,
-            tab = tab,
-            onTabChange = { tab = it },
-            archive = archive.items,
-            linkMessages = linkMessages,
-            loading = archive.loading,
-            hasMore = archive.hasMore,
-            onLoadMore = { archive.loadMore() },
-            onOpenArchive = { item ->
-                openArchiveItem(client, context, item, onToast = { toast = it }) { viewing = it }
-            },
-            onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
-            onOpenLink = { url -> openLink?.invoke(url) },
-            onTogglePinned = { v -> pinned = v; pushSettings(v, muted) },
-            onToggleMuted = { v -> muted = v; pushSettings(pinned, v) },
-            // 页内弹窗编辑，不跳页（对齐 iOS `editRemark`；弹窗组件与用户资料页共用，见 RemarkEditDialog）
-            onSetRemark = { editingRemark = true },
-            onOpenProfile = { profile = true },
-            actions = DetailActions.pillsFor(
-                isGroup = false,
-                isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
-                peerIsFriend = friend?.status == FriendEntry.ACCEPTED,
-                // 本页是从**聊天页**点头像进来的，会话已经开着——再给一个「消息」是废按钮。
-                // 从通讯录/群成员进来的那条路走的是 UserProfileHost，不经这里。
-                showsMessagePill = false,
-            ),
-            moreItems = DetailActions.moreFor(
-                isGroup = false,
-                isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
-                iAmOwner = false,
-                peerBlocked = friend?.blocked == true,
-                peerIsFriend = friend?.status == FriendEntry.ACCEPTED,
-            ),
-            onAction = { a ->
-                when (a) {
-                    // 与 iOS 同：pill 点了回聊天页进搜索态（SEARCH_DESIGN §4）
-                    DetailAction.Search -> onSearchInChat()
-                    // 通话界面整套由 im-rtc 的 Kit 接管；拨不出去（没配置 / 没上线）才回一句原因。
-                    DetailAction.Call -> RtcCall.placeSingle(conv.peerUid, video = false)?.let { toast = it }
-                    DetailAction.Video -> RtcCall.placeSingle(conv.peerUid, video = true)?.let { toast = it }
-                    DetailAction.GroupCall -> Unit // 单聊不会出这个 pill
-                    DetailAction.AddFriend -> scope.launch {
-                        runCatching { client.contacts.request(conv.peerUid) }
-                            .onSuccess { toast = Str.s(R.string.friend_request_sent) }
-                            .onFailure { toast = it.userMessage(Str.s(R.string.chat_detail_add_friend_failed)) }
-                    }
-                    // 已经在这个会话里了，这两个不会出现在 pills 里
-                    DetailAction.Message, DetailAction.More -> Unit
-                }
-            },
-            onMore = { m ->
-                when (m) {
-                    DetailMoreAction.ShareContact -> sharing = true
-                    DetailMoreAction.Report -> reporting = true
-                    DetailMoreAction.Unblock -> scope.launch {
-                        runCatching { client.contacts.unblock(conv.peerUid) }
-                            .onSuccess { toast = Str.s(R.string.friend_block_undone); friend = friend?.copy(blocked = false) }
-                            .onFailure { toast = it.userMessage(Str.s(R.string.common_action_failed)) }
-                    }
-                    // 其余都要二次确认（拉黑/清空/删好友都不可撤销或代价大）
-                    else -> confirm = m
-                }
-            },
-            host = client.host,
-            useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
-            // 语音行的发送者名。单聊只有两个人：我自己显「你自己」（同 iOS），对方显本机显示名
-            senderNameOf = { uid -> if (uid == owner) Str.s(R.string.chat_detail_you) else remark.ifBlank { conv.title } },
-            waveformOf = { seq -> voiceWaveforms[seq] },
-            galleryOnly = galleryOnly,
-            isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
-            onBack = onBack,
-        )
     }
 
     if (editingRemark) {

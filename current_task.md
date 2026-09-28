@@ -7,12 +7,22 @@
 
 ## 当前焦点
 
-> **转场没接的几处：勘察 + 拆分方案完成，未写代码（2026-09-28）**：根因是 `PushTransition.kt` 需要
+> **转场没接的几处：第一小块已落地 ✅（`ChatDetailHost` 的 Detail↔Profile，2026-09-28，未做真机验证）**：
+> 上一轮勘察 + 拆分方案见下一段与「下一步 2」。这一块确认过没有数据置空问题（`profile` 只是布尔，
+> `Profile` 分支读的 `conv`/`remark`/`knownFriends` 关闭时都不会被清），所以**不用改数据模型**，
+> 只是把原来 `when (page) { Media -> …; Profile -> …; Detail -> … }` 三分支拆成
+> `if (page == Media) { … } else { PushTransition(targetState = profile, depthOf = { if (it) 1 else 0 })
+> { isProfile -> if (isProfile) UserProfileHost(...) else ChatDetailScreen(...) } }`——**`Media` 刻意
+> 排除在外**（`viewing` 关闭即置空，套进来会引入新的半路变白回归，留给下一块单独处理）。
+> 行为不变，`BackHandler`/`page` 计算/回调参数原样保留，只重排了渲染结构。`./scripts/test.sh`
+> **964/964 绿**（纯渲染层重排，无新增可测分支——Compose 转场动画本仓一贯测不到，见
+> `CLAUDE.md`"单测测不到 Compose 布局与滚动时序"）。**未做真机验证**：改动是否真的产生 iOS 式
+> 滑动效果、有没有意外的入场闪烁，需要真机点「聊天信息」进出资料页看一遍。
+
+> **转场没接的几处：勘察 + 拆分方案（2026-09-28）**：根因是 `PushTransition.kt` 需要
 > 退场页在滑出动画期间仍按冻结的 `state` 渲染，而「没接」的几处是"关闭即置空数据"，套上去会半路
 > 变白；实际横跨三种不同导航形态（互斥枚举页/`ChatHost` 覆盖层栈/用户资料转场并入前者），
-> 不是一次改法通吃。完整诊断 + 建议顺序见「下一步 2」。判断这条任务范围明显超出单次可安全交付的
-> 大小，且唯一验证手段是真机看动画——写一半提交的风险与代价都不小，先把范围勘清楚，下一轮从最小
-> 最安全的一条（`ChatDetailHost` 的 `Detail↔Profile`，唯一不需要先改数据模型的一条）开始。
+> 不是一次改法通吃。完整诊断 + 建议顺序见「下一步 2」（已更新为最新进度）。
 
 > **离线积压 C2：sync 带 max_gap 闸门 ✅（2026-09-28，只做了 Android 审计建议的第一小块，未做真机验证）**：
 > `../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 审计发现 Android C1~C6 全未启动、
@@ -157,8 +167,8 @@
      静默给本地残缺答案。
    **别照抄 Web/iOS 的现成补丁**——设计文档 §4.11.1 原话："Android 进会话根本不走锚点开窗，那条调用点
    不存在"，得从头按 §4 的设计走，不是抄一个 diff。
-2. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4 第 316 行；2026-09-28 勘察过，范围超出单条任务，
-   本轮只诊断+拆分、未写代码——理由见下）：
+2. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4 第 316 行；2026-09-28 勘察 + 拆分，范围超出单条
+   任务，按下面顺序分块推进——第 1 块已落地，见「当前焦点」）：
    - **根因**：`ui/components/PushTransition.kt` 要求退场页在 ~300ms 滑出动画期间，内容仍按
      `AnimatedContent` **冻结住的 `state` 参数**渲染；但「没接」的几处目前是"关闭即把数据变量置空"
      （如 `ChatDetailHost` 的 `onClose = { viewing = null }`），退场那一刻数据已经没了，分支渲染出
@@ -176,17 +186,15 @@
      子页导航（`RemarkEditDialog` 是弹窗，不需要滑动转场），这一条实际指的是 `ContactsHost`/
      `ChatDetailHost`/`GroupInfoHost` 各自"进用户资料页"那条边，并入①。
    - **建议顺序（从最小最安全开始）**：
-     1. `ChatDetailHost` 的 `Detail↔Profile` 这条边**没有数据置空问题**（`profile` 只是布尔，
-        `Profile` 分支读的 `conv`/`remark`/`knownFriends` 关闭时都不会被清）——是唯一能**不改数据
-        模型、只加一层 `PushTransition`** 就安全落地的一条，建议下一块直接做它，顺便探一下
-        `PushTransition` 接进已在跑的 host 会不会撞见其它坑（`ChatDetailNav`/`BackHandler` 的
-        exhaustive when、`stateHolder`/`rememberSaveable` 的交互）。
+     1. ✅ **已做（2026-09-28，见「当前焦点」）**：`ChatDetailHost` 的 `Detail↔Profile`——没有数据
+        置空问题，不改数据模型，只重排渲染结构。`PushTransition` 接进已在跑的 host 没撞见其它坑
+        （`ChatDetailNav`/`BackHandler` 的 exhaustive when 原样不动；这条边没用到
+        `stateHolder`/`rememberSaveable`，因为 `ChatDetailScreen`/`UserProfileHost` 本来就没有
+        "退出再进入要保住滚动位置"的既有状态，PushTransition 没让这块变得更差，也没让它变好）。
      2. `ChatDetailHost` 的 `Media`（`viewing`）与 `GroupInfoHost` 的 8 个分支：都要先做①的
         "open 标志/data 分离、关闭不清 data"模型改造，一个分支一个分支来；`GroupInfoHost.kt` 574 行
         还有点余量但刚做过手术，改动别一次铺太开。
      3. `ChatHost` 覆盖层栈（②）：动手前先跟用户确认要不要做，范围最大且是产品判断。
-   - **为什么本轮不写代码**：这条链路唯一能验证"没有半路变白"的手段是真机看动画，写一半提交风险
-     与代价都不小；把范围勘清楚留给下一轮/下几轮分块推进，比硬着头皮改一半更负责任。
 3. **卡片弹层推广**：@提及、选文件、已读详情、日期跳转、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`。
 4. **收藏的剩余项**：「以聊天模式查看」（按来源会话分组下钻）、来源名到群昵称级（现只到好友备注/昵称/补拉名片）；**长按菜单缺项**：举报、翻译。
 5. **宫格**按 `IMAlbumRowPattern` 重写布局 + 五道防跳版闸；相册宫格逐格勾选。
