@@ -10,8 +10,13 @@
 > **群资料页「成员」tab 补搜索入口 ✅（2026-09-28，大群专用，未做真机验证）**：`GroupApi.members()`
 > 早已支持服务端 `?q=` 分页搜索，本轮接上。判据 `data/GroupMemberSearch.kt`（阈值/去抖/续拉/去重，
 > 逐条对齐 iOS `IMGroupMemberSearchViewController` 顶部那组 C 函数，有单测）；新页面
-> `ui/GroupMemberSearchHost.kt`（去抖走 `LaunchedEffect` 换 key 自动取消在途请求，不用像 iOS 那样
-> 手记 search token）+ `ui/screens/GroupMemberSearchScreen.kt`（复用 `IMSearchField`/`MemberRow`）。
+> `ui/GroupMemberSearchHost.kt`（首页去抖走 `LaunchedEffect` 换 key 自动取消在途请求；续页请求跑在
+> `rememberCoroutineScope()` 上不受 `query` 变化牵连，故仍需 iOS `_searchToken` 的等价物
+> `searchGen` 代次令牌判过期——动手时一度以为能全靠 `LaunchedEffect` 躲开手记 token，
+> `/code-review` 抓出续页这条路躲不开、旧词迟到的翻页响应会污染新词已显示的结果，已修 `12bf333`）
+> + `ui/screens/GroupMemberSearchScreen.kt`（复用 `IMSearchField`/`MemberRow`）。`/code-review` 顺带
+> 抓出第二处竞态并同批修：在途守卫原设在 `fetch()` 内部（协程真正跑起来才生效），大列表里同一帧
+> 多行触发 `onLoadMore` 会一起穿过守卫、打出重复请求——改成 `requestLoadMore()` 里同步设置。
 > 群总人数 > 50 时「成员」tab 顶部才出现入口行，恒走服务端过滤不做本地过滤（超级群本地只有已翻到
 > 的那几页，本地过滤会悄悄搜错）。**顺手做的拆分**：`GroupInfoHost.kt` 已贴到 600 行硬闸，把
 > 成员分页那簇状态（`members/cursor/hasMore/loading` + 四处调用点）抽成 `ui/GroupMembersState.kt`
