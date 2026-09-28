@@ -7,6 +7,27 @@
 
 ## 当前焦点
 
+> **离线积压 C2：sync 带 max_gap 闸门 ✅（2026-09-28，只做了 Android 审计建议的第一小块，未做真机验证）**：
+> `../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 审计发现 Android C1~C6 全未启动、
+> 且明确"建议先做这一条"——服务端 `max_gap`/`too_long`/`head_conv_seq` 早已上线（`internal/protocol/
+> envelope.go`），但 Android 的 `sync_req` 从不带 `max_gap`，等于对服务端说"不限深度"，超级群重连
+> 也会把积压整段抄完（`IncomingRule.kt` 头注释记着 2026-09-09 在 11 万条大群真机撞见过）。本轮只做
+> 这一条：`SyncCursorItem` 加 `maxGap`（可空 Long，对齐 Go `*int64` 指针语义）、`SyncConversation`
+> 加 `tooLong`/`headConvSeq`；`requestSync` 每条游标恒发 `SyncDefaults.MAX_GAP=400`（含 `has_more`
+> 续页，续页此前会漏发）；`applySync` 收到 `too_long` 时留痕一条日志（游标本就因为 `covered_conv_seq`
+> 原样等于 `since` 而不会推进，`advanceCursor`/`SyncCursorRule` 早已保证这点，不用额外分支）。
+> `EnvelopeTest.kt` 新增 `SyncGapTest` 4 例（编码省略/保留 `max_gap`、解码 `too_long`、老服务端无此
+> 字段时退化默认值），先临时撤掉这两个字段确认真的编译失败过（`git stash` 验红）。`./scripts/test.sh`
+> **964/964 绿**。**范围边界（刻意不做，留给后续）**：① 不区分超级群——本该给超级群发
+> `max_gap=0`（永远不自动补），但那需要本地先知道"这个会话是不是超级群"，`ConversationEntity`
+> 目前不落这一列，做了也只是一半（还得管迁移/回填），归进 C1 一起做；② 收到 `too_long`后**没有任何
+> 后续动作**——本地没有区间清单（C1 未做），只是"不再无限追平"，不产生"按需开窗补"的下一步，缺口
+> 目前对用户不可见（不影响正确性，只是体验上"这个会话消息好像还没到最新"要等下次能补齐的 sync 才
+> 追上，或用户自己下滑触发本地已有的按需开窗）；③ C1（区间清单）/C3（进会话锚点开窗）/C4（↓/实时/
+> conv_bump 处理）/C5（sync 路径回 delivered）/C6（八项分流除已接的搜索/查看器翻页外其余几项）**均未
+> 动**，见「下一步 1」的拆分清单。**未做真机验证**：改动只影响重连时的 sync 请求形状，需要真机连接
+> →断网/杀连接→重连，抓包或看日志确认 `max_gap` 真的发出去了、大群重连不再整段追平。
+
 > **群资料页「成员」tab 补搜索入口 ✅（2026-09-28，大群专用，未做真机验证）**：`GroupApi.members()`
 > 早已支持服务端 `?q=` 分页搜索，本轮接上。判据 `data/GroupMemberSearch.kt`（阈值/去抖/续拉/去重，
 > 逐条对齐 iOS `IMGroupMemberSearchViewController` 顶部那组 C 函数，有单测）；新页面
@@ -111,9 +132,24 @@
    （系统图片选择器多级页面盲点坐标屡次踩偏），也没有第二台设备/账号可以扮演"收端"；只验证到
    "提及渲染可点 + 点了跳资料页"这条基础设施是通的，`mentions` 随转发存活只有单测覆盖。
    另外**"对方撤回"的两种文案**（"XX/对方撤回了一条消息"）同样因为单设备单账号测不出来，只测了"自己撤回"。
-1. **Android 离线积压整套未启动**（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 / §5 B3a）：
-   建议先让 sync 带 `max_gap`；另缺区间清单、`conv_bump` 被丢弃、sync/window 路径不回 `delivered`；
-   C4 未做；会话内检索只取一页。
+1. **Android 离线积压（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 / §5 B3a）**：
+   C2（sync 带 `max_gap`）最小切片已做，见「当前焦点」；范围明显比单条任务大，剩下按设计文档原有
+   C1/C3/C4/C5/C6 分期，一次做一块：
+   - **C2 收尾**（本轮的直接延伸，比新开一个 C 项小）：`too_long` 时的真机验证（见「当前焦点」）；
+     超级群 `max_gap=0` 需要先给 `ConversationEntity` 加 `isSuper` 列（迁移）并在拉群资料时回填。
+   - **C1 区间清单**：新 Room 表 `conv_range_local(owner_uid, conv_id, lo, hi)` + 纯函数（合并相邻区间、
+     查询"某段是否齐全"，参照 Web `ranges.ts` 的判据，有单测）；写消息与扩区间同一事务（I1 不变量）。
+     C1 是后面几项的地基，建议下一块就做它。
+   - **C3 进会话 / 滚动**：`ui/ChatHost.kt` 目前固定本地 `ChatWindow.Tail`，`window_req` 只用于引用跳转/
+     搜索命中——要接锚点开窗（未读首条不在本地尾部时定位不到）与上滚时查区间清单再决定问本地还是服务端。
+   - **C4 ↓ / 跳号 / `conv_bump`**：`conv_bump` 目前在 `MessageService.kt` 落进忽略分支，超级群会话行
+     收不到刷新；↓ 只换本地 Tail，没有"最新一页齐不齐"的判据。
+   - **C5 `delivered` 回执**：`MessageService.kt` 只在 `NEW_MSG` 分支回，sync/window 路径一条都不回——
+     离线补拉回来的消息，对端看不到「已送达」直到被已读覆盖。
+   - **C6 八项分流剩余**：查看器翻页（已接）缺"离线降级提示"；日历/置顶判定未接；其余几项有缺口时
+     静默给本地残缺答案。
+   **别照抄 Web/iOS 的现成补丁**——设计文档 §4.11.1 原话："Android 进会话根本不走锚点开窗，那条调用点
+   不存在"，得从头按 §4 的设计走，不是抄一个 diff。
 2. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：群资料 / 聊天信息内部子页读的是已置空的状态。
 3. **卡片弹层推广**：@提及、选文件、已读详情、日期跳转、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`。
 4. **收藏的剩余项**：「以聊天模式查看」（按来源会话分组下钻）、来源名到群昵称级（现只到好友备注/昵称/补拉名片）；**长按菜单缺项**：举报、翻译。

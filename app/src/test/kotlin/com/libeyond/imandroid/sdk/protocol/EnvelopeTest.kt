@@ -130,3 +130,56 @@ class GoNullCollectionTest {
         assertEquals(7L, d.convSeq)
     }
 }
+
+/**
+ * `sync_req`/`sync_resp` 的积压深度闸门（`max_gap`/`too_long`/`head_conv_seq`，
+ * OFFLINE_BACKLOG_DESIGN §4.4）。服务端 `internal/protocol/envelope.go` 的
+ * `SyncCursor.MaxGap` 是 Go 的 `*int64`：不带=不限深度（老行为），带了才限。
+ */
+class SyncGapTest {
+
+    @Test
+    fun `maxGap 为 null 时编码省略字段（对齐 Go 指针不带=不限深度）`() {
+        val json = ProtocolJson.encodeToString(
+            com.libeyond.imandroid.sdk.protocol.SyncCursorItem.serializer(),
+            com.libeyond.imandroid.sdk.protocol.SyncCursorItem("u_1_2", 57L),
+        )
+        assertEquals("""{"conv_id":"u_1_2","since_conv_seq":57}""", json)
+    }
+
+    @Test
+    fun `maxGap 非空时编码带上 max_gap`() {
+        val json = ProtocolJson.encodeToString(
+            com.libeyond.imandroid.sdk.protocol.SyncCursorItem.serializer(),
+            com.libeyond.imandroid.sdk.protocol.SyncCursorItem("u_1_2", 57L, maxGap = 400L),
+        )
+        assertTrue(json.contains("\"max_gap\":400"))
+    }
+
+    @Test
+    fun `too_long 响应解析出 head_conv_seq 且游标原样不动`() {
+        val json = """
+            {"conversations":[{"conv_id":"g_super","messages":[],
+             "covered_conv_seq":1200,"has_more":false,"too_long":true,"head_conv_seq":101200}]}
+        """.trimIndent()
+        val d = ProtocolJson.decodeFromString(
+            com.libeyond.imandroid.sdk.protocol.SyncRespData.serializer(), json,
+        )
+        val c = d.conversations.single()
+        assertTrue(c.tooLong)
+        assertEquals(101200L, c.headConvSeq)
+        assertEquals(1200L, c.coveredConvSeq) // 原样等于请求的 since，没有推进
+        assertTrue(c.messages.isEmpty())
+    }
+
+    @Test
+    fun `不带 too_long 与 head_conv_seq 字段时退化成默认值（老服务端兼容）`() {
+        val json = """{"conversations":[{"conv_id":"u_1_2","messages":[],"covered_conv_seq":57,"has_more":false}]}"""
+        val d = ProtocolJson.decodeFromString(
+            com.libeyond.imandroid.sdk.protocol.SyncRespData.serializer(), json,
+        )
+        val c = d.conversations.single()
+        assertTrue(!c.tooLong)
+        assertEquals(0L, c.headConvSeq)
+    }
+}
