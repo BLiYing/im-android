@@ -7,12 +7,20 @@
 
 ## 当前焦点
 
-> **语音消息三期全部完成，尚未提交（2026-09-28，三端对齐，详情见 `../IMServer/docs/CLIENT_PARITY.md`
-> voice P0/P1 两行 Android 列）**：① 播放（`voice/VoicePlayer`+`ui/voice/VoiceViews`）、② 录制
-> （`voice/VoiceRecorder`+`ui/voice/VoiceRecordUi`，手势/悬浮层/锁定行/暂停试听/5min 上限/中断转
-> 暂停全套，`/code-review --fix` 修 7 条 + 用户真机复测又报的 2 条 bug 均已修——完整清单见
-> `current_task.archive.md` 2026-09-28 条目——**这部分已提交**）、③ **转文字**（本轮新增，见下，
-> **未提交**）。上滑锁定的悬浮层顺手又补了一条：锁钮里**加了呼吸上箭头**（`Lucide.ChevronUp`，
+> **好友/群成员备注编辑：回填补齐到通讯录列表与群成员资料页 ✅（2026-09-28，`d4cc22e`，已推送）**：
+> `UserProfileHost.onRemarkChanged` 此前只接了 `ChatDetailHost` 一条路（`/code-review` 抓出的坑：
+> 改完备注退回上级页仍显旧值）。补齐两处真正会复现的：`ContactsHost`（好友列表点进资料页改备注，
+> 回填 `friends` 状态）、`GroupInfoHost`（群成员资料页改备注，加 `remarkOverrides` 覆盖
+> `knownFriends` 这份整会话只拉一次的快照）。`FavoritesHost`/`ChatPickerLayers`/`QrRouteHost`
+> 三处未动——都是「选人即用」场景，资料页没有可复现的常驻展示位，见「已知坑」。
+> `./scripts/test.sh` 952/952 绿（纯 Compose 状态回填，无可单测的新逻辑分支）。
+
+> **语音消息三期全部完成 ✅（2026-09-28，三端对齐，已提交并推送，详情见
+> `../IMServer/docs/CLIENT_PARITY.md` voice P0/P1 两行 Android 列）**：① 播放（`voice/VoicePlayer`+
+> `ui/voice/VoiceViews`）、② 录制（`voice/VoiceRecorder`+`ui/voice/VoiceRecordUi`，手势/悬浮层/
+> 锁定行/暂停试听/5min 上限/中断转暂停全套，`/code-review --fix` 修 7 条 + 用户真机复测又报的 2 条
+> bug 均已修——完整清单见 `current_task.archive.md` 2026-09-28 条目）、③ **转文字**（`b3cf207`，
+> 同批提交）。上滑锁定的悬浮层顺手又补了一条：锁钮里**加了呼吸上箭头**（`Lucide.ChevronUp`，
 > `position.y` 上下 4dp、0.7s、线性、无限往复，对齐 iOS `IMVoicePressOverlay.restartArrowBreathe`
 > 逐参数抄的——之前只把锁钮渲染出来了，没照 iOS 补这个"往上滑到这里"的动效提示，用户对照 iOS 截图
 > 指出后补上），真机 adb 分帧摆拍确认箭头在两帧之间有位移。
@@ -94,6 +102,10 @@
 
 ## 已知坑 / 限制
 
+- **`FavoritesHost`/`ChatPickerLayers`/`QrRouteHost` 三处进 `UserProfileHost` 没接 `onRemarkChanged`**
+  （2026-09-28，与 `ContactsHost`/`GroupInfoHost` 同一个坑，本次只补了后两处）：这三处进资料页都是
+  「选人即用」场景（收藏来源名片、转发选目标、扫码加人），资料页本身没有像 ChatDetailHost/ContactsHost
+  那样退回后立刻可见的常驻展示位，复现路径没那么直给，暂缓；要补的话按同一套模式（本机状态覆盖）接上即可。
 - **语音转文字 code review 跳过的两条小优化（2026-09-28，均不影响行为，留作后续）**：
   ① `VoiceTranscriptStore.putText` 每写一条都把整份 FIFO 顺序表（最多 2000 条）`joinToString` 后重写
   SharedPreferences——填满缓存近似 O(n²)，量小暂不改；要改可只在淘汰时写顺序表，或改落 Room。
@@ -187,10 +199,10 @@
   （`adb exec-out screencap`；用 `uiautomator dump` 找控件坐标比按像素猜可靠）。
 - **视频不转码**、**分片上传不跨进程续传**、**视频没有本地缓存**、**图片不压缩**（只挡 20MB）、**无断点续传**。
 - **查看器翻页只能往更旧续拉**（服务端媒体接口是 `conv_seq < cursor` 倒序分页），本地一次最多取 300 条。
-- **贴线文件持续在涨，暂未拆**（上限 600，**WARN 线 480**，2026-09-23 `test.sh` 报的最新行数）：
-  `GroupInfoHost.kt` 594、`ChatHost.kt` 575（本次日历/来自筛选加了约 30 行）、`ChatScreen.kt` 541、
-  `MessageRepository.kt` 552、`MessageService.kt` 507。**都还没触顶但都很近了**——下次往这几个文件加东西前
-  先规划拆分，别等 WARN 变红闸。
+- **`GroupInfoHost.kt` 已顶到硬闸 600 行**（2026-09-28，本次接 `onRemarkChanged` 加的 2 行踩到线，
+  已把新注释压到一行才卡着通过——**下一次改这个文件必须先拆**，不能再靠压行数混过去）。
+  其余贴线文件（2026-09-23 `test.sh` 报的行数，WARN 线 480）：`ChatHost.kt` 595、`ChatScreen.kt` 557、
+  `MessageService.kt` 547、`VoiceRecordUi.kt` 512——都还没触顶但都很近了，加东西前先规划拆分。
 - **明文 HTTP 只对 `10.0.2.2`/`localhost`/`127.0.0.1` 放行**（release）；**本机 `JAVA_HOME` 是坏的**（test.sh 已自愈）。
 
 ## 关联工程 / 常用命令
