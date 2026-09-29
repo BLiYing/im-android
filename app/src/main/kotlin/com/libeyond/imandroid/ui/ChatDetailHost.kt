@@ -119,8 +119,21 @@ fun ChatDetailHost(
     var sharing by remember(conv.convId) { mutableStateOf(false) }
 
     var pinned by remember(conv.convId) { mutableStateOf(conv.pinnedAt > 0) }
+    var pinnedAt by remember(conv.convId) { mutableStateOf(conv.pinnedAt) }
     var muted by remember(conv.convId) { mutableStateOf(conv.muted) }
     var muteUntil by remember(conv.convId) { mutableStateOf(conv.muteUntil) }
+    var markedUnread by remember(conv.convId) { mutableStateOf(conv.markedUnread) }
+    // `conv` 是打开聊天那一刻的快照，之后在本页或别的设备改的置顶/免打扰/标未读它都不知道——
+    // 进页拉一次服务端设置（同 iOS IMChatDetailViewController、本端 GroupInfoSettings.load）。
+    // 不拉的话：置顶打开→退出重进又显示关（2026-09-29 真机），保存时还会把旧的 marked_unread 写回去。
+    LaunchedEffect(conv.convId) {
+        runCatching { client.conversationsApi.settings(conv.convId) }
+            .onSuccess { s ->
+                pinned = s.pinnedAt > 0; pinnedAt = s.pinnedAt
+                muted = s.muted; muteUntil = s.muteUntil; markedUnread = s.markedUnread
+            }
+            .onFailure { IMLog.tag("IM.Detail").w("conv_settings_load_failed") }
+    }
     var muteSheetOpen by remember(conv.convId) { mutableStateOf(false) }
     var remark by remember(conv.convId) { mutableStateOf(conv.peerRemark) }
     var editingRemark by remember(conv.convId) { mutableStateOf(false) }
@@ -158,13 +171,20 @@ fun ChatDetailHost(
      *   置顶开关这条路留 `null`（省略），让服务端按 PROTOCOL §6.10 缺省规则保留原到期时间。
      */
     fun pushSettings(newPinned: Boolean, newMuted: Boolean, newMuteUntil: Long? = null) {
+        // 置顶时间只在「由关变开」时取现在；已置顶时改免打扰要原样带回，否则置顶会话之间的顺序被打乱
+        pinnedAt = when {
+            !newPinned -> 0
+            pinnedAt > 0 -> pinnedAt
+            else -> System.currentTimeMillis()
+        }
+        val sendPinnedAt = pinnedAt
         scope.launch {
             runCatching {
                 client.conversationsApi.updateSettings(
                     conv.convId,
-                    pinnedAt = if (newPinned) System.currentTimeMillis() else 0,
+                    pinnedAt = sendPinnedAt,
                     muted = newMuted,
-                    markedUnread = conv.markedUnread,
+                    markedUnread = markedUnread,
                     muteUntil = newMuteUntil,
                 )
             }.onFailure { IMLog.tag("IM.Detail").w("conv_settings_failed") }
