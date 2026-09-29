@@ -90,6 +90,10 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     }
 
     var openConv by remember { mutableStateOf<ConversationEntity?>(null) }
+    // 通知判定 alertDecision 的 viewingConv 输入（NOTIFICATIONS_DESIGN §3.1）：`openConv` 是
+    // "当前打开的会话"的唯一权威来源，写进 data/ 层的全局标记供 MessageService 的 NEW_MSG 分支读——
+    // 那条路径没有 Compose 上下文，够不到这个局部变量。
+    LaunchedEffect(openConv) { com.libeyond.imandroid.data.ViewingConv.current = openConv?.convId }
 
     // 初值 null = 本地库还没回第一份。**不能拿 emptyList() 当初值**：那等于先宣布「还没有会话」、
     // 库回数据再改口——冷启动 / 登录都先闪一下空态（2026-09-15 用户报，判据见 ConversationListPhase）
@@ -98,8 +102,12 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     }.collectAsState(initial = null)
 
     val connState by client.socket.state.collectAsState()
-    // 底栏「消息」蓝点：与会话行同一份数据现算，口径见 TabUnread（三端同口径）
-    val tabUnread = remember(conversations) { TabUnread.count(conversations.orEmpty()) }
+    // 底栏「消息」蓝点：与会话行同一份数据现算，口径见 TabUnread（三端同口径）。
+    // includeMuted 来自「通知与提示音 ▸ 角标计数」（NOTIFICATIONS_DESIGN §3.4），默认关=现行口径。
+    val notifSettings by com.libeyond.imandroid.data.NotificationSettingsStore.settings.collectAsState()
+    val tabUnread = remember(conversations, notifSettings.badge.includeMuted) {
+        TabUnread.count(conversations.orEmpty(), notifSettings.badge.includeMuted)
+    }
 
     // 进主界面就拉一次会话列表——WS 的 onConnected 也会拉，但那条路只在
     // 「本次冷启动真的新建了连接」时触发；会话已存活时进来不会有 onConnected。

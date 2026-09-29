@@ -129,7 +129,12 @@ class MessageService(
                 val m = ProtocolJson.decodeFromJsonElement(MessageData.serializer(), it)
                 repo.onIncoming(owner, m, bumpUnread = true)
                 // §4.3 末：接收方收到后**必须回 receipt(delivered)**
-                if (m.from != owner) sendReceipt(m.convId, ReceiptData.DELIVERED, m.convSeq)
+                if (m.from != owner) {
+                    sendReceipt(m.convId, ReceiptData.DELIVERED, m.convSeq)
+                    // 通知与提示音（NOTIFICATIONS_DESIGN §3.1）：只有这一条实时路径会调判定，
+                    // sync/window 补拉都不经过这里——见 IncomingAlert 类注释。
+                    IncomingAlert.handle(owner, m, repo)
+                }
             }
 
             FrameType.SYNC_RESP -> data?.let {

@@ -29,6 +29,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -74,6 +77,17 @@ object RtcCall {
      * 页面自己重新调 [fetchCallHistory] 取权威结果。主线程。
      */
     @Volatile var onCallEnded: (() -> Unit)? = null
+
+    private val _inCall = MutableStateFlow(false)
+
+    /**
+     * 正在音视频通话中（来电响铃 / 拨出中 到 挂断之间）。**通知判定 `alertDecision` 的 `inCall`
+     * 输入读它**（NOTIFICATIONS_DESIGN §3.1："正在音视频通话 → 不响不振，会抢通话音频"）。
+     * 从响铃（[IMCallEngineListener.onCallReceived] / 接通 [IMCallEngineListener.onCallBegin]）
+     * 到 [IMCallEngineListener.onCallEnd] 之间恒为真——不追踪响铃与接通之间更细的子状态，
+     * P0 只需要"是不是在通话"这一个粗粒度布尔。
+     */
+    val inCall: StateFlow<Boolean> = _inCall.asStateFlow()
 
     /** 引擎已建好（不代表握手已成功，连接态看日志）。 */
     val isStarted: Boolean get() = engine != null
@@ -172,6 +186,7 @@ object RtcCall {
     /** 离开主界面调用。幂等。 */
     fun stop() {
         generation++
+        _inCall.value = false
         profileResolver?.close()
         val old = engine ?: return
         engine = null
@@ -290,11 +305,22 @@ object RtcCall {
         ) {
             if (stale) return
             profileResolver?.groupId = if (isGroup) chatGroupId else ""
+            _inCall.value = true
+        }
+
+        /** 接通（主被叫都抛）：响铃阶段 [onCallReceived] 已经置过一次，这里覆盖同一个值，兜住主叫自己发起、没经过 onCallReceived 的路径。 */
+        override fun onCallBegin(
+            callId: String, roomId: String, mediaType: String, isGroup: Boolean,
+            role: String, caller: String, chatGroupId: String, userData: String,
+        ) {
+            if (stale) return
+            _inCall.value = true
         }
 
         /** 每通电话都会到达（不分角色）：只转发信号给 [onCallEnded]，不带数据——那是通话记录专属的落库判定。 */
         override fun onCallEnd(callId: String, reason: IMCallEndReason, durationSec: Long, endedBy: String) {
             if (stale) return
+            _inCall.value = false
             onCallEnded?.invoke()
         }
 
