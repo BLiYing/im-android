@@ -15,25 +15,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.ArrowDownLeft
 import com.composables.icons.lucide.ArrowUpRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Phone
-import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.Video
 import com.imrtc.engine.IMCallHistoryRecord
 import com.libeyond.imandroid.R
@@ -82,7 +83,7 @@ internal fun CallHistoryScreen(
         IMTopBar(title = stringResource(R.string.ios_settings_row_recent_calls), onLeft = onBack)
         LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
             item(key = "tabs") {
-                SegTabBar(
+                CallHistorySegment(
                     listOf(stringResource(R.string.call_history_tab_all), stringResource(R.string.call_history_tab_missed)),
                     tab.ordinal,
                 ) { i -> onTabChange(CallHistoryTab.entries[i]) }
@@ -105,12 +106,44 @@ internal fun CallHistoryScreen(
     }
 }
 
-/** 日期分组头（今天 / 昨天 / 具体日期，UX 稿 §03）。 */
+/**
+ * 「全部 / 未接」分段控制（UX 稿 `.seg`）：两段**等宽铺满整行**，同 iOS `UISegmentedControl` / Web 的做法。
+ * 不用 [SegTabBar]——那是给详情页四个页签按内容宽度排的，只有两段时右侧留一大片空白。
+ */
+@Composable
+private fun CallHistorySegment(titles: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    val c = IMTheme.colors
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(9.dp)).background(c.subtleFill).padding(2.dp),
+    ) {
+        titles.forEachIndexed { i, t ->
+            val on = i == selected
+            Box(
+                Modifier.weight(1f)
+                    .then(if (on) Modifier.shadow(1.dp, RoundedCornerShape(7.dp)) else Modifier)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(if (on) c.surfaceElevated else Color.Transparent)
+                    .clickable { onSelect(i) }
+                    .padding(vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                // 选中/未选中同为主文字色，只靠字重 + 药丸区分（同 MediaSeg / iOS IMLiquidSegmentedControl）
+                Text(
+                    t, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary,
+                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                )
+            }
+        }
+    }
+}
+
+/** 日期分组头（今天 / 昨天 / 具体日期，UX 稿 §03：12 Bold 次要色）。 */
 @Composable
 private fun DayHeader(label: String) {
     val c = IMTheme.colors
     Text(
-        label, color = c.textSecondary, style = MaterialTheme.typography.labelMedium,
+        label, color = c.textSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
         modifier = Modifier.fillMaxWidth().background(c.groupedBackground).padding(start = 16.dp, top = 14.dp, bottom = 6.dp),
     )
 }
@@ -132,21 +165,25 @@ private fun CallHistoryRowView(record: IMCallHistoryRecord, me: String, name: St
                 .padding(horizontal = d.space4, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (record.isGroup) GroupCallAvatar(size = 40.dp) else {
-                IMAvatar(displayName = name, seed = CallHistory.peerUid(record, me), avatarUrl = avatarUrl, size = 40.dp)
-            }
+            val displayName = if (record.isGroup) name.ifBlank { groupSummary(record) } else name.ifBlank { DisplayName.UNNAMED }
+            // 群行与会话列表同一口径画群头像（种子用群会话 id，颜色与会话列表一致）；本机没有这个群时退回首字色块
+            IMAvatar(
+                displayName = displayName,
+                seed = if (record.isGroup) record.chatGroupId else CallHistory.peerUid(record, me),
+                avatarUrl = avatarUrl, size = 40.dp,
+            )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                val tint = if (missed) c.danger else c.textPrimary
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(
                         imageVector = if (outgoing) Lucide.ArrowUpRight else Lucide.ArrowDownLeft,
-                        contentDescription = null, modifier = Modifier.size(13.dp), colorFilter = ColorFilter.tint(tint),
+                        contentDescription = null, modifier = Modifier.size(13.dp),
+                        colorFilter = ColorFilter.tint(if (missed) c.danger else c.textSecondary),
                     )
-                    Spacer(Modifier.width(4.dp))
-                    val displayName = if (record.isGroup) name.ifBlank { groupSummary(record) } else name.ifBlank { DisplayName.UNNAMED }
+                    Spacer(Modifier.width(5.dp))
                     Text(
-                        displayName, color = tint, style = MaterialTheme.typography.titleSmall,
+                        displayName, color = if (missed) c.danger else c.textPrimary,
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -156,18 +193,19 @@ private fun CallHistoryRowView(record: IMCallHistoryRecord, me: String, name: St
                         imageVector = if (video) Lucide.Video else Lucide.Phone,
                         contentDescription = null, modifier = Modifier.size(12.dp), colorFilter = ColorFilter.tint(c.textSecondary),
                     )
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(5.dp))
                     Text(
                         if (record.isGroup) groupSummary(record) else subtitleOf(record, outgoing),
-                        color = c.textSecondary, style = MaterialTheme.typography.bodySmall,
+                        color = c.textSecondary, style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
             Spacer(Modifier.width(8.dp))
+            // 分组头已给出日期，行内只写 HH:mm（UX 稿 §02 示例，同 iOS/Web）
             Text(
-                TimeFormat.conversationTime(record.startedAtMs), color = c.textSecondary,
-                style = MaterialTheme.typography.bodySmall,
+                TimeFormat.bubbleTime(record.startedAtMs), color = c.textSecondary,
+                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.align(Alignment.Top),
             )
         }
         Box(Modifier.fillMaxWidth().padding(start = 66.dp).height(0.5.dp).background(c.separator))
@@ -190,15 +228,6 @@ private fun subtitleOf(record: IMCallHistoryRecord, outgoing: Boolean): String {
 private fun groupSummary(record: IMCallHistoryRecord): String {
     val kind = stringResource(if (record.mediaType == "video") R.string.call_record_kind_video else R.string.call_record_kind_voice)
     return stringResource(R.string.call_history_group_subtitle, kind, CallHistory.groupMemberCount(record))
-}
-
-/** 群通话统一的渐变底图标（不是群头像——通话参与者 ≠ 群成员，设计文档 §2）。 */
-@Composable
-private fun GroupCallAvatar(size: Dp) {
-    val c = IMTheme.colors
-    Box(Modifier.size(size).clip(CircleShape).background(c.accentSoft), contentAlignment = Alignment.Center) {
-        Image(Lucide.Users, contentDescription = null, modifier = Modifier.size(size * 0.45f), colorFilter = ColorFilter.tint(c.accent))
-    }
 }
 
 /** 一条通话记录都没有（UX 稿 §04-A）。 */

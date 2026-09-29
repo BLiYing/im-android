@@ -182,6 +182,11 @@
 >   user1001 也过）**：通话记录列表按天分组、来去电箭头、未接标红、「全部/未接」筛选、点击行发起
 >   回拨均正常；未覆盖到滚动分页时序、`callEnded` 重拉首页画面表现、群通话行跳转会话——这几条留给
 >   后续有多测试账号互相拨打攒出真实分页数据后再核对。
+> - **验收修复（2026-09-29，真机 user1001 已验，未提交）**：「全部/未接」改成等宽铺满的
+>   `CallHistorySegment`（原复用 `SegTabBar` 按内容宽排，两段时右侧空一大块）；群行改用群会话真实头像
+>   （`avatarOf` 取 `groupConvById[chatGroupId].avatarUrl`，`IMAvatar` seed 用群会话 id，同会话列表），
+>   删 `GroupCallAvatar`；行内时间改 `TimeFormat.bubbleTime`（`HH:mm`，日期交给分组头）；箭头次要色、
+>   名字 16 SemiBold、分组头 Bold，按 UX 稿对齐。`./scripts/test.sh` 986/986。
 
 ## 下一步
 

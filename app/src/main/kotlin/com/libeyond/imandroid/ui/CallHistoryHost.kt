@@ -111,8 +111,8 @@ internal class CallHistoryList {
  * 「我 ▸ 最近通话」的接线层（CALL_HISTORY_DESIGN.md）：取数、身份解析、点击回拨 / 跳转群会话。
  *
  * 身份解析**复用会话表**（与 [FavoritesHost] 的 `sourceOf` 同一套路）：1v1 对方优先用本机会话行
- * （备注 > 昵称），本机没聊过的再补拉一次名片；群通话优先用本机群会话标题，查不到就回退
- * 「群语音/视频通话 · N人」（设计文档 §2）。**不复用 [com.libeyond.imandroid.rtc.RtcProfileSources]**：
+ * （备注 > 昵称），本机没聊过的再补拉一次名片；群通话优先用本机群会话的标题与头像，查不到就回退
+ * 「群语音/视频通话 · N人」+ 首字色块（设计文档 §2）。**不复用 [com.libeyond.imandroid.rtc.RtcProfileSources]**：
  * 那是喂给通话中界面（Kit）的解析器，生命周期绑定一通正在进行的电话，这里要的是"历史列表批量查名"，
  * 直接读会话表更直接，两处各自的生命周期不该绑死。
  */
@@ -178,7 +178,7 @@ internal fun CallHistoryHost(
         if (record.isGroup) groupConvById[record.chatGroupId]?.title.orEmpty() else peerName(CallHistory.peerUid(record, owner))
 
     fun avatarOf(record: IMCallHistoryRecord): String =
-        if (record.isGroup) "" else peerAvatar(CallHistory.peerUid(record, owner))
+        if (record.isGroup) groupConvById[record.chatGroupId]?.avatarUrl.orEmpty() else peerAvatar(CallHistory.peerUid(record, owner))
 
     fun open(record: IMCallHistoryRecord) {
         if (record.isGroup) {
