@@ -413,8 +413,6 @@ fun ChatHost(
                             null
                         }
                 }
-                // 与 iOS 一致：整个功能三端都没做
-                AttachItems.Kind.AudioVideo -> toast = Str.s(R.string.chat_attach_audio_video_unimplemented)
                 // 收藏页的选择模式（iOS `openFavoritesPicker`），发送见下方 ChatPickerLayers 的 onFavoritesPicked
                 AttachItems.Kind.Favorite -> pickingFavorites = true
             }

@@ -29,7 +29,6 @@ import com.composables.icons.lucide.File
 import com.composables.icons.lucide.IdCard
 import com.composables.icons.lucide.Image as LucideImage
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Video
 import com.libeyond.imandroid.data.AttachItems
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -97,7 +96,6 @@ private fun AttachCell(item: AttachItems.Item, onPick: (AttachItems.Kind) -> Uni
 private fun iconOf(kind: AttachItems.Kind): ImageVector = when (kind) {
     AttachItems.Kind.Photo -> Lucide.LucideImage
     AttachItems.Kind.Camera -> Lucide.Camera
-    AttachItems.Kind.AudioVideo -> Lucide.Video
     AttachItems.Kind.Favorite -> Lucide.Bookmark
     AttachItems.Kind.ContactCard -> Lucide.IdCard
     AttachItems.Kind.File -> Lucide.File

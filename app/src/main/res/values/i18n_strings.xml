@@ -99,8 +99,6 @@
     <string name="card_contact_unavailable">[个人名片] 无法显示</string>
     <string name="card_record_unavailable">[聊天记录] 无法显示</string>
     <string name="chat_archive_delete_failed_retry">删除失败，请重试</string>
-    <string name="chat_attach_audio_video_unimplemented">音视频通话还没做</string>
-    <string name="chat_attach_av">音视频</string>
     <string name="chat_attach_camera">拍摄</string>
     <string name="chat_attach_contact_card">个人名片</string>
     <string name="chat_attach_friends_load_failed">联系人加载失败</string>

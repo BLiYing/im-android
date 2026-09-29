@@ -7,6 +7,23 @@
 
 ## 当前焦点
 
+> **六条用户报告第 5 项：加号面板去掉音视频占位 ✅（2026-09-29，真机验证，OPPO PKD130）**：
+> `AttachItems.Kind.AudioVideo` 一直是打不通的占位——点了只弹"音视频通话还没做"的吐司，而呼叫/
+> 视频早已在聊天详情页（`ChatDetailHost`/`showsMessagePill` 那条链路）真正接通，面板这颗反而
+> 误导用户以为是另一条独立的路。删掉整条：`AttachItems.kt` 的枚举项与 `ALL` 条目、
+> `AttachPanel.kt` 的图标映射、`ChatHost.kt` 的 tap 分支、两份 `i18n_strings.xml` 的
+> `chat_attach_av`/`chat_attach_audio_video_unimplemented`。面板从 6 项变 5 项（2×3 → 3+2），
+> `AttachPanel.kt` 本就有"末行不足补空位"的逻辑（避免 `FillEqually` 把末行拉伸变形），不用改；
+> iOS 同一处**原先没有**，已照 Android 这套思路给 `IMChatViewController+Media.m` 的
+> `buildAttachPanel` 补上（末行不足 3 个时补透明 `UIView` 占位）。iOS `attachItems` 同步删掉
+> "av" 条目，末尾兜底分支从 `im_showComingSoon` 改成 `NSAssert`（五个已知 id 全部真实接通，
+> 走到兜底说明加了新项忘记接实现，不该再是"还没做"的话术）。**Web 本就没有这颗占位**
+> （`useMediaSend.ts` 的 `attachItems` 只有"图片或视频"/"文件"两项），此项只涉及 iOS/Android。
+> Android `./scripts/test.sh` 986/986 绿（`AttachItemsTest` 改断言，未加新用例）；iOS
+> `./scripts/test.sh` 561/561 绿。**真机/模拟器验证 ✅**：Android 真机截图确认面板 5 项、
+> 布局对齐（个人名片/文件仍卡在左侧两列，非拉伸铺满）；iOS 用一次性 XCUITest 截图核对同一件事，
+> 通过后已删除脚本。
+
 > **六条用户报告第 4 项：正在输入过期不清除 ✅（2026-09-29，真机验证，OPPO PKD130 user1001 ↔ Web user1002）**：
 > 根因与会话列表绿点是同一类坑——`ChatPresence.kt` 的「正在输入」判定挂在 `rememberChatSubtitle` 里
 > 那颗 30s 一次的粗粒度 `tick`（`Presence.TICK_MS`，给在线态心跳用的）上重算，而 typing TTL 只有 5s
@@ -56,8 +73,8 @@
 > - **真机验证 ✅**：user1002 用 `IMServer/scripts/send.sh` 连发消息，贴底时验证①自动贴底正确、
 >   离底后验证②角标数字与实发条数逐次对上、③点击跳转贴底后角标正确消失、④退出会话后会话列表
 >   预览文本/排序/未读角标均正确（已读位点被"可见即读"推进，列表侧无残留未读）。
-> - **④ 已做**（正在输入过期清除，见上方新条目）。**⑤-⑥ 未动**：加号面板去掉音视频入口、
->   消息列表滚动条（**滚动条本端其实已有**——`ChatScroll.kt` 的 `chatScrollbar`，⑥严格说只差
+> - **④⑤ 已做**（正在输入过期清除、加号面板去掉音视频入口，均见上方新条目）。**⑥ 未动**：
+>   消息列表滚动条（**滚动条本端其实已有**——`ChatScroll.kt` 的 `chatScrollbar`，严格说只差
 >   iOS/Web 两端补齐，Android 已完成，逐项对齐时留意别重做）。
 
 > **开始第 3 项前用户追加两条修复，均已真机验证（2026-09-29，OPPO PKD130，user1001）**：
@@ -108,10 +125,9 @@
 >   回落 599 行（WARN，未 FAIL）。`./scripts/test.sh` **969/969 绿**（3 轮全绿，含体量门禁）。
 >   **真机验证 ✅ 已通过（2026-09-29，OPPO PKD130，user1001）**：@提及跳转、头像点击跳转均正确
 >   打开资料页且呼叫/视频/搜索/更多齐全；「消息」pill 正确换到与该用户的单聊（含群成员场景）。
-> - **③④ 已做**（详见本节最上方条目）：↓N 角标已补，自动贴底与滚动条其实此前已完整；正在输入
->   过期清除的粗粒度心跳坑也已修。
-> - **⑤-⑥ 未动**：加号面板去掉音视频入口、消息列表滚动条（Android 已有，iOS/Web 待补），
->   用户要求逐项来，按顺序排在后面。
+> - **③④⑤ 已做**（详见本节最上方条目）：↓N 角标已补，自动贴底与滚动条其实此前已完整；正在输入
+>   过期清除的粗粒度心跳坑也已修；加号面板音视频占位已删（iOS 同步）。
+> - **⑥ 未动**：消息列表滚动条（Android 已有，iOS/Web 待补），用户要求逐项来，按顺序排在后面。
 
 > **im-rtc 换票：从调试密钥迁移到 IMServer 真实换票接口 ✅（2026-09-28，本端已完成——三端全部完成）**：
 > 此前 `RtcCall.signToken`（同步、`IMDebugTokenGenerator` 本地签调试票）改成调 IMServer

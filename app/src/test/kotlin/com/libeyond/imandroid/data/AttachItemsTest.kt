@@ -11,24 +11,25 @@ import org.junit.Test
 class AttachItemsTest {
 
     @Test
-    fun `六项且顺序与 iOS 一致`() {
+    fun `五项且顺序与 iOS 一致`() {
+        // 音视频入口已删除（六条用户报告第 5 项，2026-09-29）：呼叫/视频早已在聊天详情页真正接通，
+        // 面板这颗是打不通的占位，留着反而误导。
         assertEquals(
-            listOf("照片", "拍摄", "音视频", "收藏", "个人名片", "文件"),
+            listOf("照片", "拍摄", "收藏", "个人名片", "文件"),
             AttachItems.ALL.map { it.title },
         )
     }
 
     @Test
-    fun `刚好排满两行三列`() {
-        assertEquals(0, AttachItems.ALL.size % AttachItems.COLUMNS)
-        assertEquals(2, AttachItems.ALL.size / AttachItems.COLUMNS)
+    fun `排两行，末行不必填满`() {
+        assertEquals(2, (AttachItems.ALL.size + AttachItems.COLUMNS - 1) / AttachItems.COLUMNS)
     }
 
     @Test
     fun `未实现的项照样列出来`() {
         // 删掉会让三端面板长得不一样：用户在另一端找得到、在这端找不到，比点进去看到「还没做」更困惑
         val notDone = AttachItems.ALL.filter { !it.implemented }.map { it.title }
-        assertEquals(listOf("音视频", "收藏"), notDone)
+        assertEquals(listOf("收藏"), notDone)
         assertTrue(AttachItems.ALL.any { it.implemented })
     }
 

@@ -99,8 +99,6 @@
     <string name="card_contact_unavailable">[Contact] Unable to display</string>
     <string name="card_record_unavailable">[Chat History] Unable to display</string>
     <string name="chat_archive_delete_failed_retry">Delete failed, please retry</string>
-    <string name="chat_attach_audio_video_unimplemented">Voice/video calling isn\'t available yet</string>
-    <string name="chat_attach_av">Audio/Video</string>
     <string name="chat_attach_camera">Camera</string>
     <string name="chat_attach_contact_card">Contact card</string>
     <string name="chat_attach_friends_load_failed">Couldn\'t load contacts</string>
