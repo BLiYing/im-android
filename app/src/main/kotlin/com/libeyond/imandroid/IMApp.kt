@@ -1,6 +1,7 @@
 package com.libeyond.imandroid
 
 import android.app.Application
+import com.libeyond.imandroid.data.AppearanceStore
 import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.i18n.ContextStringResolver
 import com.libeyond.imandroid.i18n.Str
@@ -21,6 +22,7 @@ class IMApp : Application(), coil.ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         LanguageStore.init(this)
+        AppearanceStore.init(this)
         Str.install(ContextStringResolver(this))
         client = IMClient(this)
         // 开发期日志回传到 IMServer 的 /__devlog（与 iOS / Web 同一条通道）。**仅 Debug 构建**；

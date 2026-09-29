@@ -74,6 +74,7 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.data.db.PendingMessageEntity
 import com.libeyond.imandroid.data.db.SendState
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.ui.components.ChatWallpaperBackground
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.components.TopBarAvatar
 import com.libeyond.imandroid.ui.components.TimeFormat
@@ -374,6 +375,7 @@ fun ChatScreen(
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        ChatWallpaperBackground(Modifier.matchParentSize())
         LazyColumn(
             state = listState,
             // 横向内边距**就是** UI_SPEC §3 的「头像距 cell 左 12」——不要换成别的数，

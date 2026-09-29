@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import com.libeyond.imandroid.data.ChatWallpaper
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -54,6 +55,8 @@ data class IMColors(
     val metaTime: Color,
     val wallpaperTop: Color,
     val wallpaperBottom: Color,
+    /** 涂鸦壁纸的图案色（白 α0.16 / 深色 α0.035，iOS `wallpaperDoodleColor` 同值）。 */
+    val wallpaperDoodle: Color,
     val datePillBackground: Color,
     /** 群系统消息里的人名段。刻意不用 accent：胶囊底就是主题绿，绿字绿底看不出哪几个字是名字。 */
     val sysName: Color,
@@ -128,6 +131,7 @@ val LightIMColors = IMColors(
     metaTime = Color(0xFF6B8A5E),
     wallpaperTop = Color(0xFFD6E8C4),
     wallpaperBottom = Color(0xFFB4D89B),
+    wallpaperDoodle = Color(0x29FFFFFF),
     datePillBackground = Color(0x8C5C8A4C),
     sysName = Color(0xFFFFD98A),
 
@@ -184,6 +188,7 @@ val DarkIMColors = IMColors(
     metaTime = Color(0xFF9FB89A),
     wallpaperTop = Color(0xFF0E1A12),
     wallpaperBottom = Color(0xFF16261A),
+    wallpaperDoodle = Color(0x09FFFFFF),
     datePillBackground = Color(0x73000000),
     sysName = Color(0xFFFFD98A),
 
@@ -382,8 +387,12 @@ val DarkSettingsIconColors = IMSettingsIconColors(
 data class IMAppearance(
     /** 聊天正文字号，用户可调 14～22（§3）。 */
     val chatFontSize: TextUnit = 15.sp,
-    /** 气泡圆角，用户可调 6～24（§2）。 */
+    /** 气泡圆角，用户可调 6～24（§2）；输入框圆角也跟它走（UI_SPEC §4）。 */
     val bubbleRadius: Dp = 18.dp,
+    /** 聊天区壁纸样式（颜色来自 [IMColors.wallpaperTop]/[IMColors.wallpaperBottom]，随主题变）。 */
+    val wallpaper: ChatWallpaper = ChatWallpaper.DOODLE,
+    /** 「动画」开关：关掉后界面弹出类动效直接到终态（iOS `IMAnimator` 同口径，触感反馈不受影响）。 */
+    val animationsEnabled: Boolean = true,
 ) {
     /** 系统提示/居中时间标签随消息字号等比缩放（×0.8），与 Web `--sys-font` 同口径。 */
     val sysFontSize: TextUnit get() = (chatFontSize.value * 0.8f).sp

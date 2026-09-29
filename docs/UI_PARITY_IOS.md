@@ -635,6 +635,42 @@ iOS：`Modules/Conversation/IMConversationListViewController.m`（`plusTapped:` 
 
 ---
 
+## 4.11 外观（2026-09-29，OPPO PKD130 真机验过）
+
+iOS：`Modules/Me/IMAppearanceViewController.m`（主页 + 网格/模式/滑块三个私有子页 + `IMAppearanceChatPreview`）、
+`Common/IMAppearance.m`（偏好与配色）、`Modules/Chat/IMChatBackgroundView.m`（聊天壁纸）。
+Android：`ui/AppearanceHost.kt` + `ui/screens/Appearance{Screen,Preview,GridScreen,ModeScreen,SliderScreen}.kt`；
+偏好 `data/AppearancePrefs.kt` + `data/AppearanceStore.kt`，配色 `ui/theme/ChatPalette.kt`，壁纸 `ui/components/ChatWallpaper.kt`，
+图标 `ui/AppIconSwitcher.kt` + 清单里四个 activity-alias。
+**动手前抄下来的结构清单**：
+
+- 右上「还原」：六项回出厂值 + 图标回默认，不二次确认。
+- 卡 1 主题颜色：聊天预览（238 高）→ 横向主题条（14 个，92 宽 mini 卡，选中描该主题强调色）→「聊天主题」「聊天壁纸」两行（右值 = 当前名）。
+- 卡 2 显示模式：「夜间模式」开关（开 = 深色；**关 = 跟随系统**，不是浅色）+「自动夜间模式」行（进三选一，右值 = 当前模式名）。
+- 卡 3 聊天外观：「字号」「信息框圆角」两行（右值 = 数字，进滑块页）+「动画」开关。
+- 卡 4 应用图标：默认 / 蓝色 / 紫色 / 深色四选一。
+- 网格页两列，缩略图 = 真实聊天预览 × 0.72；主题网格用当前壁纸画、壁纸网格用当前主题画；点即生效。
+- 滑块页：上铺预览、下圆顶面板「小 A — 滑块 — 大 A」；拖动即写入，「取消」还原进页时的值，「设置」只是离开。
+
+| 项 | iOS | Android | 判定 |
+|---|---|---|---|
+| 四张卡的行 / 顺序 / 文案 / 右值 | 如上 | 同 | ✅ |
+| 14 个主题的配色 | `IMAppearance.m` 手调值 + 派生公式 | `ChatPalettes` 逐值照抄（`ChatPaletteTest` 钉住） | ✅ |
+| 经典主题强调色 | `systemGreen` | 本端令牌表原值 `#4CA64C` | 🟢 不为照抄把全 App 默认强调色换掉 |
+| 主题只换强调色 / 我方气泡 / 壁纸两端 | 是 | 是（`themedColors`；日期胶囊、已读勾保持中性） | ✅ |
+| 聊天字号默认值 | 17（iOS 系统正文基线） | **15**（Android/Web 正文基线，Web `--msg-font` 同） | 🟢 范围三端一致 14～22 |
+| 偏好存储 | NSUserDefaults，本机、退出登录保留 | SharedPreferences `im_appearance`，同 | ✅ |
+| 涂鸦图案 | SF Symbols 实心图 | Lucide 同义线框图，位置/大小逐个照抄 | 🟢 本端没有 SF Symbols |
+| 卡片圆角 | 28 / 24 | 本端设置卡统一 `radiusCard` | 🟢 与本端其它设置页一致优先 |
+| 滑块页呈现 | 模态全屏 | push 转场，左右键同（取消 / 设置），系统返回 = 取消 | 🟢 |
+| 「动画」开关管什么 | toast 弹出 + 点按回弹 | 消息长按菜单的抬起弹簧（本端 toast 本就无弹出动效） | ✅ 口径同：弹出类动效，触感不受影响 |
+| 应用图标切换时机 | 立即（系统弹提示） | 选中即显示，**退到后台才真正切**：前台停用启动它的 alias，ColorOS 会当场结束任务、退回桌面（真机实测） | 🟢 |
+| 应用图标「系统不支持」提示 | `appearance.icon.unsupported` | 不需要（activity-alias 全版本可用），失败只记日志 | 🟢 |
+| 主题条选中项进场可见 | 不滚，选了靠后的主题回来看不到 | 进场滚到选中项 | 🟢 |
+| 系统栏图标明暗 | 跟 `overrideUserInterfaceStyle` | 按 App 显示模式判（`MainActivity.applySystemBars`），强制浅/深色时不再黑字压黑底 | ✅ |
+
+---
+
 ## 5. 为什么会漂这么远（2026-09-08 复盘）
 
 用户问：「不是严格按照 iOS UI 来参照吗，为什么差这么多？」——这一节是答案，

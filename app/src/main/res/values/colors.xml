@@ -4,4 +4,8 @@
          取值对应 Web 令牌 grouped-bg / accent（XML 注释里不能出现连字符对，故略去变量前缀）。 -->
     <color name="window_background">#F5F6F8</color>
     <color name="ic_launcher_background">#000317</color>
+    <!-- 备选应用图标的底色：取 iOS 同名图标的角落像素，与前景外圈无缝。 -->
+    <color name="ic_launcher_ocean_background">#00092B</color>
+    <color name="ic_launcher_violet_background">#040020</color>
+    <color name="ic_launcher_midnight_background">#000009</color>
 </resources>

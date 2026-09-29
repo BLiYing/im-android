@@ -78,6 +78,6 @@ Compose 默认就会重算，但一旦写了 `Modifier.height(48.dp)` 包住文�
 
 - [ ] **图标库接入 lucide**（ISC 许可，与 Web 同一套；iOS 用 SF Symbols，三端语义对齐）。
       接入前 Material Icons 顶着用，但**别把两套混着用**。
-- [ ] 应用内主题偏好落地（持久化 + 实时生效 + 重启恢复，`UI_COLOR.md` §1.3 的五件事）。
-- [ ] 聊天壁纸（浅色/深色两套值，壁纸渐变色**不得外溢**到按钮/文字/页面）。
+- [x] 应用内主题偏好落地（2026-09-29：`data/AppearanceStore.kt`，外观页见 `docs/UI_PARITY_IOS.md` §4.11）。
+- [x] 聊天壁纸（2026-09-29：`ui/components/ChatWallpaper.kt`，只画在消息列表底下，不外溢）。
 - [ ] 正式启动图标（现为占位绿底气泡矢量图）。

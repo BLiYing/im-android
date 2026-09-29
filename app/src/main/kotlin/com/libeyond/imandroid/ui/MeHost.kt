@@ -71,6 +71,7 @@ fun MeHost(
             MePage.Privacy -> PrivacySecurityHost(client = client, onBack = { page = MePage.List })
             MePage.Qr -> QrCardHost(client = client, me = me, onBack = { page = MePage.List })
             MePage.Language -> LanguageHost(onBack = { page = MePage.List })
+            MePage.Appearance -> AppearanceHost(onBack = { page = MePage.List })
             MePage.Profile -> MyProfileHost(
                 client = client,
                 card = me,
@@ -93,6 +94,7 @@ fun MeHost(
                         onOpenFavorites = { page = MePage.Favorites },
                         onOpenCallHistory = { page = MePage.CallHistory },
                         onOpenLanguage = { page = MePage.Language },
+                        onOpenAppearance = { page = MePage.Appearance },
                         onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                         onLogout = { confirmLogout = true },
                     )

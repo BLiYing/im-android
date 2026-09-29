@@ -8,6 +8,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
+import com.libeyond.imandroid.data.ChatThemeId
 
 /**
  * 媒体地址补全用的服务器地址（`host:port` + 是否 TLS）。
@@ -62,14 +64,11 @@ object IMTheme {
 fun IMAppTheme(
     mode: IMThemeMode = IMThemeMode.System,
     appearance: IMAppearance = IMAppearance(),
+    chatTheme: ChatThemeId = ChatThemeId.CLASSIC,
     content: @Composable () -> Unit,
 ) {
-    val dark = when (mode) {
-        IMThemeMode.System -> isSystemInDarkTheme()
-        IMThemeMode.Light -> false
-        IMThemeMode.Dark -> true
-    }
-    val colors = if (dark) DarkIMColors else LightIMColors
+    val dark = isDarkFor(mode)
+    val colors = themedColors(if (dark) DarkIMColors else LightIMColors, chatTheme, dark)
 
     val m3 = if (dark) {
         darkColorScheme(
@@ -107,4 +106,29 @@ fun IMAppTheme(
     ) {
         MaterialTheme(colorScheme = m3, typography = IMTypography, content = content)
     }
+}
+
+/** 显示模式 → 此刻是否深色。`MainActivity` 用同一判据给系统栏图标选色，两边不会各算各的。 */
+@Composable
+fun isDarkFor(mode: IMThemeMode): Boolean = when (mode) {
+    IMThemeMode.System -> isSystemInDarkTheme()
+    IMThemeMode.Light -> false
+    IMThemeMode.Dark -> true
+}
+
+/**
+ * 把聊天主题叠到基础令牌上：**只替换**强调色、我方气泡、壁纸两端（UI_COLOR §5），
+ * 其余令牌（对方气泡、日期胶囊、已读勾……）保持中性。`accentSoft` 随强调色走 α12%（iOS 同）。
+ */
+fun themedColors(base: IMColors, theme: ChatThemeId, dark: Boolean): IMColors {
+    if (theme == ChatThemeId.CLASSIC) return base
+    val p = ChatPalettes.of(theme, dark)
+    val accent = Color(p.accent)
+    return base.copy(
+        accent = accent,
+        accentSoft = accent.copy(alpha = 0.12f),
+        bubbleMe = Color(p.bubbleMe),
+        wallpaperTop = Color(p.wallpaperTop),
+        wallpaperBottom = Color(p.wallpaperBottom),
+    )
 }

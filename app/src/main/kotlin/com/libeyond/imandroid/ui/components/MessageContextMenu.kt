@@ -83,9 +83,11 @@ fun MessageContextMenu(
     // 预览与原位逐像素重合）看上去就是"什么都没发生"，用户报的「发送端长按没有浮起效果」
     // 就是这个。对方消息当时反而"看着浮起来了"——那其实是预览漏了头像列、画偏了 36dp。
     // 两个毛病一个成因：预览没有自己的抬起表达。
-    val lift = remember { Animatable(0.94f) }
+    // 外观 ▸「动画」关掉时直接落到终态（iOS `IMAnimator.springPopIn` 同口径）
+    val animate = IMTheme.appearance.animationsEnabled
+    val lift = remember { Animatable(if (animate) 0.94f else 1.02f) }
     LaunchedEffect(Unit) {
-        lift.animateTo(1.02f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow))
+        if (animate) lift.animateTo(1.02f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow))
     }
 
     // 菜单高度按项数估算（每项 48 + 上下 8）——只用来判断"下方放不放得下"，

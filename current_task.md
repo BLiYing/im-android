@@ -7,6 +7,16 @@
 
 ## 当前焦点
 
+> **设置 ▸ 外观 ✅ 对照 iOS 全量落地（2026-09-29，分支 `feature/appearance`，未提交；OPPO PKD130 真机验过）**：
+> 四卡片逐行照抄 `IMAppearanceViewController`——14 主题 + 横向主题条 + 主题/壁纸网格（真实聊天缩略图）、
+> 夜间模式开关 + 跟随系统/浅色/深色、字号/信息框圆角滑块（拖动即生效、取消还原）、动画开关、四选一应用图标。
+> 偏好 `data/AppearancePrefs.kt`（纯函数）+ `AppearanceStore.kt`（SharedPreferences + StateFlow），配色
+> `ui/theme/ChatPalette.kt`（逐值抄 iOS），聊天壁纸 `ui/components/ChatWallpaper.kt`（此前 Android 聊天区是纯色），
+> 图标 = 清单四个 activity-alias + `ui/AppIconSwitcher.kt`（**退后台才切**：前台停用启动 alias 会被 ColorOS
+> 当场结束任务，真机踩到后改的）。`./scripts/test.sh` 999/999 绿（新增 `AppearancePrefsTest`/`ChatPaletteTest`
+> 13 例，均先看红过）。真机验了：主题实时变色、聊天页壁纸、字号拖动 + 取消、强制浅色 + 系统栏翻色、图标切换、还原、
+> 两个网格页。差异登记 `docs/UI_PARITY_IOS.md` §4.11。**没验**：纯色/渐变壁纸在聊天页的观感、OPPO 以外桌面的图标刷新。
+
 > **六条用户报告第 6 项：消息列表滚动条 ✅ 三端全部收口（2026-09-29）**：Android 本端早已有
 > `ChatScroll.kt` 的 `chatScrollbar`（Canvas 直绘）；Web 新补了常驻可见滑块（同思路的纯函数 +
 > DOM 直绘，见 im-web 仓 `9e531a4`）；iOS 实测原生 `UITableView` 指示器滑动时本就清晰可见，

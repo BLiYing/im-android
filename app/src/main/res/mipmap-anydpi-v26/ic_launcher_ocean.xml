@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 外观页「应用图标」备选（对齐 iOS AppIconOcean）：前景 = iOS 1024 图居中缩进 72dp 安全区，外圈补角落同色。 -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_ocean_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_ocean_foreground" />
+</adaptive-icon>
