@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import org.junit.Assert.assertEquals
@@ -95,5 +96,44 @@ class ForwardTest {
         assertNull(Forward.toggleTarget(full, "c10"))
         assertEquals(8, Forward.toggleTarget(full, "c3")?.size)
         assertEquals(1, Forward.toggleTarget(emptySet(), "c1")?.size)
+    }
+
+    // ——— 「添加例外」选择页过滤（NOTIFICATIONS_P1_DESIGN §2） ———
+
+    private fun conv(
+        id: String,
+        group: Boolean = false,
+        muted: Boolean = false,
+        peer: String = "",
+        title: String = id,
+    ) = ConversationEntity(ownerUid = "me", convId = id, isGroup = group, muted = muted, peerUid = peer, title = title)
+
+    @Test
+    fun `例外选择页只列这一页类型、还没免打扰的会话`() {
+        val list = listOf(
+            conv("private_unmuted", group = false, muted = false),
+            conv("private_muted", group = false, muted = true),
+            conv("group_unmuted", group = true, muted = false),
+        )
+        assertEquals(listOf("private_unmuted"), Forward.exceptionPickable(list, group = false, query = "").map { it.convId })
+        assertEquals(listOf("group_unmuted"), Forward.exceptionPickable(list, group = true, query = "").map { it.convId })
+    }
+
+    @Test
+    fun `例外选择页剔除系统通知会话`() {
+        val list = listOf(
+            conv("normal", group = false, muted = false, peer = "u1"),
+            conv("system", group = false, muted = false, peer = DetailActions.SYSTEM_UID),
+        )
+        assertEquals(listOf("normal"), Forward.exceptionPickable(list, group = false, query = "").map { it.convId })
+    }
+
+    @Test
+    fun `例外选择页按搜索词过滤`() {
+        val list = listOf(
+            conv("a", title = "张三"),
+            conv("b", title = "李四"),
+        )
+        assertEquals(listOf("a"), Forward.exceptionPickable(list, group = false, query = "张").map { it.convId })
     }
 }

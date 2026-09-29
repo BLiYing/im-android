@@ -77,6 +77,19 @@ object Forward {
                 ListSearch.matches(query, listOf(titleOf(c), c.peerUid))
         }
 
+    /**
+     * 「添加例外」选择页数据（NOTIFICATIONS_P1_DESIGN §2）：复用同一个选择页组件，
+     * 但过滤条件与转发不同——只列**这一页对应的类型**（私聊/群聊子页分开）、**还没免打扰**的
+     * （已经是例外的不用再选一次），系统通知会话同样排除。
+     */
+    fun exceptionPickable(convs: List<ConversationEntity>, group: Boolean, query: String): List<ConversationEntity> =
+        convs.filter { c ->
+            c.isGroup == group &&
+                !c.muted &&
+                !DetailActions.isSystemPeer(c.peerUid) &&
+                ListSearch.matches(query, listOf(titleOf(c), c.peerUid))
+        }
+
     /** 行上显示的名字。末级**不落内部 ID**（10 位随机数字对人没有意义，见 [DisplayName]）。 */
     fun titleOf(c: ConversationEntity): String =
         c.title.ifBlank { if (c.isGroup) DisplayName.UNNAMED_GROUP else DisplayName.UNNAMED }

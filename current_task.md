@@ -7,6 +7,43 @@
 
 ## 当前焦点
 
+> **通知与提示音 P1 第一批 ✅（2026-09-29，`feature/notif-p1a` 分支，未合入 main，未做真机验证）**：
+> `../IMServer/docs/design/NOTIFICATIONS_P1_DESIGN.md` 第一批——应用内横幅 + 「添加例外」，
+> 后端零改动，定时免打扰（第二批）本轮未动。
+> - **`alertDecision.banner`**：`data/AlertDecision.kt` 从「P0 恒 false」改为移动端分支
+>   `banner = settings.inApp.preview`（资格同 sound/vibrate，不受节流影响）。共用向量
+>   `alert_decision.json` **32 条**全绿（`app/src/test/resources/` 拷贝与 `IMServer/docs/conformance/`
+>   源逐字节一致，`resourceMatchesSourceOfTruthWhenPresent` 测试钉住这一点）。
+> - **应用内横幅新组件**：`ui/components/InAppBanner.kt`（`InAppBannerHost`，挂 `ui/MainScreen.kt`
+>   根 `Box` 最上层——不是 `AppRoot`，因为点横幅要用只存在于 `MainScreen` 的 `openConv` 导航状态）
+>   + `data/InAppBanner.kt`（`BannerContent`/`BannerFormat`/`InAppBannerStore`，纯数据层）。
+>   `data/IncomingAlert.kt` 在 `result.banner` 为真时调 `InAppBannerStore.show`。滑入 250ms/
+>   4 秒自动收/按住暂停计时（松手接着倒计时，不是重算满 4 秒）/上滑收起/点击进会话同一条路径
+>   （`MainScreen` 按 convId 在 `conversations` 里查会话）后自身收起/新横幅原地换内容重开计时/
+>   打开该会话自动收起（`LaunchedEffect(openConv)` 调 `dismissIfShowing`）/`animationsEnabled`
+>   关时无位移。头像/标题/正文口径与会话列表行、`ConversationPreview.of` 同源，不另写一套。
+> - **主页「应用内预览」真开关**：`NotificationSettingsScreen.kt` 占位行换 `IMSwitchRow`，
+>   组脚注换 `notif_in_app_preview_footer`。
+> - **「添加例外」**：`NotificationTypeScreen.kt` 例外组改常驻（撤销 P0 commit `82c1687`），
+>   组首绿色圆形 ＋「添加例外」行；点击复用 `ForwardPickerScreen.kt`（新增
+>   `filter`/`title`/`footer`/`emptyText`/`allowMulti`/`confirmSingleTap` 可选参数，原转发调用点
+>   零改动、行为逐字不变），单选、点一行直接免打扰（第一批=永久）并关闭。过滤纯函数
+>   `data/Forward.kt#exceptionPickable`（这一页类型 + 未免打扰 + 非系统通知会话），与既有
+>   `pickable` 并列。选择页是 `IMCardSheet`，自带 `BackHandler`，返回手势天然可用。
+> - **新增令牌**：`ui/theme/Tokens.kt` 加 `radiusBanner = 12.dp`。
+> - `./scripts/test.sh` **1022/1022 绿**（144 个测试类；新增/改动测试：`AlertDecisionTest`
+>   随 32 条向量、`ForwardTest` 新增 3 例 `exceptionPickable`、新文件 `InAppBannerTest` 7 例
+>   `BannerFormat`/`InAppBannerStore`，均先临时改坏实现确认变红过）。
+> - **未做真机验证**（Compose 手势/动画时序历来测不到，见 `CODING_STYLE.md` §八）：横幅出现/
+>   点击进会话/上滑收起/4 秒自动收/连发多条原地换内容/按住暂停计时/进入该会话自动收起/预览关
+>   显示「新消息」/「动画」关无位移/通话中不出；「添加例外」选择页选中后另一端 `conv_update`
+>   同步、`pinned_at`/`marked_unread` 是否原样带回。**deviation**：横幅正文的群聊"昵称:"前缀
+>   解析用 `nameOf = { null }`（数据层没有 Compose 好友表可查），会退回服务端昵称快照/uid，
+>   不带本地备注——`ConversationPreview.of` 既有退化路径，非新引入的缺口。`docs/UI_PARITY_IOS.md`
+>   已加 §4.13。
+> - **未做（第二批，非本轮范围）**：定时免打扰（时长菜单/`mute_until` 协议字段/`isMutedNow`）、
+>   Web 标签页角标（属 im-web 仓）。
+
 > **设置 ▸ 外观 ✅ 对照 iOS 全量落地（2026-09-29，已合入 main；OPPO PKD130 真机验过）**：
 > 四卡片逐行照抄 `IMAppearanceViewController`——14 主题 + 横向主题条 + 主题/壁纸网格（真实聊天缩略图）、
 > 夜间模式开关 + 跟随系统/浅色/深色、字号/信息框圆角滑块（拖动即生效、取消还原）、动画开关、四选一应用图标。
@@ -337,6 +374,10 @@
 
 ## 下一步
 
+0f. **通知与提示音 P1 第一批的真机验证 + 合并到 main**（2026-09-29 已实现，见「当前焦点」，
+   分支 `feature/notif-p1a` 尚未合并）：横幅出现/点击/上滑/自动收/按住暂停/连发替换/进入会话收起/
+   预览关文案/动画关无位移/通话中不出，「添加例外」选中后另一端同步与置顶/标记未读原样带回——
+   需要两台设备/两个账号互相发消息才能测全；验完再合并。
 0e. **设置 ▸ 最近通话页面的剩余验证**（基础展示/筛选/回拨已于 2026-09-29 真机验证过，见「当前焦点」）：
    滚动分页时序、「未接」tab 过滤后自动连续翻页的实际观感、`callEnded` 到达时重拉首页的画面表现、
    群聊行点击跳转会话是否正确、空状态/401/网络错误三态的文案与重试——需要至少两个测试账号互相拨打

@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.NotificationExceptions
 import com.libeyond.imandroid.data.NotificationNav
 import com.libeyond.imandroid.data.NotificationPage
@@ -24,6 +25,7 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.PushTransition
+import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
 import com.libeyond.imandroid.ui.screens.NotificationSettingsScreen
 import com.libeyond.imandroid.ui.screens.NotificationSoundScreen
 import com.libeyond.imandroid.ui.screens.NotificationTypeScreen
@@ -52,6 +54,9 @@ fun NotificationSettingsHost(
     }
     var confirmReset by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
+    /** 「添加例外」会话选择页是否敞开（NOTIFICATIONS_P1_DESIGN §2）——不是 push 链的一环，
+     *  是叠在 Type 页上的卡片弹层，同 `ChatDetailHost` 里 `sharing` 那一路的挂法。 */
+    var addExceptionOpen by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -72,6 +77,7 @@ fun NotificationSettingsHost(
                 onOpenType = { group -> kind = group; page = NotificationPage.Type },
                 onToggleInAppSound = { v -> NotificationSettingsStore.update(settings.copy(inApp = settings.inApp.copy(sound = v))) },
                 onToggleInAppVibrate = { v -> NotificationSettingsStore.update(settings.copy(inApp = settings.inApp.copy(vibrate = v))) },
+                onToggleInAppPreview = { v -> NotificationSettingsStore.update(settings.copy(inApp = settings.inApp.copy(preview = v))) },
                 onToggleBadge = { v -> NotificationSettingsStore.update(settings.copy(badge = settings.badge.copy(includeMuted = v))) },
                 onComingSoon = { toast = comingSoonHint },
                 onReset = { confirmReset = true },
@@ -85,6 +91,7 @@ fun NotificationSettingsHost(
                 onToggleEnabled = { v -> NotificationSettingsStore.update(settings.withType(kind) { it.copy(enabled = v) }) },
                 onTogglePreview = { v -> NotificationSettingsStore.update(settings.withType(kind) { it.copy(preview = v) }) },
                 onOpenSound = { page = NotificationPage.Sound },
+                onAddException = { addExceptionOpen = true },
                 onUnmute = { conv -> scope.launch { unmute(client, conv) } },
                 onOpenChat = onOpenChat,
                 onBack = { page = NotificationPage.Main },
@@ -111,6 +118,26 @@ fun NotificationSettingsHost(
         )
     }
 
+    // 「添加例外」会话选择页（NOTIFICATIONS_P1_DESIGN §2）：复用 ForwardPickerScreen，单选、
+    // 点了立即免打扰（第一批 = 永久，不弹时长菜单——那是第二批的事）。
+    if (addExceptionOpen) {
+        ForwardPickerScreen(
+            conversations = conversations,
+            filter = { convs, q -> Forward.exceptionPickable(convs, kind, q) },
+            title = stringResource(R.string.notif_exceptions_add),
+            footer = stringResource(if (kind) R.string.notif_exceptions_pick_footer_group else R.string.notif_exceptions_pick_footer_private),
+            emptyText = stringResource(R.string.notif_exceptions_pick_empty),
+            allowMulti = false,
+            confirmSingleTap = false,
+            onCancel = { addExceptionOpen = false },
+            onToast = { toast = it },
+            onConfirm = { targets ->
+                addExceptionOpen = false
+                targets.firstOrNull()?.let { conv -> scope.launch { muteAsException(client, conv) } }
+            },
+        )
+    }
+
     if (page == NotificationPage.Main) toast?.let { IMToast(it) { toast = null } }
 }
 
@@ -124,6 +151,19 @@ private suspend fun unmute(client: IMClient, conv: ConversationEntity) {
         client.conversationsApi.updateSettings(conv.convId, conv.pinnedAt, muted = false, conv.markedUnread)
     }.onFailure {
         log.w("unmute_failed", "convId" to conv.convId, "err" to it.javaClass.simpleName)
+    }
+    client.messages.refreshConversations()
+}
+
+/**
+ * 「添加例外」选中一个会话：立即设免打扰（第一批 = 永久）。同 [unmute] 的口径——
+ * `pinned_at`/`marked_unread` 原样带回，接口是整体替换。
+ */
+private suspend fun muteAsException(client: IMClient, conv: ConversationEntity) {
+    runCatching {
+        client.conversationsApi.updateSettings(conv.convId, conv.pinnedAt, muted = true, conv.markedUnread)
+    }.onFailure {
+        log.w("mute_exception_failed", "convId" to conv.convId, "err" to it.javaClass.simpleName)
     }
     client.messages.refreshConversations()
 }

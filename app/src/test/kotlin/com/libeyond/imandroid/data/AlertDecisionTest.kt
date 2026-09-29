@@ -18,7 +18,7 @@ import org.junit.Test
  * `docs/conformance/`，这里的 `src/test/resources/alert_decision.json` 是拷贝；真源在旁边时会比对，
  * 防漂移——同 `CallRecordTest` 的写法）。改规则先改向量。
  *
- * 31 条向量里 mobile / desktop / browser 三种 platform 都有，**全部跑**——本端虽然只在移动端
+ * 32 条向量里 mobile / desktop / browser 三种 platform 都有，**全部跑**——本端虽然只在移动端
  * 真正调用 [AlertDecision]，但它是三端共用的一份判定逻辑，desktop/browser 分支也要跟着测通，
  * 否则这份文件就不再是共用逻辑的忠实拷贝（见任务说明「桌面/浏览器向量也必须跑绿」）。
  */
