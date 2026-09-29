@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -74,18 +75,24 @@ private fun AttachCell(item: AttachItems.Item, onPick: (AttachItems.Kind) -> Uni
         Box(
             modifier = Modifier
                 .size(AttachItems.ITEM_SIZE.dp)
+                // 与面板本身（surface，一级表面）分层：方块是叠在它上面的卡片，补一层轻阴影
+                // 才有"按钮"的立体感——之前用 pageBackground 纯色块贴着 surface，两层灰度
+                // 太接近，显得扁平（用户反馈"图标好丑"，同 CallHistorySegment 选中态那颗
+                // 立体药丸用的是同一套 surfaceElevated + shadow 手法）。
+                .shadow(1.dp, RoundedCornerShape(12.dp))
                 .clip(RoundedCornerShape(12.dp))
-                .background(c.pageBackground)
+                .background(c.surfaceElevated)
                 .clickable { onPick(item.kind) },
             contentAlignment = Alignment.Center,
         ) {
             Image(
                 imageVector = iconOf(item.kind),
                 contentDescription = item.title,
-                modifier = Modifier.size(26.dp),
+                modifier = Modifier.size(28.dp),
                 // 未实现的项**不置灰**：置灰等于说「这里坏了」，而它只是还没做。
                 // 点进去给一句「还没做」比一个点不动的灰块清楚（同「我」页入口列表的做法）。
-                colorFilter = ColorFilter.tint(c.textSecondary),
+                // 用 textPrimary 而不是 textSecondary：方块底变亮后次要色线条太淡，衬不出图标。
+                colorFilter = ColorFilter.tint(c.textPrimary),
             )
         }
         Spacer(Modifier.height(6.dp))

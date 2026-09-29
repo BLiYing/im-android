@@ -7,6 +7,15 @@
 
 ## 当前焦点
 
+> **加号面板图标立体感优化 ✅（2026-09-29，用户反馈"图标好丑"，真机验证 OPPO PKD130）**：
+> `AttachCell` 圆钮原先用 `c.pageBackground` 纯色块贴着面板背景（`c.surface`），两层灰度太接近
+> 显得扁平。征求方向后走「保留单色、加立体感」（未引入每项一个颜色——`UI_COLOR.md` 是严格的
+> 语义化单色令牌体系，全 app 没有这个先例）：背景改 `c.surfaceElevated`，补 `shadow(1.dp,
+> RoundedCornerShape(12.dp))`（同 `CallHistorySegment` 选中态那颗立体药丸的手法）；图标
+> 26→28dp、色调 `textSecondary`→`textPrimary` 补对比度（底变亮后次要色线条太淡）。iOS
+> `IMChatViewController+Media.m` 同批改（`surfaceElevated` + 轻阴影）。`./scripts/test.sh`
+> 986/986 绿。**真机验证 ✅**：截图确认方块与面板背景可辨、有明显阴影。
+
 > **六条用户报告第 5 项：加号面板去掉音视频占位 ✅（2026-09-29，真机验证，OPPO PKD130）**：
 > `AttachItems.Kind.AudioVideo` 一直是打不通的占位——点了只弹"音视频通话还没做"的吐司，而呼叫/
 > 视频早已在聊天详情页（`ChatDetailHost`/`showsMessagePill` 那条链路）真正接通，面板这颗反而
