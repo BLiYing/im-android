@@ -665,7 +665,7 @@ Android：`ui/AppearanceHost.kt` + `ui/screens/Appearance{Screen,Preview,GridScr
 | 滑块页呈现 | 模态全屏 | push 转场，左右键同（取消 / 设置），系统返回 = 取消 | 🟢 |
 | 「动画」开关管什么 | toast 弹出 + 点按回弹 | 消息长按菜单的抬起弹簧（本端 toast 本就无弹出动效） | ✅ 口径同：弹出类动效，触感不受影响 |
 | 应用图标切换时机 | 立即（系统弹提示） | 选中即显示，**退到后台才真正切**：前台停用启动它的 alias，ColorOS 会当场结束任务、退回桌面（真机实测） | 🟢 |
-| 老版本升级后的桌面快捷方式 | —（iOS 无此问题） | 启动入口从 `MainActivity` 挪到 `.LauncherDefault` alias：升级前已固定在桌面的图标，部分桌面会失效、需从抽屉重新拖出（/code-review 2026-09-29 指出）。彻底解法是把 Activity 类改名、让默认 alias 沿用 `.MainActivity` 这个组件名；开发期无正式用户，暂不做 | 🔴 发版前处理 |
+| 老版本升级后的桌面快捷方式 | —（iOS 无此问题） | 启动入口从 `MainActivity` 挪到 `.LauncherDefault` alias：升级前已固定在桌面的图标，部分桌面会失效、需从抽屉重新拖出（/code-review 2026-09-29 指出）。只影响「装过无 alias 的旧版本并钉了桌面图标」的人；**安卓从未对外发过包（2026-09-29 用户确认），首发即带 alias，正式用户不会遇到，不修**。开发/测试机遇到就从抽屉重新拖一次。⚠️ **首发后 alias 名（尤其 `.LauncherDefault`）与 `MainActivity` 类名都不可再改**，否则同样的问题会在真实用户身上重演 | ⚪ 不需处理（首发前无旧用户） |
 | 应用图标「系统不支持」提示 | `appearance.icon.unsupported` | 不需要（activity-alias 全版本可用），失败只记日志 | 🟢 |
 | 主题条选中项进场可见 | 不滚，选了靠后的主题回来看不到 | 进场滚到选中项 | 🟢 |
 | 系统栏图标明暗 | 跟 `overrideUserInterfaceStyle` | 按 App 显示模式判（`MainActivity.applySystemBars`），强制浅/深色时不再黑字压黑底 | ✅ |

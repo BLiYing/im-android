@@ -63,6 +63,8 @@
           桌面入口 = 四个 activity-alias，同一时刻只启用一个（外观页「应用图标」，对齐 iOS
           setAlternateIconName）。切换逻辑见 ui/AppIconSwitcher.kt；alias 名是持久化的一部分，
           **改名 = 用户选的图标丢失**。MainActivity 本身不再带 LAUNCHER，否则桌面会多出一个图标。
+          **首发后 alias 名与 MainActivity 类名都不可再改**：用户钉在桌面的快捷方式记的是组件名，改了就失效
+          （见 docs/UI_PARITY_IOS.md §4.11）。
         -->
         <activity-alias
             android:name=".LauncherDefault"
