@@ -1,0 +1,129 @@
+package com.libeyond.imandroid.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.NotificationExceptions
+import com.libeyond.imandroid.data.NotificationNav
+import com.libeyond.imandroid.data.NotificationPage
+import com.libeyond.imandroid.data.NotificationSettingsStore
+import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.data.withType
+import com.libeyond.imandroid.sdk.AlertPlayer
+import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.ui.components.IMConfirmDialog
+import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.PushTransition
+import com.libeyond.imandroid.ui.screens.NotificationSettingsScreen
+import com.libeyond.imandroid.ui.screens.NotificationSoundScreen
+import com.libeyond.imandroid.ui.screens.NotificationTypeScreen
+import kotlinx.coroutines.launch
+
+private val log = IMLog.tag("IM.NotifUi")
+
+/**
+ * 「通知与提示音」接线层（NOTIFICATIONS_DESIGN 全篇）：主页 + 私聊/群聊子页 + 提示音选择页，
+ * 内部用 [NotificationPage] 自成一条 push 链（同 `ChatDetailHost`/`GroupInfoHost` 的做法），
+ * 不占用外层 `MePage` 的深度——外层只需要知道"打开/关闭整个通知设置"这一件事。
+ */
+@Composable
+fun NotificationSettingsHost(
+    client: IMClient,
+    onOpenChat: (ConversationEntity) -> Unit,
+    onBack: () -> Unit,
+) {
+    var page by remember { mutableStateOf(NotificationPage.Main) }
+    /** 当前 Type/Sound 子页是关于私聊还是群聊——与 [page] 是两个独立维度，见 `data/NotificationNav.kt`。 */
+    var kind by remember { mutableStateOf(false) }
+
+    BackHandler {
+        val prev = NotificationNav.back(page)
+        if (prev != null) page = prev else onBack()
+    }
+    var confirmReset by remember { mutableStateOf(false) }
+    var toast by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val settings by NotificationSettingsStore.settings.collectAsState()
+    val owner = client.uid.orEmpty()
+    val conversations by remember(owner) { client.repo.observeConversations(owner) }.collectAsState(initial = emptyList())
+    val hasVibrator = remember { AlertPlayer.hasVibrator(context) }
+    val comingSoonHint = stringResource(R.string.ps_coming_soon_hint)
+
+    // 离开提示音选择页（回类型页 / 直接退出整条链）就停掉可能还在响的试听（§2.4「返回时停止试听」）
+    LaunchedEffect(page) { if (page != NotificationPage.Sound) AlertPlayer.stopPreview() }
+
+    PushTransition(targetState = page, depthOf = { it.depth }) { p ->
+        when (p) {
+            NotificationPage.Main -> NotificationSettingsScreen(
+                settings = settings,
+                hasVibrator = hasVibrator,
+                onOpenType = { group -> kind = group; page = NotificationPage.Type },
+                onToggleInAppSound = { v -> NotificationSettingsStore.update(settings.copy(inApp = settings.inApp.copy(sound = v))) },
+                onToggleInAppVibrate = { v -> NotificationSettingsStore.update(settings.copy(inApp = settings.inApp.copy(vibrate = v))) },
+                onToggleBadge = { v -> NotificationSettingsStore.update(settings.copy(badge = settings.badge.copy(includeMuted = v))) },
+                onComingSoon = { toast = comingSoonHint },
+                onReset = { confirmReset = true },
+                onBack = onBack,
+            )
+
+            NotificationPage.Type -> NotificationTypeScreen(
+                group = kind,
+                settings = settings.let { if (kind) it.group else it.private },
+                exceptions = NotificationExceptions.of(conversations, kind),
+                onToggleEnabled = { v -> NotificationSettingsStore.update(settings.withType(kind) { it.copy(enabled = v) }) },
+                onTogglePreview = { v -> NotificationSettingsStore.update(settings.withType(kind) { it.copy(preview = v) }) },
+                onOpenSound = { page = NotificationPage.Sound },
+                onUnmute = { conv -> scope.launch { unmute(client, conv) } },
+                onOpenChat = onOpenChat,
+                onBack = { page = NotificationPage.Main },
+            )
+
+            NotificationPage.Sound -> NotificationSoundScreen(
+                current = settings.let { if (kind) it.group.sound else it.private.sound },
+                onSelect = { sound ->
+                    NotificationSettingsStore.update(settings.withType(kind) { it.copy(sound = sound) })
+                    AlertPlayer.preview(sound)
+                },
+                onBack = { page = NotificationPage.Type },
+            )
+        }
+    }
+
+    if (confirmReset) {
+        IMConfirmDialog(
+            title = stringResource(R.string.notif_reset_confirm_title),
+            message = stringResource(R.string.notif_reset_confirm_message),
+            confirmText = stringResource(R.string.notif_reset),
+            onConfirm = { NotificationSettingsStore.reset() },
+            onDismiss = { confirmReset = false },
+        )
+    }
+
+    if (page == NotificationPage.Main) toast?.let { IMToast(it) { toast = null } }
+}
+
+/**
+ * 「例外」列表左滑「取消免打扰」。**必须把现有的 `pinned_at`/`marked_unread` 原样带回**——
+ * 接口是整体替换，漏传一项等于把它清零（同 `MainScreen.settings` 的口径，iOS
+ * `IMChatDetailViewController+Actions` 踩过这个坑）。
+ */
+private suspend fun unmute(client: IMClient, conv: ConversationEntity) {
+    runCatching {
+        client.conversationsApi.updateSettings(conv.convId, conv.pinnedAt, muted = false, conv.markedUnread)
+    }.onFailure {
+        log.w("unmute_failed", "convId" to conv.convId, "err" to it.javaClass.simpleName)
+    }
+    client.messages.refreshConversations()
+}

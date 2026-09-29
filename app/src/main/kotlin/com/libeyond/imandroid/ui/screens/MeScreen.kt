@@ -81,6 +81,7 @@ fun MeScreen(
     onOpenPrivacy: () -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenCallHistory: () -> Unit,
+    onOpenNotifications: () -> Unit,
     onOpenLanguage: () -> Unit,
     /** 语言行右值，如「跟随系统（简体中文）」——由调用方算好传入（[com.libeyond.imandroid.data.LanguageStore]）。 */
     languageLabel: String,
@@ -114,7 +115,7 @@ fun MeScreen(
             MeRow(shareCard, Lucide.IdCard, ic.teal) { onComingSoon(shareCard) },
         ),
         listOf(
-            MeRow(notifications, Lucide.Bell, ic.red) { onComingSoon(notifications) },
+            MeRow(notifications, Lucide.Bell, ic.red, onClick = onOpenNotifications),
             MeRow(privacy, Lucide.Lock, ic.gray, onClick = onOpenPrivacy),
             MeRow(dataStorage, Lucide.HardDrive, ic.green, onClick = onOpenDataStorage),
             MeRow(appearance, Lucide.Contrast, ic.blue) { onComingSoon(appearance) },

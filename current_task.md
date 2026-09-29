@@ -7,6 +7,43 @@
 
 ## 当前焦点
 
+> **设置 ▸ 通知与提示音 P0 ✅（2026-09-29，`feature/notifications` 分支，未提交，未真机验证）**：
+> `../IMServer/docs/design/NOTIFICATIONS_DESIGN.md` P0 落地——`MeScreen` 组二「通知」行从
+> `onComingSoon` 换成真正的 `ui/NotificationSettingsHost.kt`（内部 `NotificationPage` 自成一条
+> push 链：主页 → 私聊/群聊子页 → 提示音选择页，不占用外层 `MePage` 深度）。
+> - **模型/存储**：`data/NotificationSettings.kt`（纯模型 + `NotificationSettingsCodec` 逐键回落默认值）
+>   + `data/NotificationSettingsStore.kt`（SharedPreferences `im_notifications` + StateFlow，镜像
+>   `LanguageStore`，设备本地退出登录不清）。
+> - **判定**：`data/AlertDecision.kt` 三端共用 `alertDecision` 纯函数，mobile/desktop/browser
+>   三个平台分支全部实现（虽然本端只在移动端调用），单测 `AlertDecisionTest` 直接读
+>   `IMServer/docs/conformance/alert_decision.json` 30 条向量全过。
+> - **播放**：`sdk/AlertPlayer.kt`（`SoundPool` + `USAGE_NOTIFICATION_COMMUNICATION_INSTANT`，查
+>   `AudioManager.ringerMode`：非 NORMAL 不响、`SILENT` 连振动也停——比设计文档字面更保守一档，
+>   本端解读；`Vibrator` 40ms 一次性振动，`VIBRATE` 权限已加清单）。
+> - **接线**：`data/IncomingAlert.kt`（新文件，避免 `MessageService.kt` 破 600 行）挂在 `NEW_MSG`
+>   分支——**只有这一条实时路径**会调判定，sync/window 补拉不经过。`viewingConv`/`appActive` 用
+>   `data/ViewingConv.kt`/`data/AppActive.kt` 两个极简全局标记（`MainScreen`/`MainActivity` 写，
+>   `data/` 层只读，不反向依赖 UI）；`inCall` 读新增的 `RtcCall.inCall: StateFlow<Boolean>`
+>   （挂在 `onCallReceived`/`onCallBegin` → 置真，`onCallEnd`/`stop()` → 置假）。
+> - **角标**：`data/TabUnread.kt` 加 `includeMuted` 入参（默认 false = 现行口径），`MainScreen.kt`
+>   接「角标计数 ▸ 包含免打扰会话」。`TabUnreadTest` 补 3 例。
+> - **已知限制**：① 本地还没有这个会话行的第一条消息不提醒（宁可漏一条也不猜 `muted`/会话类型，
+>   见 `IncomingAlert` 类注释）；② `inCall` 只有「响铃/接通→挂断」粗粒度，不追踪更细子状态；
+>   ③ Android 不出「桌面通知」那组（`NotificationSettings.desktop` 字段只为让 `AlertDecision`
+>   单测覆盖桌面/浏览器向量，不接 UI、不持久化）。
+> - `./scripts/test.sh` **999/999 绿**（141 个测试类，新增 13 例：`AlertDecisionTest` 2 例读
+>   30 条向量、`NotificationSettingsTest` 5 例、`NotificationExceptionsTest` 3 例、`TabUnreadTest`
+>   补 3 例；四组新测试均先见红一次——临时改坏 `AlertDecision.decide`/`NotificationSettingsCodec.decode`/
+>   `TabUnread.count` 确认变红，再改回来）。**真机验证 ✅（OPPO PKD130，user1001）**：主页/私聊子页/
+>   群聊子页/提示音选择页四屏截图与设计稿一致；开关持久化（`shared_prefs/im_notifications.xml` 逐次核对）；
+>   提示音选择即试听（logcat 见 `AudioTrack` 创建，确认真的出声）；重置弹二次确认、确认后全部恢复默认；
+>   免打扰群聊「libeyond群」正确出现在群聊例外列表，左滑「取消免打扰」后立即从列表消失、会话列表的
+>   免打扰铃铛图标同步消失（`PUT settings` 往返成功，`pinned_at`/`marked_unread` 原样带回）；全程
+>   logcat 无 crash/FATAL。**未测**：`includeMuted` 对角标计数的真机可见效果（没有现成的"免打扰+未读"
+>   会话可复现）、来消息时的完整响铃/振动链路（需要第二台设备/账号发消息触发 `IncomingAlert`，本轮
+>   只验证了设置页与试听两条路径）。缺失 i18n key：无（49 个 `notif_*` key 已够用）。
+>   `docs/UI_PARITY_IOS.md` 已加 §4.12。
+
 > **六条用户报告第 6 项：消息列表滚动条 ✅ 三端全部收口（2026-09-29）**：Android 本端早已有
 > `ChatScroll.kt` 的 `chatScrollbar`（Canvas 直绘）；Web 新补了常驻可见滑块（同思路的纯函数 +
 > DOM 直绘，见 im-web 仓 `9e531a4`）；iOS 实测原生 `UITableView` 指示器滑动时本就清晰可见，

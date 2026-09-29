@@ -9,12 +9,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.libeyond.imandroid.data.AppActive
 import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.ui.AppRoot
 import androidx.compose.runtime.CompositionLocalProvider
 import com.libeyond.imandroid.ui.theme.IMAppTheme
 import com.libeyond.imandroid.ui.theme.LocalMediaHost
 import com.libeyond.imandroid.ui.theme.MediaHost
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
@@ -43,6 +45,19 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 client.wake("foreground")
+            }
+        }
+
+        // 通知判定 alertDecision 的 appActive 输入（NOTIFICATIONS_DESIGN §3.1）：本 App 只有一个
+        // Activity，拿它的 RESUMED 区间当"前台"的代理——见 data/AppActive.kt 类注释。
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                AppActive.current = true
+                try {
+                    awaitCancellation()
+                } finally {
+                    AppActive.current = false
+                }
             }
         }
 

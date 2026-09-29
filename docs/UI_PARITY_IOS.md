@@ -635,6 +635,49 @@ iOS：`Modules/Conversation/IMConversationListViewController.m`（`plusTapped:` 
 
 ---
 
+## 4.12 通知与提示音（2026-09-29，P0，**未真机手测**）
+
+设计：`../IMServer/docs/design/NOTIFICATIONS_DESIGN.md`（§2.2/§2.3/§2.4 页面结构，§3 行为，§3.7 默认值）
++ UX 稿 `sketches/NOTIFICATIONS_UX_SKETCH.html`。**iOS 这一页本轮未开工**（`IMNotificationSettingsViewController`
+等尚不存在，`IMSettingsViewController` 那一行仍是 `comingSoon:`）——Android 是三端里第一个落地的，
+下表「iOS」列写的是设计文档给两端定的**目标结构**（Android 已按它逐行照做），不是对已存在代码的比对；
+等 iOS 真正开工后，这一节要回来把「目标」换成「iOS 实际做了什么」。
+Android：`ui/NotificationSettingsHost.kt` + `ui/screens/NotificationSettingsScreen.kt` /
+`NotificationTypeScreen.kt` / `NotificationSoundScreen.kt`，判据在 `data/NotificationSettings.kt` /
+`data/AlertDecision.kt` / `data/NotificationExceptions.kt`。
+
+**动手前抄下来的结构清单**：
+
+- **主页三组 + 一个占位组 + 重置**（§2.2）：消息通知（私聊/群聊两行，右值「开 · 默认」/「关」）；
+  应用内通知（应用内提示音/振动两个真开关 + 应用内预览灰置占位行，P1）；角标计数（包含免打扰会话）；
+  锁屏与后台通知（显示通知/通知权限两行灰置，整组 P2，等 M5 推送）；重置所有通知设置（红字单独一组）。
+  灰置口径沿用 §4.9 隐私与安全那条：标题降一档、右值「即将上线」、chevron 保留、点了吐司。
+- **类型子页两组 + 例外**（§2.3，私聊/群聊共用同一份 Compose 结构，只换标题/空态文案/过滤类型）：
+  显示通知/消息预览两个开关（关显示通知时消息预览灰置且**禁用**，不是只灰不禁——本端对这一点的解读，
+  见下表判定行）；提示音一行 push 到选择页；例外列表 = 本机会话表 `muted=true` 且类型匹配的会话，
+  按最后消息时间倒序，行右值「免打扰」/「免打扰 · @我仍提醒」，**左滑「取消免打扰」**（复用
+  `PUT /conversations/{id}/settings`，原样带回 `pinned_at`/`marked_unread`），点行进该会话。
+- **提示音选择页**（§2.4）：无/默认/和弦/叮咚/上扬/水滴六项，选中态右侧 √（同 `LanguageScreen` 的画法，
+  不是 iOS 惯用的整行打勾+chevron 混排），点一下即选中并试听一次，返回时停止试听。
+- **`alertDecision` 判定**：三端共用向量 `IMServer/docs/conformance/alert_decision.json`（30 条），
+  Android 的 `data/AlertDecision.kt` 把 mobile/desktop/browser 三个平台分支**都**实现了（虽然本端只在
+  移动端分支真正调用），保持与向量文件的忠实对应。
+
+| 项 | iOS（设计目标） | Android | 判定 |
+|---|---|---|---|
+| 页面结构、分组顺序、文案 key | NOTIFICATIONS_DESIGN §2.2/§2.3/§2.4 | 逐行照抄（如上清单） | ✅ |
+| 提示音播放 | `AudioServicesPlaySystemSound`，天然遵守静音键 | `SoundPool` + `AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT`，手动查 `AudioManager.ringerMode`（非 NORMAL 不响） | 🟡 平台机制不同，效果一致 |
+| 振动 | `UIImpactFeedbackGenerator(.light)`，未开系统触感自动吞掉 | `Vibrator.vibrate(createOneShot(40ms, DEFAULT_AMPLITUDE))`，`VIBRATE` 权限（普通权限，无弹窗） | 🟡 平台机制不同 |
+| 静音模式下振动是否也停 | 未定义在设计文档（iOS 无「静音又不让振」这一档，系统只有响/不响） | **本端解读**：`RINGER_MODE_SILENT` 时振动也一并停（比设计文档字面「非 NORMAL 不响」更保守一档，理由是「静音」用户预期通常连振动一起不要） | 🟢 刻意，见 `sdk/AlertPlayer.kt` 类注释 |
+| 应用内振动行何时不画 | 设备不支持触感时整行不画 | 有振动器（`AlertPlayer.hasVibrator`）才画该行 | ✅ 判据对应但取信号不同（硬件能力 vs 触感能力），效果一致 |
+| 消息预览开关在类型关闭时 | 「灰置但保留」，未明说是否禁用交互 | 灰置**且禁用**（`IMSwitchRow(enabled=false)`）——本端判定「显示通知关了，预览开关本身没有意义可言」 | 🟢 刻意，见 `NotificationTypeScreen.kt` 类注释；提示音行**只灰不禁**（保留可点，方便提前选好） |
+| 例外列表左滑 | 未画（iOS 用 `UISwipeActionsConfiguration`，效果同） | `SwipeActionRow`（本仓自绘，同 `BlockedUsersScreen` 「取消屏蔽」一致的手法） | ✅ |
+| 桌面通知那一组（§2.5） | 不适用（该组只在 Web/Electron） | 不画——Android 主页没有这一组，`NotificationSettings.desktop` 字段只为让 `AlertDecision` 单测能覆盖桌面/浏览器向量，不接 UI、不持久化 | 🟢 刻意，平台范围不同 |
+| 应用内预览（横幅） | P1，本设计文档明确排除 P0 | 同（灰置占位行，点了吐司） | ✅ |
+| 锁屏/后台通知、应用图标角标 | P2，等 M5 推送 | 同（灰置占位组） | ✅ |
+
+---
+
 ## 5. 为什么会漂这么远（2026-09-08 复盘）
 
 用户问：「不是严格按照 iOS UI 来参照吗，为什么差这么多？」——这一节是答案，
