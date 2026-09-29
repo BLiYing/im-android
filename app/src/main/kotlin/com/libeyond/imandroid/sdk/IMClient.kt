@@ -17,6 +17,7 @@ import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.data.DownloadSettings
 import com.libeyond.imandroid.data.DownloadSettingsStore
+import com.libeyond.imandroid.data.InAppBannerStore
 import com.libeyond.imandroid.data.MediaCache
 import com.libeyond.imandroid.data.MediaDownloader
 import com.libeyond.imandroid.data.ThumbBackfill
@@ -344,11 +345,16 @@ class IMClient(context: Context) {
      * ownerUid 隔离）。真要清是「删除账号数据」那个独立功能，不是退出登录。
      *
      * 自动下载策略**要清**：它是账号级的，下一个登录的账号在拉到自己的之前不能沿用上一个人的。
+     *
+     * 应用内横幅**也要清**（同一条理由）：`InAppBannerStore` 是进程级单例，本账号来消息时
+     * 显示的横幅在退出登录那一刻若还挂着，不清的话下一个账号登进同一个进程会先看见上一个人的
+     * 会话标题/头像/消息摘要——`/code-review` 抓出的跨账号横幅泄露（2026-09-29）。
      */
     suspend fun logout() {
         socket.disconnect()
         tokens.logout()
         downloadSettingsStore.forget()
+        InAppBannerStore.dismiss()
     }
 
     /** 网络恢复 / 回到前台。 */

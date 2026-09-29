@@ -106,6 +106,10 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     val conversations by remember(owner) {
         if (owner.isEmpty()) emptyFlow() else client.repo.observeConversations(owner)
     }.collectAsState(initial = null)
+    // 应用内横幅点击按 convId 查会话：O(1) 查表，同 `Forward.kt#targetsInOrder`/`FavoritesHost`/
+    // `CallHistoryHost` 既有的 `associateBy { it.convId }` 手法，别在导航这条热路径上现扫一遍全表
+    // （`/code-review` 抓出的效率点）。
+    val conversationsById = remember(conversations) { conversations.orEmpty().associateBy { it.convId } }
 
     val connState by client.socket.state.collectAsState()
     // 底栏「消息」蓝点：与会话行同一份数据现算，口径见 TabUnread（三端同口径）。
@@ -240,7 +244,11 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
             }
         }
         InAppBannerHost(
-            onOpen = { convId -> conversations.orEmpty().firstOrNull { it.convId == convId }?.let { openConv = it } },
+            onOpen = { convId ->
+                val conv = conversationsById[convId]
+                if (conv != null) openConv = conv
+                conv != null
+            },
         )
     }
 }

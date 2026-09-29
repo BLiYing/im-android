@@ -47,6 +47,26 @@
 >   `onOpen`/`onDismiss` 传进去——手势协程只在首次组合时启动、不随新横幅重启，点被替换后的横幅会
 >   打开上一条横幅的会话（同 `PassThroughTap.kt` 类注释记的坑）。已用 `rememberUpdatedState` 补上
 >   （提交 `8bb30dd`）。
+> - **`/code-review medium` 抓出并已修的 3 条（2026-09-29）**：
+>   ① `IMClient.logout()` 没清 `InAppBannerStore`——它是进程级单例，账号 A 来消息挂着横幅时退出
+>   登录、账号 B 在同一进程登进来会先看见 A 的会话标题/头像/摘要（跨账号泄露）；`logout()` 补一行
+>   `InAppBannerStore.dismiss()`，与它旁边 `downloadSettingsStore.forget()` 同一条纪律（账号级状态
+>   必须清）。
+>   ② `NotificationSettingsHost.kt` 的 `conversations` 用 `collectAsState(initial = emptyList())`，
+>   「添加例外」选择页在本地库还没回第一份时会抢答"没有可添加的会话"（闪一下空态）——改成
+>   `initial = null`（同 `MainScreen.kt` 既有判据），`conversations == null` 时不传 `emptyText`。
+>   ③ `InAppBannerHost` 的 `onOpen` 原先点了就无条件 `dismiss()` 再回调，若 `MainScreen` 那份
+>   `conversations` 流还没收敛到刚建好的会话（横幅弹出只看本地 `ConversationEntity` 是否已入库，
+>   两处时机不保证一致），会是一次死点击——横幅消失但没跳转。改成 `onOpen: (String) -> Boolean`，
+>   查不到就不收起，用户能再点一次；`MainScreen` 顺手把查表从 `firstOrNull` 改成
+>   `remember(conversations) { associateBy { it.convId } }`（同一条 review 顺手指出的 O(n)→O(1)，
+>   与 `Forward.kt`/`FavoritesHost`/`CallHistoryHost` 既有手法一致）。
+>   **未采纳的 2 条**（有意保留，非疏漏）：④「应用内通知」组脚注从通用文案换成
+>   `notif_in_app_preview_footer` 后不再解释 sound/vibrate 两个开关——这是设计文档 §1.3 原文
+>   明确指定的替换（"组脚注换成 notif.in_app.preview_footer"），不是本端自选；⑤ `muteAsException`
+>   失败只写日志不 toast——与同文件里的 `unmute`、`MainScreen.kt` 的 `ConversationMenu`（pin/mute/
+>   markRead 走同一个 `runCatching` 套路、甚至**不落日志**）是同一个仓库级既有模式，单独给新代码
+>   补 toast 会造成新旧行为不一致，留给专门收口这类静默失败的后续任务一起做。
 
 > **设置 ▸ 外观 ✅ 对照 iOS 全量落地（2026-09-29，已合入 main；OPPO PKD130 真机验过）**：
 > 四卡片逐行照抄 `IMAppearanceViewController`——14 主题 + 横向主题条 + 主题/壁纸网格（真实聊天缩略图）、

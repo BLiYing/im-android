@@ -54,10 +54,13 @@ private const val SLIDE_MS = 250
  * 见 `ui/MainScreen.kt` 里的接线注释），订阅 [InAppBannerStore.current] 自己画自己收。
  *
  * @param onOpen 点击/唤起该会话——与点会话列表行同一条导航路径，由调用方决定"同一路径"具体是什么
- *   （`MainScreen` 传的是 `openConv = conversations.find { it.convId == convId }`）。
+ *   （`MainScreen` 按 convId 查表后 `openConv = it`）。**返回是否真的找到并跳转了**：横幅弹出的
+ *   时机只看本地 `ConversationEntity` 是否已入库（`IncomingAlert.handle`），跟 `MainScreen` 自己
+ *   收集的会话流是否已经收敛到这一条是两件事——真有这个极窄的竞态时，返回 false 不收起横幅，
+ *   用户能再点一次，不是一次死点击（`/code-review` 抓出）。
  */
 @Composable
-fun InAppBannerHost(onOpen: (String) -> Unit) {
+fun InAppBannerHost(onOpen: (String) -> Boolean) {
     val current by InAppBannerStore.current.collectAsState()
     // AnimatedVisibility 退场那一下 current 已经是 null 了，得记住"最后一条"才能让滑出动画
     // 带着内容走，而不是瞬间变空白再滑走。
@@ -81,7 +84,7 @@ fun InAppBannerHost(onOpen: (String) -> Unit) {
         shown?.let { c ->
             BannerCard(
                 content = c,
-                onOpen = { InAppBannerStore.dismiss(); onOpen(c.convId) },
+                onOpen = { if (onOpen(c.convId)) InAppBannerStore.dismiss() },
                 onDismiss = InAppBannerStore::dismiss,
             )
         }

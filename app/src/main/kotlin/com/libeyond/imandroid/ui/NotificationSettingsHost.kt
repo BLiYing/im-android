@@ -62,7 +62,10 @@ fun NotificationSettingsHost(
     val scope = rememberCoroutineScope()
     val settings by NotificationSettingsStore.settings.collectAsState()
     val owner = client.uid.orEmpty()
-    val conversations by remember(owner) { client.repo.observeConversations(owner) }.collectAsState(initial = emptyList())
+    // 初值 null（不是 emptyList()）= 本地库还没回第一份，同 `MainScreen.kt` 的既有判据——
+    // 「添加例外」选择页的空态文案要能分清"还没读到数据"和"读到了、真的没有可选会话"，
+    // 用 emptyList() 当初值会在库还没回数据时就抢答"没有可添加的会话"（`/code-review` 抓出）。
+    val conversations by remember(owner) { client.repo.observeConversations(owner) }.collectAsState(initial = null)
     val hasVibrator = remember { AlertPlayer.hasVibrator(context) }
     val comingSoonHint = stringResource(R.string.ps_coming_soon_hint)
 
@@ -87,7 +90,7 @@ fun NotificationSettingsHost(
             NotificationPage.Type -> NotificationTypeScreen(
                 group = kind,
                 settings = settings.let { if (kind) it.group else it.private },
-                exceptions = NotificationExceptions.of(conversations, kind),
+                exceptions = NotificationExceptions.of(conversations.orEmpty(), kind),
                 onToggleEnabled = { v -> NotificationSettingsStore.update(settings.withType(kind) { it.copy(enabled = v) }) },
                 onTogglePreview = { v -> NotificationSettingsStore.update(settings.withType(kind) { it.copy(preview = v) }) },
                 onOpenSound = { page = NotificationPage.Sound },
@@ -122,11 +125,14 @@ fun NotificationSettingsHost(
     // 点了立即免打扰（第一批 = 永久，不弹时长菜单——那是第二批的事）。
     if (addExceptionOpen) {
         ForwardPickerScreen(
-            conversations = conversations,
+            conversations = conversations.orEmpty(),
             filter = { convs, q -> Forward.exceptionPickable(convs, kind, q) },
             title = stringResource(R.string.notif_exceptions_add),
             footer = stringResource(if (kind) R.string.notif_exceptions_pick_footer_group else R.string.notif_exceptions_pick_footer_private),
-            emptyText = stringResource(R.string.notif_exceptions_pick_empty),
+            // 本地库还没回第一份（conversations == null）时不抢答"没有可添加的会话"——
+            // 那一刻其实"还不知道"，不是"知道了、真的没有"（同 ForwardPickerScreen 自己的
+            // query 判据："还没读到库里的数据时不能抢答，闪一下空态"）。
+            emptyText = if (conversations == null) "" else stringResource(R.string.notif_exceptions_pick_empty),
             allowMulti = false,
             confirmSingleTap = false,
             onCancel = { addExceptionOpen = false },
