@@ -220,5 +220,10 @@ data class ConversationEntity(
     val syncedConvSeq: Long = 0,
     val pinnedAt: Long = 0,
     val muted: Boolean = false,
+    /**
+     * 定时免打扰到期毫秒（0=永久或未免打扰，第二批 NOTIFICATIONS_P1_DESIGN §5）。
+     * ⚠️ **判「是否免打扰」不要直接读 [muted]**，一律走 `data/MuteState.isMutedNow(muted, muteUntil, now)`。
+     */
+    val muteUntil: Long = 0,
     val markedUnread: Boolean = false,
 )

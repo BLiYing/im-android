@@ -56,4 +56,20 @@ class TabUnreadTest {
         assertEquals(7, TabUnread.count(listOf(conv("a", unread = 3), conv("b", unread = 4)), includeMuted = true))
         assertEquals(0, TabUnread.count(listOf(conv("a", marked = true)), includeMuted = true))
     }
+
+    // ——— 定时免打扰到期（NOTIFICATIONS_P1_DESIGN §4.3/§4.4）———
+
+    private fun timedConv(id: String, unread: Int, muteUntil: Long) = ConversationEntity(
+        ownerUid = "me", convId = id, unread = unread, muted = true, muteUntil = muteUntil,
+    )
+
+    @Test
+    fun `过期的定时免打扰按未免打扰计——到点铃铛消失、未读重新计入角标`() {
+        assertEquals(5, TabUnread.count(listOf(timedConv("expired", unread = 5, muteUntil = 500)), nowMs = 1000))
+    }
+
+    @Test
+    fun `未到期的定时免打扰仍按免打扰计`() {
+        assertEquals(0, TabUnread.count(listOf(timedConv("active", unread = 5, muteUntil = 2000)), nowMs = 1000))
+    }
 }

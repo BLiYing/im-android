@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -174,6 +174,17 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /**
+         * v12 → v13：会话加 `muteUntil`（定时免打扰到期毫秒，第二批 NOTIFICATIONS_P1_DESIGN §5）。
+         * 老行为 NULL DEFAULT 0 = 「永久或未免打扰」——与现状语义一致（`muted` 老行本就是"要么永久
+         * 免打扰要么不免打扰"），不用回填，下次拉会话列表 / 收到 conv_update 会带上真实值。
+         */
+        internal val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversation ADD COLUMN muteUntil INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): IMDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -185,7 +196,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                 )
                 .build().also { instance = it }
         }

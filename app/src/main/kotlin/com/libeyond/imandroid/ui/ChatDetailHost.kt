@@ -21,6 +21,7 @@ import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.data.DetailTab
 import com.libeyond.imandroid.data.DetailTabs
 import com.libeyond.imandroid.data.DisplayName
+import com.libeyond.imandroid.data.MuteState
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.MediaUrl
@@ -37,7 +38,9 @@ import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMTextPrompt
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.LocalOpenLink
+import com.libeyond.imandroid.ui.components.MuteDurationSheet
 import com.libeyond.imandroid.ui.components.PushTransition
+import com.libeyond.imandroid.ui.components.rememberMuteTick
 import com.libeyond.imandroid.ui.screens.ChatDetailScreen
 import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
 import com.libeyond.imandroid.ui.screens.linkUrlOf
@@ -80,6 +83,7 @@ fun ChatDetailHost(
     // 「链接」页签点一条在 App 内打开（宿主在 WebLinkHost，iOS `openLink:`）
     val openLink = LocalOpenLink.current
     val owner = client.uid.orEmpty()
+    val title = conv.title.ifBlank { conv.peerUid }
 
     var profile by remember(conv.convId) { mutableStateOf(false) }
     // 拆成两个变量（而不是用 `viewing: ConvMediaItem?` 的非空身兼"开不开"）：关闭时只翻
@@ -115,9 +119,27 @@ fun ChatDetailHost(
     var sharing by remember(conv.convId) { mutableStateOf(false) }
 
     var pinned by remember(conv.convId) { mutableStateOf(conv.pinnedAt > 0) }
+    var pinnedAt by remember(conv.convId) { mutableStateOf(conv.pinnedAt) }
     var muted by remember(conv.convId) { mutableStateOf(conv.muted) }
+    var muteUntil by remember(conv.convId) { mutableStateOf(conv.muteUntil) }
+    var markedUnread by remember(conv.convId) { mutableStateOf(conv.markedUnread) }
+    // `conv` 是打开聊天那一刻的快照，之后在本页或别的设备改的置顶/免打扰/标未读它都不知道——
+    // 进页拉一次服务端设置（同 iOS IMChatDetailViewController、本端 GroupInfoSettings.load）。
+    // 不拉的话：置顶打开→退出重进又显示关（2026-09-29 真机），保存时还会把旧的 marked_unread 写回去。
+    LaunchedEffect(conv.convId) {
+        runCatching { client.conversationsApi.settings(conv.convId) }
+            .onSuccess { s ->
+                pinned = s.pinnedAt > 0; pinnedAt = s.pinnedAt
+                muted = s.muted; muteUntil = s.muteUntil; markedUnread = s.markedUnread
+            }
+            .onFailure { IMLog.tag("IM.Detail").w("conv_settings_load_failed") }
+    }
+    var muteSheetOpen by remember(conv.convId) { mutableStateOf(false) }
     var remark by remember(conv.convId) { mutableStateOf(conv.peerRemark) }
     var editingRemark by remember(conv.convId) { mutableStateOf(false) }
+    // 定时免打扰到期刷新（NOTIFICATIONS_P1_DESIGN §4.4）：本页只关心这一个会话，喂单元素表即可。
+    val muteTick = rememberMuteTick(listOf(conv.copy(muted = muted, muteUntil = muteUntil)))
+    val mutedNow = MuteState.isMutedNow(muted, muteUntil, muteTick)
 
     // 归档长按菜单（媒体/文件/语音/链接四格共用；接线在 ArchiveActionsHost）
     var archiveMenuFor by remember(conv.convId) { mutableStateOf<ArchiveTarget?>(null) }
@@ -143,15 +165,27 @@ fun ChatDetailHost(
         }
     }
 
-    /** 会话设置是**整体替换**三项：改一项也要把另外两项原样带回，否则会顺手清掉。 */
-    fun pushSettings(newPinned: Boolean, newMuted: Boolean) {
+    /**
+     * 会话设置是**整体替换**三项：改一项也要把另外两项原样带回，否则会顺手清掉。
+     * @param newMuteUntil 定时免打扰到期毫秒——**只有时长菜单选中/点「取消免打扰」才传**，
+     *   置顶开关这条路留 `null`（省略），让服务端按 PROTOCOL §6.10 缺省规则保留原到期时间。
+     */
+    fun pushSettings(newPinned: Boolean, newMuted: Boolean, newMuteUntil: Long? = null) {
+        // 置顶时间只在「由关变开」时取现在；已置顶时改免打扰要原样带回，否则置顶会话之间的顺序被打乱
+        pinnedAt = when {
+            !newPinned -> 0
+            pinnedAt > 0 -> pinnedAt
+            else -> System.currentTimeMillis()
+        }
+        val sendPinnedAt = pinnedAt
         scope.launch {
             runCatching {
                 client.conversationsApi.updateSettings(
                     conv.convId,
-                    pinnedAt = if (newPinned) System.currentTimeMillis() else 0,
+                    pinnedAt = sendPinnedAt,
                     muted = newMuted,
-                    markedUnread = conv.markedUnread,
+                    markedUnread = markedUnread,
+                    muteUntil = newMuteUntil,
                 )
             }.onFailure { IMLog.tag("IM.Detail").w("conv_settings_failed") }
             client.messages.refreshConversations()
@@ -200,11 +234,11 @@ fun ChatDetailHost(
             ChatDetailPage.Detail -> {
                 ChatDetailScreen(
                     conv = conv,
-                    title = conv.title.ifBlank { conv.peerUid },
+                    title = title,
                     handle = knownFriends[conv.peerUid]?.handle.orEmpty(),
                     remark = remark,
                     pinned = pinned,
-                    muted = muted,
+                    muteValueText = if (mutedNow) MuteState.untilText(muteUntil, muteTick) else stringResource(R.string.common_off),
                     tab = tab,
                     onTabChange = { tab = it },
                     archive = archive.items,
@@ -220,7 +254,7 @@ fun ChatDetailHost(
                     onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
                     onOpenLink = { url -> openLink?.invoke(url) },
                     onTogglePinned = { v -> pinned = v; pushSettings(v, muted) },
-                    onToggleMuted = { v -> muted = v; pushSettings(pinned, v) },
+                    onOpenMuteSheet = { muteSheetOpen = true },
                     // 页内弹窗编辑，不跳页（对齐 iOS `editRemark`；弹窗组件与用户资料页共用，见 RemarkEditDialog）
                     onSetRemark = { editingRemark = true },
                     onOpenProfile = { profile = true },
@@ -295,6 +329,25 @@ fun ChatDetailHost(
                     remark = v
                 }
             },
+        )
+    }
+
+    // 定时免打扰时长菜单（NOTIFICATIONS_P1_DESIGN §4.1/§4.2）：「消息免打扰」行点了弹它；
+    // 已免打扰时最上面多一项红色「取消免打扰」（用于「把 8 小时改成永久」这类调整）。
+    if (muteSheetOpen) {
+        MuteDurationSheet(
+            convTitle = title,
+            showUnmute = mutedNow,
+            onUnmute = {
+                muted = false; muteUntil = 0; muteSheetOpen = false
+                pushSettings(pinned, false)
+            },
+            onSelect = { d ->
+                val until = d.muteUntil()
+                muted = true; muteUntil = until; muteSheetOpen = false
+                pushSettings(pinned, true, until)
+            },
+            onDismiss = { muteSheetOpen = false },
         )
     }
 

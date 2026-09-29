@@ -17,6 +17,7 @@ import com.libeyond.imandroid.data.NotificationExceptions
 import com.libeyond.imandroid.data.NotificationNav
 import com.libeyond.imandroid.data.NotificationPage
 import com.libeyond.imandroid.data.NotificationSettingsStore
+import com.libeyond.imandroid.data.MuteDuration
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.withType
 import com.libeyond.imandroid.sdk.AlertPlayer
@@ -24,7 +25,9 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.MuteDurationSheet
 import com.libeyond.imandroid.ui.components.PushTransition
+import com.libeyond.imandroid.ui.components.rememberMuteTick
 import com.libeyond.imandroid.ui.screens.ForwardPickerScreen
 import com.libeyond.imandroid.ui.screens.NotificationSettingsScreen
 import com.libeyond.imandroid.ui.screens.NotificationSoundScreen
@@ -57,6 +60,8 @@ fun NotificationSettingsHost(
     /** 「添加例外」会话选择页是否敞开（NOTIFICATIONS_P1_DESIGN §2）——不是 push 链的一环，
      *  是叠在 Type 页上的卡片弹层，同 `ChatDetailHost` 里 `sharing` 那一路的挂法。 */
     var addExceptionOpen by remember { mutableStateOf(false) }
+    /** 「添加例外」选完会话、还没选时长（NOTIFICATIONS_P1_DESIGN §4.1「选完会话先弹菜单」）。 */
+    var pendingExceptionTarget by remember { mutableStateOf<ConversationEntity?>(null) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -66,6 +71,8 @@ fun NotificationSettingsHost(
     // 「添加例外」选择页的空态文案要能分清"还没读到数据"和"读到了、真的没有可选会话"，
     // 用 emptyList() 当初值会在库还没回数据时就抢答"没有可添加的会话"（`/code-review` 抓出）。
     val conversations by remember(owner) { client.repo.observeConversations(owner) }.collectAsState(initial = null)
+    // 定时免打扰到期刷新（NOTIFICATIONS_P1_DESIGN §4.4）：例外列表与选择页过滤都要跟着到点重算。
+    val muteTick = rememberMuteTick(conversations)
     val hasVibrator = remember { AlertPlayer.hasVibrator(context) }
     val comingSoonHint = stringResource(R.string.ps_coming_soon_hint)
 
@@ -90,7 +97,8 @@ fun NotificationSettingsHost(
             NotificationPage.Type -> NotificationTypeScreen(
                 group = kind,
                 settings = settings.let { if (kind) it.group else it.private },
-                exceptions = NotificationExceptions.of(conversations.orEmpty(), kind),
+                exceptions = NotificationExceptions.of(conversations.orEmpty(), kind, muteTick),
+                nowMs = muteTick,
                 onToggleEnabled = { v -> NotificationSettingsStore.update(settings.withType(kind) { it.copy(enabled = v) }) },
                 onTogglePreview = { v -> NotificationSettingsStore.update(settings.withType(kind) { it.copy(preview = v) }) },
                 onOpenSound = { page = NotificationPage.Sound },
@@ -121,12 +129,12 @@ fun NotificationSettingsHost(
         )
     }
 
-    // 「添加例外」会话选择页（NOTIFICATIONS_P1_DESIGN §2）：复用 ForwardPickerScreen，单选、
-    // 点了立即免打扰（第一批 = 永久，不弹时长菜单——那是第二批的事）。
+    // 「添加例外」会话选择页（NOTIFICATIONS_P1_DESIGN §2 + §4.1）：复用 ForwardPickerScreen，单选、
+    // 选完先弹时长菜单，选中时长才真正免打扰（不再是第一批那样点了立即永久免打扰）。
     if (addExceptionOpen) {
         ForwardPickerScreen(
             conversations = conversations.orEmpty(),
-            filter = { convs, q -> Forward.exceptionPickable(convs, kind, q) },
+            filter = { convs, q -> Forward.exceptionPickable(convs, kind, q, muteTick) },
             title = stringResource(R.string.notif_exceptions_add),
             footer = stringResource(if (kind) R.string.notif_exceptions_pick_footer_group else R.string.notif_exceptions_pick_footer_private),
             // 本地库还没回第一份（conversations == null）时不抢答"没有可添加的会话"——
@@ -139,8 +147,23 @@ fun NotificationSettingsHost(
             onToast = { toast = it },
             onConfirm = { targets ->
                 addExceptionOpen = false
-                targets.firstOrNull()?.let { conv -> scope.launch { muteAsException(client, conv) } }
+                pendingExceptionTarget = targets.firstOrNull()
             },
+        )
+    }
+
+    // 选完会话后的时长菜单（§4.1「选完会话先弹菜单」）：没有「取消免打扰」项——选择页已经把
+    // 免打扰中的会话过滤掉了，选出来的这一个必然还没免打扰。
+    pendingExceptionTarget?.let { conv ->
+        MuteDurationSheet(
+            convTitle = Forward.titleOf(conv),
+            showUnmute = false,
+            onUnmute = {},
+            onSelect = { d ->
+                pendingExceptionTarget = null
+                scope.launch { muteAsException(client, conv, d.muteUntil()) }
+            },
+            onDismiss = { pendingExceptionTarget = null },
         )
     }
 
@@ -162,12 +185,12 @@ private suspend fun unmute(client: IMClient, conv: ConversationEntity) {
 }
 
 /**
- * 「添加例外」选中一个会话：立即设免打扰（第一批 = 永久）。同 [unmute] 的口径——
+ * 「添加例外」选中一个会话、再选完时长菜单：按选的时长设免打扰。同 [unmute] 的口径——
  * `pinned_at`/`marked_unread` 原样带回，接口是整体替换。
  */
-private suspend fun muteAsException(client: IMClient, conv: ConversationEntity) {
+private suspend fun muteAsException(client: IMClient, conv: ConversationEntity, muteUntil: Long) {
     runCatching {
-        client.conversationsApi.updateSettings(conv.convId, conv.pinnedAt, muted = true, conv.markedUnread)
+        client.conversationsApi.updateSettings(conv.convId, conv.pinnedAt, muted = true, conv.markedUnread, muteUntil = muteUntil)
     }.onFailure {
         log.w("mute_exception_failed", "convId" to conv.convId, "err" to it.javaClass.simpleName)
     }

@@ -264,6 +264,7 @@ class MessageRepository(
                 syncedConvSeq = existing?.syncedConvSeq ?: 0,
                 pinnedAt = s.pinnedAt,
                 muted = s.muted,
+                muteUntil = s.muteUntil,
                 markedUnread = s.markedUnread,
             )
         }
@@ -335,6 +336,7 @@ class MessageRepository(
             c.copy(
                 pinnedAt = u.pinnedAt,
                 muted = u.muted,
+                muteUntil = u.muteUntil,
                 markedUnread = u.markedUnread,
             )
         )
