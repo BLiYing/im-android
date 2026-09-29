@@ -7,10 +7,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -22,6 +25,8 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DetailActions
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.ui.AppIconChoice
+import com.libeyond.imandroid.ui.AppIconSwitcher
 import com.libeyond.imandroid.ui.theme.LocalMediaHost
 
 /**
@@ -57,7 +62,7 @@ fun avatarColorForSeed(seed: String): Color {
  *
  * 首字母取显示名**末两位**——三端同口径（`docs/UI.md`）。
  *
- * 系统通知会话（`seed == DetailActions.SYSTEM_UID`）：一律显示应用 logo，不发网络请求、
+ * 系统通知会话（`seed == DetailActions.SYSTEM_UID`）：一律显示应用 logo（跟随当前桌面图标），不发网络请求、
  * 不落首字母/取色兜底——服务端 `avatar_url` 恒空（`SystemUserAvatarURL=""`），与 iOS
  * `UILabel+IMAvatar.m`（`LaunchLogo`）/ Web `Avatar.tsx`（`/im-logo.png`）同一契约。
  */
@@ -70,8 +75,10 @@ fun IMAvatar(
     avatarUrl: String = "",
 ) {
     if (DetailActions.isSystemPeer(seed)) {
+        // 跟随外观 ▸ 应用图标的当前选择（同 iOS 读 alternateIconName）；选完即换，不等退后台
+        val icon by AppIconSwitcher.selected(LocalContext.current).collectAsState()
         Image(
-            painter = painterResource(R.drawable.im_system_logo),
+            painter = painterResource((icon ?: AppIconChoice.DEFAULT).systemLogo),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = modifier.size(size).clip(CircleShape),

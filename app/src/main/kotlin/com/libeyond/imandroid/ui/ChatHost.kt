@@ -328,6 +328,7 @@ fun ChatHost(
         convId = conv.convId,
         title = conv.title.ifBlank { conv.convId },
         avatarUrl = conv.avatarUrl,
+        avatarSeed = if (conv.isGroup) conv.convId else conv.peerUid.ifBlank { conv.convId },
         myUid = owner,
         rows = rows,
         readSeq = entry.first,

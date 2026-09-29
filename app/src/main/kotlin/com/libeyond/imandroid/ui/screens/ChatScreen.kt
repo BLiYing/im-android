@@ -128,6 +128,8 @@ fun ChatScreen(
     onOpenInfo: () -> Unit,
     /** 会话头像（右上角那个）。空串则显示首字母色块。 */
     avatarUrl: String,
+    /** 顶栏头像种子：群 = convId，单聊 = 对端 uid。 */
+    avatarSeed: String,
     /** 取链接富预览（文本气泡里首个 URL）。由 Host 注入，screen 不持有 IMClient。 */
     loadLinkPreview: suspend (String) -> com.libeyond.imandroid.sdk.api.LinkPreview?,
     /** 媒体地址补全用。 */
@@ -319,7 +321,8 @@ fun ChatScreen(
                 onTitleClick = onOpenInfo,
                 avatar = TopBarAvatar(
                     label = title,
-                    seed = convId,
+                    // 单聊用对端 uid（与会话列表同种子：同色，且系统通知 777000 才能认出来换成应用 logo）
+                    seed = avatarSeed,
                     url = avatarUrl,
                     onClick = onOpenInfo,
                 ),

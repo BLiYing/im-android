@@ -7,16 +7,26 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.logging.IMLog
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * 外观页「应用图标」的四个选项（对齐 iOS `AppIcon` / `AppIconOcean` / `AppIconViolet` / `AppIconMidnight`）。
  * [alias] 对应 `AndroidManifest.xml` 里的 activity-alias 名，**改名会让用户已选的图标失效**。
  */
-enum class AppIconChoice(val alias: String, @StringRes val title: Int, @DrawableRes val thumb: Int) {
-    DEFAULT(".LauncherDefault", R.string.appearance_icon_default, R.drawable.appearance_icon_default),
-    OCEAN(".LauncherOcean", R.string.appearance_icon_blue, R.drawable.appearance_icon_ocean),
-    VIOLET(".LauncherViolet", R.string.appearance_icon_purple, R.drawable.appearance_icon_violet),
-    MIDNIGHT(".LauncherMidnight", R.string.general_theme_dark, R.drawable.appearance_icon_midnight),
+enum class AppIconChoice(
+    val alias: String,
+    @StringRes val title: Int,
+    @DrawableRes val thumb: Int,
+    /** 系统通知会话头像（512px，[com.libeyond.imandroid.ui.components.IMAvatar]）：跟随当前桌面图标，同 iOS。 */
+    @DrawableRes val systemLogo: Int,
+) {
+    DEFAULT(".LauncherDefault", R.string.appearance_icon_default, R.drawable.appearance_icon_default, R.drawable.im_system_logo),
+    OCEAN(".LauncherOcean", R.string.appearance_icon_blue, R.drawable.appearance_icon_ocean, R.drawable.im_system_logo_ocean),
+    VIOLET(".LauncherViolet", R.string.appearance_icon_purple, R.drawable.appearance_icon_violet, R.drawable.im_system_logo_violet),
+    MIDNIGHT(
+        ".LauncherMidnight", R.string.general_theme_dark, R.drawable.appearance_icon_midnight, R.drawable.im_system_logo_midnight,
+    ),
 }
 
 /**
@@ -38,11 +48,20 @@ object AppIconSwitcher {
     @Volatile
     private var pending: AppIconChoice? = null
 
+    /** 当前选中（含待切值）的可观察版：系统通知头像订阅它，选完立刻换图，不等退后台落地。首次 [selected] 时从系统读。 */
+    private val selectedFlow = MutableStateFlow<AppIconChoice?>(null)
+
+    fun selected(context: Context): StateFlow<AppIconChoice?> {
+        if (selectedFlow.value == null) selectedFlow.value = current(context)
+        return selectedFlow
+    }
+
     /** 页面显示用：有待切值就是它，否则读系统。 */
     fun current(context: Context): AppIconChoice = pending ?: applied(context)
 
     fun select(context: Context, choice: AppIconChoice) {
         pending = if (choice == applied(context)) null else choice
+        selectedFlow.value = choice
     }
 
     /** `MainActivity.onStop` 调：把待切值落到系统组件状态上。 */
