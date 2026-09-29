@@ -1,3 +1,99 @@
+## 2026-09-29 im-rtc 换票 + 转场 Media 分支 + 离线积压 C2 + 群成员搜索入口（从 current_task.md 移入，均已完成；转场剩余分支/离线积压后续切片的待办仍在 current_task.md「下一步」，未连带移入）
+
+> **im-rtc 换票：从调试密钥迁移到 IMServer 真实换票接口 ✅（2026-09-28，本端已完成——三端全部完成）**：
+> 此前 `RtcCall.signToken`（同步、`IMDebugTokenGenerator` 本地签调试票）改成调 IMServer
+> `POST /api/v1/rtc/token`：
+> - `signToken` 改成 `private suspend fun`，调新增的 `sdk/api/RtcApi.kt#fetchToken`。`HttpClient`
+>   默认 `authenticated=true`，会自动带上当前 IM 会话的 Bearer token——本端**不用**像 iOS/Web 那样
+>   手动取/传 token 字符串，直接 `http.call("POST", "/api/v1/rtc/token", ...)` 就够了。
+> - `start`/`onTokenWillExpire`（SDK 回调，非协程上下文）都经 `RtcCall` 自建的
+>   `CoroutineScope(SupervisorJob() + Dispatchers.Main)` 发起换票；两处都加了 `generation` 判定
+>   （换票是异步的，回来时可能已经 `stop` 过——切账号/登出，同已有的 `HostListener.stale` 同一思路）。
+> - 换票结果 → token 的判定逻辑抽成包级函数 `rtcTokenFrom(result: Result<RtcTokenResult>)`
+>   （**不放 `object RtcCall` 内**：`RtcCall` 的类初始化含 `Handler(Looper.getMainLooper())`，
+>   纯 JVM 单测碰它任何成员都会抛异常——第一版把这个纯函数写进 object 内，`RtcCallTest` 4 个用例
+>   全红，改成包级函数后才过；已把这条教训写进 `../IMServer/docs/SYMMETRY.md`）。
+> - `RtcConfig` 精简为只剩 `wsUrl`（去掉 `appId`/`keyId`/`secret`）；`local.properties`/
+>   `app/build.gradle.kts` 的 `RTC_APP_ID`/`RTC_KEY_ID`/`RTC_DEBUG_SECRET` 三个 `buildConfigField`
+>   一并删除。
+> - `IMClient` 新增 `val rtc = RtcApi(http)`；`AppRoot.kt` 的 `RtcCall.start(...)` 调用点传
+>   `rtcApi = client.rtc`。
+> - 新增测试 `RtcCallTest.kt`（4 例，覆盖成功/空 token/业务异常/传输异常四条路径，变异验红过）；
+>   `RtcConfigTest.kt` 同步精简（字段从四项减到一项）。这个项目对网络层（`XxxApi` 类）本身没有
+>   mock 基础设施覆盖的先例（`ProfileApi`/`AuthApi` 等既有类同样没测），未额外引入。
+> - `./scripts/test.sh` 全量 **969/969 绿**（新增 8 例）。
+> - **真机实测 ✅ 已通过**（用户确认）：`adb install` 装到已连接的真机（OnePlus PKD130）后起 App
+>   无崩溃，通话流程验证通过——三端（Web/iOS/Android）换票迁移**全部完成且全部真机/浏览器联调过**。
+
+> **转场没接的几处：`GroupInfoHost` 的 `Media` 分支已落地 ✅（2026-09-28，未做真机验证）**：
+> `ChatDetailHost` 的 3 个分支（Detail/Profile/Media）已在上两轮全部接完。这一轮照抄同一套「open
+> 标志/data 分离」模型，只动 `GroupInfoHost` 的 `Media`（`viewing: ConvMediaItem?`）这一支——它与
+> `ChatDetailHost` 那支是同一个坑：拆成 `viewingOpen: Boolean` + `viewingData: ConvMediaItem?`，
+> 关闭（`onClose`/`onLocateInChat`/`BackHandler` 的 Media 分支）只翻 `viewingOpen = false`，
+> `viewingData` 留着不清（下次 `onOpenArchive` 才覆盖）。**与 `ChatDetailHost` 不同的一点**：
+> `GroupInfoHost` 的 if/else-if 链有 9 个分支，不是 3 个，没有把全部 9 支都改成 `when` 吃
+> `PushTransition` 冻结的 `state`（那是「下一步 2」第 4 步的活，范围大得多）——本轮只把
+> `Media`/`Detail` 这一对相邻的 `else if`/`else` 换成内部套一层
+> `PushTransition(targetState = innerPage, depthOf = {...})`（`innerPage` 只在 `Media`/`Detail`
+> 两值间取值，没有改 `GroupInfoPage` 枚举本身，`depthOf` 就地写成 lambda，没有像 `ChatDetailPage`
+> 那样加 `depth` 字段——9 个分支还没全接，加了也只对得上这一对）；其余 8 个分支（Pick/Bans/Admins/
+> JoinRequests/MemberProfile/MemberSearch/Manage/Qr）原样是整页替换，完全没动。**副作用**：为了让
+> `Media`/`Detail` 在 if-else 链里相邻好嵌套，把 `managing`/`qrCardAsLink` 两个分支的判断顺序挪到了
+> `Media` 前面（原顺序 MemberSearch→Media→Manage→Qr→Detail，现在 MemberSearch→Manage→Qr→
+> Media/Detail）——核对过这几个标志位在运行时互斥（`viewing` 只在 Detail 页的 `onOpenArchive` 里
+> 置位，`managing`/`qrCardAsLink` 为真时不可能同时置位 `viewing`），改变判断顺序不影响实际行为。
+> `GroupInfoHost.kt` 574→**587 行**（还有 13 行余量，比 `Media` 这轮之前更紧，下一块动它前先看着点）。
+> 没加新单测——改动是渲染结构重排 + 状态拆分，不是新的纯函数逻辑（`GroupInfoNav`/`GroupInfoPage`
+> 本身没变，既有 `GroupInfoNavTest` 原样覆盖）。`./scripts/test.sh` **965/965 绿**。**未做真机验证**：
+> 查看器进出是否真的滑动、`viewingData` 保留旧值有没有意外副作用，以及 `managing`/`qrCardAsLink`
+> 判断顺序调整后这两条路径本身（与本轮改动其实无关，但顺手挪了判断顺序，值得真机点一遍确认没引入
+> 回归）。`GroupInfoHost` 剩下的 8 个分支（`else if` 链上真正复杂的部分）仍是拆分方案里最大的一块，
+> 留给后续，一个分支一个分支来。根因诊断与三种导航形态的完整拆分方案见「下一步 2」。
+
+> **离线积压 C2：sync 带 max_gap 闸门 ✅（2026-09-28，只做了 Android 审计建议的第一小块，未做真机验证）**：
+> `../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 审计发现 Android C1~C6 全未启动、
+> 且明确"建议先做这一条"——服务端 `max_gap`/`too_long`/`head_conv_seq` 早已上线（`internal/protocol/
+> envelope.go`），但 Android 的 `sync_req` 从不带 `max_gap`，等于对服务端说"不限深度"，超级群重连
+> 也会把积压整段抄完（`IncomingRule.kt` 头注释记着 2026-09-09 在 11 万条大群真机撞见过）。本轮只做
+> 这一条：`SyncCursorItem` 加 `maxGap`（可空 Long，对齐 Go `*int64` 指针语义）、`SyncConversation`
+> 加 `tooLong`/`headConvSeq`；`requestSync` 每条游标恒发 `SyncDefaults.MAX_GAP=400`（含 `has_more`
+> 续页，续页此前会漏发）；`applySync` 收到 `too_long` 时留痕一条日志（游标本就因为 `covered_conv_seq`
+> 原样等于 `since` 而不会推进，`advanceCursor`/`SyncCursorRule` 早已保证这点，不用额外分支）。
+> `EnvelopeTest.kt` 新增 `SyncGapTest` 4 例（编码省略/保留 `max_gap`、解码 `too_long`、老服务端无此
+> 字段时退化默认值），先临时撤掉这两个字段确认真的编译失败过（`git stash` 验红）。`./scripts/test.sh`
+> **964/964 绿**。**范围边界（刻意不做，留给后续）**：① 不区分超级群——本该给超级群发
+> `max_gap=0`（永远不自动补），但那需要本地先知道"这个会话是不是超级群"，`ConversationEntity`
+> 目前不落这一列，做了也只是一半（还得管迁移/回填），归进 C1 一起做；② 收到 `too_long`后**没有任何
+> 后续动作**——本地没有区间清单（C1 未做），只是"不再无限追平"，不产生"按需开窗补"的下一步，缺口
+> 目前对用户不可见（不影响正确性，只是体验上"这个会话消息好像还没到最新"要等下次能补齐的 sync 才
+> 追上，或用户自己下滑触发本地已有的按需开窗）；③ C1（区间清单）/C3（进会话锚点开窗）/C4（↓/实时/
+> conv_bump 处理）/C5（sync 路径回 delivered）/C6（八项分流除已接的搜索/查看器翻页外其余几项）**均未
+> 动**，见「下一步 1」的拆分清单。**未做真机验证**：改动只影响重连时的 sync 请求形状，需要真机连接
+> →断网/杀连接→重连，抓包或看日志确认 `max_gap` 真的发出去了、大群重连不再整段追平。
+
+> **群资料页「成员」tab 补搜索入口 ✅（2026-09-28，大群专用，未做真机验证）**：`GroupApi.members()`
+> 早已支持服务端 `?q=` 分页搜索，本轮接上。判据 `data/GroupMemberSearch.kt`（阈值/去抖/续拉/去重，
+> 逐条对齐 iOS `IMGroupMemberSearchViewController` 顶部那组 C 函数，有单测）；新页面
+> `ui/GroupMemberSearchHost.kt`（首页去抖走 `LaunchedEffect` 换 key 自动取消在途请求；续页请求跑在
+> `rememberCoroutineScope()` 上不受 `query` 变化牵连，故仍需 iOS `_searchToken` 的等价物
+> `searchGen` 代次令牌判过期——动手时一度以为能全靠 `LaunchedEffect` 躲开手记 token，
+> `/code-review` 抓出续页这条路躲不开、旧词迟到的翻页响应会污染新词已显示的结果，已修 `12bf333`）
+> + `ui/screens/GroupMemberSearchScreen.kt`（复用 `IMSearchField`/`MemberRow`）。`/code-review` 顺带
+> 抓出第二处竞态并同批修：在途守卫原设在 `fetch()` 内部（协程真正跑起来才生效），大列表里同一帧
+> 多行触发 `onLoadMore` 会一起穿过守卫、打出重复请求——改成 `requestLoadMore()` 里同步设置。
+> 群总人数 > 50 时「成员」tab 顶部才出现入口行，恒走服务端过滤不做本地过滤（超级群本地只有已翻到
+> 的那几页，本地过滤会悄悄搜错）。**顺手做的拆分**：`GroupInfoHost.kt` 已贴到 600 行硬闸，把
+> 成员分页那簇状态（`members/cursor/hasMore/loading` + 四处调用点）抽成 `ui/GroupMembersState.kt`
+> （CODING_STYLE §7①），才腾出线程加新页面，改完降到 574 行。新增 `GroupInfoPage.MemberSearch`
+> 枚举页（返回键走既有"一处派发"机制，`GroupInfoNavTest` 补两条层级断言）。
+> **已知简化**：① 未做搜索结果命中高亮（iOS 有，这里判定为纯装饰，跳过）；② 从搜索结果点开一个人的
+> 资料页、又退回来时，搜索词与结果会清空（因为这条路复用 `GroupInfoHost` 顶层"整页替换"导航，
+> 资料页与搜索页互斥、不共存于同一份组合状态里；iOS 用 push/pop 天然不丢，本端要接住得让搜索页
+> 常驻组合树、资料页浮在它上面，超出本轮范围，留作后续小优化）。`./scripts/test.sh` **960/960 绿**
+> （新增 `GroupMemberSearchTest` 7 例 + `GroupInfoNavTest` 补 1 例，均先见红过）。**未做真机验证**：
+> 没有现成的 50+ 人测试群，也没有 Android 端的屏幕自动化工具可用，只验证了编译与 JVM 单测；
+> 入口显隐、搜索/翻页/选人整条链路需要用户真机跑一遍。
+
 ## 2026-09-28 好友备注回填 + 语音消息三期 + 多语言 P3 + 应用内多语言全量迁移（从 current_task.md 移入，均已完成/已推送/已真机验证，无未结下一步指回它们）
 
 > **好友/群成员备注编辑：回填补齐到通讯录列表与群成员资料页 ✅（2026-09-28，`d4cc22e`，已推送）**：

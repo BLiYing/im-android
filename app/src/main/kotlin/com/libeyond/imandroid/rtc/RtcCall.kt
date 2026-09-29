@@ -3,11 +3,14 @@ package com.libeyond.imandroid.rtc
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import com.imrtc.engine.IMCallEndReason
 import com.imrtc.engine.IMCallEngine
 import com.imrtc.engine.IMCallEngineListener
+import com.imrtc.engine.IMCallHistoryPage
 import com.imrtc.engine.IMCallOptions
 import com.imrtc.engine.IMCallSummary
 import com.imrtc.engine.IMKickedOutReason
+import com.imrtc.engine.IMRTCError
 import com.imrtc.engine.log.IMRTCLog
 import com.imrtc.engine.media.IMVideoProfile
 import com.imrtc.engine.webrtc.IMWebRTCAdapter
@@ -64,6 +67,13 @@ object RtcCall {
      * 由拿得到 IM 客户端的地方（AppRoot）接线；没接线 = 不发，只写日志。主线程。
      */
     @Volatile var onCallRecord: ((CallRecordPlan) -> Unit)? = null
+
+    /**
+     * 每通电话结束时触发（双方都会收到，不分角色）——设置 ▸ 最近通话页面留在页面上时靠它重拉首页
+     * （CALL_HISTORY_DESIGN.md §3）。没接线的页面 = 不触发，只是一个信号，不带数据，
+     * 页面自己重新调 [fetchCallHistory] 取权威结果。主线程。
+     */
+    @Volatile var onCallEnded: (() -> Unit)? = null
 
     /** 引擎已建好（不代表握手已成功，连接态看日志）。 */
     val isStarted: Boolean get() = engine != null
@@ -196,6 +206,20 @@ object RtcCall {
     }
 
     /**
+     * 查自己的通话记录（设置 ▸ 最近通话），原样透传给 engine（游标分页，见 [IMCallEngine.fetchCallHistory]）。
+     * 引擎没起来时直接回退失败，原因走 [unavailableReason]（与 [placeSingle]/[placeGroup] 同一套文案）。
+     * 主线程回调。
+     */
+    fun fetchCallHistory(limit: Int, cursor: Long?, onResult: (IMCallHistoryPage?, IMRTCError?) -> Unit) {
+        val e = engine
+        if (e == null) {
+            onResult(null, IMRTCError(0, "rtc_not_started", unavailableReason().orEmpty(), ""))
+            return
+        }
+        e.fetchCallHistory(limit, cursor) { page, error -> onResult(page, error) }
+    }
+
+    /**
      * SDK 自己的日志默认没有出口（一条都不输出）。转给宿主的 [IMLog]：logcat 能看到，Debug 构建还会回传到
      * IMServer 的 `/__devlog`。事件名用 SDK 的 tag（稳定、可 grep），正文放 `msg`。幂等。
      */
@@ -266,6 +290,12 @@ object RtcCall {
         ) {
             if (stale) return
             profileResolver?.groupId = if (isGroup) chatGroupId else ""
+        }
+
+        /** 每通电话都会到达（不分角色）：只转发信号给 [onCallEnded]，不带数据——那是通话记录专属的落库判定。 */
+        override fun onCallEnd(callId: String, reason: IMCallEndReason, durationSec: Long, endedBy: String) {
+            if (stale) return
+            onCallEnded?.invoke()
         }
 
         /** 每通电话恰好一次、晚于 onCallEnd。宿主只在 role==caller 时发记录，别的都不用管。 */

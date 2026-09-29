@@ -56,4 +56,5 @@ enum class MePage(val depth: Int) {
     Privacy(1),
     Favorites(1),
     Language(1),
+    CallHistory(1),
 }

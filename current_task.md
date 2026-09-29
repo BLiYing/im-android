@@ -38,11 +38,8 @@
 >   陌生 uid（非当前会话对方）点「发消息」只是关掉浮层，压根没打开任何聊天。
 >   `ChatHost.kt` 因为加参数顶到体量红线（606>600），已把两处新增文档注释压缩，
 >   回落 599 行（WARN，未 FAIL）。`./scripts/test.sh` **969/969 绿**（3 轮全绿，含体量门禁）。
->   **未做真机手测**：在真机上装了最新包、想端到端点一遍（免密登录 → 进群 → 点 @某人/头像 →
->   看资料页有没有呼叫/视频），但这台设备的登录页「服务器地址」编辑框在 adb 盲操作下
->   （无 accessibility 树工具、只能截图猜坐标）几次三番被误触/复位，没能可靠地把 host 改成
->   `192.168.1.4:8080` 点进去登录——放弃了继续用 adb 硬点，没有拖时间瞎试。
->   **APK 已装在设备上**（`adb install -r` 成功，冷启动无崩溃），**麻烦用户手动登录跑一遍这条链路**。
+>   **真机验证 ✅ 已通过（2026-09-29，OPPO PKD130，user1001）**：@提及跳转、头像点击跳转均正确
+>   打开资料页且呼叫/视频/搜索/更多齐全；「消息」pill 正确换到与该用户的单聊（含群成员场景）。
 > - **③-⑥ 未动**：消息到底收新消息即时显示/角标未读、正在输入过期清除、加号面板去掉音视频入口、
 >   消息列表滚动条，用户要求逐项来，按顺序排在后面。
 
@@ -140,8 +137,58 @@
 > 没有现成的 50+ 人测试群，也没有 Android 端的屏幕自动化工具可用，只验证了编译与 JVM 单测；
 > 入口显隐、搜索/翻页/选人整条链路需要用户真机跑一遍。
 
+> **设置 ▸ 最近通话页面 ✅（2026-09-29，`feature/call-history` 已合入 main，三端真机/模拟器/浏览器均验证过）**：
+> `../IMServer/docs/design/CALL_HISTORY_DESIGN.md` 落地——「我」页早已有的「最近通话」占位行
+> （`MeScreen.kt` 第一组，绿色电话图标）换成真正导航，调 im-rtc SDK 的 `IMCallEngine.fetchCallHistory`
+> 拉自己的通话历史，纯客户端功能，不经过 IMServer。
+> - **导航**：沿用本仓「无 NavHost，`MePage` 枚举 + `PushTransition`」的既有套路（同 `Favorites`）——
+>   `data/PushNav.kt` 的 `MePage` 加 `CallHistory(1)`；`MeHost.kt` 的 `when(p)` 加一支接
+>   `CallHistoryHost`；`MeScreen.kt` 加 `onOpenCallHistory: () -> Unit` 参数，「最近通话」行的
+>   `onClick` 从 `{ onComingSoon(recentCalls) }` 换成 `onOpenCallHistory`，行本身（文案/图标/颜色/
+>   位置）未动。
+> - **SDK 接线**：`rtc/RtcCall.kt` 新增 `fetchCallHistory(limit, cursor, onResult)`（透传给
+>   `engine.fetchCallHistory`，引擎未起时按既有 `unavailableReason()` 文案回退失败）与
+>   `onCallEnded: (() -> Unit)?` 回调（`HostListener` 新增 `onCallEnd` override，双方都触发，
+>   不分角色——区别于只对主叫触发的 `onCallSummary`/`onCallRecord`，用于「留在本页时通话结束要
+>   重拉首页」，设计文档 §3）。
+> - **纯逻辑** `data/CallHistory.kt`（新文件，有单测）：未接判定（我是被叫且 `durationSec==0`）、
+>   1v1 对方 uid 与群通话人数（逐字对齐 im-rtc Demo `HistoryScreen.peerText` 的判据，不重新发明）、
+>   翻页去重、按天分组（`labelOf` 注入避免 `data/` 反向依赖 `ui.components.TimeFormat`）、「未接」
+>   tab 自动续页的判据（`shouldAutoContinue`）。**reason 文案复用 `CallRecord.render`**（聊天气泡
+>   通话记录消息同一套判定），不新造一套；**红色与否不看它**——未接判定是本页自己的简单两字段规则
+>   （设计文档 §0.7 把两件事分开管，行为上可能与 `CallRecord.Tone.Missed` 不完全重合，是设计使然）。
+> - **接线层** `ui/CallHistoryHost.kt`（`CallHistoryList` 状态类，同 `FavoritesHost.FavoriteList`
+>   同一形状：`generation` 代次令牌作废在途旧请求，`callEnded` 回调重拉首页也走同一份 `reload`）：
+>   身份解析走会话表优先（1v1 备注>标题，群用群会话标题），查不到的 1v1 再补拉一次名片（同
+>   `FavoritesHost.sourceOf` 的两段式）；**未复用 `RtcProfileResolver`**——那是喂给通话中界面
+>   （Kit）的解析器，生命周期绑一通电话，这里要「历史列表批量查名」，直接读会话表更直接。
+>   点单聊行 = 按 `mediaType` 直接调 `RtcCall.placeSingle`，不弹确认；点群聊行 = 跳转
+>   `chatGroupId` 对应群会话（本地没有就用 `client.groupConversationStubFor` 造一个壳）。
+> - **UI** `ui/screens/CallHistoryScreen.kt`：`SegTabBar`/`Hint`/`LoadMore`（复用 `DetailArchive.kt`
+>   既有组件，同 `FavoritesScreen` 套路）；行用 `Lucide.ArrowUpRight`/`ArrowDownLeft` 方向箭头 +
+>   `Lucide.Phone`/`Video` 类型图标 + `IMAvatar`（1v1）/自绘 `Lucide.Users` 渐变底（群通话，
+>   通话参与者 ≠ 群成员，不用群头像）；未接来电整行 `IMTheme.colors.danger`。
+> - **string 新增**（`values`/`values-en` 两份 `i18n_strings.xml`，均已加）：`call_history_tab_all`/
+>   `_tab_missed`/`_empty`/`_group_voice`/`_group_video`/`_group_summary`；页面标题/空态图标/
+>   401 文案复用既有 key（`ios_settings_row_recent_calls`/`common_load_failed`/
+>   `common_tap_to_retry`/`rtc_error_not_started`），未新增重复 key。
+> - 新增 `CallHistoryTest.kt`（17 例：未接判定、1v1 对方 uid、群人数、翻页去重、未接自动续页判据、
+>   按天分组），均覆盖设计文档 §6 测试点里能脱离 Compose 布局单测的部分。`./scripts/test.sh`
+>   全量 **986/986 绿**（体量门禁/日志红线/编译/单测四步全过，新文件均远低于 600 行硬闸）。
+> - **没做 / 已知限制**：删除、长按菜单、未接数量角标——按设计文档 v1 范围明确不做，也没有为它们
+>   预留接口；「全部/未接」的自动续页与端上过滤是设计文档 §3.5 明说的一期凑合方案，服务端过滤参数
+>   二期才加。
+> - **真机验证 ✅ 已通过（2026-09-29，OPPO PKD130，user1001；同批 iOS 模拟器/libeyond、Web 浏览器/
+>   user1001 也过）**：通话记录列表按天分组、来去电箭头、未接标红、「全部/未接」筛选、点击行发起
+>   回拨均正常；未覆盖到滚动分页时序、`callEnded` 重拉首页画面表现、群通话行跳转会话——这几条留给
+>   后续有多测试账号互相拨打攒出真实分页数据后再核对。
+
 ## 下一步
 
+0e. **设置 ▸ 最近通话页面的剩余验证**（基础展示/筛选/回拨已于 2026-09-29 真机验证过，见「当前焦点」）：
+   滚动分页时序、「未接」tab 过滤后自动连续翻页的实际观感、`callEnded` 到达时重拉首页的画面表现、
+   群聊行点击跳转会话是否正确、空状态/401/网络错误三态的文案与重试——需要至少两个测试账号互相拨打
+   几通电话（含群通话）攒出足够多真实通话记录再验。
 0d. **群资料页「成员」tab 搜索入口的真机验证**（2026-09-28 已实现，见「当前焦点」，未测）：入口显隐
    门槛（>50 人）、搜索/去抖/翻页、选中后跳资料页整条链路，需要一个 50+ 人的测试群。
 0b. **上几批仍欠的真机回归**（这两轮没动到、也没回归）：归档查看器「更多」五项、合并转发记录页内翻页、

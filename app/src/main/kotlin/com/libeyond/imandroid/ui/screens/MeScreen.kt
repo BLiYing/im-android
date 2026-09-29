@@ -80,6 +80,7 @@ fun MeScreen(
     onOpenDataStorage: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onOpenFavorites: () -> Unit,
+    onOpenCallHistory: () -> Unit,
     onOpenLanguage: () -> Unit,
     /** 语言行右值，如「跟随系统（简体中文）」——由调用方算好传入（[com.libeyond.imandroid.data.LanguageStore]）。 */
     languageLabel: String,
@@ -106,7 +107,7 @@ fun MeScreen(
     val groups = listOf(
         listOf(
             MeRow(savedMessages, Lucide.Bookmark, ic.blue, onClick = onOpenFavorites),
-            MeRow(recentCalls, Lucide.Phone, ic.green) { onComingSoon(recentCalls) },
+            MeRow(recentCalls, Lucide.Phone, ic.green, onClick = onOpenCallHistory),
             MeRow(devices, Lucide.Laptop, ic.orange, onClick = onOpenDevices),
             MeRow(folders, Lucide.Folder, ic.blue) { onComingSoon(folders) },
             // 与左上角「我的二维码」并列：二维码给**面对面**，名片消息给**线上**。
