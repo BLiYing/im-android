@@ -73,7 +73,8 @@ android {
     sourceSets {
         getByName("main")  { kotlin.srcDirs("src/main/kotlin") }
         getByName("test")  { kotlin.srcDirs("src/test/kotlin") }
-        getByName("androidTest") { kotlin.srcDirs("src/androidTest/kotlin") }
+        // 迁移测试（MigrationTestHelper）要从 assets 读导出的 schema JSON
+        getByName("androidTest") { kotlin.srcDirs("src/androidTest/kotlin"); assets.srcDirs("$projectDir/schemas") }
     }
 
     packaging {
@@ -125,6 +126,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
 
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.room.testing)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)

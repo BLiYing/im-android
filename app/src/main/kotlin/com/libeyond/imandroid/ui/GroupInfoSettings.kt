@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.MuteState
+import com.libeyond.imandroid.data.PinnedAt
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.ui.components.MuteDurationSheet
 import com.libeyond.imandroid.ui.components.rememberMuteTick
@@ -69,12 +70,7 @@ class GroupInfoSettingsState internal constructor(
     /** 置顶/免打扰**整体替换**三项：改一项也要把 `markedUnread` 原样带回，否则会顺手清掉。 */
     /** @param muteUntil 只有时长菜单选中时才传；其余留 null（省略），服务端保留未到期的原到期时间（PROTOCOL §6.10）。 */
     private fun push(newPinned: Boolean, newMuted: Boolean, muteUntil: Long? = null) {
-        // 置顶时间只在「由关变开」时取现在；已置顶时改免打扰原样带回，不打乱置顶顺序（同 ChatDetailHost）
-        val pinnedAt = when {
-            !newPinned -> 0L
-            pinnedAtState.value > 0 -> pinnedAtState.value
-            else -> System.currentTimeMillis()
-        }
+        val pinnedAt = PinnedAt.next(newPinned, pinnedAtState.value)
         pinnedAtState.value = pinnedAt
         scope.launch {
             runCatching {
@@ -102,9 +98,14 @@ class GroupInfoSettingsState internal constructor(
         push(pinned, muteUntil != null, muteUntil)
     }
 
-    /** 「消息免打扰」行右值（关 / 至… / 永久）；`nowMs` 由调用方的到期定时器驱动，到点自动重组。 */
-    fun muteValueText(nowMs: Long): String? =
-        if (MuteState.isMutedNow(mutedState.value, muteUntilState.value, nowMs)) MuteState.untilText(muteUntilState.value, nowMs) else null
+    /**
+     * 「消息免打扰」行右值（至… / 永久；未免打扰返回 null）。与 [muted] 同取墙钟，两处不会各说各话；
+     * 到点重组由调用方的到期定时器负责（见 [rememberGroupMuteValueText]）。
+     */
+    fun muteValueText(): String? {
+        val now = System.currentTimeMillis()
+        return if (MuteState.isMutedNow(mutedState.value, muteUntilState.value, now)) MuteState.untilText(muteUntilState.value, now) else null
+    }
 
     /** 喂给 [com.libeyond.imandroid.ui.components.rememberMuteTick] 的单元素会话表（只关心到期时刻）。 */
     fun tickSource(): List<ConversationEntity> =
@@ -131,8 +132,8 @@ class GroupInfoSettingsState internal constructor(
 /** 群资料页「消息免打扰」行右值：到期定时器驱动，到点自动从「至…」变回「关」。 */
 @Composable
 fun rememberGroupMuteValueText(settings: GroupInfoSettingsState): String {
-    val now = rememberMuteTick(settings.tickSource())
-    return settings.muteValueText(now) ?: stringResource(R.string.common_off)
+    rememberMuteTick(settings.tickSource()) // 只负责到期 / 回前台时触发重组，取值走 muteValueText 的墙钟
+    return settings.muteValueText() ?: stringResource(R.string.common_off)
 }
 
 /** 群资料页的免打扰时长菜单（与聊天信息页同一个 [MuteDurationSheet]）；未打开时不画。 */

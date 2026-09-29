@@ -22,6 +22,7 @@ import com.libeyond.imandroid.data.DetailTab
 import com.libeyond.imandroid.data.DetailTabs
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.MuteState
+import com.libeyond.imandroid.data.PinnedAt
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.MediaUrl
@@ -171,12 +172,7 @@ fun ChatDetailHost(
      *   置顶开关这条路留 `null`（省略），让服务端按 PROTOCOL §6.10 缺省规则保留原到期时间。
      */
     fun pushSettings(newPinned: Boolean, newMuted: Boolean, newMuteUntil: Long? = null) {
-        // 置顶时间只在「由关变开」时取现在；已置顶时改免打扰要原样带回，否则置顶会话之间的顺序被打乱
-        pinnedAt = when {
-            !newPinned -> 0
-            pinnedAt > 0 -> pinnedAt
-            else -> System.currentTimeMillis()
-        }
+        pinnedAt = PinnedAt.next(newPinned, pinnedAt)
         val sendPinnedAt = pinnedAt
         scope.launch {
             runCatching {
