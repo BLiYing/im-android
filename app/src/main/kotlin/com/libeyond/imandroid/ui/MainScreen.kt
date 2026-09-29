@@ -53,6 +53,7 @@ import com.libeyond.imandroid.data.ConversationAction
 import com.libeyond.imandroid.data.ConversationActions
 import com.libeyond.imandroid.data.PushNav
 import com.libeyond.imandroid.data.TabUnread
+import com.libeyond.imandroid.ui.components.InAppBannerHost
 import com.libeyond.imandroid.ui.components.MessageContextMenu
 import com.libeyond.imandroid.ui.components.PushBase
 import com.libeyond.imandroid.ui.components.PushTransition
@@ -93,13 +94,22 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     // 通知判定 alertDecision 的 viewingConv 输入（NOTIFICATIONS_DESIGN §3.1）：`openConv` 是
     // "当前打开的会话"的唯一权威来源，写进 data/ 层的全局标记供 MessageService 的 NEW_MSG 分支读——
     // 那条路径没有 Compose 上下文，够不到这个局部变量。
-    LaunchedEffect(openConv) { com.libeyond.imandroid.data.ViewingConv.current = openConv?.convId }
+    // 同时：应用内横幅正显示的恰是刚打开的这个会话就收起它（NOTIFICATIONS_P1_DESIGN §1.2「进入该会话」）——
+    // 不只是横幅自己被点开这一条路径，群资料里点成员「发消息」这类别的入口进同一会话也该收。
+    LaunchedEffect(openConv) {
+        com.libeyond.imandroid.data.ViewingConv.current = openConv?.convId
+        openConv?.let { com.libeyond.imandroid.data.InAppBannerStore.dismissIfShowing(it.convId) }
+    }
 
     // 初值 null = 本地库还没回第一份。**不能拿 emptyList() 当初值**：那等于先宣布「还没有会话」、
     // 库回数据再改口——冷启动 / 登录都先闪一下空态（2026-09-15 用户报，判据见 ConversationListPhase）
     val conversations by remember(owner) {
         if (owner.isEmpty()) emptyFlow() else client.repo.observeConversations(owner)
     }.collectAsState(initial = null)
+    // 应用内横幅点击按 convId 查会话：O(1) 查表，同 `Forward.kt#targetsInOrder`/`FavoritesHost`/
+    // `CallHistoryHost` 既有的 `associateBy { it.convId }` 手法，别在导航这条热路径上现扫一遍全表
+    // （`/code-review` 抓出的效率点）。
+    val conversationsById = remember(conversations) { conversations.orEmpty().associateBy { it.convId } }
 
     val connState by client.socket.state.collectAsState()
     // 底栏「消息」蓝点：与会话行同一份数据现算，口径见 TabUnread（三端同口径）。
@@ -148,86 +158,98 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
         BottomBar(current = tab, unread = tabUnread, onSelect = { tab = it })
     }
 
-    // 扫码/点链接加群路由宿主：挂在这里（不是更外层的 AppRoot）是因为它要改 openConv 来进群聊/单聊，
-    // 那份状态是本函数的私有变量，宿主离它太远够不着（QrRouteHost.kt 头注释）。
-    QrRouteHost(client = client, onOpenChat = { openConv = it }) {
-        // —— 一级 push：Tab 根 ↔ 聊天页 ——
-        // 进聊天页时整个 Tab 层（连同底栏）向左让开、转场结束后离开组合——与此前 early return 同一语义
-        PushTransition(
-            targetState = openConv,
-            depthOf = { if (it == null) PushNav.ROOT_DEPTH else 1 },
-            // 同一个会话的实体被刷新不算换页；换会话（群资料里点成员「发消息」）才转场
-            contentKey = { it?.convId },
-        ) { conv ->
-            if (conv == null) {
-                Box(Modifier.fillMaxSize().background(IMTheme.colors.groupedBackground)) {
-                    when (tab) {
-                        Tab.Chats -> ChatsHost(
-                            client = client,
-                            conversations = conversations,
-                            connected = connState == ConnState.Connected,
-                            knownFriends = knownFriends,
-                            onOpenChat = { openConv = it },
-                            onLongPress = { c, rect -> menuFor = c; menuAnchor = rect },
-                            bottomBar = bottomBar,
-                        )
-                        Tab.Contacts -> ContactsHost(client = client, onOpenChat = { openConv = it }, bottomBar = bottomBar)
-                        Tab.Me -> MeHost(
-                            client = client, onLogout = onLogout, bottomBar = bottomBar,
-                            onOpenChat = { openConv = it },
-                        )
-                    }
-                    menuFor?.let { target ->
-                        ConversationMenu(client, target, menuAnchor, scope, onDismiss = { menuFor = null })
-                    }
-                }
-            } else {
-                val covered = infoForConv != null
-                Box(Modifier.fillMaxSize()) {
-                    // 详情页**盖在**聊天页之上，聊天页不出组合（iOS push 之后底下那个 VC 还活着，同构）。
-                    // 此前是二选一的 `return`：进详情就把 ChatHost 整个移出组合，回来时列表状态从头建、
-                    // 按首屏规则重新定位——停在历史里点进详情，回来被甩回首条未读或底部（设计稿 #10）。
-                    // 被盖住时只左移让开（PushBase），不离开组合
-                    PushBase(covered = covered) {
-                        // 换会话（群资料里点成员「发消息」）要整页重建：列表位置、输入框、覆盖层都是按会话的
-                        key(conv.convId) {
-                            ChatHost(
+    // 应用内横幅（NOTIFICATIONS_P1_DESIGN §1.2）挂在这一层最上面——不是更外层的 AppRoot：
+    // 点横幅要"以点会话列表行同一路径"进会话，那条路径就是下面这个 `openConv = it`，
+    // 是本函数的私有导航状态，AppRoot 那一层够不着（与 QrRouteHost 挂在这里的理由同构）。
+    Box(Modifier.fillMaxSize()) {
+        // 扫码/点链接加群路由宿主：挂在这里（不是更外层的 AppRoot）是因为它要改 openConv 来进群聊/单聊，
+        // 那份状态是本函数的私有变量，宿主离它太远够不着（QrRouteHost.kt 头注释）。
+        QrRouteHost(client = client, onOpenChat = { openConv = it }) {
+            // —— 一级 push：Tab 根 ↔ 聊天页 ——
+            // 进聊天页时整个 Tab 层（连同底栏）向左让开、转场结束后离开组合——与此前 early return 同一语义
+            PushTransition(
+                targetState = openConv,
+                depthOf = { if (it == null) PushNav.ROOT_DEPTH else 1 },
+                // 同一个会话的实体被刷新不算换页；换会话（群资料里点成员「发消息」）才转场
+                contentKey = { it?.convId },
+            ) { conv ->
+                if (conv == null) {
+                    Box(Modifier.fillMaxSize().background(IMTheme.colors.groupedBackground)) {
+                        when (tab) {
+                            Tab.Chats -> ChatsHost(
                                 client = client,
-                                conv = conv,
-                                onBack = { openConv = null },
-                                onOpenInfo = { infoTab = null; infoGallery = false; infoForConv = conv },
-                                onOpenMediaGallery = {
-                                    infoTab = com.libeyond.imandroid.data.DetailTab.Media
-                                    infoGallery = true
-                                    infoForConv = conv
-                                },
-                                arm = chatArm,
-                                onArmConsumed = { chatArm = ChatArm() },
-                                covered = covered,
-                                onOpenChat = { stub -> openConv = stub },
+                                conversations = conversations,
+                                connected = connState == ConnState.Connected,
+                                knownFriends = knownFriends,
+                                onOpenChat = { openConv = it },
+                                onLongPress = { c, rect -> menuFor = c; menuAnchor = rect },
+                                bottomBar = bottomBar,
+                            )
+                            Tab.Contacts -> ContactsHost(client = client, onOpenChat = { openConv = it }, bottomBar = bottomBar)
+                            Tab.Me -> MeHost(
+                                client = client, onLogout = onLogout, bottomBar = bottomBar,
+                                onOpenChat = { openConv = it },
                             )
                         }
+                        menuFor?.let { target ->
+                            ConversationMenu(client, target, menuAnchor, scope, onDismiss = { menuFor = null })
+                        }
                     }
-                    // —— 二级 push：聊天页 → 会话详情 / 群资料 ——
-                    PushTransition(
-                        targetState = infoForConv,
-                        depthOf = { if (it == null) 0 else 1 },
-                        contentKey = { it?.convId },
-                    ) { info ->
-                        if (info != null) {
-                            Box(Modifier.fillMaxSize().blockPointerInput()) {
-                                InfoPage(client, info, knownFriends, infoTab, infoGallery,
-                                    onOpenChat = { stub -> infoForConv = null; openConv = stub },
-                                    onArm = { arm -> infoForConv = null; chatArm = arm },
-                                    onBack = { infoForConv = null },
-                                    onLeft = { infoForConv = null; openConv = null },
+                } else {
+                    val covered = infoForConv != null
+                    Box(Modifier.fillMaxSize()) {
+                        // 详情页**盖在**聊天页之上，聊天页不出组合（iOS push 之后底下那个 VC 还活着，同构）。
+                        // 此前是二选一的 `return`：进详情就把 ChatHost 整个移出组合，回来时列表状态从头建、
+                        // 按首屏规则重新定位——停在历史里点进详情，回来被甩回首条未读或底部（设计稿 #10）。
+                        // 被盖住时只左移让开（PushBase），不离开组合
+                        PushBase(covered = covered) {
+                            // 换会话（群资料里点成员「发消息」）要整页重建：列表位置、输入框、覆盖层都是按会话的
+                            key(conv.convId) {
+                                ChatHost(
+                                    client = client,
+                                    conv = conv,
+                                    onBack = { openConv = null },
+                                    onOpenInfo = { infoTab = null; infoGallery = false; infoForConv = conv },
+                                    onOpenMediaGallery = {
+                                        infoTab = com.libeyond.imandroid.data.DetailTab.Media
+                                        infoGallery = true
+                                        infoForConv = conv
+                                    },
+                                    arm = chatArm,
+                                    onArmConsumed = { chatArm = ChatArm() },
+                                    covered = covered,
+                                    onOpenChat = { stub -> openConv = stub },
                                 )
+                            }
+                        }
+                        // —— 二级 push：聊天页 → 会话详情 / 群资料 ——
+                        PushTransition(
+                            targetState = infoForConv,
+                            depthOf = { if (it == null) 0 else 1 },
+                            contentKey = { it?.convId },
+                        ) { info ->
+                            if (info != null) {
+                                Box(Modifier.fillMaxSize().blockPointerInput()) {
+                                    InfoPage(client, info, knownFriends, infoTab, infoGallery,
+                                        onOpenChat = { stub -> infoForConv = null; openConv = stub },
+                                        onArm = { arm -> infoForConv = null; chatArm = arm },
+                                        onBack = { infoForConv = null },
+                                        onLeft = { infoForConv = null; openConv = null },
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
         }
+        InAppBannerHost(
+            onOpen = { convId ->
+                val conv = conversationsById[convId]
+                if (conv != null) openConv = conv
+                conv != null
+            },
+        )
     }
 }
 

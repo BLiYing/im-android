@@ -229,6 +229,8 @@ data class IMDimens(
     val radiusCard: Dp = 14.dp,
     val radiusBubble: Dp = 18.dp,
     val radiusMenu: Dp = 8.dp,
+    /** 应用内横幅圆角（NOTIFICATIONS_P1_DESIGN §1.2 表格：Android 版 12，与 iOS 的 14 是刻意的正当差异）。 */
+    val radiusBanner: Dp = 12.dp,
     val space1: Dp = 4.dp,
     val space2: Dp = 8.dp,
     val space3: Dp = 12.dp,

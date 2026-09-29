@@ -31,10 +31,11 @@ data class NotifTypeSettings(
 )
 
 /** 应用内通知（§2.2 第二组）。[preview] 是 P1（应用内横幅），P0 只存默认值，不接实际横幅。 */
+// 默认全关（2026-09-29 用户：App 开着时没必要响/振/弹；提醒留给后台时的系统通知）
 data class InAppSettings(
-    val sound: Boolean = true,
-    val vibrate: Boolean = true,
-    val preview: Boolean = true,
+    val sound: Boolean = false,
+    val vibrate: Boolean = false,
+    val preview: Boolean = false,
 )
 
 /** 角标计数（§3.4）。默认关 = 现行口径（免打扰不计）。 */

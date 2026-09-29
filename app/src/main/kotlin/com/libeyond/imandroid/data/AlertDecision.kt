@@ -36,7 +36,11 @@ data class AlertContext(
     val settings: NotificationSettings,
 )
 
-/** 判定结果。`soundId` 在 [sound] 为假时恒为 null。`banner` P0 恒为 false（P1 才做应用内横幅）。 */
+/**
+ * 判定结果。`soundId` 在 [sound] 为假时恒为 null。
+ * `banner`（NOTIFICATIONS_P1_DESIGN §1.1）：仅移动端可能为真——资格与 [sound]/[vibrate] 同一套
+ * （含 appActive），另要求 `settings.inApp.preview`；**不受节流影响**（连发多条横幅原地换内容、不吞）。
+ */
 data class AlertResult(
     val sound: Boolean,
     val vibrate: Boolean,
@@ -88,7 +92,9 @@ object AlertDecision {
             PLATFORM_MOBILE -> {
                 val sound = ctx.settings.inApp.sound && soundAllowed
                 val vibrate = ctx.settings.inApp.vibrate && !throttled
-                AlertResult(sound, vibrate, banner = false, osNotify = false, soundId = resolvedSoundId.takeIf { sound })
+                // 走到这里已经过了①-④全部资格判断（appActive 含在内）；节流只管声音/振动，横幅不看它。
+                val banner = ctx.settings.inApp.preview
+                AlertResult(sound, vibrate, banner = banner, osNotify = false, soundId = resolvedSoundId.takeIf { sound })
             }
             PLATFORM_DESKTOP -> {
                 val sound = ctx.settings.desktop.sound && soundAllowed

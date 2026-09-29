@@ -40,6 +40,7 @@ internal fun NotificationSettingsScreen(
     onOpenType: (group: Boolean) -> Unit,
     onToggleInAppSound: (Boolean) -> Unit,
     onToggleInAppVibrate: (Boolean) -> Unit,
+    onToggleInAppPreview: (Boolean) -> Unit,
     onToggleBadge: (Boolean) -> Unit,
     onComingSoon: (String) -> Unit,
     onReset: () -> Unit,
@@ -98,15 +99,15 @@ internal fun NotificationSettingsScreen(
                     )
                 }
                 IMRowDivider(insetStart = d.space4)
-                // P1（应用内横幅），P0 画成灰置占位行——不藏，藏了开关下面整块会跳（PRIVACY_SECURITY_DESIGN §2.5 同口径）
-                IMSettingsRow(
+                // P1 应用内横幅（NOTIFICATIONS_P1_DESIGN §1.3）：第一期是灰置占位行，
+                // 现在接的是真开关，读写已经存在的 inApp.preview（第一期就存了，默认开）。
+                IMSwitchRow(
                     title = inAppPreviewTitle,
-                    onClick = { onComingSoon(inAppPreviewTitle) },
-                    rightValue = comingSoonLabel,
-                    muted = true,
+                    checked = settings.inApp.preview,
+                    onCheckedChange = onToggleInAppPreview,
                 )
             }
-            IMSectionFooter(stringResource(R.string.notif_in_app_footer))
+            IMSectionFooter(stringResource(R.string.notif_in_app_preview_footer))
 
             Spacer(Modifier.height(d.cardGap))
             IMSectionHeader(stringResource(R.string.notif_section_badge))

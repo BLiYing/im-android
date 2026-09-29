@@ -707,8 +707,61 @@ Android：`ui/NotificationSettingsHost.kt` + `ui/screens/NotificationSettingsScr
 | 消息预览开关在类型关闭时 | 「灰置但保留」，未明说是否禁用交互 | 灰置**且禁用**（`IMSwitchRow(enabled=false)`）——本端判定「显示通知关了，预览开关本身没有意义可言」 | 🟢 刻意，见 `NotificationTypeScreen.kt` 类注释；提示音行**只灰不禁**（保留可点，方便提前选好） |
 | 例外列表左滑 | 未画（iOS 用 `UISwipeActionsConfiguration`，效果同） | `SwipeActionRow`（本仓自绘，同 `BlockedUsersScreen` 「取消屏蔽」一致的手法） | ✅ |
 | 桌面通知那一组（§2.5） | 不适用（该组只在 Web/Electron） | 不画——Android 主页没有这一组，`NotificationSettings.desktop` 字段只为让 `AlertDecision` 单测能覆盖桌面/浏览器向量，不接 UI、不持久化 | 🟢 刻意，平台范围不同 |
-| 应用内预览（横幅） | P1，本设计文档明确排除 P0 | 同（灰置占位行，点了吐司） | ✅ |
+| 应用内预览（横幅） | P0 灰置占位行 | P1 第一批已接真开关，见 §4.13 | ✅（P1 第一批已收口） |
 | 锁屏/后台通知、应用图标角标 | P2，等 M5 推送 | 同（灰置占位组） | ✅ |
+
+---
+
+## 4.13 通知与提示音 P1 第一批：应用内横幅 / 添加例外（2026-09-29，未做真机验证）
+
+设计：`../IMServer/docs/design/NOTIFICATIONS_P1_DESIGN.md` §1/§2/§6.3/§7/§8 + UX 稿
+`sketches/NOTIFICATIONS_P1_UX_SKETCH.html`（01/02 两节）。这一批**只做客户端本地能落的三项里
+属于 Android 的两项**（应用内横幅、「添加例外」）——后端零改动，定时免打扰是第二批，本轮未动。
+
+- **`alertDecision.banner`**：`data/AlertDecision.kt` 从「P0 恒 false」改为「移动端分支里，
+  走到这一步已经过了①-④全部资格判断（含 appActive），再看 `settings.inApp.preview`」——
+  与 sound/vibrate 同一套资格，但**不受 1.5 秒节流影响**（连来多条横幅原地换最新一条）。
+  `alert_decision.json` 32 条向量（新增 2 条 + 修正既有 8 条 `banner` 期望）全绿。
+- **应用内横幅新组件**：`ui/components/InAppBanner.kt`（`InAppBannerHost`，挂在 `ui/MainScreen.kt`
+  的根 `Box` 最上层——不是更外层的 `AppRoot`，因为点横幅要用 `openConv` 这个只存在于
+  `MainScreen` 的私有导航状态进会话，与 `QrRouteHost` 挂在同一层的理由一致）+
+  `data/InAppBanner.kt`（`BannerContent`/`BannerFormat`/`InAppBannerStore`，纯数据层，不碰
+  Compose）。`data/IncomingAlert.kt` 在 `result.banner` 为真时调 `InAppBannerStore.show(...)`。
+  头像/标题/正文口径：头像种子群聊=convId、私聊=peerUid（与会话列表/转发选择页同一口径，
+  系统通知会话 `IMAvatar` 自动显示应用图标）；标题 = `conv.title.ifBlank { conv.convId }`
+  （与会话列表行 `ConversationRow` 同一来源）；正文该类型预览开 → 复用
+  `data/ConversationPreview.of`（群聊已经是"发送者：摘要"形状，不必另拼）、关 → 固定文案
+  `notif_preview_hidden`（第一期已有）。
+- **手势/动效**：滑入 250ms（`IMTheme.appearance.animationsEnabled` 关时直接出现/消失，无位移）、
+  4 秒自动收起、按住暂停计时（松手从暂停点继续，不是重新算满 4 秒）、上滑收起、点击进会话后
+  自身收起、新横幅到达原地换内容并重开计时器（不叠加、不排队）、打开该会话时收起
+  （`ui/MainScreen.kt` 里 `LaunchedEffect(openConv)` 调 `InAppBannerStore.dismissIfShowing`）。
+- **主页「应用内预览」真开关**：`ui/screens/NotificationSettingsScreen.kt` 的占位行换成
+  `IMSwitchRow`，绑 `settings.inApp.preview`；组脚注换成 `notif_in_app_preview_footer`。
+- **「添加例外」**：`ui/screens/NotificationTypeScreen.kt` 的「例外」组改为**常驻**（撤销 P0
+  commit `82c1687` 的「没有例外就整组不显示」，P1 §8 已拍板）；组内第一行是绿色圆形 ＋
+  「添加例外」行（`c.accent`，与本 App 强调色同一个绿，不是另起颜色）。点击打开
+  `ui/screens/ForwardPickerScreen.kt`（复用，新增 `filter`/`title`/`footer`/`emptyText`/
+  `allowMulti`/`confirmSingleTap` 参数，不传时行为与原转发流程逐字不变）：单选（`allowMulti=false`
+  不出「多选」按钮）、点一行不经二次确认直接 `updateSettings(muted=true)`（`confirmSingleTap=false`）
+  并关闭选择页。数据过滤 `data/Forward.kt` 新增 `exceptionPickable`（这一页类型 + 未免打扰 +
+  非系统通知会话），与既有 `pickable`（转发用）并列、互不影响。
+- **导航**：选择页是 `IMCardSheet`，本就自带 `BackHandler`（下拉/遮罩/返回键三态关闭），
+  「Back gesture must work」不需要额外接线。
+
+| 项 | iOS（设计目标） | Android | 判定 |
+|---|---|---|---|
+| 横幅容器层级/圆角/边距 | key window 独立视图，盖导航栏不盖状态栏，圆角 14 | `MainScreen` 根 `Box` 最上层，`statusBarsPadding()` 贴状态栏下沿，左右 8dp，圆角 12（`d.radiusBanner`，新增令牌） | 🟢 正当差异，见 NOTIFICATIONS_P1_DESIGN §7 表格 |
+| 横幅出现/收起动效 | 滑入 250ms/上滑收起/4 秒自动/按住不计时 | 同（`AnimatedVisibility` + 手写 `pointerInput` 手势，`animationsEnabled` 关时零动画） | ✅ |
+| 横幅正文格式化 | 复用会话列表预览格式化 | 同，复用 `ConversationPreview.of`（`BannerFormat.of`） | ✅ |
+| 「添加例外」选择页 | 复用转发选择页，单选 | 复用 `ForwardPickerScreen`（新增可选参数，非破坏性改动） | ✅ |
+| 例外组常驻 | §8 已拍板②，两端同改 | 同 | ✅ |
+| 定时免打扰（时长菜单/`mute_until`） | 第二批，本轮未动 | 同，本轮未动 | ⚪ 不在本批范围 |
+
+**未做真机验证**（明确交给下一步）：横幅出现/点击进会话/上滑收起/4 秒自动收/连发多条原地换内容/
+按住暂停计时/进入该会话自动收起/预览关显示「新消息」/「动画」关时无位移/通话中不出，以及「添加
+例外」选择页选中后另一端同步、`pinned_at`/`marked_unread` 是否原样带回的端到端验证——均只过了
+编译与 JVM 单测，Compose 手势与动画时序历来测不到（`CODING_STYLE.md` §八）。
 
 ---
 

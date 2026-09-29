@@ -50,5 +50,11 @@ object IncomingAlert {
         )
         val result = AlertDecision.decide(ctx)
         if (result.sound || result.vibrate) AlertPlayer.play(result)
+        // P1 应用内横幅（NOTIFICATIONS_P1_DESIGN §1.1/§1.2）：不受节流影响，判定为真就原地换/重新计时，
+        // 交给 InAppBannerStore；真正画它、算 4 秒计时与手势的是 ui/components/InAppBanner.kt。
+        if (result.banner) {
+            val previewOn = ctx.settings.typeOf(group = conv.isGroup).preview
+            InAppBannerStore.show(BannerFormat.of(conv, previewOn = previewOn, myUid = owner))
+        }
     }
 }

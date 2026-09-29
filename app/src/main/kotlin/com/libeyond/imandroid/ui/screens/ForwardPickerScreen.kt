@@ -45,6 +45,7 @@ import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMCardSheet
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMSearchField
+import com.libeyond.imandroid.ui.components.IMSectionFooter
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -65,6 +66,10 @@ private val ROW_GAP = 12.dp
  * - 剔除系统通知单聊。
  *
  * [onConfirm] / [onCancel] 都在卡片**滑出屏幕之后**才回调。
+ *
+ * **NOTIFICATIONS_P1_DESIGN §2「添加例外」复用这同一个组件**（不是另写一份选择页）：
+ * 那一路要求纯单选（没有右上「多选」入口）、点一行不经二次确认直接生效、标题/脚注/空态文案
+ * 也不一样，故下面几个参数都留了口子——不传就是原来转发那一套行为，行为**逐字不变**。
  */
 @Composable
 fun ForwardPickerScreen(
@@ -72,6 +77,17 @@ fun ForwardPickerScreen(
     onConfirm: (List<ConversationEntity>) -> Unit,
     onCancel: () -> Unit,
     onToast: (String) -> Unit,
+    /** 数据过滤——默认转发那一套（[Forward.pickable]），「添加例外」传 [Forward.exceptionPickable] 的绑定版。 */
+    filter: (List<ConversationEntity>, String) -> List<ConversationEntity> = Forward::pickable,
+    title: String = stringResource(R.string.forward_picker_destination_title),
+    /** 列表下方的说明文字，空串不画（转发不需要，「添加例外」传 `notif_exceptions_pick_footer_*`）。 */
+    footer: String = "",
+    /** 数据源本就是空的（不是搜索没搜到）时显示的文案，空串不画——转发场景保留原状（不说话）。 */
+    emptyText: String = "",
+    /** 允许切到多选（右上「多选」按钮）。「添加例外」传 false：纯单选，不出这颗按钮。 */
+    allowMulti: Boolean = true,
+    /** 单选态点一行是否先弹「发送给「X」？」确认。「添加例外」传 false：点了立即生效并关闭选择页。 */
+    confirmSingleTap: Boolean = true,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -81,14 +97,15 @@ fun ForwardPickerScreen(
     // Set 的加减保持插入顺序：发送顺序 = 勾选顺序（iOS `_selected` 是有序数组）
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirming by remember { mutableStateOf<ConversationEntity?>(null) }
-    val rows = remember(conversations, query) { Forward.pickable(conversations, query) }
+    val rows = remember(conversations, query, filter) { filter(conversations, query) }
 
     IMCardSheet(onDismissed = onCancel) { sheet ->
         IMTopBar(
-            title = stringResource(R.string.forward_picker_destination_title),
+            title = title,
             leftLabel = stringResource(R.string.common_cancel),
             onLeft = { sheet.dismiss(onCancel) },
             actionText = when {
+                !allowMulti -> ""
                 !multi -> stringResource(R.string.forward_picker_multi)
                 selected.isEmpty() -> stringResource(R.string.common_send)
                 else -> pluralStringResource(R.plurals.forward_picker_send_count, selected.size, selected.size)
@@ -109,10 +126,17 @@ fun ForwardPickerScreen(
             placeholder = stringResource(R.string.forward_picker_search_placeholder),
             modifier = Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = d.space2),
         )
-        // 只在「搜了但没搜到」时说话：会话列表还没从库里读到时（调用方初值是空表）说「没有」再改口，就是闪一下空态
-        if (rows.isEmpty() && query.isNotBlank()) {
+        // 「搜了但没搜到」恒说「没匹配」；数据源本就是空的才轮到调用方给的 emptyText——
+        // 只在 query 为空时判"数据源本就空"：还没读到库里的数据时（初值空表）不能抢答，闪一下空态
+        val emptyMessage = when {
+            rows.isNotEmpty() -> null
+            query.isNotBlank() -> stringResource(R.string.forward_picker_no_match)
+            emptyText.isNotEmpty() -> emptyText
+            else -> null
+        }
+        emptyMessage?.let {
             Text(
-                stringResource(R.string.forward_picker_no_match),
+                it,
                 color = c.textTertiary,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
@@ -128,7 +152,11 @@ fun ForwardPickerScreen(
                     onClick = {
                         focus.clearFocus()
                         if (!multi) {
-                            confirming = conv
+                            if (confirmSingleTap) {
+                                confirming = conv
+                            } else {
+                                sheet.dismiss { onConfirm(listOf(conv)) }
+                            }
                         } else {
                             val next = Forward.toggleTarget(selected, conv.convId)
                             if (next == null) {
@@ -140,6 +168,7 @@ fun ForwardPickerScreen(
                     },
                 )
             }
+            if (footer.isNotEmpty()) item { IMSectionFooter(footer) }
         }
         confirming?.let { target ->
             IMConfirmDialog(

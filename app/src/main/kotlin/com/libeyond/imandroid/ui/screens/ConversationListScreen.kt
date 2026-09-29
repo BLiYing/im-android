@@ -1,7 +1,7 @@
 package com.libeyond.imandroid.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,27 +12,30 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,8 +48,8 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.ConversationListPhase
 import com.libeyond.imandroid.data.ConversationPreview
-import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.components.TimeFormat
@@ -106,13 +109,26 @@ fun ConversationListScreen(
             // 还不知道有没有：什么都不画。画空态 = 先宣布「还没有会话」再改口
             ConversationListPhase.Loading -> Unit
             ConversationListPhase.Empty -> EmptyState()
-            ConversationListPhase.List -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+            ConversationListPhase.List -> {
+                val listState = rememberLazyListState()
+                // 列表按 convId 做 key：新消息把某会话顶到第一行时，LazyColumn 会**锚住原来的第一行**，
+                // 新顶上来的会话被挤到屏幕上方、看起来像「消失了」（2026-09-29 真机）。
+                // 用户本来就停在顶部时跟着回顶；往下翻着看时不动，不打断阅读。
+                // 「顶部」要在**新列表布局前**判：remember(topKey) 在组合期算，此时 listState 还是旧位置
+                // （等 LaunchedEffect 里再读，锚定已经把 index 推到了 1+）。
+                val topKey = conversations.firstOrNull()?.convId
+                val wasAtTop = remember(topKey) {
+                    Snapshot.withoutReadObservation { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+                }
+                LaunchedEffect(topKey) { if (wasAtTop) listState.scrollToItem(0) }
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 items(conversations, key = { it.convId }) { conv ->
                     ConversationRow(
                         conv, myUid, localNameOf, onlineOf,
                         onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) },
                     )
                 }
+            }
             }
         }
     }

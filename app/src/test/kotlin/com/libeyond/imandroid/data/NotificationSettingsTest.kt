@@ -15,6 +15,16 @@ class NotificationSettingsTest {
     }
 
     @Test
+    fun `应用内提示音、振动、预览默认关（2026-09-29 用户决定），分类通知默认开`() {
+        val d = NotificationSettings.DEFAULT
+        assertEquals(false, d.inApp.sound)
+        assertEquals(false, d.inApp.vibrate)
+        assertEquals(false, d.inApp.preview)
+        assertEquals(true, d.private.enabled)
+        assertEquals(true, d.group.enabled)
+    }
+
+    @Test
     fun `编码后解码原样往返`() {
         val s = NotificationSettings(
             private = NotifTypeSettings(enabled = false, preview = false, sound = NotifSound.CHORD),
