@@ -17,6 +17,8 @@ import com.composables.icons.lucide.UserPlus
 import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.data.ChatsPage
 import com.libeyond.imandroid.data.ConversationListPhase
+import com.libeyond.imandroid.data.Presence
+import com.libeyond.imandroid.data.PresenceDisplay
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
@@ -47,6 +49,14 @@ fun ChatsHost(
     bottomBar: @Composable () -> Unit,
 ) {
     val owner = client.uid.orEmpty()
+    // 在线态绿点：数据链路早已在（HTTP 快照 seed + presence 帧增量更新，见 data/Presence.kt），
+    // 缺的只是这一层读取——同 iOS 的 `peerPresence.isOnline`，不额外发 watch（下线态本就靠
+    // 下次刷新收敛，见 IMConversationListViewController.m 的同款注释，两端行为一致）。
+    val presenceMap by client.presence.presence.collectAsState()
+    val onlineOf = { uid: String ->
+        val p = presenceMap[uid]
+        p != null && Presence.display(p.status, p.onlineUntil, p.lastSeen, System.currentTimeMillis()) is PresenceDisplay.Online
+    }
     var page by remember { mutableStateOf(ChatsPage.List) }
     var plusAnchor by remember { mutableStateOf<Rect?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
@@ -71,6 +81,7 @@ fun ChatsHost(
                     // 会话列表只有全局好友表可用，没有群成员表（那是群资料里的东西）——
                     // 与 iOS 列表 cell 的 `lastPreviewTextForSelfUID:` 同一条退化路径（群昵称传 nil）。
                     localNameOf = { uid -> knownFriends[uid]?.displayName },
+                    onlineOf = onlineOf,
                     onOpen = onOpenChat,
                     onLongPress = onLongPress,
                     onPlus = { plusAnchor = it },

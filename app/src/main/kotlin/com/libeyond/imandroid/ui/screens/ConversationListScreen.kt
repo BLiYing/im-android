@@ -68,6 +68,9 @@ fun ConversationListScreen(
     myUid: String,
     /** 本机对某 uid 的显示名（备注 > 昵称）；取不到回 null，见 [ConversationPreview.of]。 */
     localNameOf: (String) -> String?,
+    /** 对端在线态（仅单聊；群聊调用方不必关心）——同 iOS `peerPresence.isOnline`，快照来自
+     * 会话列表接口，此后靠 presence 帧增量更新（`data/Presence.kt`）。 */
+    onlineOf: (String) -> Boolean,
     onOpen: (ConversationEntity) -> Unit,
     /** 长按一行，带上它在窗口坐标系里的矩形——菜单要贴着这一行弹（对齐 iOS UIContextMenu）。 */
     onLongPress: (ConversationEntity, Rect) -> Unit,
@@ -106,7 +109,7 @@ fun ConversationListScreen(
             ConversationListPhase.List -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(conversations, key = { it.convId }) { conv ->
                     ConversationRow(
-                        conv, myUid, localNameOf,
+                        conv, myUid, localNameOf, onlineOf,
                         onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) },
                     )
                 }
@@ -121,6 +124,7 @@ private fun ConversationRow(
     conv: ConversationEntity,
     myUid: String,
     localNameOf: (String) -> String?,
+    onlineOf: (String) -> Boolean,
     onClick: () -> Unit,
     onLongClick: (Rect) -> Unit,
 ) {
@@ -144,13 +148,27 @@ private fun ConversationRow(
             .padding(horizontal = d.space4, vertical = d.space3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IMAvatar(
-            displayName = title,
-            // 种子用 uid 不用显示名——改昵称不该换颜色
-            seed = if (conv.isGroup) conv.convId else conv.peerUid.ifBlank { conv.convId },
-            avatarUrl = conv.avatarUrl,
-            size = d.convAvatar,
-        )
+        Box {
+            IMAvatar(
+                displayName = title,
+                // 种子用 uid 不用显示名——改昵称不该换颜色
+                seed = if (conv.isGroup) conv.convId else conv.peerUid.ifBlank { conv.convId },
+                avatarUrl = conv.avatarUrl,
+                size = d.convAvatar,
+            )
+            // 在线态绿点：仅单聊且对端在线时显示（对齐 iOS `_onlineDot`）。群聊不显示。
+            // 12dp 圆 + 2dp 边框（描边色=行背景，抠出与底色的间隙），贴头像右下角。
+            if (!conv.isGroup && onlineOf(conv.peerUid)) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(12.dp)
+                        .background(c.pageBackground, CircleShape)
+                        .padding(2.dp)
+                        .background(c.online, CircleShape),
+                )
+            }
+        }
         Spacer(Modifier.width(d.space3))
 
         Column(modifier = Modifier.weight(1f)) {

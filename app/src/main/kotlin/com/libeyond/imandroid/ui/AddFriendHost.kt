@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +32,7 @@ fun AddFriendHost(
     onBack: () -> Unit,
     onChanged: () -> Unit = {},
 ) {
+    BackHandler(onBack = onBack)
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<UserCard>>(emptyList()) }

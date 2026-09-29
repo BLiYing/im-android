@@ -7,6 +7,21 @@
 
 ## 当前焦点
 
+> **开始第 3 项前用户追加两条修复，均已真机验证（2026-09-29，OPPO PKD130，user1001）**：
+> - **① 侧滑手势返回不回上一页**：根因是 4 个 Host 只把 `onBack` 接给顶部返回箭头，没有
+>   `BackHandler(onBack = onBack)`——系统返回手势/按钮没有可拦截的回调，直接落到 Activity
+>   默认行为（退出/回桌面），不是"回到上一页"。`CallHistoryHost.kt`（本轮新写的代码，同批自己
+>   带出的缺口）+ `LanguageHost.kt`/`AddFriendHost.kt`/`CreateGroupHost.kt`（三个既有旧缺口，
+>   同一个 grep 扫描 `ui/*Host.kt` 找 `onBack` 参数缺 `BackHandler` 一次性挖出）。全仓再无同类缺口。
+> - **② 会话列表头像没有在线态绿点，iOS 有**：数据链路本就齐（`GET /conversations` 的
+>   `peer_presence`/`peer_online_until`/`peer_last_seen` 早就解析进 `PresenceStore`，`presence`
+>   帧也早在无条件更新它——`MessageService.kt`/`MessageRepository.kt` 都不用动），缺的只是
+>   `ConversationListScreen.kt` 从没读过它。新增 `onlineOf: (String) -> Boolean` 参数（同
+>   `localNameOf` 的传法，`ChatsHost.kt` 用 `client.presence.presence` + `Presence.display(...)`
+>   算），单聊行头像右下角叠 12dp 绿点（`c.online`，2dp 边框挖空=行背景色，同 iOS `_onlineDot`
+>   尺寸）。不额外发 `watch`——下线态本就靠下次刷新收敛，两端行为一致（iOS 同款注释）。
+> `./scripts/test.sh` 986/986。
+
 > **群聊六条用户报告，逐项排查中（2026-09-29，先做第 1/2 项，第 3-6 项未动）**：
 > - **① @提及点击跳资料页**：主链路（`mention_spans`→Room→`chatBodyText`→
 >   `LinkAnnotation.Clickable`→`onOpenUser`）本就接通，写了真机插桩测试

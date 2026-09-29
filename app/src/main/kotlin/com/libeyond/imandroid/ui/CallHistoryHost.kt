@@ -3,6 +3,7 @@ package com.libeyond.imandroid.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -122,6 +123,7 @@ internal fun CallHistoryHost(
     onOpenChat: (ConversationEntity) -> Unit,
     onBack: () -> Unit,
 ) {
+    BackHandler(onBack = onBack)
     val scope = rememberCoroutineScope()
     val owner = client.uid.orEmpty()
     val list = remember { CallHistoryList() }

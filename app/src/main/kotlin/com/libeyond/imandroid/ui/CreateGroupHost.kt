@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,6 +46,7 @@ fun CreateGroupHost(
     onCreated: (GroupInfo) -> Unit,
     onBack: () -> Unit,
 ) {
+    BackHandler(onBack = onBack)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var friends by remember { mutableStateOf(seedFriends.filter { it.status == FriendEntry.ACCEPTED }) }
