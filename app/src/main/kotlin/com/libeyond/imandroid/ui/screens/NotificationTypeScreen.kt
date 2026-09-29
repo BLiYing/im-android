@@ -197,7 +197,13 @@ private fun ExceptionRow(conv: ConversationEntity, onClick: () -> Unit) {
             .padding(horizontal = d.space4, vertical = d.space2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IMAvatar(displayName = title, seed = conv.convId, avatarUrl = conv.avatarUrl, size = EXCEPTION_AVATAR)
+        IMAvatar(
+            displayName = title,
+            // 种子与会话列表 / 选择页同源（单聊用对端 uid）：否则同一个人在这里换了个颜色
+            seed = if (conv.isGroup) conv.convId else conv.peerUid.ifBlank { conv.convId },
+            avatarUrl = conv.avatarUrl,
+            size = EXCEPTION_AVATAR,
+        )
         Spacer(Modifier.width(d.space3))
         Text(
             text = title,
