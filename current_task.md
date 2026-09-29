@@ -43,6 +43,10 @@
 >   已加 §4.13。
 > - **未做（第二批，非本轮范围）**：定时免打扰（时长菜单/`mute_until` 协议字段/`isMutedNow`）、
 >   Web 标签页角标（属 im-web 仓）。
+> - **自审补的一处 bug**：横幅手势 `pointerInput(Unit)` 的 key 恒为 Unit，第一版直接把每次新横幅的
+>   `onOpen`/`onDismiss` 传进去——手势协程只在首次组合时启动、不随新横幅重启，点被替换后的横幅会
+>   打开上一条横幅的会话（同 `PassThroughTap.kt` 类注释记的坑）。已用 `rememberUpdatedState` 补上
+>   （提交 `8bb30dd`）。
 
 > **设置 ▸ 外观 ✅ 对照 iOS 全量落地（2026-09-29，已合入 main；OPPO PKD130 真机验过）**：
 > 四卡片逐行照抄 `IMAppearanceViewController`——14 主题 + 横向主题条 + 主题/壁纸网格（真实聊天缩略图）、
