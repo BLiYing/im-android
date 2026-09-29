@@ -157,6 +157,7 @@
     <string name="chat_detail_login_first">Please log in first</string>
     <string name="chat_detail_manage_hint">Owner/admins only</string>
     <string name="chat_detail_manage_pending_badge">%1$d pending</string>
+    <string name="chat_detail_mute_footer">While muted there are no sounds and no badge count; \@mentions still alert you.</string>
     <string name="chat_detail_muted">Mute notifications</string>
     <string name="chat_detail_my_group_nickname">My nickname in this group</string>
     <string name="chat_detail_my_group_nickname_message">Visible to everyone in the group. Up to 20 characters; leave blank to use your default nickname.</string>
@@ -1213,6 +1214,8 @@
     <string name="mute_10m">10 minutes</string>
     <string name="mute_1d">1 day</string>
     <string name="mute_1h">1 hour</string>
+    <string name="mute_7d">7 days</string>
+    <string name="mute_8h">8 hours</string>
     <string name="mute_title">Mute duration</string>
     <string name="net_error_account_switched">Account switched</string>
     <string name="net_error_ack_timeout">Timed out waiting for the server</string>
@@ -1306,7 +1309,10 @@
     <string name="notif_exceptions_empty_private">No muted private chats. Swipe a chat or open its info to mute it.</string>
     <string name="notif_exceptions_muted">Muted</string>
     <string name="notif_exceptions_muted_mention">Muted · mentions still alert</string>
+    <string name="notif_exceptions_muted_until">Muted %1$s</string>
+    <string name="notif_exceptions_muted_until_mention">Muted %1$s · mentions still alert</string>
     <string name="notif_exceptions_pick_empty">No chats to add</string>
+    <string name="notif_exceptions_pick_footer_all">Only chats that aren\'t muted are listed.</string>
     <string name="notif_exceptions_pick_footer_group">Only groups that aren\'t muted are listed.</string>
     <string name="notif_exceptions_pick_footer_private">Only private chats that aren\'t muted are listed.</string>
     <string name="notif_exceptions_web_row">Muted chats</string>
@@ -1316,6 +1322,10 @@
     <string name="notif_in_app_sound">In-app sounds</string>
     <string name="notif_in_app_vibrate">In-app vibration</string>
     <string name="notif_message_footer">Muted chats won\'t alert you, except when you\'re mentioned.</string>
+    <string name="notif_mute_sheet_title">Mute \"%1$s\" for…</string>
+    <string name="notif_mute_until_date">until %1$s</string>
+    <string name="notif_mute_until_today">until %1$s</string>
+    <string name="notif_mute_until_tomorrow">until tomorrow, %1$s</string>
     <string name="notif_preview_hidden">New message</string>
     <string name="notif_reset">Reset all notifications</string>
     <string name="notif_reset_confirm_message">All switches and sounds will be restored to defaults. Muted chats stay muted.</string>

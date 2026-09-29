@@ -51,13 +51,17 @@ import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.ConversationAction
 import com.libeyond.imandroid.data.ConversationActions
+import com.libeyond.imandroid.data.Forward
+import com.libeyond.imandroid.data.MuteState
 import com.libeyond.imandroid.data.PushNav
 import com.libeyond.imandroid.data.TabUnread
 import com.libeyond.imandroid.ui.components.InAppBannerHost
 import com.libeyond.imandroid.ui.components.MessageContextMenu
+import com.libeyond.imandroid.ui.components.MuteDurationSheet
 import com.libeyond.imandroid.ui.components.PushBase
 import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.components.SheetItem
+import com.libeyond.imandroid.ui.components.rememberMuteTick
 import kotlinx.coroutines.launch
 import com.libeyond.imandroid.ui.theme.IMTheme
 import kotlinx.coroutines.flow.emptyFlow
@@ -115,8 +119,11 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     // 底栏「消息」蓝点：与会话行同一份数据现算，口径见 TabUnread（三端同口径）。
     // includeMuted 来自「通知与提示音 ▸ 角标计数」（NOTIFICATIONS_DESIGN §3.4），默认关=现行口径。
     val notifSettings by com.libeyond.imandroid.data.NotificationSettingsStore.settings.collectAsState()
-    val tabUnread = remember(conversations, notifSettings.badge.includeMuted) {
-        TabUnread.count(conversations.orEmpty(), notifSettings.badge.includeMuted)
+    // 定时免打扰到期刷新（NOTIFICATIONS_P1_DESIGN §4.4）：到点后铃铛/未读徽标/页签角标跟着重组，
+    // 不需要服务端推帧。ChatsHost 的会话列表也复用这同一份 tick（往下传），不在那边另起一份定时器。
+    val muteTick = rememberMuteTick(conversations)
+    val tabUnread = remember(conversations, notifSettings.badge.includeMuted, muteTick) {
+        TabUnread.count(conversations.orEmpty(), notifSettings.badge.includeMuted, muteTick)
     }
 
     // 进主界面就拉一次会话列表——WS 的 onConnected 也会拉，但那条路只在
@@ -150,6 +157,10 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
 
     var menuFor by remember { mutableStateOf<ConversationEntity?>(null) }
     var menuAnchor by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    // 会话列表左滑/长按「免打扰」的时长菜单（NOTIFICATIONS_P1_DESIGN §4.1/§4.2）：非空 = 敞开着，
+    // 叠在最外层（同 InAppBannerHost 这一层），不是 ConversationMenu 自己的子状态——两个弹层不能
+    // 同时占用同一份 anchor 坐标系（时长菜单是居中的底部弹层，不用贴着长按的那一行）。
+    var muteSheetFor by remember { mutableStateOf<ConversationEntity?>(null) }
     val scope = rememberCoroutineScope()
 
     // 底部 Tab 栏由各 Tab 的**根页**自己画（[TabRoot]），二级页整屏铺满——判据 PushNav.showsTabBar。
@@ -184,6 +195,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                 onOpenChat = { openConv = it },
                                 onLongPress = { c, rect -> menuFor = c; menuAnchor = rect },
                                 bottomBar = bottomBar,
+                                muteNow = muteTick,
                             )
                             Tab.Contacts -> ContactsHost(client = client, onOpenChat = { openConv = it }, bottomBar = bottomBar)
                             Tab.Me -> MeHost(
@@ -192,7 +204,11 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                             )
                         }
                         menuFor?.let { target ->
-                            ConversationMenu(client, target, menuAnchor, scope, onDismiss = { menuFor = null })
+                            ConversationMenu(
+                                client, target, menuAnchor, scope, muteTick,
+                                onRequestMuteSheet = { conv -> menuFor = null; muteSheetFor = conv },
+                                onDismiss = { menuFor = null },
+                            )
                         }
                     }
                 } else {
@@ -250,6 +266,23 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                 conv != null
             },
         )
+        muteSheetFor?.let { conv ->
+            MuteDurationSheet(
+                convTitle = Forward.titleOf(conv),
+                // 会话列表这条入口不给「取消免打扰」项：已免打扰时 ConversationActions 给的是
+                // Unmute 项，点了直接调 settings(muted=false)，走不到这个弹层（§4.2 入口表）。
+                showUnmute = false,
+                onUnmute = {},
+                onSelect = { d ->
+                    scope.launch {
+                        runCatching { settings(client, conv, muted = true, muteUntil = d.muteUntil()) }
+                        client.messages.refreshConversations()
+                    }
+                    muteSheetFor = null
+                },
+                onDismiss = { muteSheetFor = null },
+            )
+        }
     }
 }
 
@@ -266,29 +299,39 @@ private fun ConversationMenu(
     target: ConversationEntity,
     anchor: androidx.compose.ui.geometry.Rect,
     scope: kotlinx.coroutines.CoroutineScope,
+    /** 判「是否免打扰」的当前时刻——决定菜单给「免打扰」还是「取消免打扰」（§4.1/§4.2）。 */
+    nowMs: Long,
+    /** 点了「免打扰」（且当前未免打扰）：交给调用方弹时长菜单，不在这里直接置 muted=true
+     *  （§4.1：未免打扰时这一项要先选时长，已免打扰时这一项本身就是「取消免打扰」，直接生效）。 */
+    onRequestMuteSheet: (ConversationEntity) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val mutedNow = MuteState.isMutedNow(target.muted, target.muteUntil, nowMs)
     MessageContextMenu(
         anchor = anchor,
         // 会话行是整行全宽的，菜单靠左（跟着行的起始边，与 iOS 的 preview 锚点同侧）
         mine = false,
         items = ConversationActions
-            .availableFor(target.pinnedAt, target.muted, target.markedUnread, target.unread)
+            .availableFor(target.pinnedAt, mutedNow, target.markedUnread, target.unread)
             .map { a ->
                 SheetItem(a.label, a.destructive, icon = convActionIcon(a)) {
-                    scope.launch {
-                        runCatching {
-                            when (a) {
-                                ConversationAction.Pin -> settings(client, target, pinnedAt = System.currentTimeMillis())
-                                ConversationAction.Unpin -> settings(client, target, pinnedAt = 0)
-                                ConversationAction.Mute -> settings(client, target, muted = true)
-                                ConversationAction.Unmute -> settings(client, target, muted = false)
-                                ConversationAction.MarkUnread -> settings(client, target, markedUnread = true)
-                                ConversationAction.MarkRead -> settings(client, target, markedUnread = false)
-                                ConversationAction.Delete -> client.conversationsApi.delete(target.convId)
+                    if (a == ConversationAction.Mute) {
+                        onRequestMuteSheet(target)
+                    } else {
+                        scope.launch {
+                            runCatching {
+                                when (a) {
+                                    ConversationAction.Pin -> settings(client, target, pinnedAt = System.currentTimeMillis())
+                                    ConversationAction.Unpin -> settings(client, target, pinnedAt = 0)
+                                    ConversationAction.Unmute -> settings(client, target, muted = false)
+                                    ConversationAction.MarkUnread -> settings(client, target, markedUnread = true)
+                                    ConversationAction.MarkRead -> settings(client, target, markedUnread = false)
+                                    ConversationAction.Delete -> client.conversationsApi.delete(target.convId)
+                                    ConversationAction.Mute -> Unit // 上面已分流，走不到这里
+                                }
                             }
+                            client.messages.refreshConversations()
                         }
-                        client.messages.refreshConversations()
                     }
                 }
             },
@@ -371,8 +414,11 @@ private suspend fun settings(
     pinnedAt: Long = conv.pinnedAt,
     muted: Boolean = conv.muted,
     markedUnread: Boolean = conv.markedUnread,
+    /** 定时免打扰到期毫秒——**只有选了时长菜单的调用点才传**，其余调用点留 `null`（省略），
+     *  让服务端按 PROTOCOL §6.10 的缺省规则保留原到期时间（不然置顶一下会把定时免打扰变成永久）。 */
+    muteUntil: Long? = null,
 ) {
-    client.conversationsApi.updateSettings(conv.convId, pinnedAt, muted, markedUnread)
+    client.conversationsApi.updateSettings(conv.convId, pinnedAt, muted, markedUnread, muteUntil)
 }
 
 @Composable

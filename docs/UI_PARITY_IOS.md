@@ -756,12 +756,70 @@ Android：`ui/NotificationSettingsHost.kt` + `ui/screens/NotificationSettingsScr
 | 横幅正文格式化 | 复用会话列表预览格式化 | 同，复用 `ConversationPreview.of`（`BannerFormat.of`） | ✅ |
 | 「添加例外」选择页 | 复用转发选择页，单选 | 复用 `ForwardPickerScreen`（新增可选参数，非破坏性改动） | ✅ |
 | 例外组常驻 | §8 已拍板②，两端同改 | 同 | ✅ |
-| 定时免打扰（时长菜单/`mute_until`） | 第二批，本轮未动 | 同，本轮未动 | ⚪ 不在本批范围 |
+| 定时免打扰（时长菜单/`mute_until`） | 第二批 | 第二批已落地，见 §4.14 | ✅ |
 
 **未做真机验证**（明确交给下一步）：横幅出现/点击进会话/上滑收起/4 秒自动收/连发多条原地换内容/
 按住暂停计时/进入该会话自动收起/预览关显示「新消息」/「动画」关时无位移/通话中不出，以及「添加
 例外」选择页选中后另一端同步、`pinned_at`/`marked_unread` 是否原样带回的端到端验证——均只过了
 编译与 JVM 单测，Compose 手势与动画时序历来测不到（`CODING_STYLE.md` §八）。
+
+---
+
+## 4.14 通知与提示音 P1 第二批：定时免打扰（2026-09-29，`feature/notif-p1b` 分支，未做真机验证）
+
+设计：`../IMServer/docs/design/NOTIFICATIONS_P1_DESIGN.md` §4/§5/§6.3/§7 + UX 稿
+`sketches/NOTIFICATIONS_P1_UX_SKETCH.html` §04。协议 `mute_until`（毫秒，0=永久）见
+`../IMServer/docs/PROTOCOL.md` §6.10，后端已上线（本轮 Android 只接客户端）。
+
+- **判定纯函数** `data/MuteState.kt`：`isMutedNow(muted, muteUntil, nowMs)` 与到期文案分类
+  `untilLabel`（今天/明天/更晚/永久四类），逐字对齐三端共用向量 `conformance/mute_state.json`
+  （对端 im-web `src/muteState.ts`、iOS `IMMuteState.*`，`SYMMETRY.md` 已登记）。**所有**过去
+  直接读 `ConversationEntity.muted`/`ConversationSummary.muted` 的地方全部换成 `isMutedNow`：
+  会话列表铃铛与 `strongAlert`、`TabUnread.count`、`IncomingAlert` 拼 `muted`、
+  `NotificationExceptions.of` 过滤、`Forward.exceptionPickable` 过滤、`ChatDetailHost`/
+  `ChatDetailScreen` 的免打扰行、群资料页 `GroupInfoSettings.muted`（读点收口，未接时长 UI，见下）。
+- **时长菜单** `ui/components/MuteDurationSheet.kt`：样式复用既有 `ActionSheet`（会话列表长按/
+  消息长按同一套底部弹层），不另起一套；5 项 1 小时/8 小时/1 天/7 天/永久，
+  映射在纯函数 `data/MuteDuration.kt`（`muteUntil(now)`）。已免打扰时最上面多一项红色
+  「取消免打扰」（`showUnmute` 入参）。
+- **到期刷新** `ui/components/MuteTick.kt`（`rememberMuteTick`）：算出会话表里最近一个未到期
+  `mute_until`，`LaunchedEffect` 精确 `delay` 到点后推进一个 `nowMs` 状态，读它的地方（列表/
+  角标/例外列表）跟着重组；另用 `repeatOnLifecycle(RESUMED)` 在前台回来时再刷一遍。**没有网络
+  请求**——到期由端上自判，与服务端 `online_until` 同一条纪律。
+- **三个入口**（对齐设计文档 §4.2 入口表，Android 那一列）：
+  - 会话列表 `ConversationAction.Mute`（左滑/长按菜单）：未免打扰时开时长菜单；已免打扰时
+    该项本身就是「取消免打扰」，直接生效，不弹菜单（`ui/MainScreen.kt` `ConversationMenu`）。
+  - 聊天信息页「消息免打扰」：从开关行换成带右值的行（`common_off`/`至……`/`common_permanent`），
+    点了开同一个时长菜单，脚注 `chat_detail_mute_footer`（`ui/screens/ChatDetailScreen.kt`）。
+  - 「添加例外」选择页：选完会话后再弹时长菜单，选中才真正免打扰（不再是第一批那样点了立即
+    永久免打扰）——`ui/NotificationSettingsHost.kt`。
+- **文案**：详情页右值与例外列表副标题都走 `MuteState.untilPhrase`/`untilText`（今天/明天用
+  `notif_mute_until_today`/`_tomorrow`；更晚用 `notif_mute_until_date`，「至 {date}」复用既有的
+  本地化月日格式化 `Str.s(R.string.time_month_day, Str.monthArg(cal), day)`，与 `TimeFormat.kt`
+  同一套，不另写一套日期格式化）。例外列表副标题：永久用纯文案 `notif_exceptions_muted[_mention]`，
+  定时免打扰用带参数的 `notif_exceptions_muted_until[_mention]`。
+- **PUT 语义**（协议 §5.2，端上照做）：选时长菜单才显式传 `mute_until`；取消免打扰只传
+  `muted=false`（服务端自动清 0）；其余调用点（置顶/标未读/群备注）继续**不传** `mute_until`，
+  让服务端按「省略时保留未到期的原值」处理，不会把定时免打扰意外变永久。
+- **存储**：`ConversationEntity` 加 `muteUntil`，Room `IMDatabase` v12→v13（`MIGRATION_12_13`，
+  加列默认 0，语义与老行「要么永久免打扰要么不免打扰」一致，不用回填）。
+
+| 项 | iOS（设计目标） | Android | 判定 |
+|---|---|---|---|
+| 时长选项 | 1 小时/8 小时/1 天/7 天/永久，不做自定义 | 同 | ✅ |
+| 列表入口菜单样式 | ActionSheet | 复用既有 `ActionSheet`（长按/左滑菜单同款底部弹层） | ✅ |
+| 已免打扰时列表入口 | 直接「取消免打扰」，不弹菜单 | 同 | ✅ |
+| 聊天信息页行 | 开关→带右值的行，点开菜单，已免打扰时菜单顶多一项红色「取消免打扰」 | 同 | ✅ |
+| 「添加例外」流程 | 选完会话先弹时长菜单 | 同 | ✅ |
+| 到期刷新 | 客户端自判，不等服务端推帧 | 同（`rememberMuteTick` 精确定时器 + 前台回来兜底） | ✅ |
+| 群资料页「消息免打扰」 | 未在设计文档 §6.3 Android 清单/本任务入口清单内 | **仍是原有的纯开关**（`GroupInfoScreen`/`GroupInfoSettings`），未接时长菜单/右值文案，只把读点换成 `isMutedNow` | 🔴 **已知缺口**：与聊天信息页不对称，留给后续把群资料页也接上同一套时长菜单 |
+
+**未做**：群资料页「消息免打扰」接入时长菜单（见上表 🔴 一行，刻意留白，非疏漏——任务给定的三个
+入口清单（会话列表/聊天信息页/添加例外）不含它）。**未做真机验证**：时长菜单三个入口的样式与红色
+「取消免打扰」、到期后铃铛/角标/例外列表是否真的自动刷新（需要把系统时间往后拨或设极短时长）、
+另一端 `conv_update` 同步显示「永久」、定时免打扰期间改置顶/标未读/群备注 `mute_until` 是否不变——
+均只过了编译与 JVM 单测（含共用向量 `mute_state.json` 两段、时长映射、到期刷新用的
+`nearestFutureMuteUntil`），Compose 定时器/手势时序历来测不到（`CODING_STYLE.md` §八）。
 
 ---
 

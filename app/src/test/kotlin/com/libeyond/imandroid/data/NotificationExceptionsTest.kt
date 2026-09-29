@@ -36,4 +36,16 @@ class NotificationExceptionsTest {
     fun `没有免打扰会话时是空列表`() {
         assertEquals(emptyList<ConversationEntity>(), NotificationExceptions.of(emptyList(), group = false))
     }
+
+    // ——— 定时免打扰到期（NOTIFICATIONS_P1_DESIGN §4.3/§4.4）———
+
+    private fun timedConv(id: String, muteUntil: Long) = ConversationEntity(
+        ownerUid = "me", convId = id, isGroup = false, muted = true, muteUntil = muteUntil,
+    )
+
+    @Test
+    fun `过期的定时免打扰会话到点自动从例外列表消失`() {
+        val list = listOf(timedConv("expired", muteUntil = 500), timedConv("active", muteUntil = 2000))
+        assertEquals(listOf("active"), NotificationExceptions.of(list, group = false, nowMs = 1000).map { it.convId })
+    }
 }

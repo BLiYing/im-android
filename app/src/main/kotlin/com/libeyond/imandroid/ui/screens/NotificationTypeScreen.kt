@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.MuteState
 import com.libeyond.imandroid.data.NotifTypeSettings
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -66,8 +67,10 @@ private val ADD_EXCEPTION_ICON = 26.dp
 internal fun NotificationTypeScreen(
     group: Boolean,
     settings: NotifTypeSettings,
-    /** 该类型下 muted=true 的会话（`data/NotificationExceptions.kt`），按最后消息时间倒序。 */
+    /** 该类型下有效免打扰的会话（`data/NotificationExceptions.kt`），按最后消息时间倒序。 */
     exceptions: List<ConversationEntity>,
+    /** 判「是否免打扰」与到期文案的当前时刻（定时免打扰到期刷新，NOTIFICATIONS_P1_DESIGN §4.4）。 */
+    nowMs: Long,
     onToggleEnabled: (Boolean) -> Unit,
     onTogglePreview: (Boolean) -> Unit,
     onOpenSound: () -> Unit,
@@ -137,7 +140,7 @@ internal fun NotificationTypeScreen(
                         onOpenedChange = { open -> openedId = if (open) conv.convId else null },
                     ) {
                         // 敞着的行点内容只收起；合着时点了才进会话（同 BlockedUsersScreen）
-                        ExceptionRow(conv, onClick = if (opened) ({ openedId = null }) else ({ onOpenChat(conv) }))
+                        ExceptionRow(conv, nowMs, onClick = if (opened) ({ openedId = null }) else ({ onOpenChat(conv) }))
                     }
                 }
             }
@@ -183,10 +186,12 @@ private fun AddExceptionRow(onClick: () -> Unit) {
 }
 
 @Composable
-private fun ExceptionRow(conv: ConversationEntity, onClick: () -> Unit) {
+private fun ExceptionRow(conv: ConversationEntity, nowMs: Long, onClick: () -> Unit) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val title = conv.peerRemark.ifBlank { conv.title }.ifBlank { conv.convId }
+    // 到期时间副标题（NOTIFICATIONS_P1_DESIGN §4.2 草图 C）：永久用纯文案，定时免打扰带「至……」。
+    val untilPhrase = MuteState.untilPhrase(conv.muteUntil, nowMs)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -215,9 +220,12 @@ private fun ExceptionRow(conv: ConversationEntity, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(d.space2))
         Text(
-            text = stringResource(
-                if (conv.mentionUnread) R.string.notif_exceptions_muted_mention else R.string.notif_exceptions_muted,
-            ),
+            text = when {
+                untilPhrase == null && conv.mentionUnread -> stringResource(R.string.notif_exceptions_muted_mention)
+                untilPhrase == null -> stringResource(R.string.notif_exceptions_muted)
+                conv.mentionUnread -> stringResource(R.string.notif_exceptions_muted_until_mention, untilPhrase)
+                else -> stringResource(R.string.notif_exceptions_muted_until, untilPhrase)
+            },
             color = c.textSecondary,
             style = MaterialTheme.typography.bodySmall,
         )

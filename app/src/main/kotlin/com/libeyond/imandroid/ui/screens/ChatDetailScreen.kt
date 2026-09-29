@@ -38,6 +38,7 @@ import com.libeyond.imandroid.data.toArchiveTarget
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.DetailActionBar
+import com.libeyond.imandroid.ui.components.IMSectionFooter
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -61,7 +62,9 @@ internal fun ChatDetailScreen(
     handle: String,
     remark: String,
     pinned: Boolean,
-    muted: Boolean,
+    /** 「消息免打扰」行的右值：`common_off` / `notif_mute_until_*` / `common_permanent`
+     *  （NOTIFICATIONS_P1_DESIGN §4.2，本页不持免打扰判定逻辑，调用方算好文本传进来——纯展示）。 */
+    muteValueText: String,
     tab: DetailTab,
     onTabChange: (DetailTab) -> Unit,
     /** 当前页签的归档数据（链接页签走 [linkMessages]，这里为空）。 */
@@ -76,7 +79,8 @@ internal fun ChatDetailScreen(
     onLongPressArchive: (ArchiveTarget, Rect) -> Unit,
     onOpenLink: (String) -> Unit,
     onTogglePinned: (Boolean) -> Unit,
-    onToggleMuted: (Boolean) -> Unit,
+    /** 点「消息免打扰」行：打开时长菜单（NOTIFICATIONS_P1_DESIGN §4.1/§4.2，草图 B）。 */
+    onOpenMuteSheet: () -> Unit,
     onSetRemark: () -> Unit,
     onOpenProfile: () -> Unit,
     /** 头部操作排（消息/呼叫/视频/搜索/更多，或非好友时只有「加好友」）。 */
@@ -190,11 +194,16 @@ internal fun ChatDetailScreen(
                     // 所以改一项也要把另外两项原样带回（Host 里做）。
                     SwitchRow(stringResource(R.string.chat_detail_pinned), pinned, onTogglePinned)
                     Divider()
-                    SwitchRow(stringResource(R.string.chat_detail_muted), muted, onToggleMuted)
+                    // 「免打扰」从开关变成右值行（第二批 NOTIFICATIONS_P1_DESIGN §4.2）：点了弹时长菜单，
+                    // 右值 = 关 / 至……/ 永久。
+                    Row2(stringResource(R.string.chat_detail_muted), muteValueText, onClick = onOpenMuteSheet)
                     // 「查找聊天记录 / 清空聊天记录」**不在这张卡上**：iOS 把它们放在头部
                     // 操作排的「搜索」与「更多 → 清空聊天记录」里。摆两处等于同一件事有两个入口，
                     // 而其中一个还写着"还没做"。
                 }
+            }
+            if (showBody) item(key = "settings_footer") {
+                IMSectionFooter(stringResource(R.string.chat_detail_mute_footer))
             }
             if (showBody) item(key = "tabs") {
                 Spacer(Modifier.height(d.cardGap))

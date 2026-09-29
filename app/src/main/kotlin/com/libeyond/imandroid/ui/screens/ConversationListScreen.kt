@@ -48,6 +48,7 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.ConversationListPhase
 import com.libeyond.imandroid.data.ConversationPreview
+import com.libeyond.imandroid.data.MuteState
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -80,6 +81,9 @@ fun ConversationListScreen(
     /** 右上角 ＋，带上按钮在窗口坐标系里的矩形——菜单贴着它弹（对齐 iOS `plusTapped:` 的 IMPopoverCard）。 */
     onPlus: (Rect) -> Unit,
     connected: Boolean,
+    /** 判「是否免打扰」的当前时刻（定时免打扰到期刷新，NOTIFICATIONS_P1_DESIGN §4.4）：
+     *  纯展示不持业务状态（CODING_STYLE §7②），由调用方喂 `ui/components/MuteTick.kt` 的 tick。 */
+    nowMs: Long = System.currentTimeMillis(),
 ) {
     val c = IMTheme.colors
     var plusRect by remember { mutableStateOf(Rect.Zero) }
@@ -124,7 +128,7 @@ fun ConversationListScreen(
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 items(conversations, key = { it.convId }) { conv ->
                     ConversationRow(
-                        conv, myUid, localNameOf, onlineOf,
+                        conv, myUid, localNameOf, onlineOf, nowMs,
                         onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) },
                     )
                 }
@@ -141,6 +145,7 @@ private fun ConversationRow(
     myUid: String,
     localNameOf: (String) -> String?,
     onlineOf: (String) -> Boolean,
+    nowMs: Long,
     onClick: () -> Unit,
     onLongClick: (Rect) -> Unit,
 ) {
@@ -245,7 +250,7 @@ private fun ConversationRow(
                 style = MaterialTheme.typography.labelSmall,
             )
             Spacer(Modifier.height(6.dp))
-            UnreadBadge(conv)
+            UnreadBadge(conv, nowMs)
         }
     }
     Box(
@@ -263,11 +268,13 @@ private fun ConversationRow(
  * - 手动标未读显示小红点、不计数。
  */
 @Composable
-private fun UnreadBadge(conv: ConversationEntity) {
+private fun UnreadBadge(conv: ConversationEntity, nowMs: Long) {
     val c = IMTheme.colors
+    // 判「是否免打扰」一律走 MuteState.isMutedNow，不直接读 conv.muted（NOTIFICATIONS_P1_DESIGN §4.3）。
+    val mutedNow = MuteState.isMutedNow(conv.muted, conv.muteUntil, nowMs)
     when {
         conv.unread > 0 -> {
-            val strongAlert = !conv.muted || conv.mentionUnread
+            val strongAlert = !mutedNow || conv.mentionUnread
             val d = IMTheme.dimens
             Box(
                 // 高 20、最小宽 20（UI_SPEC §2，与 iOS _badge.heightAnchor 同值）：
@@ -292,7 +299,7 @@ private fun UnreadBadge(conv: ConversationEntity) {
         conv.markedUnread -> Box(
             modifier = Modifier.size(10.dp).clip(CircleShape).background(c.unreadBadge),
         )
-        conv.muted -> Text("🔕", fontSize = 11.sp)
+        mutedNow -> Text("🔕", fontSize = 11.sp)
         else -> Spacer(Modifier.height(1.dp))
     }
 }

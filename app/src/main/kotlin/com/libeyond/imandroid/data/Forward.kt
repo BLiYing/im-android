@@ -80,12 +80,15 @@ object Forward {
     /**
      * 「添加例外」选择页数据（NOTIFICATIONS_P1_DESIGN §2）：复用同一个选择页组件，
      * 但过滤条件与转发不同——只列**这一页对应的类型**（私聊/群聊子页分开）、**还没免打扰**的
-     * （已经是例外的不用再选一次），系统通知会话同样排除。
+     * （[MuteState.isMutedNow]，已经是例外的不用再选一次；过期的定时免打扰会重新出现在这里），
+     * 系统通知会话同样排除。
+     *
+     * @param nowMs 判「是否免打扰」的当前时刻。
      */
-    fun exceptionPickable(convs: List<ConversationEntity>, group: Boolean, query: String): List<ConversationEntity> =
+    fun exceptionPickable(convs: List<ConversationEntity>, group: Boolean, query: String, nowMs: Long = System.currentTimeMillis()): List<ConversationEntity> =
         convs.filter { c ->
             c.isGroup == group &&
-                !c.muted &&
+                !MuteState.isMutedNow(c.muted, c.muteUntil, nowMs) &&
                 !DetailActions.isSystemPeer(c.peerUid) &&
                 ListSearch.matches(query, listOf(titleOf(c), c.peerUid))
         }

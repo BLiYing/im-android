@@ -166,6 +166,8 @@ enum class ConversationAction(@StringRes private val labelRes: Int, val destruct
 }
 
 object ConversationActions {
+    /** @param muted **有效**免打扰状态（调用方先用 `MuteState.isMutedNow` 算过一遍，不是原始存储值）——
+     *  否则一个刚过期的定时免打扰会话仍会显示「取消免打扰」而不是「免打扰」。 */
     fun availableFor(pinnedAt: Long, muted: Boolean, markedUnread: Boolean, unread: Int): List<ConversationAction> =
         buildList {
             add(if (pinnedAt > 0) ConversationAction.Unpin else ConversationAction.Pin)

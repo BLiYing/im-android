@@ -3,6 +3,7 @@ package com.libeyond.imandroid.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import com.libeyond.imandroid.data.MuteState
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +29,10 @@ class GroupInfoSettingsState internal constructor(
 ) {
     private val pinnedState = mutableStateOf(false)
     private val mutedState = mutableStateOf(false)
+    /** 定时免打扰到期毫秒（第二批 NOTIFICATIONS_P1_DESIGN §5）。群资料页暂未接时长菜单
+     *  （本轮范围只做会话列表/聊天信息页/添加例外三个入口，见任务清单），这里只保证 [muted]
+     *  这个读点走 [MuteState.isMutedNow]，不直接暴露原始 `muted`。 */
+    private val muteUntilState = mutableStateOf(0L)
     private val markedUnreadState = mutableStateOf(false)
     private val remarkState = mutableStateOf("")
     private val editingMyNicknameState = mutableStateOf(false)
@@ -35,7 +40,7 @@ class GroupInfoSettingsState internal constructor(
     private val noticeState = mutableStateOf<Pair<String, String>?>(null)
 
     val pinned: Boolean get() = pinnedState.value
-    val muted: Boolean get() = mutedState.value
+    val muted: Boolean get() = MuteState.isMutedNow(mutedState.value, muteUntilState.value)
     val remark: String get() = remarkState.value
     val editingMyNickname: Boolean get() = editingMyNicknameState.value
     val editingRemark: Boolean get() = editingRemarkState.value
@@ -47,6 +52,7 @@ class GroupInfoSettingsState internal constructor(
             .onSuccess { s ->
                 pinnedState.value = s.pinnedAt > 0
                 mutedState.value = s.muted
+                muteUntilState.value = s.muteUntil
                 markedUnreadState.value = s.markedUnread
                 remarkState.value = s.remark
             }
@@ -69,7 +75,11 @@ class GroupInfoSettingsState internal constructor(
     }
 
     fun togglePinned(v: Boolean) { pinnedState.value = v; push(v, muted) }
-    fun toggleMuted(v: Boolean) { mutedState.value = v; push(pinned, v) }
+    fun toggleMuted(v: Boolean) {
+        mutedState.value = v
+        if (!v) muteUntilState.value = 0
+        push(pinned, v)
+    }
 
     /** 群备注（G1）：与置顶/免打扰三开关解耦的独立接口，不动那三个值。 */
     fun setRemark(v: String) {

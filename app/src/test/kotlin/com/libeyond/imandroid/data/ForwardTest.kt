@@ -136,4 +136,22 @@ class ForwardTest {
         )
         assertEquals(listOf("a"), Forward.exceptionPickable(list, group = false, query = "张").map { it.convId })
     }
+
+    // ——— 定时免打扰到期（NOTIFICATIONS_P1_DESIGN §4.3/§4.4） ———
+
+    private fun timedConv(id: String, muteUntil: Long) = ConversationEntity(
+        ownerUid = "me", convId = id, isGroup = false, muted = true, muteUntil = muteUntil,
+    )
+
+    @Test
+    fun `过期的定时免打扰重新出现在选择页——用 isMutedNow 判，不直接看 muted`() {
+        val list = listOf(
+            timedConv("expired", muteUntil = 500),
+            timedConv("active", muteUntil = 2000),
+        )
+        assertEquals(
+            listOf("expired"),
+            Forward.exceptionPickable(list, group = false, query = "", nowMs = 1000).map { it.convId },
+        )
+    }
 }

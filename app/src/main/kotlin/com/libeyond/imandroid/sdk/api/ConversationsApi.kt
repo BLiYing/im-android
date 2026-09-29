@@ -39,6 +39,13 @@ data class ConversationSummary(
     @SerialName("group_read_seq") val groupReadSeq: Long = 0,
     @SerialName("pinned_at") val pinnedAt: Long = 0,
     val muted: Boolean = false,
+    /**
+     * 定时免打扰到期毫秒（0=永久或未免打扰，NOTIFICATIONS_P1_DESIGN §5）。
+     * **`muted` 恒为服务端按当前时刻算好的有效值**（已到期 → `muted=false, mute_until=0`）——
+     * 但端上仍要用 [com.libeyond.imandroid.data.MuteState.isMutedNow] 重判一遍：本地这份是上次
+     * 刷新时的快照，两次刷新之间时间还在走，到期由端上自己判（§4.3）。
+     */
+    @SerialName("mute_until") val muteUntil: Long = 0,
     @SerialName("marked_unread") val markedUnread: Boolean = false,
     /** 未读区间内有人 @我。**穿透免打扰**做强提醒。 */
     @SerialName("mention_unread") val mentionUnread: Boolean = false,
@@ -67,6 +74,8 @@ private data class ConversationsResp(
 data class ConversationSettings(
     @SerialName("pinned_at") val pinnedAt: Long = 0,
     val muted: Boolean = false,
+    /** 见 [ConversationSummary.muteUntil] 的同一条注释。 */
+    @SerialName("mute_until") val muteUntil: Long = 0,
     @SerialName("marked_unread") val markedUnread: Boolean = false,
     val remark: String = "",
 )
@@ -101,12 +110,19 @@ class ConversationsApi(private val http: HttpClient) {
     /**
      * 会话设置（§6.8）。**整体替换**三项——不是增量，漏传一项等于把它清零。
      * 成功后服务端推 conv_update 给本人全部设备，本端也从帧里收敛。
+     *
+     * @param muteUntil 定时免打扰到期毫秒（第二批，NOTIFICATIONS_P1_DESIGN §5.2）。**可省略**
+     *   （不传，即不落进请求体，`null`）：服务端若本次 `muted=true` 且库里当前是「未到期的定时
+     *   免打扰」，**保留原到期时间**——改置顶/标未读时把 `muted` 原样带回却不带这个参数的调用方
+     *   （[updateSettings] 的绝大多数调用点）**不会**把定时免打扰变成永久。选时长菜单的调用点才
+     *   显式传值；`muted=false` 时服务端一律清 0，传不传都一样。
      */
-    suspend fun updateSettings(convId: String, pinnedAt: Long, muted: Boolean, markedUnread: Boolean) {
+    suspend fun updateSettings(convId: String, pinnedAt: Long, muted: Boolean, markedUnread: Boolean, muteUntil: Long? = null) {
         http.call("PUT", "/api/v1/conversations/$convId/settings", buildJsonObject {
             put("pinned_at", pinnedAt)
             put("muted", muted)
             put("marked_unread", markedUnread)
+            if (muteUntil != null) put("mute_until", muteUntil)
         })
     }
 

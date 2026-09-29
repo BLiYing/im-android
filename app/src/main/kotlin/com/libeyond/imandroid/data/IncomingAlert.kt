@@ -28,6 +28,7 @@ object IncomingAlert {
             log.d("alert_skip_no_conversation", "convId" to m.convId)
             return
         }
+        val nowMs = System.currentTimeMillis()
         val ctx = AlertContext(
             platform = "mobile",
             isLive = true,
@@ -38,13 +39,14 @@ object IncomingAlert {
             missedCallForMe = m.contentType == ContentType.CALL &&
                 CallRecord.isMissedPreview(CallRecord.preview(m.content, viewerIsSender = false)),
             convType = if (conv.isGroup) "group" else "private",
-            muted = conv.muted,
+            // 定时免打扰：一律走 MuteState.isMutedNow，不直接读 conv.muted（NOTIFICATIONS_P1_DESIGN §4.3）。
+            muted = MuteState.isMutedNow(conv.muted, conv.muteUntil, nowMs),
             mentionsMe = m.mentionSpans.orEmpty().any { it.uid.isEmpty() || it.uid == owner },
             appActive = AppActive.current,
             windowFocused = true, // 移动端分支不读这个字段
             viewingConv = AppActive.current && ViewingConv.current == m.convId,
             inCall = RtcCall.inCall.value,
-            nowMs = System.currentTimeMillis(),
+            nowMs = nowMs,
             lastSoundAtMs = AlertPlayer.lastSoundAt,
             settings = NotificationSettingsStore.current,
         )

@@ -7,6 +7,32 @@
 
 ## 当前焦点
 
+> **通知与提示音 P1 第二批 ✅（2026-09-29，`feature/notif-p1b` 分支，从 main 切出，未合入 main，
+> 未做真机验证）**：`../IMServer/docs/design/NOTIFICATIONS_P1_DESIGN.md` §4/§5——定时免打扰。
+> 后端已上线 `mute_until`（PROTOCOL §6.10），本轮只接客户端。详细改动清单、判定表、已知缺口见
+> `docs/UI_PARITY_IOS.md` §4.14（唯一来源，这里只记要点，不重复）。
+> - **判定** `data/MuteState.kt`（`isMutedNow`/`untilLabel`，共用向量 `conformance/mute_state.json`）
+>   + **时长映射** `data/MuteDuration.kt`（1 小时/8 小时/1 天/7 天/永久）。**所有**读 `muted` 的地方
+>   （会话列表铃铛/`strongAlert`、`TabUnread.count`、`IncomingAlert`、`NotificationExceptions`、
+>   `Forward.exceptionPickable`、`ChatDetailHost`/`Screen`、群资料页 `GroupInfoSettings`）全部换成
+>   `isMutedNow`。
+> - **UI**：`ui/components/MuteDurationSheet.kt`（复用既有 `ActionSheet` 样式）+
+>   `ui/components/MuteTick.kt`（`rememberMuteTick`，到期精确定时器 + 前台回来兜底刷新，不发请求）。
+>   三个入口：会话列表左滑/长按（`ui/MainScreen.kt`）、聊天信息页「消息免打扰」行
+>   （`ui/ChatDetailHost.kt` + `ui/screens/ChatDetailScreen.kt`，开关→带右值的行 + 脚注）、
+>   「添加例外」选择页选完会话后弹时长菜单（`ui/NotificationSettingsHost.kt`）。
+> - **存储**：`ConversationEntity` 加 `muteUntil`，Room `IMDatabase` v12→v13（`MIGRATION_12_13`）；
+>   `ConversationsApi`（`ConversationSummary`/`ConversationSettings`/`updateSettings` 新增可选
+>   `muteUntil` 参数）、`ConvUpdateData`、`MessageRepository` 列表同步与 `applyConvUpdate` 同步跟进。
+> - **已知缺口（刻意，非疏漏）**：群资料页「消息免打扰」仍是原有的纯开关，未接时长菜单/右值文案
+>   （任务给定的三个入口清单不含它），只把读点换成了 `isMutedNow`。
+> - `./scripts/test.sh` **1038/1038 绿**（146 个测试类；新增 `MuteStateTest`/`MuteDurationTest`
+>   + `ForwardTest`/`NotificationExceptionsTest`/`TabUnreadTest` 补充定时免打扰到期用例，均先看红
+>   一次——临时改坏 `MuteState.isMutedNow`/`Forward.exceptionPickable` 确认变红过）。
+> - **未做真机验证**：时长菜单三个入口的样式、到期后铃铛/角标/例外列表是否真的自动刷新、另一端
+>   `conv_update` 同步、定时免打扰期间改置顶/标未读/群备注 `mute_until` 是否不变——均只过了编译与
+>   JVM 单测，Compose 定时器/手势时序历来测不到（`CODING_STYLE.md` §八）。
+
 > **通知与提示音 P1 第一批 ✅（2026-09-29，`feature/notif-p1a` 分支，未合入 main，未做真机验证）**：
 > `../IMServer/docs/design/NOTIFICATIONS_P1_DESIGN.md` 第一批——应用内横幅 + 「添加例外」，
 > 后端零改动，定时免打扰（第二批）本轮未动。
@@ -41,8 +67,7 @@
 >   解析用 `nameOf = { null }`（数据层没有 Compose 好友表可查），会退回服务端昵称快照/uid，
 >   不带本地备注——`ConversationPreview.of` 既有退化路径，非新引入的缺口。`docs/UI_PARITY_IOS.md`
 >   已加 §4.13。
-> - **未做（第二批，非本轮范围）**：定时免打扰（时长菜单/`mute_until` 协议字段/`isMutedNow`）、
->   Web 标签页角标（属 im-web 仓）。
+> - **第二批（定时免打扰）已完成**，见上方新条目；Web 标签页角标不属本仓（属 im-web 仓）。
 > - **自审补的一处 bug**：横幅手势 `pointerInput(Unit)` 的 key 恒为 Unit，第一版直接把每次新横幅的
 >   `onOpen`/`onDismiss` 传进去——手势协程只在首次组合时启动、不随新横幅重启，点被替换后的横幅会
 >   打开上一条横幅的会话（同 `PassThroughTap.kt` 类注释记的坑）。已用 `rememberUpdatedState` 补上
@@ -398,6 +423,11 @@
 
 ## 下一步
 
+0g. **通知与提示音 P1 第二批（定时免打扰）的真机验证 + 合并到 main**（2026-09-29 已实现，
+   `feature/notif-p1b` 分支）：三个入口（会话列表/聊天信息页/添加例外）的时长菜单样式与红色
+   「取消免打扰」、到期后铃铛/角标/例外列表自动刷新（拨系统时间或设极短时长验）、另一端
+   `conv_update` 同步显示「永久」、定时免打扰期间改置顶/标未读/群备注 `mute_until` 不变——
+   需要两台设备/两个账号才能测全；建议与 `feature/notif-p1a`（第一批）一起验完再合并。
 0f. **通知与提示音 P1 第一批的真机验证 + 合并到 main**（2026-09-29 已实现，见「当前焦点」，
    分支 `feature/notif-p1a` 尚未合并）：横幅出现/点击/上滑/自动收/按住暂停/连发替换/进入会话收起/
    预览关文案/动画关无位移/通话中不出，「添加例外」选中后另一端同步与置顶/标记未读原样带回——

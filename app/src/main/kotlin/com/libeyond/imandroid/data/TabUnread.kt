@@ -16,14 +16,18 @@ import com.libeyond.imandroid.data.db.ConversationEntity
  * @param includeMuted 「设置 ▸ 通知与提示音 ▸ 角标计数 ▸ 包含免打扰会话」（NOTIFICATIONS_DESIGN §3.4）。
  *   默认 `false` = 上面这条现行口径；打开后免打扰会话也按未读数计入（不再退化成只计 @我 那 1 条）。
  *   三端同一个入参（`SYMMETRY.md` 已登记），iOS `IMTabUnreadCount` / Web `badgeCountOf` 同改。
+ * @param nowMs 判「是否免打扰」的当前时刻（[MuteState.isMutedNow]，定时免打扰到期刷新用，
+ *   NOTIFICATIONS_P1_DESIGN §4.3/§4.4）。
  */
 object TabUnread {
-    fun count(conversations: List<ConversationEntity>, includeMuted: Boolean = false): Int = conversations.sumOf { c ->
-        when {
-            !c.muted -> c.unread
-            includeMuted -> c.unread
-            c.mentionUnread -> 1
-            else -> 0
+    fun count(conversations: List<ConversationEntity>, includeMuted: Boolean = false, nowMs: Long = System.currentTimeMillis()): Int =
+        conversations.sumOf { c ->
+            val mutedNow = MuteState.isMutedNow(c.muted, c.muteUntil, nowMs)
+            when {
+                !mutedNow -> c.unread
+                includeMuted -> c.unread
+                c.mentionUnread -> 1
+                else -> 0
+            }
         }
-    }
 }
