@@ -3,7 +3,12 @@ package com.libeyond.imandroid.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.MuteState
+import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.ui.components.MuteDurationSheet
+import com.libeyond.imandroid.ui.components.rememberMuteTick
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.CoroutineScope
@@ -28,11 +33,11 @@ class GroupInfoSettingsState internal constructor(
     private val scope: CoroutineScope,
 ) {
     private val pinnedState = mutableStateOf(false)
+    private val pinnedAtState = mutableStateOf(0L)
     private val mutedState = mutableStateOf(false)
-    /** 定时免打扰到期毫秒（第二批 NOTIFICATIONS_P1_DESIGN §5）。群资料页暂未接时长菜单
-     *  （本轮范围只做会话列表/聊天信息页/添加例外三个入口，见任务清单），这里只保证 [muted]
-     *  这个读点走 [MuteState.isMutedNow]，不直接暴露原始 `muted`。 */
+    /** 定时免打扰到期毫秒（第二批 NOTIFICATIONS_P1_DESIGN §5）。「消息免打扰」行点开时长菜单，同聊天信息页。 */
     private val muteUntilState = mutableStateOf(0L)
+    private val muteSheetOpenState = mutableStateOf(false)
     private val markedUnreadState = mutableStateOf(false)
     private val remarkState = mutableStateOf("")
     private val editingMyNicknameState = mutableStateOf(false)
@@ -41,6 +46,7 @@ class GroupInfoSettingsState internal constructor(
 
     val pinned: Boolean get() = pinnedState.value
     val muted: Boolean get() = MuteState.isMutedNow(mutedState.value, muteUntilState.value)
+    val muteSheetOpen: Boolean get() = muteSheetOpenState.value
     val remark: String get() = remarkState.value
     val editingMyNickname: Boolean get() = editingMyNicknameState.value
     val editingRemark: Boolean get() = editingRemarkState.value
@@ -51,6 +57,7 @@ class GroupInfoSettingsState internal constructor(
         runCatching { client.conversationsApi.settings(convId) }
             .onSuccess { s ->
                 pinnedState.value = s.pinnedAt > 0
+                pinnedAtState.value = s.pinnedAt
                 mutedState.value = s.muted
                 muteUntilState.value = s.muteUntil
                 markedUnreadState.value = s.markedUnread
@@ -60,14 +67,23 @@ class GroupInfoSettingsState internal constructor(
     }
 
     /** 置顶/免打扰**整体替换**三项：改一项也要把 `markedUnread` 原样带回，否则会顺手清掉。 */
-    private fun push(newPinned: Boolean, newMuted: Boolean) {
+    /** @param muteUntil 只有时长菜单选中时才传；其余留 null（省略），服务端保留未到期的原到期时间（PROTOCOL §6.10）。 */
+    private fun push(newPinned: Boolean, newMuted: Boolean, muteUntil: Long? = null) {
+        // 置顶时间只在「由关变开」时取现在；已置顶时改免打扰原样带回，不打乱置顶顺序（同 ChatDetailHost）
+        val pinnedAt = when {
+            !newPinned -> 0L
+            pinnedAtState.value > 0 -> pinnedAtState.value
+            else -> System.currentTimeMillis()
+        }
+        pinnedAtState.value = pinnedAt
         scope.launch {
             runCatching {
                 client.conversationsApi.updateSettings(
                     convId,
-                    pinnedAt = if (newPinned) System.currentTimeMillis() else 0,
+                    pinnedAt = pinnedAt,
                     muted = newMuted,
                     markedUnread = markedUnreadState.value,
+                    muteUntil = muteUntil,
                 )
             }.onFailure { IMLog.tag("IM.Group").w("group_conv_settings_failed") }
             client.messages.refreshConversations()
@@ -75,11 +91,24 @@ class GroupInfoSettingsState internal constructor(
     }
 
     fun togglePinned(v: Boolean) { pinnedState.value = v; push(v, muted) }
-    fun toggleMuted(v: Boolean) {
-        mutedState.value = v
-        if (!v) muteUntilState.value = 0
-        push(pinned, v)
+    fun openMuteSheet() { muteSheetOpenState.value = true }
+    fun dismissMuteSheet() { muteSheetOpenState.value = false }
+
+    /** 时长菜单的结果：`null` = 取消免打扰，否则为到期毫秒（0 = 永久）。 */
+    fun setMute(muteUntil: Long?) {
+        muteSheetOpenState.value = false
+        mutedState.value = muteUntil != null
+        muteUntilState.value = muteUntil ?: 0
+        push(pinned, muteUntil != null, muteUntil)
     }
+
+    /** 「消息免打扰」行右值（关 / 至… / 永久）；`nowMs` 由调用方的到期定时器驱动，到点自动重组。 */
+    fun muteValueText(nowMs: Long): String? =
+        if (MuteState.isMutedNow(mutedState.value, muteUntilState.value, nowMs)) MuteState.untilText(muteUntilState.value, nowMs) else null
+
+    /** 喂给 [com.libeyond.imandroid.ui.components.rememberMuteTick] 的单元素会话表（只关心到期时刻）。 */
+    fun tickSource(): List<ConversationEntity> =
+        listOf(ConversationEntity(ownerUid = "", convId = convId, muted = mutedState.value, muteUntil = muteUntilState.value))
 
     /** 群备注（G1）：与置顶/免打扰三开关解耦的独立接口，不动那三个值。 */
     fun setRemark(v: String) {
@@ -97,4 +126,24 @@ class GroupInfoSettingsState internal constructor(
     fun dismissRemarkEditor() { editingRemarkState.value = false }
     fun openNotice(title: String, content: String) { noticeState.value = title to content }
     fun dismissNotice() { noticeState.value = null }
+}
+
+/** 群资料页「消息免打扰」行右值：到期定时器驱动，到点自动从「至…」变回「关」。 */
+@Composable
+fun rememberGroupMuteValueText(settings: GroupInfoSettingsState): String {
+    val now = rememberMuteTick(settings.tickSource())
+    return settings.muteValueText(now) ?: stringResource(R.string.common_off)
+}
+
+/** 群资料页的免打扰时长菜单（与聊天信息页同一个 [MuteDurationSheet]）；未打开时不画。 */
+@Composable
+fun GroupMuteSheet(settings: GroupInfoSettingsState, title: String) {
+    if (!settings.muteSheetOpen) return
+    MuteDurationSheet(
+        convTitle = title,
+        showUnmute = settings.muted,
+        onUnmute = { settings.setMute(null) },
+        onSelect = { d -> settings.setMute(d.muteUntil()) },
+        onDismiss = settings::dismissMuteSheet,
+    )
 }

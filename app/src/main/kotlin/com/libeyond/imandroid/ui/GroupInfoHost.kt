@@ -420,9 +420,9 @@ fun GroupInfoHost(
         myUid = client.uid.orEmpty(),
         onOpenManage = { managing = true },
         pinned = settings.pinned,
-        muted = settings.muted,
+        muteValueText = rememberGroupMuteValueText(settings),
         onTogglePinned = settings::togglePinned,
-        onToggleMuted = settings::toggleMuted,
+        onOpenMute = settings::openMuteSheet,
         onEditMyNickname = settings::openMyNicknameEditor,
         remark = settings.remark,
         onEditRemark = settings::openRemarkEditor,
@@ -482,6 +482,8 @@ fun GroupInfoHost(
         }
     }
     }
+
+    GroupMuteSheet(settings, g.name) // 「消息免打扰」时长菜单（第二批）
 
     // —— 头部「更多」的二次确认（对每一页都生效；文案在 GroupInfoDialogs.kt）——
     GroupMoreConfirmDialog(

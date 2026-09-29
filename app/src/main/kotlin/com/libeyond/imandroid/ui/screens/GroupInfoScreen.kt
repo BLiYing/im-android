@@ -89,9 +89,10 @@ fun GroupInfoScreen(
     // —— 设置区（对齐 iOS `IMChatDetailViewController` 的 Settings 分区，2026-09-22 补）——
     /** 置顶聊天 / 消息免打扰：与单聊那侧同一套会话设置接口，全体成员可自己拨。 */
     pinned: Boolean,
-    muted: Boolean,
+    /** 「消息免打扰」行右值（关 / 至… / 永久），点开时长菜单（第二批，同单聊聊天信息页）。 */
+    muteValueText: String,
     onTogglePinned: (Boolean) -> Unit,
-    onToggleMuted: (Boolean) -> Unit,
+    onOpenMute: () -> Unit,
     /** 我在本群的昵称（仅本人可见，覆盖全局昵称）。 */
     onEditMyNickname: () -> Unit,
     /** 群备注（G1，仅本人可见，与单聊「备注名」同一套接口、多端同步）。 */
@@ -228,7 +229,7 @@ fun GroupInfoScreen(
                     val notSet = stringResource(R.string.settings_info_not_set)
                     SettingsSwitchRow(stringResource(R.string.chat_detail_pinned), pinned, onTogglePinned)
                     SettingsDivider()
-                    SettingsSwitchRow(stringResource(R.string.chat_detail_muted), muted, onToggleMuted)
+                    SettingsChevronRow(stringResource(R.string.chat_detail_muted), muteValueText, onOpenMute)
                     SettingsDivider()
                     SettingsChevronRow(
                         stringResource(R.string.chat_detail_my_group_nickname),
