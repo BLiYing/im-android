@@ -57,9 +57,23 @@ internal fun rememberChatSubtitle(client: IMClient, conv: ConversationEntity): S
         onDispose { client.messages.sendWatch(emptySet(), force = true) }
     }
 
+    // —— 正在输入：需要精确到点清除，不能靠上面 30s 一次的粗粒度 tick ——
+    // typing TTL 只有 5s（PresenceStore.TYPING_TTL_MS），若只靠 `tick` 触发重算，
+    // 最坏要等下一次心跳（最多 30s 后）才会发现已过期，表现为「正在输入」赖着不消失（用户报）。
+    // 借鉴 iOS `cancelPreviousPerformRequestsWithTarget` + `performSelector:afterDelay:` 的debounce
+    // 套路：LaunchedEffect 的 key 换成新到期时间即自动取消上一个定时器、重新掐表——效果等价。
+    var typingNow by remember { mutableStateOf(System.currentTimeMillis()) }
+    val typingExpiry = typingMap[conv.convId]?.second
+    LaunchedEffect(typingExpiry) {
+        if (typingExpiry == null) return@LaunchedEffect
+        val wait = typingExpiry - System.currentTimeMillis()
+        if (wait > 0) delay(wait)
+        typingNow = System.currentTimeMillis()
+    }
+
     val typingLabel = stringResource(R.string.chat_typing)
-    val subtitle = remember(conv.convId, presenceMap, typingMap, tick) {
-        val who = client.presence.typingIn(conv.convId, tick)
+    val subtitle = remember(conv.convId, presenceMap, typingMap, tick, typingNow) {
+        val who = client.presence.typingIn(conv.convId, maxOf(tick, typingNow))
         when {
             who != null -> typingLabel
             conv.isGroup -> ""

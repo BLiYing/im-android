@@ -7,6 +7,21 @@
 
 ## 当前焦点
 
+> **六条用户报告第 4 项：正在输入过期不清除 ✅（2026-09-29，真机验证，OPPO PKD130 user1001 ↔ Web user1002）**：
+> 根因与会话列表绿点是同一类坑——`ChatPresence.kt` 的「正在输入」判定挂在 `rememberChatSubtitle` 里
+> 那颗 30s 一次的粗粒度 `tick`（`Presence.TICK_MS`，给在线态心跳用的）上重算，而 typing TTL 只有 5s
+> （`PresenceStore.TYPING_TTL_MS`）：一条 typing 帧到期后，最坏要等下一次 30s 心跳才会被发现"已过期"，
+> 表现为"正在输入"赖着不消失、长达十几到三十秒（用户报）。**不能简单把 typing 也挂到同一颗 tick 上**
+> （粒度对不上，治标不治本），照 iOS `IMChatViewController+Socket.m` 的
+> `cancelPreviousPerformRequestsWithTarget` + `performSelector:afterDelay:3.0` 思路——每条 typing 帧
+> 到时精确掐表、新帧一来自动顶掉旧表——补一颗独立的精确定时器：`typingNow` 状态 + `LaunchedEffect
+> (typingExpiry)`（key 换成新到期时间即自动取消旧协程重新 `delay` 到点），到点才把 `typingNow` 更新为
+> 真实当前时间，逼 `typingIn(convId, maxOf(tick, typingNow))` 精确到点重算并清除。原有 30s `tick` 仍留
+> 给在线态用（粒度对在线态够）。`./scripts/test.sh` 986/986 绿（未加新单测：纯 Compose 定时器时序，
+> 同 `ChatScroll.kt`/`ChatPresence.kt` 既有先例一样不易脱离 Compose 单测）。**真机验证 ✅**：Web 端
+> user1002 在与 user1001 的 1v1 里敲字（不发送），Android 侧「正在输入」几秒内准时消失、不再滞留，
+> 反复两轮均一致。
+
 > **`/code-review` 抓出：会话列表绿点没有心跳重算 ✅（2026-09-29，紧接上一条一起改的，编译/单测已过，
 > 未做多分钟真机蹲守验证）**：↓N 角标那次提交命中 SYMMETRY「页面结构对 iOS」，按约定跑了
 > `/code-review`，抓到 `ChatsHost.kt` 的 `onlineOf` 只在**调用那一刻**算一次
@@ -41,8 +56,9 @@
 > - **真机验证 ✅**：user1002 用 `IMServer/scripts/send.sh` 连发消息，贴底时验证①自动贴底正确、
 >   离底后验证②角标数字与实发条数逐次对上、③点击跳转贴底后角标正确消失、④退出会话后会话列表
 >   预览文本/排序/未读角标均正确（已读位点被"可见即读"推进，列表侧无残留未读）。
-> - **④-⑥ 未动**：正在输入过期清除、加号面板去掉音视频入口、消息列表滚动条（**滚动条本端其实已有**——
->   `ChatScroll.kt` 的 `chatScrollbar`，⑥严格说只差 iOS/Web 两端补齐，Android 已完成，逐项对齐时留意别重做）。
+> - **④ 已做**（正在输入过期清除，见上方新条目）。**⑤-⑥ 未动**：加号面板去掉音视频入口、
+>   消息列表滚动条（**滚动条本端其实已有**——`ChatScroll.kt` 的 `chatScrollbar`，⑥严格说只差
+>   iOS/Web 两端补齐，Android 已完成，逐项对齐时留意别重做）。
 
 > **开始第 3 项前用户追加两条修复，均已真机验证（2026-09-29，OPPO PKD130，user1001）**：
 > - **① 侧滑手势返回不回上一页**：根因是 4 个 Host 只把 `onBack` 接给顶部返回箭头，没有
@@ -92,9 +108,10 @@
 >   回落 599 行（WARN，未 FAIL）。`./scripts/test.sh` **969/969 绿**（3 轮全绿，含体量门禁）。
 >   **真机验证 ✅ 已通过（2026-09-29，OPPO PKD130，user1001）**：@提及跳转、头像点击跳转均正确
 >   打开资料页且呼叫/视频/搜索/更多齐全；「消息」pill 正确换到与该用户的单聊（含群成员场景）。
-> - **③ 已做**（详见本节最上方条目）：↓N 角标已补，自动贴底与滚动条其实此前已完整。
-> - **④-⑥ 未动**：正在输入过期清除、加号面板去掉音视频入口、消息列表滚动条（Android 已有，
->   iOS/Web 待补），用户要求逐项来，按顺序排在后面。
+> - **③④ 已做**（详见本节最上方条目）：↓N 角标已补，自动贴底与滚动条其实此前已完整；正在输入
+>   过期清除的粗粒度心跳坑也已修。
+> - **⑤-⑥ 未动**：加号面板去掉音视频入口、消息列表滚动条（Android 已有，iOS/Web 待补），
+>   用户要求逐项来，按顺序排在后面。
 
 > **im-rtc 换票：从调试密钥迁移到 IMServer 真实换票接口 ✅（2026-09-28，本端已完成——三端全部完成）**：
 > 此前 `RtcCall.signToken`（同步、`IMDebugTokenGenerator` 本地签调试票）改成调 IMServer
