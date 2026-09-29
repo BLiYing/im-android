@@ -57,17 +57,24 @@ object AppIconSwitcher {
                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                 PackageManager.DONT_KILL_APP,
             )
-            AppIconChoice.entries.filter { it != target }.forEach {
+        } catch (e: RuntimeException) {
+            // 目标都没启用成功：其余保持原样，桌面仍是原图标
+            log.e("app_icon_change_failed", e, "icon" to target.name)
+            return
+        }
+        // 逐个停用、各自兜错：中途一个失败不该让后面的都不停（否则桌面长期挂两个图标）
+        AppIconChoice.entries.filter { it != target }.forEach {
+            try {
                 pm.setComponentEnabledSetting(
                     component(context, it),
                     PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                     PackageManager.DONT_KILL_APP,
                 )
+            } catch (e: RuntimeException) {
+                log.e("app_icon_disable_failed", e, "icon" to it.name)
             }
-            log.i("app_icon_changed", "icon" to target.name)
-        } catch (e: RuntimeException) {
-            log.e("app_icon_change_failed", e, "icon" to target.name)
         }
+        log.i("app_icon_changed", "icon" to target.name)
     }
 
     private fun applied(context: Context): AppIconChoice {

@@ -201,6 +201,9 @@ object RtcCall {
         RtcIds.problem(Str.s(R.string.rtc_kind_peer_id), peerUid)?.let { return it }
         profileResolver?.groupId = ""
         IMCallKit.placeCall(listOf(peerUid), mediaType(video), isGroup = false)
+        // 拨出即算「通话中」：否则对方响铃期间来的消息会在本端外拨界面上叠一声提示音（/code-review 2026-09-29）；
+        // 由 onCallEnd / stop() 复位
+        _inCall.value = true
         return null
     }
 
@@ -217,6 +220,9 @@ object RtcCall {
             calleeUids, mediaType(video = true),
             IMCallOptions(isGroup = true, chatGroupId = chatGroupId),
         )
+        // 拨出即算「通话中」：否则对方响铃期间来的消息会在本端外拨界面上叠一声提示音（/code-review 2026-09-29）；
+        // 由 onCallEnd / stop() 复位
+        _inCall.value = true
         return null
     }
 

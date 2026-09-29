@@ -7,6 +7,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import com.libeyond.imandroid.data.ChatThemeId
@@ -28,7 +29,9 @@ enum class IMThemeMode { System, Light, Dark }
 
 private val LocalIMColors = staticCompositionLocalOf { LightIMColors }
 private val LocalIMDimens = staticCompositionLocalOf { IMDimens() }
-private val LocalIMAppearance = staticCompositionLocalOf { IMAppearance() }
+// 外观值会被滑块逐档改写（字号/圆角拖动即生效）：用 compositionLocalOf 只重组读它的地方；
+// static 版每改一档就把整棵树重组一遍（/code-review 2026-09-29）。颜色令牌很少变，仍用 static。
+private val LocalIMAppearance = compositionLocalOf { IMAppearance() }
 private val LocalSettingsIconColors = staticCompositionLocalOf { LightSettingsIconColors }
 
 /**
