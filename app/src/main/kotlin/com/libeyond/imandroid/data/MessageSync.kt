@@ -8,6 +8,7 @@ import com.libeyond.imandroid.sdk.protocol.ErrorData
 import com.libeyond.imandroid.sdk.protocol.FrameType
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import com.libeyond.imandroid.sdk.protocol.SyncCursorItem
+import com.libeyond.imandroid.sdk.protocol.SyncDefaults
 import com.libeyond.imandroid.sdk.protocol.SyncReqData
 import com.libeyond.imandroid.sdk.protocol.SyncRespData
 
@@ -42,9 +43,16 @@ internal suspend fun MessageService.onConnected() {
     sendWatch(presence.currentWatchSet().toSet(), force = true)
 }
 
-/** 按各会话的本地游标发一次 `sync_req`（增量补拉）。开窗取数走 `windows`，不是这一路。 */
+/**
+ * 按各会话的本地游标发一次 `sync_req`（增量补拉）。开窗取数走 `windows`，不是这一路。
+ *
+ * **每条游标都带 `max_gap`**（OFFLINE_BACKLOG_DESIGN §4.11.1 C2，Android 审计建议的第一条）：
+ * 不带的话服务端不限深度、追平为止——超级群重连也会把积压整段抄完（`IncomingRule.kt` 头注释
+ * 记着 2026-09-09 在 11 万条大群真机撞见过）。恒发 [SyncDefaults.MAX_GAP]，暂不按超级群降到
+ * 0（那需要本地知道"这个会话是不是超级群"，`ConversationEntity` 目前不落这一列，留给 C1）。
+ */
 internal suspend fun MessageService.requestSync(owner: String) {
-    val cursors = repo.syncCursors(owner).map { (convId, seq) -> SyncCursorItem(convId, seq) }
+    val cursors = repo.syncCursors(owner).map { (convId, seq) -> SyncCursorItem(convId, seq, maxGap = SyncDefaults.MAX_GAP) }
     if (cursors.isEmpty()) return
     socket.send(
         FrameType.SYNC_REQ,
@@ -73,9 +81,16 @@ internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData)
             "convId" to c.convId, "msgs" to c.messages.size,
             "covered" to c.coveredConvSeq, "hasMore" to c.hasMore,
         )
+        // 服务端判它「太长了」：本页没有消息、游标原地不动（advanceCursor 上面那行是空写）。
+        // 只留痕，不重试——重试只会立刻拿到同一个 too_long（缺口本身要等 C1 落地才谈得上按需补）。
+        if (c.tooLong) {
+            log.i("sync_backlog_too_long", "convId" to c.convId, "head" to c.headConvSeq)
+        }
         if (c.hasMore && firstFailed == null) {
             needMore = true
-            nextCursors += SyncCursorItem(c.convId, SyncCursorRule.nextSince(c.coveredConvSeq))
+            // 续页沿用同一个 max_gap 预算：page 1 通过闸门后，别让 page 2 在两页之间悄悄变回不限深度
+            // （极端场景：page 1 与 page 2 之间又涌进一大批新消息，把 head 顶远了）。
+            nextCursors += SyncCursorItem(c.convId, SyncCursorRule.nextSince(c.coveredConvSeq), maxGap = SyncDefaults.MAX_GAP)
         }
     }
     if (needMore) {

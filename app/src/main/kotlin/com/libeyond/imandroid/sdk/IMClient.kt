@@ -24,6 +24,7 @@ import com.libeyond.imandroid.sdk.api.DevicesApi
 import com.libeyond.imandroid.sdk.api.DownloadSettingsApi
 import com.libeyond.imandroid.sdk.api.ProfileApi
 import com.libeyond.imandroid.sdk.api.QrApi
+import com.libeyond.imandroid.sdk.api.RtcApi
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.HttpClient
 import com.libeyond.imandroid.sdk.logging.IMLog
@@ -88,6 +89,8 @@ class IMClient(context: Context) {
     val groups = GroupApi(http)
     val profile = ProfileApi(http)
     val qr = QrApi(http)
+    /** im-rtc（音视频通话）换票：`RtcCall` 用它取接入票，不再本地签调试票。 */
+    val rtc = RtcApi(http)
     /** 语音转文字（VOICE_TRANSCRIBE_DESIGN §3.1）：目前只有这一个接口。 */
     private val voiceApi = com.libeyond.imandroid.sdk.api.VoiceApi(http)
     /** 上传。**公开**：除消息媒体外，改头像也要用它（「我」页编辑资料）。 */

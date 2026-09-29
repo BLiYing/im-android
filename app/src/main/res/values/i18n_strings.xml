@@ -64,6 +64,11 @@
     <string name="blocked_title">已屏蔽的用户</string>
     <string name="blocked_unblock">取消屏蔽</string>
     <string name="blocked_unblock_failed">取消屏蔽失败：%1$s</string>
+    <string name="call_history_empty">暂无通话记录</string>
+    <string name="call_history_group_subtitle">群%1$s通话 · %2$d人</string>
+    <string name="call_history_load_failed">加载失败，点击重试</string>
+    <string name="call_history_tab_all">全部</string>
+    <string name="call_history_tab_missed">未接</string>
     <string name="call_record_cancelled">已取消</string>
     <string name="call_record_cancelled_by_peer">对方已取消</string>
     <string name="call_record_declined">已拒绝</string>
@@ -1531,6 +1536,7 @@
     <string name="rtc_error_id_too_long">%1$s 超过 %2$d 字节</string>
     <string name="rtc_error_no_callees">请选择要呼叫的成员</string>
     <string name="rtc_error_not_started">通话服务未启动（请重新登录）</string>
+    <string name="rtc_error_token_fetch_failed">获取通话凭证失败</string>
     <string name="rtc_invite_in_call">已在通话中</string>
     <string name="rtc_kind_group_id">群号</string>
     <string name="rtc_kind_peer_id">对方 id</string>

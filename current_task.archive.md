@@ -1,3 +1,171 @@
+## 2026-09-29 im-rtc 换票 + 转场 Media 分支 + 离线积压 C2 + 群成员搜索入口（从 current_task.md 移入，均已完成；转场剩余分支/离线积压后续切片的待办仍在 current_task.md「下一步」，未连带移入）
+
+> **im-rtc 换票：从调试密钥迁移到 IMServer 真实换票接口 ✅（2026-09-28，本端已完成——三端全部完成）**：
+> 此前 `RtcCall.signToken`（同步、`IMDebugTokenGenerator` 本地签调试票）改成调 IMServer
+> `POST /api/v1/rtc/token`：
+> - `signToken` 改成 `private suspend fun`，调新增的 `sdk/api/RtcApi.kt#fetchToken`。`HttpClient`
+>   默认 `authenticated=true`，会自动带上当前 IM 会话的 Bearer token——本端**不用**像 iOS/Web 那样
+>   手动取/传 token 字符串，直接 `http.call("POST", "/api/v1/rtc/token", ...)` 就够了。
+> - `start`/`onTokenWillExpire`（SDK 回调，非协程上下文）都经 `RtcCall` 自建的
+>   `CoroutineScope(SupervisorJob() + Dispatchers.Main)` 发起换票；两处都加了 `generation` 判定
+>   （换票是异步的，回来时可能已经 `stop` 过——切账号/登出，同已有的 `HostListener.stale` 同一思路）。
+> - 换票结果 → token 的判定逻辑抽成包级函数 `rtcTokenFrom(result: Result<RtcTokenResult>)`
+>   （**不放 `object RtcCall` 内**：`RtcCall` 的类初始化含 `Handler(Looper.getMainLooper())`，
+>   纯 JVM 单测碰它任何成员都会抛异常——第一版把这个纯函数写进 object 内，`RtcCallTest` 4 个用例
+>   全红，改成包级函数后才过；已把这条教训写进 `../IMServer/docs/SYMMETRY.md`）。
+> - `RtcConfig` 精简为只剩 `wsUrl`（去掉 `appId`/`keyId`/`secret`）；`local.properties`/
+>   `app/build.gradle.kts` 的 `RTC_APP_ID`/`RTC_KEY_ID`/`RTC_DEBUG_SECRET` 三个 `buildConfigField`
+>   一并删除。
+> - `IMClient` 新增 `val rtc = RtcApi(http)`；`AppRoot.kt` 的 `RtcCall.start(...)` 调用点传
+>   `rtcApi = client.rtc`。
+> - 新增测试 `RtcCallTest.kt`（4 例，覆盖成功/空 token/业务异常/传输异常四条路径，变异验红过）；
+>   `RtcConfigTest.kt` 同步精简（字段从四项减到一项）。这个项目对网络层（`XxxApi` 类）本身没有
+>   mock 基础设施覆盖的先例（`ProfileApi`/`AuthApi` 等既有类同样没测），未额外引入。
+> - `./scripts/test.sh` 全量 **969/969 绿**（新增 8 例）。
+> - **真机实测 ✅ 已通过**（用户确认）：`adb install` 装到已连接的真机（OnePlus PKD130）后起 App
+>   无崩溃，通话流程验证通过——三端（Web/iOS/Android）换票迁移**全部完成且全部真机/浏览器联调过**。
+
+> **转场没接的几处：`GroupInfoHost` 的 `Media` 分支已落地 ✅（2026-09-28，未做真机验证）**：
+> `ChatDetailHost` 的 3 个分支（Detail/Profile/Media）已在上两轮全部接完。这一轮照抄同一套「open
+> 标志/data 分离」模型，只动 `GroupInfoHost` 的 `Media`（`viewing: ConvMediaItem?`）这一支——它与
+> `ChatDetailHost` 那支是同一个坑：拆成 `viewingOpen: Boolean` + `viewingData: ConvMediaItem?`，
+> 关闭（`onClose`/`onLocateInChat`/`BackHandler` 的 Media 分支）只翻 `viewingOpen = false`，
+> `viewingData` 留着不清（下次 `onOpenArchive` 才覆盖）。**与 `ChatDetailHost` 不同的一点**：
+> `GroupInfoHost` 的 if/else-if 链有 9 个分支，不是 3 个，没有把全部 9 支都改成 `when` 吃
+> `PushTransition` 冻结的 `state`（那是「下一步 2」第 4 步的活，范围大得多）——本轮只把
+> `Media`/`Detail` 这一对相邻的 `else if`/`else` 换成内部套一层
+> `PushTransition(targetState = innerPage, depthOf = {...})`（`innerPage` 只在 `Media`/`Detail`
+> 两值间取值，没有改 `GroupInfoPage` 枚举本身，`depthOf` 就地写成 lambda，没有像 `ChatDetailPage`
+> 那样加 `depth` 字段——9 个分支还没全接，加了也只对得上这一对）；其余 8 个分支（Pick/Bans/Admins/
+> JoinRequests/MemberProfile/MemberSearch/Manage/Qr）原样是整页替换，完全没动。**副作用**：为了让
+> `Media`/`Detail` 在 if-else 链里相邻好嵌套，把 `managing`/`qrCardAsLink` 两个分支的判断顺序挪到了
+> `Media` 前面（原顺序 MemberSearch→Media→Manage→Qr→Detail，现在 MemberSearch→Manage→Qr→
+> Media/Detail）——核对过这几个标志位在运行时互斥（`viewing` 只在 Detail 页的 `onOpenArchive` 里
+> 置位，`managing`/`qrCardAsLink` 为真时不可能同时置位 `viewing`），改变判断顺序不影响实际行为。
+> `GroupInfoHost.kt` 574→**587 行**（还有 13 行余量，比 `Media` 这轮之前更紧，下一块动它前先看着点）。
+> 没加新单测——改动是渲染结构重排 + 状态拆分，不是新的纯函数逻辑（`GroupInfoNav`/`GroupInfoPage`
+> 本身没变，既有 `GroupInfoNavTest` 原样覆盖）。`./scripts/test.sh` **965/965 绿**。**未做真机验证**：
+> 查看器进出是否真的滑动、`viewingData` 保留旧值有没有意外副作用，以及 `managing`/`qrCardAsLink`
+> 判断顺序调整后这两条路径本身（与本轮改动其实无关，但顺手挪了判断顺序，值得真机点一遍确认没引入
+> 回归）。`GroupInfoHost` 剩下的 8 个分支（`else if` 链上真正复杂的部分）仍是拆分方案里最大的一块，
+> 留给后续，一个分支一个分支来。根因诊断与三种导航形态的完整拆分方案见「下一步 2」。
+
+> **离线积压 C2：sync 带 max_gap 闸门 ✅（2026-09-28，只做了 Android 审计建议的第一小块，未做真机验证）**：
+> `../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 审计发现 Android C1~C6 全未启动、
+> 且明确"建议先做这一条"——服务端 `max_gap`/`too_long`/`head_conv_seq` 早已上线（`internal/protocol/
+> envelope.go`），但 Android 的 `sync_req` 从不带 `max_gap`，等于对服务端说"不限深度"，超级群重连
+> 也会把积压整段抄完（`IncomingRule.kt` 头注释记着 2026-09-09 在 11 万条大群真机撞见过）。本轮只做
+> 这一条：`SyncCursorItem` 加 `maxGap`（可空 Long，对齐 Go `*int64` 指针语义）、`SyncConversation`
+> 加 `tooLong`/`headConvSeq`；`requestSync` 每条游标恒发 `SyncDefaults.MAX_GAP=400`（含 `has_more`
+> 续页，续页此前会漏发）；`applySync` 收到 `too_long` 时留痕一条日志（游标本就因为 `covered_conv_seq`
+> 原样等于 `since` 而不会推进，`advanceCursor`/`SyncCursorRule` 早已保证这点，不用额外分支）。
+> `EnvelopeTest.kt` 新增 `SyncGapTest` 4 例（编码省略/保留 `max_gap`、解码 `too_long`、老服务端无此
+> 字段时退化默认值），先临时撤掉这两个字段确认真的编译失败过（`git stash` 验红）。`./scripts/test.sh`
+> **964/964 绿**。**范围边界（刻意不做，留给后续）**：① 不区分超级群——本该给超级群发
+> `max_gap=0`（永远不自动补），但那需要本地先知道"这个会话是不是超级群"，`ConversationEntity`
+> 目前不落这一列，做了也只是一半（还得管迁移/回填），归进 C1 一起做；② 收到 `too_long`后**没有任何
+> 后续动作**——本地没有区间清单（C1 未做），只是"不再无限追平"，不产生"按需开窗补"的下一步，缺口
+> 目前对用户不可见（不影响正确性，只是体验上"这个会话消息好像还没到最新"要等下次能补齐的 sync 才
+> 追上，或用户自己下滑触发本地已有的按需开窗）；③ C1（区间清单）/C3（进会话锚点开窗）/C4（↓/实时/
+> conv_bump 处理）/C5（sync 路径回 delivered）/C6（八项分流除已接的搜索/查看器翻页外其余几项）**均未
+> 动**，见「下一步 1」的拆分清单。**未做真机验证**：改动只影响重连时的 sync 请求形状，需要真机连接
+> →断网/杀连接→重连，抓包或看日志确认 `max_gap` 真的发出去了、大群重连不再整段追平。
+
+> **群资料页「成员」tab 补搜索入口 ✅（2026-09-28，大群专用，未做真机验证）**：`GroupApi.members()`
+> 早已支持服务端 `?q=` 分页搜索，本轮接上。判据 `data/GroupMemberSearch.kt`（阈值/去抖/续拉/去重，
+> 逐条对齐 iOS `IMGroupMemberSearchViewController` 顶部那组 C 函数，有单测）；新页面
+> `ui/GroupMemberSearchHost.kt`（首页去抖走 `LaunchedEffect` 换 key 自动取消在途请求；续页请求跑在
+> `rememberCoroutineScope()` 上不受 `query` 变化牵连，故仍需 iOS `_searchToken` 的等价物
+> `searchGen` 代次令牌判过期——动手时一度以为能全靠 `LaunchedEffect` 躲开手记 token，
+> `/code-review` 抓出续页这条路躲不开、旧词迟到的翻页响应会污染新词已显示的结果，已修 `12bf333`）
+> + `ui/screens/GroupMemberSearchScreen.kt`（复用 `IMSearchField`/`MemberRow`）。`/code-review` 顺带
+> 抓出第二处竞态并同批修：在途守卫原设在 `fetch()` 内部（协程真正跑起来才生效），大列表里同一帧
+> 多行触发 `onLoadMore` 会一起穿过守卫、打出重复请求——改成 `requestLoadMore()` 里同步设置。
+> 群总人数 > 50 时「成员」tab 顶部才出现入口行，恒走服务端过滤不做本地过滤（超级群本地只有已翻到
+> 的那几页，本地过滤会悄悄搜错）。**顺手做的拆分**：`GroupInfoHost.kt` 已贴到 600 行硬闸，把
+> 成员分页那簇状态（`members/cursor/hasMore/loading` + 四处调用点）抽成 `ui/GroupMembersState.kt`
+> （CODING_STYLE §7①），才腾出线程加新页面，改完降到 574 行。新增 `GroupInfoPage.MemberSearch`
+> 枚举页（返回键走既有"一处派发"机制，`GroupInfoNavTest` 补两条层级断言）。
+> **已知简化**：① 未做搜索结果命中高亮（iOS 有，这里判定为纯装饰，跳过）；② 从搜索结果点开一个人的
+> 资料页、又退回来时，搜索词与结果会清空（因为这条路复用 `GroupInfoHost` 顶层"整页替换"导航，
+> 资料页与搜索页互斥、不共存于同一份组合状态里；iOS 用 push/pop 天然不丢，本端要接住得让搜索页
+> 常驻组合树、资料页浮在它上面，超出本轮范围，留作后续小优化）。`./scripts/test.sh` **960/960 绿**
+> （新增 `GroupMemberSearchTest` 7 例 + `GroupInfoNavTest` 补 1 例，均先见红过）。**未做真机验证**：
+> 没有现成的 50+ 人测试群，也没有 Android 端的屏幕自动化工具可用，只验证了编译与 JVM 单测；
+> 入口显隐、搜索/翻页/选人整条链路需要用户真机跑一遍。
+
+## 2026-09-28 好友备注回填 + 语音消息三期 + 多语言 P3 + 应用内多语言全量迁移（从 current_task.md 移入，均已完成/已推送/已真机验证，无未结下一步指回它们）
+
+> **好友/群成员备注编辑：回填补齐到通讯录列表与群成员资料页 ✅（2026-09-28，`d4cc22e`，已推送）**：
+> `UserProfileHost.onRemarkChanged` 此前只接了 `ChatDetailHost` 一条路（`/code-review` 抓出的坑：
+> 改完备注退回上级页仍显旧值）。补齐两处真正会复现的：`ContactsHost`（好友列表点进资料页改备注，
+> 回填 `friends` 状态）、`GroupInfoHost`（群成员资料页改备注，加 `remarkOverrides` 覆盖
+> `knownFriends` 这份整会话只拉一次的快照）。`FavoritesHost`/`ChatPickerLayers`/`QrRouteHost`
+> 三处未动——都是「选人即用」场景，资料页没有可复现的常驻展示位，见「已知坑」。
+> `./scripts/test.sh` 952/952 绿（纯 Compose 状态回填，无可单测的新逻辑分支）。
+
+> **语音消息三期全部完成 ✅（2026-09-28，三端对齐，已提交并推送，详情见
+> `../IMServer/docs/CLIENT_PARITY.md` voice P0/P1 两行 Android 列）**：① 播放（`voice/VoicePlayer`+
+> `ui/voice/VoiceViews`）、② 录制（`voice/VoiceRecorder`+`ui/voice/VoiceRecordUi`，手势/悬浮层/
+> 锁定行/暂停试听/5min 上限/中断转暂停全套，`/code-review --fix` 修 7 条 + 用户真机复测又报的 2 条
+> bug 均已修——完整清单见 `current_task.archive.md` 2026-09-28 条目）、③ **转文字**（`b3cf207`，
+> 同批提交）。上滑锁定的悬浮层顺手又补了一条：锁钮里**加了呼吸上箭头**（`Lucide.ChevronUp`，
+> `position.y` 上下 4dp、0.7s、线性、无限往复，对齐 iOS `IMVoicePressOverlay.restartArrowBreathe`
+> 逐参数抄的——之前只把锁钮渲染出来了，没照 iOS 补这个"往上滑到这里"的动效提示，用户对照 iOS 截图
+> 指出后补上），真机 adb 分帧摆拍确认箭头在两帧之间有位移。
+>
+> **③ 转文字**：长按菜单「转文字」（仅语音、`convSeq>0`）→ `voice/VoiceApi.transcribe` 调
+> `POST /voice/transcripts`（只传消息坐标不传音频路径）→ 气泡下方展开面板（左侧引用线+文本+隐私
+> 说明尾行，同 iOS/Web 视觉语系）；命中缓存秒出，未命中先显「识别中…」，结果经 `voice_transcript`
+> 帧（`MessageService.voiceTranscripts` → `VoiceTranscriber.applyRemote`）到达。新增
+> `voice/VoiceTranscriber.kt`（展开态 `StateFlow`）+ `voice/VoiceTranscriptStore`（`PrefsVoiceKv`
+> 持久化：文本按**音频内容**缓存、折叠态按 mid 落盘，两条判据对齐 iOS `IMVoiceTranscriber`，
+> FIFO 封顶 2000/500）；`MessageActions`/`ChatMessageMenu` 补「转文字」/「取消转文字」互斥对。
+> **调研纠偏**：动手前一度误判 iOS/Web 都没做这个新方案（分别被 Objective-C 文件后缀、CLIENT_PARITY
+> 里一条已废弃的旧设计行带偏），用户当场指出后重新核实——iOS `IMVoiceTranscriber`(.h/.m)+
+> `IMChatViewController+Menu.m`/`+Voice.m`、Web `useVoiceTranscript.ts` 其实都已实现且完整，
+> 本轮 Android 实现直接照抄两边的判据（内容去重缓存、折叠态持久化、识别中途取消不被迟到结果撑开）。
+> `VoiceTranscriberTest` 8 例 + `VoiceTranscriptStore` 4 例 + `MessageActionsTest` 1 例（均先见红，
+> 含一例用 `CompletableDeferred` 钉住"请求真在途时取消"的竞态）。`MessageRepository.kt` 顺手拆分
+> （新增 `MessageRepositorySend.kt`，600 行硬闸触顶所致，纯平移无逻辑改动）。`./scripts/test.sh`
+> **948/948 绿**；OPPO 真机对着真实识别引擎（本机已装 `install-transcribe.sh`）实测通过：菜单→
+> 识别中→文本落地（含隐私说明尾行）→取消转文字收起，全链路走通。
+> **已知简化**：面板撑高后「补进视口」只做了近似（历史中间某条转写可能需要用户自己再滑一下，
+> 不像 iOS/Web 那样按行几何精确计算），多数场景（末条是语音）够用，留作后续小优化。
+
+> **多语言 P3 全部完成 ✅（2026-09-27，OPPO 真机中↔英实测通过）**——① `sys_event`/`sys_args`：新增
+> `data/SysEvents.kt`（对齐 iOS `IMSysEventFormatter`/Web `sysEventRender.ts`）——群系统消息按事件表拼出与
+> `sys_segments` 同构的分段，喂回 `SystemNote` 原有的「本地显示名 + 可点」管线（邀请多人时被邀请者逐个出段、各自可点）；
+> 系统通知单聊（777000）按 `sys_args` 拼多行气泡正文。会话列表预览**按当前语言现算**（会话表存
+> `lastSysEvent/lastSysArgs/lastSysSegments`，同 iOS），切语言立即生效。落库：消息加 `sysEvent`/`sysArgs`，
+> Room v10→v11（真机覆盖安装验证迁移无误）。事件为空/不认识 → 回退服务端中文整句。`SysEventsTest` 12 例（先看红过）；
+> `./scripts/test.sh` **908/908 绿**。**存量限制**：升级前已落库的消息行没有这两列（旧版没存），聊天页里仍是中文；
+> 服务端 P3 上线前产生的系统消息本身也不带 `sys_event`（协议明写不回填）。
+> ② `reply_snapshot_kind`/`_args`：`data/ReplySnapshots.kt` 把结构化标记还原成引用块已认得的原始 token
+> （`[chat_record] 标题`/`[contact] 名字`/`[file] 名`/`[voice] m:ss`/`[recalled]`），显示仍统一走 `localizeReplySnapshot`，
+> 图标/文件名判据不分叉；Room v11→v12（消息加 `replySnapshotKind`/`replySnapshotArgs`）。真机：英文下引用名片显示 `[Contact] 名字`。
+> ③ 顺修既有 bug：**群系统消息被计入未读**——`IncomingRule.countsAsUnread` 与服务端 M4-8 同口径排除 `system`，
+> 聊天页未读分割线也不再以系统消息为首条；真机验证群公告进来红点不再 +1。
+> ④ `ONLY=Xxx ./scripts/test.sh` 修好（只把 `--tests` 交给含匹配测试的模块；用例数自检只数匹配的报告）。
+> ⑤ 新增 145 键英文逐条复核（2026-09-27）：改 34 条（含 code-review 后补 7 条；复数补 one 形态、术语对齐 Mute everyone/Log out/[Chat History]/[Call]、
+> `{op}: done/failed` 取代生硬拼接）；真机英文看过收藏、数据和存储（含自动下载子页）、群资料、群管理，无截断。
+> `./scripts/test.sh` **915/915 绿**（新增 `SysEventsTest` 12、`ReplySnapshotKindTest` 6、`IncomingRuleTest` +1，均先看红过）。
+
+> **应用内多语言全量迁移 ✅（2026-09-27，真机 OPPO Android 15 实测中↔英通过）**：全 App 文案接上
+> `IMServer/docs/i18n/strings.json`（本轮新增 145 个键，优先复用 iOS/Web 译文；表现 1538 键）。
+> 取文案两条路：Compose 用 `stringResource`；非 Compose（`data/` 纯函数、回调、toast）用 **`i18n/Str`**
+> ——可插拔解析器，App 里跟随 `LanguageStore`，JVM 单测经 ServiceLoader 读 `values/` 简体中文，故既有中文断言原样成立。
+> 切换：API 33+ 平台 `LocaleManager`；**所有版本** `MainActivity.attachBaseContext` 按当前语言包 Context，
+> API 33 以下切换时自行 `recreate()`（原"<33 不能即时切换"的限制已消除）。`media-picker` 模块看不到 app 的 `R`，
+> 自带一份 `mp_*` 中英资源（手写，改时两份一起改）。`check-i18n.mjs` 已接 Android 源码扫描（`R.string.a_b` 反查回表键）。
+> 顺手修的真实 bug：引用块/输入栏回复条的类型图标与文件名判据原先比对本地化后的中文（`[图片]`），英文下会全部失效——
+> 改为只认原始快照 token（`[image]` 等 + 服务端预本地化的 `[聊天记录]`/`[个人名片]` + 存量中文）；
+> `replyPreviewOf` 改产出原始 token，与服务端冻结快照同一形态，显示时统一 `localizeReplySnapshot`。
+> `./scripts/test.sh` **896/896 绿**。真机看过：消息列表、通讯录、我、语言页、聊天页、聊天详情、通话界面。
+> **刻意保留中文（DEFERRED，同 iOS）**：会写进消息内容外发的（@全员 token `Mention.ALL_LABEL`、合并转发兜底标题
+> `SelectionActions.chatRecordTitle`、转发来源名/群成员 displayName 的"未命名用户"兜底）、sdk 传输层诊断
+> （上层 `userMessage()` 会整体替换，不到达屏幕）、开发期 UI（免密登录/服务器地址）、拼音分组表。
+
 ## 2026-09-28 语音消息 P2 录制 + code review 修复 + 两个真机 bug 修复
 
 > **语音消息 P2 录制 ✅（OPPO 真机实测核心手势）**：按设计稿 `VOICE_MESSAGE_DESIGN.md` +

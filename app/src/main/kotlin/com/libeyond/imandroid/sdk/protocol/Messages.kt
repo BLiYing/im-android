@@ -252,6 +252,14 @@ data class ReceiptData(
 data class SyncCursorItem(
     @SerialName("conv_id") val convId: String,
     @SerialName("since_conv_seq") val sinceConvSeq: Long,
+    /**
+     * 本次愿意补拉的最大积压深度（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.4）：
+     * 服务端算出 `head_conv_seq - since_conv_seq` 超过它就不查消息表，直接回 `too_long`。
+     * **须是可空**，null（不带这个字段）与本项目自己发 `0` 语义不同——`null` 会退回老行为
+     * "不限深度、追平为止"，Android 目前没有区间清单（C1），恒发 [SyncDefaults.MAX_GAP]，
+     * 不区分超级群（那需要先知道会话是不是超级群，本地目前不落这一列，留作后续）。
+     */
+    @SerialName("max_gap") val maxGap: Long? = null,
 )
 
 @Serializable
@@ -273,7 +281,21 @@ data class SyncConversation(
      */
     @SerialName("covered_conv_seq") val coveredConvSeq: Long = 0,
     @SerialName("has_more") val hasMore: Boolean = false,
+    /**
+     * 积压深度超过本游标声明的 [SyncCursorItem.maxGap]：`messages` 为空、`coveredConvSeq`
+     * 原样等于请求的 `since`（游标不推进）。客户端据此在本地记一个缺口——本端目前没有区间清单
+     * （OFFLINE_BACKLOG_DESIGN §4.11.1 C1，未做），先只做到"不再无限追平"，缺口本身还没有
+     * 结构化记录，也就没有"按需开窗补"的下一步，留给 C1 落地时接上。
+     */
+    @SerialName("too_long") val tooLong: Boolean = false,
+    /** 会话真实最新位点（含 `msg_op` 事件行）；仅当请求带了 `max_gap` 时下发，否则为 0。 */
+    @SerialName("head_conv_seq") val headConvSeq: Long = 0,
 )
+
+/** [SyncCursorItem.maxGap] 的默认值——设计文档 §4.4："顺手补上"与"留缺口"的分水岭，三端同值。 */
+object SyncDefaults {
+    const val MAX_GAP = 400L
+}
 
 @Serializable
 data class SyncRespData(val conversations: List<SyncConversation> = emptyList())

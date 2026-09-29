@@ -5,8 +5,12 @@ package com.libeyond.imandroid.data
  * 返回键**一处按当前页派发**，枚举加一页 `when` 就编译不过，漏不掉。
  *
  * 详见 [GroupInfoPage] 的注释（2026-09-08 一天漏了三次的那笔账）。
+ *
+ * [depth] 供 `ui/components/PushTransition.kt` 判转场方向（同 `data/PushNav.kt` 那几个 Tab 页面
+ * 枚举的写法）：`Media` 与 `Profile` **都只从 `Detail` 直接进**（互相之间没有真实跳转路径），
+ * 是并列的两个子页，深度同为 1，不必再分二三级。
  */
-enum class ChatDetailPage { Media, Profile, Detail }
+enum class ChatDetailPage(val depth: Int) { Detail(0), Profile(1), Media(1) }
 
 object ChatDetailNav {
 

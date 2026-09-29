@@ -64,6 +64,11 @@
     <string name="blocked_title">Blocked users</string>
     <string name="blocked_unblock">Unblock</string>
     <string name="blocked_unblock_failed">Couldn’t unblock: %1$s</string>
+    <string name="call_history_empty">No call history</string>
+    <string name="call_history_group_subtitle">Group %1$s call · %2$d people</string>
+    <string name="call_history_load_failed">Failed to load, tap to retry</string>
+    <string name="call_history_tab_all">All</string>
+    <string name="call_history_tab_missed">Missed</string>
     <string name="call_record_cancelled">Cancelled</string>
     <string name="call_record_cancelled_by_peer">Cancelled</string>
     <string name="call_record_declined">Declined</string>
@@ -1574,6 +1579,7 @@
     <string name="rtc_error_id_too_long">%1$s exceeds %2$d bytes</string>
     <string name="rtc_error_no_callees">Select members to call</string>
     <string name="rtc_error_not_started">The call service isn’t running. Please log in again.</string>
+    <string name="rtc_error_token_fetch_failed">Failed to fetch the call credential</string>
     <string name="rtc_invite_in_call">In a call</string>
     <string name="rtc_kind_group_id">Group ID</string>
     <string name="rtc_kind_peer_id">Peer ID</string>

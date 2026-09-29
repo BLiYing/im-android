@@ -7,81 +7,58 @@
 
 ## 当前焦点
 
-> **好友/群成员备注编辑：回填补齐到通讯录列表与群成员资料页 ✅（2026-09-28，`d4cc22e`，已推送）**：
-> `UserProfileHost.onRemarkChanged` 此前只接了 `ChatDetailHost` 一条路（`/code-review` 抓出的坑：
-> 改完备注退回上级页仍显旧值）。补齐两处真正会复现的：`ContactsHost`（好友列表点进资料页改备注，
-> 回填 `friends` 状态）、`GroupInfoHost`（群成员资料页改备注，加 `remarkOverrides` 覆盖
-> `knownFriends` 这份整会话只拉一次的快照）。`FavoritesHost`/`ChatPickerLayers`/`QrRouteHost`
-> 三处未动——都是「选人即用」场景，资料页没有可复现的常驻展示位，见「已知坑」。
-> `./scripts/test.sh` 952/952 绿（纯 Compose 状态回填，无可单测的新逻辑分支）。
-
-> **语音消息三期全部完成 ✅（2026-09-28，三端对齐，已提交并推送，详情见
-> `../IMServer/docs/CLIENT_PARITY.md` voice P0/P1 两行 Android 列）**：① 播放（`voice/VoicePlayer`+
-> `ui/voice/VoiceViews`）、② 录制（`voice/VoiceRecorder`+`ui/voice/VoiceRecordUi`，手势/悬浮层/
-> 锁定行/暂停试听/5min 上限/中断转暂停全套，`/code-review --fix` 修 7 条 + 用户真机复测又报的 2 条
-> bug 均已修——完整清单见 `current_task.archive.md` 2026-09-28 条目）、③ **转文字**（`b3cf207`，
-> 同批提交）。上滑锁定的悬浮层顺手又补了一条：锁钮里**加了呼吸上箭头**（`Lucide.ChevronUp`，
-> `position.y` 上下 4dp、0.7s、线性、无限往复，对齐 iOS `IMVoicePressOverlay.restartArrowBreathe`
-> 逐参数抄的——之前只把锁钮渲染出来了，没照 iOS 补这个"往上滑到这里"的动效提示，用户对照 iOS 截图
-> 指出后补上），真机 adb 分帧摆拍确认箭头在两帧之间有位移。
->
-> **③ 转文字**：长按菜单「转文字」（仅语音、`convSeq>0`）→ `voice/VoiceApi.transcribe` 调
-> `POST /voice/transcripts`（只传消息坐标不传音频路径）→ 气泡下方展开面板（左侧引用线+文本+隐私
-> 说明尾行，同 iOS/Web 视觉语系）；命中缓存秒出，未命中先显「识别中…」，结果经 `voice_transcript`
-> 帧（`MessageService.voiceTranscripts` → `VoiceTranscriber.applyRemote`）到达。新增
-> `voice/VoiceTranscriber.kt`（展开态 `StateFlow`）+ `voice/VoiceTranscriptStore`（`PrefsVoiceKv`
-> 持久化：文本按**音频内容**缓存、折叠态按 mid 落盘，两条判据对齐 iOS `IMVoiceTranscriber`，
-> FIFO 封顶 2000/500）；`MessageActions`/`ChatMessageMenu` 补「转文字」/「取消转文字」互斥对。
-> **调研纠偏**：动手前一度误判 iOS/Web 都没做这个新方案（分别被 Objective-C 文件后缀、CLIENT_PARITY
-> 里一条已废弃的旧设计行带偏），用户当场指出后重新核实——iOS `IMVoiceTranscriber`(.h/.m)+
-> `IMChatViewController+Menu.m`/`+Voice.m`、Web `useVoiceTranscript.ts` 其实都已实现且完整，
-> 本轮 Android 实现直接照抄两边的判据（内容去重缓存、折叠态持久化、识别中途取消不被迟到结果撑开）。
-> `VoiceTranscriberTest` 8 例 + `VoiceTranscriptStore` 4 例 + `MessageActionsTest` 1 例（均先见红，
-> 含一例用 `CompletableDeferred` 钉住"请求真在途时取消"的竞态）。`MessageRepository.kt` 顺手拆分
-> （新增 `MessageRepositorySend.kt`，600 行硬闸触顶所致，纯平移无逻辑改动）。`./scripts/test.sh`
-> **948/948 绿**；OPPO 真机对着真实识别引擎（本机已装 `install-transcribe.sh`）实测通过：菜单→
-> 识别中→文本落地（含隐私说明尾行）→取消转文字收起，全链路走通。
-> **已知简化**：面板撑高后「补进视口」只做了近似（历史中间某条转写可能需要用户自己再滑一下，
-> 不像 iOS/Web 那样按行几何精确计算），多数场景（末条是语音）够用，留作后续小优化。
-
-> **多语言 P3 全部完成 ✅（2026-09-27，OPPO 真机中↔英实测通过）**——① `sys_event`/`sys_args`：新增
-> `data/SysEvents.kt`（对齐 iOS `IMSysEventFormatter`/Web `sysEventRender.ts`）——群系统消息按事件表拼出与
-> `sys_segments` 同构的分段，喂回 `SystemNote` 原有的「本地显示名 + 可点」管线（邀请多人时被邀请者逐个出段、各自可点）；
-> 系统通知单聊（777000）按 `sys_args` 拼多行气泡正文。会话列表预览**按当前语言现算**（会话表存
-> `lastSysEvent/lastSysArgs/lastSysSegments`，同 iOS），切语言立即生效。落库：消息加 `sysEvent`/`sysArgs`，
-> Room v10→v11（真机覆盖安装验证迁移无误）。事件为空/不认识 → 回退服务端中文整句。`SysEventsTest` 12 例（先看红过）；
-> `./scripts/test.sh` **908/908 绿**。**存量限制**：升级前已落库的消息行没有这两列（旧版没存），聊天页里仍是中文；
-> 服务端 P3 上线前产生的系统消息本身也不带 `sys_event`（协议明写不回填）。
-> ② `reply_snapshot_kind`/`_args`：`data/ReplySnapshots.kt` 把结构化标记还原成引用块已认得的原始 token
-> （`[chat_record] 标题`/`[contact] 名字`/`[file] 名`/`[voice] m:ss`/`[recalled]`），显示仍统一走 `localizeReplySnapshot`，
-> 图标/文件名判据不分叉；Room v11→v12（消息加 `replySnapshotKind`/`replySnapshotArgs`）。真机：英文下引用名片显示 `[Contact] 名字`。
-> ③ 顺修既有 bug：**群系统消息被计入未读**——`IncomingRule.countsAsUnread` 与服务端 M4-8 同口径排除 `system`，
-> 聊天页未读分割线也不再以系统消息为首条；真机验证群公告进来红点不再 +1。
-> ④ `ONLY=Xxx ./scripts/test.sh` 修好（只把 `--tests` 交给含匹配测试的模块；用例数自检只数匹配的报告）。
-> ⑤ 新增 145 键英文逐条复核（2026-09-27）：改 34 条（含 code-review 后补 7 条；复数补 one 形态、术语对齐 Mute everyone/Log out/[Chat History]/[Call]、
-> `{op}: done/failed` 取代生硬拼接）；真机英文看过收藏、数据和存储（含自动下载子页）、群资料、群管理，无截断。
-> `./scripts/test.sh` **915/915 绿**（新增 `SysEventsTest` 12、`ReplySnapshotKindTest` 6、`IncomingRuleTest` +1，均先看红过）。
-
-> **应用内多语言全量迁移 ✅（2026-09-27，真机 OPPO Android 15 实测中↔英通过）**：全 App 文案接上
-> `IMServer/docs/i18n/strings.json`（本轮新增 145 个键，优先复用 iOS/Web 译文；表现 1538 键）。
-> 取文案两条路：Compose 用 `stringResource`；非 Compose（`data/` 纯函数、回调、toast）用 **`i18n/Str`**
-> ——可插拔解析器，App 里跟随 `LanguageStore`，JVM 单测经 ServiceLoader 读 `values/` 简体中文，故既有中文断言原样成立。
-> 切换：API 33+ 平台 `LocaleManager`；**所有版本** `MainActivity.attachBaseContext` 按当前语言包 Context，
-> API 33 以下切换时自行 `recreate()`（原"<33 不能即时切换"的限制已消除）。`media-picker` 模块看不到 app 的 `R`，
-> 自带一份 `mp_*` 中英资源（手写，改时两份一起改）。`check-i18n.mjs` 已接 Android 源码扫描（`R.string.a_b` 反查回表键）。
-> 顺手修的真实 bug：引用块/输入栏回复条的类型图标与文件名判据原先比对本地化后的中文（`[图片]`），英文下会全部失效——
-> 改为只认原始快照 token（`[image]` 等 + 服务端预本地化的 `[聊天记录]`/`[个人名片]` + 存量中文）；
-> `replyPreviewOf` 改产出原始 token，与服务端冻结快照同一形态，显示时统一 `localizeReplySnapshot`。
-> `./scripts/test.sh` **896/896 绿**。真机看过：消息列表、通讯录、我、语言页、聊天页、聊天详情、通话界面。
-> **刻意保留中文（DEFERRED，同 iOS）**：会写进消息内容外发的（@全员 token `Mention.ALL_LABEL`、合并转发兜底标题
-> `SelectionActions.chatRecordTitle`、转发来源名/群成员 displayName 的"未命名用户"兜底）、sdk 传输层诊断
-> （上层 `userMessage()` 会整体替换，不到达屏幕）、开发期 UI（免密登录/服务器地址）、拼音分组表。
+> **设置 ▸ 最近通话页面 ✅（2026-09-29，逻辑与编译已过，未做真机验证）**：
+> `../IMServer/docs/design/CALL_HISTORY_DESIGN.md` 落地——「我」页早已有的「最近通话」占位行
+> （`MeScreen.kt` 第一组，绿色电话图标）换成真正导航，调 im-rtc SDK 的 `IMCallEngine.fetchCallHistory`
+> 拉自己的通话历史，纯客户端功能，不经过 IMServer。
+> - **导航**：沿用本仓「无 NavHost，`MePage` 枚举 + `PushTransition`」的既有套路（同 `Favorites`）——
+>   `data/PushNav.kt` 的 `MePage` 加 `CallHistory(1)`；`MeHost.kt` 的 `when(p)` 加一支接
+>   `CallHistoryHost`；`MeScreen.kt` 加 `onOpenCallHistory: () -> Unit` 参数，「最近通话」行的
+>   `onClick` 从 `{ onComingSoon(recentCalls) }` 换成 `onOpenCallHistory`，行本身（文案/图标/颜色/
+>   位置）未动。
+> - **SDK 接线**：`rtc/RtcCall.kt` 新增 `fetchCallHistory(limit, cursor, onResult)`（透传给
+>   `engine.fetchCallHistory`，引擎未起时按既有 `unavailableReason()` 文案回退失败）与
+>   `onCallEnded: (() -> Unit)?` 回调（`HostListener` 新增 `onCallEnd` override，双方都触发，
+>   不分角色——区别于只对主叫触发的 `onCallSummary`/`onCallRecord`，用于「留在本页时通话结束要
+>   重拉首页」，设计文档 §3）。
+> - **纯逻辑** `data/CallHistory.kt`（新文件，有单测）：未接判定（我是被叫且 `durationSec==0`）、
+>   1v1 对方 uid 与群通话人数（逐字对齐 im-rtc Demo `HistoryScreen.peerText` 的判据，不重新发明）、
+>   翻页去重、按天分组（`labelOf` 注入避免 `data/` 反向依赖 `ui.components.TimeFormat`）、「未接」
+>   tab 自动续页的判据（`shouldAutoContinue`）。**reason 文案复用 `CallRecord.render`**（聊天气泡
+>   通话记录消息同一套判定），不新造一套；**红色与否不看它**——未接判定是本页自己的简单两字段规则
+>   （设计文档 §0.7 把两件事分开管，行为上可能与 `CallRecord.Tone.Missed` 不完全重合，是设计使然）。
+> - **接线层** `ui/CallHistoryHost.kt`（`CallHistoryList` 状态类，同 `FavoritesHost.FavoriteList`
+>   同一形状：`generation` 代次令牌作废在途旧请求，`callEnded` 回调重拉首页也走同一份 `reload`）：
+>   身份解析走会话表优先（1v1 备注>标题，群用群会话标题），查不到的 1v1 再补拉一次名片（同
+>   `FavoritesHost.sourceOf` 的两段式）；**未复用 `RtcProfileResolver`**——那是喂给通话中界面
+>   （Kit）的解析器，生命周期绑一通电话，这里要「历史列表批量查名」，直接读会话表更直接。
+>   点单聊行 = 按 `mediaType` 直接调 `RtcCall.placeSingle`，不弹确认；点群聊行 = 跳转
+>   `chatGroupId` 对应群会话（本地没有就用 `client.groupConversationStubFor` 造一个壳）。
+> - **UI** `ui/screens/CallHistoryScreen.kt`：`SegTabBar`/`Hint`/`LoadMore`（复用 `DetailArchive.kt`
+>   既有组件，同 `FavoritesScreen` 套路）；行用 `Lucide.ArrowUpRight`/`ArrowDownLeft` 方向箭头 +
+>   `Lucide.Phone`/`Video` 类型图标 + `IMAvatar`（1v1）/自绘 `Lucide.Users` 渐变底（群通话，
+>   通话参与者 ≠ 群成员，不用群头像）；未接来电整行 `IMTheme.colors.danger`。
+> - **string 新增**（`values`/`values-en` 两份 `i18n_strings.xml`，均已加）：`call_history_tab_all`/
+>   `_tab_missed`/`_empty`/`_group_voice`/`_group_video`/`_group_summary`；页面标题/空态图标/
+>   401 文案复用既有 key（`ios_settings_row_recent_calls`/`common_load_failed`/
+>   `common_tap_to_retry`/`rtc_error_not_started`），未新增重复 key。
+> - 新增 `CallHistoryTest.kt`（17 例：未接判定、1v1 对方 uid、群人数、翻页去重、未接自动续页判据、
+>   按天分组），均覆盖设计文档 §6 测试点里能脱离 Compose 布局单测的部分。`./scripts/test.sh`
+>   全量 **986/986 绿**（体量门禁/日志红线/编译/单测四步全过，新文件均远低于 600 行硬闸）。
+> - **没做 / 已知限制**：删除、长按菜单、未接数量角标——按设计文档 v1 范围明确不做，也没有为它们
+>   预留接口；「全部/未接」的自动续页与端上过滤是设计文档 §3.5 明说的一期凑合方案，服务端过滤参数
+>   二期才加。**未做真机验证**（本环境无法起模拟器/连真机）：滚动分页时序、「未接」tab 自动连续翻页
+>   的视觉表现、`callEnded` 到达时重拉首页会不会有画面闪烁、群通话行点击后跳转会话是否正确、
+>   1v1 回拨的 Kit 忙线/无权限守门提示是否如预期，全部只验证到编译与 JVM 单测这一层。
 
 ## 下一步
 
-0d. **群资料页「成员」tab 缺搜索入口**（2026-09-24 用户报后调研发现，未改代码）：`GroupApi.members()`
-   已支持 `q` 参数、服务端本就能分页搜索，复用 `MentionComposerState`/`RtcInviteProvider` 的调用模式
-   即可实现；参照 iOS `IMGroupMemberSearchViewController`（搜索框 + 服务端分页 + 下拉加载更多）。
+0e. **设置 ▸ 最近通话页面的真机验证**（2026-09-29 已实现，见「当前焦点」，未测）：滚动分页时序、
+   「未接」tab 过滤后自动连续翻页的实际观感、`callEnded` 到达时重拉首页的画面表现、1v1 行点击回拨
+   （含忙线/无权限的 Kit 守门提示）、群聊行点击跳转会话是否正确、空状态/401/网络错误三态的文案与
+   重试。需要至少两个测试账号互相拨打几通电话（含群通话）攒出真实通话记录再验。
+0d. **群资料页「成员」tab 搜索入口的真机验证**（2026-09-28 已实现，见「当前焦点」，未测）：入口显隐
+   门槛（>50 人）、搜索/去抖/翻页、选中后跳资料页整条链路，需要一个 50+ 人的测试群。
 0b. **上几批仍欠的真机回归**（这两轮没动到、也没回归）：归档查看器「更多」五项、合并转发记录页内翻页、
    长按预览里点图/点链接只关菜单、以及 2026-09-15/16 那两批的清单（见 `current_task.archive.md` 顶部）。
 0c. **本批（2026-09-23）真机回归**——📅/👤/撤回实时刷新/非 UTC+8 时区换算均已测过（见 archive），
@@ -89,10 +66,63 @@
    （系统图片选择器多级页面盲点坐标屡次踩偏），也没有第二台设备/账号可以扮演"收端"；只验证到
    "提及渲染可点 + 点了跳资料页"这条基础设施是通的，`mentions` 随转发存活只有单测覆盖。
    另外**"对方撤回"的两种文案**（"XX/对方撤回了一条消息"）同样因为单设备单账号测不出来，只测了"自己撤回"。
-1. **Android 离线积压整套未启动**（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 / §5 B3a）：
-   建议先让 sync 带 `max_gap`；另缺区间清单、`conv_bump` 被丢弃、sync/window 路径不回 `delivered`；
-   C4 未做；会话内检索只取一页。
-2. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：群资料 / 聊天信息内部子页读的是已置空的状态。
+1. **Android 离线积压（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 / §5 B3a）**：
+   C2（sync 带 `max_gap`）最小切片已做，见「当前焦点」；范围明显比单条任务大，剩下按设计文档原有
+   C1/C3/C4/C5/C6 分期，一次做一块：
+   - **C2 收尾**（本轮的直接延伸，比新开一个 C 项小）：`too_long` 时的真机验证（见「当前焦点」）；
+     超级群 `max_gap=0` 需要先给 `ConversationEntity` 加 `isSuper` 列（迁移）并在拉群资料时回填。
+   - **C1 区间清单**：新 Room 表 `conv_range_local(owner_uid, conv_id, lo, hi)` + 纯函数（合并相邻区间、
+     查询"某段是否齐全"，参照 Web `ranges.ts` 的判据，有单测）；写消息与扩区间同一事务（I1 不变量）。
+     C1 是后面几项的地基，建议下一块就做它。
+   - **C3 进会话 / 滚动**：`ui/ChatHost.kt` 目前固定本地 `ChatWindow.Tail`，`window_req` 只用于引用跳转/
+     搜索命中——要接锚点开窗（未读首条不在本地尾部时定位不到）与上滚时查区间清单再决定问本地还是服务端。
+   - **C4 ↓ / 跳号 / `conv_bump`**：`conv_bump` 目前在 `MessageService.kt` 落进忽略分支，超级群会话行
+     收不到刷新；↓ 只换本地 Tail，没有"最新一页齐不齐"的判据。
+   - **C5 `delivered` 回执**：`MessageService.kt` 只在 `NEW_MSG` 分支回，sync/window 路径一条都不回——
+     离线补拉回来的消息，对端看不到「已送达」直到被已读覆盖。
+   - **C6 八项分流剩余**：查看器翻页（已接）缺"离线降级提示"；日历/置顶判定未接；其余几项有缺口时
+     静默给本地残缺答案。
+   **别照抄 Web/iOS 的现成补丁**——设计文档 §4.11.1 原话："Android 进会话根本不走锚点开窗，那条调用点
+   不存在"，得从头按 §4 的设计走，不是抄一个 diff。
+2. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4 第 316 行；2026-09-28 勘察 + 拆分，范围超出单条
+   任务，按下面顺序分块推进——第 1 块已落地，见「当前焦点」）：
+   - **根因**：`ui/components/PushTransition.kt` 要求退场页在 ~300ms 滑出动画期间，内容仍按
+     `AnimatedContent` **冻结住的 `state` 参数**渲染；但「没接」的几处目前是"关闭即把数据变量置空"
+     （如 `ChatDetailHost` 的 `onClose = { viewing = null }`），退场那一刻数据已经没了，分支渲染出
+     空白——套上去就是文档说的"半路变白"，不是简单包一层就行。
+   - **实际是三种不同形态，不是一次改法通吃**：
+     ① **互斥枚举页 + 关闭置空数据**的 host（`GroupInfoHost` 9 个分支；`ChatDetailHost` 的 `Media`/
+     `viewing` 那支）：改法 = 把"是否打开"和"显示什么数据"拆成两个变量，关闭只翻布尔、数据留着
+     （下次打开才覆盖），`when` 改成吃 `PushTransition` 传入的冻结 `state`，不直接读外部活变量。
+     ② `ChatHost` 的 `Set<Layer>` 覆盖层栈（`ChatOverlays.kt`：Viewer/UserProfile/**ChatRecord
+     可嵌套压栈**/FriendPicker/MediaPicker/FavoritePicker/Forward/ContextMenu）：连接口都对不上——
+     `PushTransition` 吃单一 `S` + `depthOf`，`ChatRecord` 是任意深度的栈，要么扩展 `PushTransition`
+     支持栈式深度、要么给它单独一套转场，工作量明显更大，且"要不要真做 iOS 式滑动"更像产品判断，
+     不是纯技术判断——动手前应该先问用户，不能假定文档写着就该做。
+     ③ **"用户资料内部"不是独立第三类**：核实过 `UserProfileHost`/`UserProfileScreen` 自己没有内部
+     子页导航（`RemarkEditDialog` 是弹窗，不需要滑动转场），这一条实际指的是 `ContactsHost`/
+     `ChatDetailHost`/`GroupInfoHost` 各自"进用户资料页"那条边，并入①。
+   - **建议顺序（从最小最安全开始）**：
+     1. ✅ **已做（2026-09-28）**：`ChatDetailHost` 的 `Detail↔Profile`——没有数据置空问题，不改
+        数据模型，只重排渲染结构。
+     2. ✅ **已做（2026-09-28，见「当前焦点」）**：`ChatDetailHost` 的 `Media`——按①的"open 标志/
+        data 分离、关闭不清 data"模型改造（`viewingOpen`/`viewingData`），三分支合并进同一个
+        `PushTransition`。`ChatDetailHost` 这个 host 的转场至此**全部接完**。
+     3. `GroupInfoHost` 的 9 个分支（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/
+        Media/Manage/Qr，注：`GroupInfoPage` 目前 9 个值，`Detail` 不算转场目标）：同样是①的模型
+        改造，但分支数是 `ChatDetailHost` 的 3 倍——一个分支一个分支来，别一次性全改。
+        - ✅ **已做（2026-09-28，见「当前焦点」）**：`Media`——照抄 `ChatDetailHost` 的
+          `viewingOpen`/`viewingData` 写法，只把这一支单独套了一层 `PushTransition`（没有把 9 个
+          分支统一进一个大 `when`，那是下面第 4 步的活）。`GroupInfoHost.kt` 574→**587 行**，
+          离 600 硬闸只剩 13 行——下一个分支动手前先看这个数字，必要时先拆文件再接。
+        - 剩下 8 个（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/Manage/Qr）未动，
+          都是「关闭即整页替换 + 置空数据」的同一种坑，逐支来；哪支先做没有强制顺序，挑数据置空
+          最明显、改动最小的那支（参照这轮 `Media` 与上两轮 `ChatDetailHost` 的判据）。
+     4. 把 `GroupInfoHost` 全部 9 个分支真正统一进**一个** `PushTransition(targetState = page,
+        depthOf = { it.depth })`（`page: GroupInfoPage` 走完整枚举、加 `depth` 字段，同
+        `ChatDetailPage` 的写法）——**在第 3 步的 9 个分支逐个改完「开/关不清数据」之前，不要
+        提前做这步**，否则等于把还没改好的分支也塞进转场，退场画面照样半路变白。
+     5. `ChatHost` 覆盖层栈（②）：动手前先跟用户确认要不要做，范围最大且是产品判断。
 3. **卡片弹层推广**：@提及、选文件、已读详情、日期跳转、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`。
 4. **收藏的剩余项**：「以聊天模式查看」（按来源会话分组下钻）、来源名到群昵称级（现只到好友备注/昵称/补拉名片）；**长按菜单缺项**：举报、翻译。
 5. **宫格**按 `IMAlbumRowPattern` 重写布局 + 五道防跳版闸；相册宫格逐格勾选。

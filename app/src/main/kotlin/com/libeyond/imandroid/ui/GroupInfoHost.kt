@@ -44,6 +44,7 @@ import com.libeyond.imandroid.ui.screens.GroupBanListScreen
 import com.libeyond.imandroid.ui.screens.GroupInfoScreen
 import com.libeyond.imandroid.ui.screens.GroupManageScreen
 import com.libeyond.imandroid.ui.screens.JoinRequestsScreen
+import com.libeyond.imandroid.ui.components.PushTransition
 import kotlinx.coroutines.launch
 
 /**
@@ -76,13 +77,12 @@ fun GroupInfoHost(
     // 「链接」页签点一条在 App 内打开（宿主 WebLinkHost，iOS `openLink:`）
     val openLink = com.libeyond.imandroid.ui.components.LocalOpenLink.current
     var info by remember(convId) { mutableStateOf<GroupInfo?>(null) }
-    var members by remember(convId) { mutableStateOf<List<GroupMember>>(emptyList()) }
-    var cursor by remember(convId) { mutableStateOf("") }
-    var hasMore by remember(convId) { mutableStateOf(false) }
-    var loading by remember(convId) { mutableStateOf(false) }
+    val membersState = rememberGroupMembersState(client, convId)
 
     // 点开的成员资料页盖在群资料之上；开着时本页的返回让位给它
     var memberProfile by remember(convId) { mutableStateOf<GroupMember?>(null) }
+    // 群成员搜索页（大群专用，GroupMemberSearch.shouldOffer 门控入口）
+    var memberSearchOpen by remember(convId) { mutableStateOf(false) }
     // 待审入群申请（G3）。null = 没打开过
     var joinReqs by remember(convId) { mutableStateOf<List<JoinRequest>?>(null) }
     var joinReqsLoading by remember(convId) { mutableStateOf(false) }
@@ -97,7 +97,10 @@ fun GroupInfoHost(
     val archive = rememberConvArchive(client, convId, tab)
     // 只在「链接」页签上订阅本地消息表（理由见 rememberLocalScan）
     val linkMessages = rememberLinkMessages(client, convId, active = tab == DetailTab.Links)
-    var viewing by remember(convId) { mutableStateOf<ConvMediaItem?>(null) }
+    // 媒体查看器：开不开与看哪项拆成两个变量（同 ChatDetailHost 这轮的写法）——关闭只翻
+    // viewingOpen，viewingData 留着不清，退场动画那 300ms 里 PushTransition 还要读它。
+    var viewingOpen by remember(convId) { mutableStateOf(false) }
+    var viewingData by remember(convId) { mutableStateOf<ConvMediaItem?>(null) }
     var archiveMenuFor by remember(convId) { mutableStateOf<ArchiveTarget?>(null) }
     var archiveMenuAnchor by remember(convId) { mutableStateOf(Rect.Zero) }
     /** 归档要转发的那一项（长按菜单与查看器「更多」共用这一份状态，见 ArchiveActionsHost 的注释）。 */
@@ -123,7 +126,8 @@ fun GroupInfoHost(
         adminsOpen = adminsOpen,
         joinRequestsOpen = joinReqs != null,
         memberProfileOpen = memberProfile != null,
-        mediaOpen = viewing != null,
+        memberSearchOpen = memberSearchOpen,
+        mediaOpen = viewingOpen,
         managing = managing,
         qrOpen = qrCardAsLink != null,
     )
@@ -134,7 +138,8 @@ fun GroupInfoHost(
             GroupInfoPage.Admins -> adminsOpen = false
             GroupInfoPage.JoinRequests -> joinReqs = null
             GroupInfoPage.MemberProfile -> memberProfile = null
-            GroupInfoPage.Media -> viewing = null
+            GroupInfoPage.MemberSearch -> memberSearchOpen = false
+            GroupInfoPage.Media -> viewingOpen = false
             GroupInfoPage.Manage -> managing = false
             GroupInfoPage.Qr -> qrCardAsLink = null
             GroupInfoPage.Detail -> onBack()
@@ -147,12 +152,7 @@ fun GroupInfoHost(
     LaunchedEffect(convId) {
         runCatching { info = client.groups.info(convId) }
             .onFailure { IMLog.tag("IM.Group").w("group_info_failed") }
-        loadMore(client, convId, cursor) { page ->
-            com.libeyond.imandroid.rtc.RtcCall.onGroupMembers(convId, page.items)
-            members = page.items
-            cursor = page.nextCursor
-            hasMore = page.hasMore
-        }
+        membersState.refresh()
         settings.load()
     }
 
@@ -184,15 +184,7 @@ fun GroupInfoHost(
             }
             if (r.isSuccess) toast = Str.s(R.string.group_manage_op_succeeded, label)
             runCatching { client.groups.info(convId) }.onSuccess { info = it }
-            if (!loading) {
-                loading = true
-                loadMore(client, convId, "") { pg ->
-                    members = pg.items
-                    cursor = pg.nextCursor
-                    hasMore = pg.hasMore
-                }
-                loading = false
-            }
+            membersState.refresh()
         }
     }
 
@@ -233,7 +225,7 @@ fun GroupInfoHost(
         // 画法在 GroupPickPage.kt。这里只留"点下去之后做什么"。
         GroupPickPage(
             purpose = pk,
-            members = members,
+            members = membersState.members,
             friends = friends,
             picked = picked,
             myUid = myUid,
@@ -247,7 +239,7 @@ fun GroupInfoHost(
                 pick = null
                 runManage(Str.s(R.string.group_member_action_make_admin)) { client.groups.setRole(convId, id, GroupMember.ROLE_ADMIN) }
             },
-            onTransferTo = { id -> confirmTransfer = members.firstOrNull { it.userId == id } },
+            onTransferTo = { id -> confirmTransfer = membersState.members.firstOrNull { it.userId == id } },
             onConfirmInvite = { ids ->
                 pick = null
                 picked = emptySet()
@@ -276,7 +268,7 @@ fun GroupInfoHost(
         )
     } else if (adminsOpen) {
         GroupAdminListScreen(
-            admins = members.filter { it.role == GroupMember.ROLE_ADMIN },
+            admins = membersState.members.filter { it.role == GroupMember.ROLE_ADMIN },
             // 群主可增删、管理员只读（同 im-web）
             canEdit = g.myRole == GroupMember.ROLE_OWNER,
             busyUid = deciding,
@@ -286,11 +278,7 @@ fun GroupInfoHost(
                     val r = runCatching { client.groups.setRole(convId, m.userId, GroupMember.ROLE_MEMBER) }
                     toast = if (r.isSuccess) Str.s(R.string.group_ops_revoke_admin_done) else Str.s(R.string.group_ops_revoke_admin_failed)
                     // 撤销后重拉首页成员——角色变了，管理员列表要跟着变
-                    loadMore(client, convId, "") { pg ->
-                        members = pg.items
-                        cursor = pg.nextCursor
-                        hasMore = pg.hasMore
-                    }
+                    membersState.refresh()
                     deciding = ""
                 }
             },
@@ -335,27 +323,17 @@ fun GroupInfoHost(
             onRemarkChanged = { v -> remarkOverrides = remarkOverrides + (mp.userId to v) },
             onBack = { memberProfile = null },
         )
-    } else if (viewing != null) {
-        val m = viewing!!
-        // 翻页 / 「更多」/ 转发都在 ArchiveViewer.kt 里，与单聊详情共用
-        ArchiveMediaViewer(
-            client = client, convId = convId, isGroup = true,
-            iAmManager = info?.iAmManager == true,
-            archive = archive, current = m, scope = scope,
-            // 查看器标题＝群名（iOS `IMMediaPagerViewController.conversationTitle`）
-            title = info?.name.orEmpty(),
-            onSave = saveMedia,
-            onForwardPicker = { archiveForward = it },
-            onLocateInChat = { seq -> viewing = null; onLocateInChat(seq) },
-            onChanged = { archive.reload() },
-            onToast = { toast = it },
-            onClose = { viewing = null },
+    } else if (memberSearchOpen) {
+        GroupMemberSearchHost(
+            client = client, convId = convId, totalMembers = g.memberCount,
+            onPickMember = { m -> memberProfile = m },
+            onBack = { memberSearchOpen = false },
         )
     } else if (managing) {
         GroupManageScreen(
             info = g,
             banCount = bans?.size,
-            members = members,
+            members = membersState.members,
             onManage = { action -> manage = action },
             onToggleSetting = { key ->
                 // **整体替换**：五个值一次全传，翻转哪一个由纯函数算（见 GroupSettings）
@@ -399,38 +377,45 @@ fun GroupInfoHost(
             onBack = { qrCardAsLink = null },
         )
     } else {
+        // Media 与 Detail 是这条链里唯一真的接了转场的一对（同 ChatDetailHost 这轮的写法）：
+        // 关闭只翻 viewingOpen，viewingData 留着不清，退场动画期间渲染读的是 PushTransition
+        // 冻结下来的 state，不是活变量。其余 8 个分支仍是整页替换，本轮不碰。
+        val innerPage = if (viewingOpen) GroupInfoPage.Media else GroupInfoPage.Detail
+        PushTransition(targetState = innerPage, depthOf = { if (it == GroupInfoPage.Media) 1 else 0 }) { state ->
+        if (state == GroupInfoPage.Media) {
+        viewingData?.let { m ->
+        // 翻页 / 「更多」/ 转发都在 ArchiveViewer.kt 里，与单聊详情共用
+        ArchiveMediaViewer(
+            client = client, convId = convId, isGroup = true,
+            iAmManager = info?.iAmManager == true,
+            archive = archive, current = m, scope = scope,
+            // 查看器标题＝群名（iOS `IMMediaPagerViewController.conversationTitle`）
+            title = info?.name.orEmpty(),
+            onSave = saveMedia,
+            onForwardPicker = { archiveForward = it },
+            onLocateInChat = { seq -> viewingOpen = false; onLocateInChat(seq) },
+            onChanged = { archive.reload() },
+            onToast = { toast = it },
+            onClose = { viewingOpen = false },
+        )
+        }
+        } else {
         // **整页替换而不是叠一层**：`GroupInfoHost` 的内容不在自己的 Box 里，
         // 父布局是谁由调用方决定，叠出来可能是竖排而不是覆盖。替换还顺带让
         // 详情页的滚动位置与成员分页游标原样留着（那些 remember 都在上面，没被跳过）。
         GroupInfoScreen(
         info = g,
-        members = members,
+        members = membersState.members,
         // 语音行发送者名（判据在 data/SenderNames.kt 的 groupVoiceSenderNameOf）
         senderNameOf = groupVoiceSenderNameOf(
-            client.uid, members,
+            client.uid, membersState.members,
             rememberLocalSenderNames(client, convId, active = tab == DetailTab.Voice),
         ),
         // 波形：服务端归档接口不回带，从本地消息表按 conv_seq 兜底（见 rememberVoiceWaveforms）
         waveformOf = rememberVoiceWaveforms(client, convId, active = tab == DetailTab.Voice)::get,
-        hasMoreMembers = hasMore,
-        onLoadMoreMembers = {
-            // 在途守卫：滚到底会连续触发，不守的话同一页会被追加两次——
-            // im-web 三周前那条「连点加载更多把同一页追加两次」就是这个形状，
-            // 而 iOS 后来在别处又演了一遍（见 ../IMServer/docs/SYMMETRY.md）
-            if (!loading && hasMore) {
-                loading = true
-                scope.launch {
-                    loadMore(client, convId, cursor) { page ->
-                        // 按 userId 去重再追加——即便守卫被绕过也不会出现重复行
-                        val existing = members.mapTo(HashSet()) { it.userId }
-                        members = members + page.items.filter { it.userId !in existing }
-                        cursor = page.nextCursor
-                        hasMore = page.hasMore
-                    }
-                    loading = false
-                }
-            }
-        },
+        hasMoreMembers = membersState.hasMore,
+        onLoadMoreMembers = { membersState.loadNext(scope) },
+        onOpenMemberSearch = { memberSearchOpen = true },
         onOpenMember = { m -> memberProfile = m },
         myUid = client.uid.orEmpty(),
         onOpenManage = { managing = true },
@@ -484,7 +469,7 @@ fun GroupInfoHost(
             archiveHasMore = archive.hasMore,
             onLoadMoreArchive = { archive.loadMore() },
             onOpenArchive = { item ->
-                openArchiveItem(client, context, item, onToast = { toast = it }) { viewing = it }
+                openArchiveItem(client, context, item, onToast = { toast = it }) { viewingData = it; viewingOpen = true }
             },
             onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
             onOpenLink = { url -> openLink?.invoke(url) },
@@ -493,6 +478,8 @@ fun GroupInfoHost(
             galleryOnly = galleryOnly,
             onBack = onBack,
         )
+        }
+        }
     }
     }
 
