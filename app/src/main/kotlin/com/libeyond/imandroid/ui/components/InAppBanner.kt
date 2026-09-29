@@ -97,6 +97,11 @@ private fun BannerCard(content: BannerContent, onOpen: () -> Unit, onDismiss: ()
     // 在 finally 里把已经过去的时长扣掉，松手后从这个值接着倒计时——不是从头算，是真正的"暂停"。
     var remainingMs by remember(content.token) { mutableLongStateOf(AUTO_DISMISS_MS) }
     val latestDismiss by rememberUpdatedState(onDismiss)
+    // 手势那颗 pointerInput 的 key 是 Unit（同 `passThroughTap` 类注释里记的坑）：新横幅到达时
+    // `onOpen`/`onDismiss` 换了新闭包（绑的是新 content 的 convId），但手势协程不会重启，
+    // 直接把新闭包塞给它只会在**第一次**按下时生效——用 rememberUpdatedState 转一手，
+    // 让协程永远读到最新那份，不然点被替换后的横幅会打开上一条横幅的会话。
+    val latestOpen by rememberUpdatedState(onOpen)
 
     LaunchedEffect(content.token, pressed) {
         if (pressed) return@LaunchedEffect
@@ -117,7 +122,7 @@ private fun BannerCard(content: BannerContent, onOpen: () -> Unit, onDismiss: ()
             .shadow(8.dp, RoundedCornerShape(d.radiusBanner))
             .clip(RoundedCornerShape(d.radiusBanner))
             .background(c.cardBackground)
-            .bannerGestures(onTap = onOpen, onSwipeUp = onDismiss, onPressedChange = { pressed = it })
+            .bannerGestures(onTap = { latestOpen() }, onSwipeUp = { latestDismiss() }, onPressedChange = { pressed = it })
             .padding(horizontal = d.space3, vertical = d.space3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
