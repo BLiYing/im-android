@@ -78,7 +78,9 @@ object AlertDecision {
         if (ctx.platform == PLATFORM_MOBILE && !ctx.appActive) return AlertResult.SILENT
 
         // ⑤ 节流：1.5 秒内响过就都不响/不振（连发十条只响一声）
-        val throttled = ctx.nowMs - ctx.lastSoundAtMs < THROTTLE_MS
+        // 差值为负 = 系统时钟往回拨过：当没响过，否则回拨多久就静音多久（/code-review 2026-09-29，三端同改）
+        val sinceLast = ctx.nowMs - ctx.lastSoundAtMs
+        val throttled = sinceLast in 0 until THROTTLE_MS
         val soundAllowed = typeSettings.sound != NotifSound.NONE && !throttled
         val resolvedSoundId = typeSettings.sound.wire
 
