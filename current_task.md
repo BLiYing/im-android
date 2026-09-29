@@ -7,6 +7,45 @@
 
 ## 当前焦点
 
+> **群聊六条用户报告，逐项排查中（2026-09-29，先做第 1/2 项，第 3-6 项未动）**：
+> - **① @提及点击跳资料页**：主链路（`mention_spans`→Room→`chatBodyText`→
+>   `LinkAnnotation.Clickable`→`onOpenUser`）本就接通，写了真机插桩测试
+>   `androidTest/.../MentionTapConflictTest.kt` 排除了「气泡长按手势吞掉内层点击」这个假设
+>   （**OPPO PKD130 真机跑绿**）。顺手挖到并修了一个真实缺口：`Mention.segmentByNames`
+>   （无 `mention_spans` 的老路兜底）此前 uid 恒为空串（"老路本就点不动"），与 iOS
+>   `IMBubbleCell` 的老路（现查当前群成员表、**可点**）不对齐——已按 iOS 口径把
+>   `List<String>` 改成 `Map<String,String>`（显示名→uid）全链路穿透
+>   （`ChatHost`→`ChatScreen`→`ChatRowStyle`→`Bubble`→`chatBodyText`）。
+> - **② 群聊接收端头像点击跳资料页**：确认是真实缺口——`IMAvatar` 之前完全没挂点击手势，已补
+>   `onAvatarTap` 接 `onOpenUser(uid)`（`Bubbles.kt`/`AlbumBubble.kt`/`ChatRowView.kt`）。
+> - **①②追加·用户第二轮反馈「资料页看不到呼叫/视频按钮」——确认是真实的架构缺口，已修**：
+>   `onOpenUser`（@提及/头像/系统消息里的名字共用同一入口）原先无论如何都开
+>   `UserProfileHost`（简化版：仅「发消息/加好友/删除」，连好友也没有呼叫/视频/搜索/更多）。
+>   而 `DetailActions.kt` 里其实早就设计好了 `showsMessagePill` 这个开关（文档原话："从外部
+>   入口（**群成员行**/通讯录/找人）进来时为 true"），却从没在这条路上真正用过——
+>   `ChatDetailHost.kt` 旧代码甚至写死注释"从通讯录/群成员进来的那条路走的是
+>   UserProfileHost，不经这里"。已改线：群成员资料页现在开的是 `ChatDetailHost`
+>   （与单聊自己的「聊天信息」同一个页面，呼叫/视频/搜索/更多齐全）+ `showsMessagePill=true`
+>   （多一条「消息」pill），用 `client.conversationStubFor(uid,...)` 现造一个会话壳
+>   （这个函数本就是为"没聊过也能直接进"设计的，`ContactsHost`/`QrRouteHost`/`GroupInfoHost`
+>   等多处已在用）。链路：`ChatHost` 新增 `onOpenChat` 参数 → `MainScreen.kt`
+>   `onOpenChat = { stub -> openConv = stub }`（点「消息」pill 换会话，同
+>   `GroupInfoHost` 现成的那条）→ `ChatPickerLayers.kt` 把 `UserProfileHost` 换成
+>   `ChatDetailHost`（用 `memberNames`/`memberAvatars` 兜底首帧头像/昵称，不必等联网）→
+>   `ChatDetailHost.kt` 的 `showsMessagePill`/`onOpenChat` 从写死值改成参数，
+>   `DetailAction.Message` 分支从 `Unit` 改成真正调 `onOpenChat(conv)`。
+>   顺手改这条路时也**修掉一个隐藏的死按钮**：换之前 `onSendMessage = { onCloseUser() }`——
+>   陌生 uid（非当前会话对方）点「发消息」只是关掉浮层，压根没打开任何聊天。
+>   `ChatHost.kt` 因为加参数顶到体量红线（606>600），已把两处新增文档注释压缩，
+>   回落 599 行（WARN，未 FAIL）。`./scripts/test.sh` **969/969 绿**（3 轮全绿，含体量门禁）。
+>   **未做真机手测**：在真机上装了最新包、想端到端点一遍（免密登录 → 进群 → 点 @某人/头像 →
+>   看资料页有没有呼叫/视频），但这台设备的登录页「服务器地址」编辑框在 adb 盲操作下
+>   （无 accessibility 树工具、只能截图猜坐标）几次三番被误触/复位，没能可靠地把 host 改成
+>   `192.168.1.4:8080` 点进去登录——放弃了继续用 adb 硬点，没有拖时间瞎试。
+>   **APK 已装在设备上**（`adb install -r` 成功，冷启动无崩溃），**麻烦用户手动登录跑一遍这条链路**。
+> - **③-⑥ 未动**：消息到底收新消息即时显示/角标未读、正在输入过期清除、加号面板去掉音视频入口、
+>   消息列表滚动条，用户要求逐项来，按顺序排在后面。
+
 > **im-rtc 换票：从调试密钥迁移到 IMServer 真实换票接口 ✅（2026-09-28，本端已完成——三端全部完成）**：
 > 此前 `RtcCall.signToken`（同步、`IMDebugTokenGenerator` 本地签调试票）改成调 IMServer
 > `POST /api/v1/rtc/token`：

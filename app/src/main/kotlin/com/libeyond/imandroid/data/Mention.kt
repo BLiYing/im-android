@@ -243,15 +243,15 @@ object Mention {
     /**
      * **老路**：按已知 `@显示名` token 切段（没有片段的老消息 / 老客户端发来的）。
      *
-     * 普通群里这条路本就够用；超级群不下发成员表，这里拿不到 names 就整段不高亮
-     * ——这正是片段机制要解决的那个场景，别在这里想办法补救。
+     * [displayNameToUid] 是本群当前成员表的 显示名→uid（与 iOS `IMBubbleCell` 的
+     * `mentions: NSDictionary<name,uid>` 同一口径）——**有 uid 就可点**，与片段路一致；
+     * 传空 map 才整段不高亮（超级群不下发成员表，见类头注释）。
      */
-    fun segmentByNames(text: String, displayNames: List<String>): List<MentionSegment> {
+    fun segmentByNames(text: String, displayNameToUid: Map<String, String>): List<MentionSegment> {
         if (text.isEmpty()) return emptyList()
-        val nameToUid = LinkedHashMap<String, String>()
-        for (n in displayNames) if (n.isNotEmpty()) nameToUid.putIfAbsent(n, "")
+        val nameToUid = displayNameToUid.filterKeys { it.isNotEmpty() }
         if (nameToUid.isEmpty()) return listOf(MentionSegment(text, mention = false))
-        // 复用同一套扫描：老路只要"哪几段是提及"，uid 一律为空（老路本就点不动）
+        // 复用同一套扫描：uid 从调用方传入的成员表里取，与片段路同一条可点判据
         return segmentBySpans(text, scanTokens(text, nameToUid))
     }
 

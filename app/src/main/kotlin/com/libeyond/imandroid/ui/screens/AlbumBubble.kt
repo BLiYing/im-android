@@ -117,6 +117,8 @@ internal fun AlbumBubble(
     reserveAvatarColumn: Boolean = false,
     showAvatar: Boolean = false,
     avatarSeed: String = "",
+    /** 点群聊对方头像 → 进该成员资料页（对齐 [Bubble] 同名参数）。null = 不可点。 */
+    onAvatarTap: (() -> Unit)? = null,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -131,7 +133,12 @@ internal fun AlbumBubble(
     ) {
         if (reserveAvatarColumn) {
             // 底对齐、不另加左边距（列表横向内边距已是 chatAvatarLeading），与 Bubble 同
-            Box(modifier = Modifier.size(d.chatAvatar).align(Alignment.Bottom)) {
+            Box(
+                modifier = Modifier.size(d.chatAvatar).align(Alignment.Bottom)
+                    .then(
+                        if (showAvatar && onAvatarTap != null) Modifier.clickable(onClick = onAvatarTap) else Modifier,
+                    ),
+            ) {
                 if (showAvatar) {
                     IMAvatar(
                         displayName = senderName.orEmpty().ifBlank { avatarSeed },

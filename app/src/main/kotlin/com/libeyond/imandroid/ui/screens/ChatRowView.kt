@@ -43,11 +43,11 @@ internal data class ChatRowStyle(
      */
     val searchHighlight: String = "",
     /**
-     * 本群成员显示名，**只给没有 `mention_spans` 的老消息兜底**（按昵称扫文本）。
+     * 本群成员表（显示名→uid），**只给没有 `mention_spans` 的老消息兜底**（按昵称扫文本，有 uid 就可点）。
      * 超级群不下发成员表 → 空表 → 老消息里的 @ 不高亮，与协议里写的降级一致。
      * 新消息一律走片段那条路，与这份表无关。
      */
-    val mentionNames: List<String> = emptyList(),
+    val mentionNames: Map<String, String> = emptyMap(),
     /** 群成员角色：uid → owner/admin/member，昵称旁的徽标用。拿不到（超级群）返回 null，退回消息上带的 from_role。 */
     val roleOf: (String) -> String? = { null },
     /** 群成员显示名：uid → 群昵称 > 昵称 > @句柄。排在备注之后、消息上的昵称之前。 */
@@ -120,6 +120,8 @@ internal fun ChatRowView(
             reserveAvatarColumn = isGroup && !albumMine,
             showAvatar = showsSenderAvatar(rows, i, myUid, isGroup),
             avatarSeed = firstSent?.sender.orEmpty(),
+            // 点群聊对方头像 → 进该成员资料页（与下面 Confirmed 分支同一套口径）
+            onAvatarTap = firstSent?.sender?.takeIf { isGroup && !albumMine }?.let { uid -> { onOpenUser(uid) } },
             // **一个宫格里两种格并存**：已确认的正常显示，还在传的那几格压暗底。
             // 状态由每一格自己带（AlbumMember.sending），不再靠"整行是不是待发行"——
             // 靠行类型的话，一批图必然经历"散成单张 → 逐个变确认 → 最后凑回宫格"。
@@ -243,6 +245,8 @@ internal fun ChatRowView(
             reserveAvatarColumn = isGroup && m.sender != myUid,
             showAvatar = showsSenderAvatar(rows, i, myUid, isGroup),
             avatarSeed = m.sender,
+            // 点群聊对方头像 → 进该成员资料页（此前只有 @提及能跳，头像点了没反应）
+            onAvatarTap = if (isGroup && m.sender != myUid) { { onOpenUser(m.sender) } } else null,
             loadLinkPreview = loadLinkPreview,
             searchHighlight = style.searchHighlight,
             )

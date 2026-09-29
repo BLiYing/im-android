@@ -110,13 +110,15 @@ internal fun Bubble(
     showAvatar: Boolean = false,
     /** 头像取色种子——用 uid 不用昵称，改昵称不该换颜色。 */
     avatarSeed: String = "",
+    /** 点群聊对方头像 → 进该成员资料页（对齐 iOS `onAvatarTap`）。null = 不可点（单聊/自己不挂）。 */
+    onAvatarTap: (() -> Unit)? = null,
     /** 群聊——自动下载策略的单聊/群聊分档要用。 */
     isGroup: Boolean = false,
     /**
-     * 本群成员显示名，**只给没有 `mention_spans` 的老消息兜底**（按昵称扫文本）。
+     * 本群成员表（显示名→uid），**只给没有 `mention_spans` 的老消息兜底**（按昵称扫文本）。
      * 超级群拿不到成员表就传空表：那时老消息里的 @ 不高亮，与协议里写的降级一致。
      */
-    mentionNames: List<String> = emptyList(),
+    mentionNames: Map<String, String> = emptyMap(),
     /**
      * @提及片段的 JSON。默认取 [msg] 上的；**待发气泡要显式传**——那时还没有
      * [MessageEntity]，只有待发行，不传的话自己刚发出去的 @ 在 ack 落地前不高亮
@@ -164,7 +166,10 @@ internal fun Bubble(
             // **这里不再加左边距**：消息列表本身的横向内边距就是 chatAvatarLeading（见 ChatScreen），
             // 在这儿再加一次会把整列右推 12dp（实测头像左边距 24 而非 12、气泡左缘 60 而非 48）。
             Box(
-                modifier = Modifier.size(d.chatAvatar).align(Alignment.Bottom),
+                modifier = Modifier.size(d.chatAvatar).align(Alignment.Bottom)
+                    .then(
+                        if (showAvatar && onAvatarTap != null) Modifier.clickable(onClick = onAvatarTap) else Modifier,
+                    ),
             ) {
                 if (showAvatar) {
                     IMAvatar(

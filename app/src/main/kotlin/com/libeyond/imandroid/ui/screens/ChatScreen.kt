@@ -195,8 +195,8 @@ fun ChatScreen(
     searchFromPickerOpen: Boolean = false,
     searchFromCandidates: List<SearchSenderCandidate> = emptyList(),
     onPickSearchFrom: (SearchSenderCandidate) -> Unit = {},
-    /** 本群成员显示名——只给没有 mention_spans 的老消息兜底（见 [ChatRowStyle.mentionNames]）。 */
-    mentionNames: List<String> = emptyList(),
+    /** 本群成员表（显示名→uid）——只给没有 mention_spans 的老消息兜底（见 [ChatRowStyle.mentionNames]）。 */
+    mentionNames: Map<String, String> = emptyMap(),
     /** 群成员角色 uid → owner/admin/member（发送者徽标）。见 [ChatRowStyle.roleOf]。 */
     roleOf: (String) -> String? = { null },
     /** 群成员显示名 uid → 群昵称/昵称/@句柄。发送者名、引用块、回复条共用。 */

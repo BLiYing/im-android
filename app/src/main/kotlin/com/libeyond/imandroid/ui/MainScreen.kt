@@ -196,6 +196,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                 arm = chatArm,
                                 onArmConsumed = { chatArm = ChatArm() },
                                 covered = covered,
+                                onOpenChat = { stub -> openConv = stub },
                             )
                         }
                     }

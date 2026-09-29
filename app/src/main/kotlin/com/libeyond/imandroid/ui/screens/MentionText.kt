@@ -38,8 +38,11 @@ internal fun chatBodyText(
     text: String,
     /** 落库的片段（已解析）。空表 = 老消息/老客户端，走昵称老路。 */
     spans: List<MentionSpan>,
-    /** 老路用的本群成员显示名。拿不到（超级群）就传空表：那时 @ 不高亮，与协议里写的降级一致。 */
-    memberNames: List<String>,
+    /**
+     * 老路用的本群成员表：显示名→uid（有 uid 就可点，与片段路同一判据）。
+     * 拿不到（超级群不下发成员表）就传空表：那时 @ 不高亮，与协议里写的降级一致。
+     */
+    memberNames: Map<String, String>,
     /** 会话内搜索的命中词；空串 = 不在搜索态。 */
     searchNeedle: String,
     highlightBackground: Color,

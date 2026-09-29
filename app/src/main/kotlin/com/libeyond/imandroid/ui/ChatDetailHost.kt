@@ -65,6 +65,14 @@ fun ChatDetailHost(
     initialTab: DetailTab = DetailTab.Media,
     /** 只当会话媒体库用（查看器右下角「媒体」钮进的那一页）。见 `ChatDetailScreen.galleryOnly`。 */
     galleryOnly: Boolean = false,
+    /**
+     * 操作排要不要出「消息」pill（对齐 iOS `showsMessagePill`）。
+     * 从**外部入口**（群成员/@提及/系统消息里的名字）进来时为 true——这个单聊可能压根没打开过，
+     * 需要一个「消息」入口把会话开出来；从聊天页自己点头像进来时为 false（已经在会话里了）。
+     */
+    showsMessagePill: Boolean = false,
+    /** 点「消息」pill：交回调用方去换会话（[showsMessagePill] 为 false 时不会触发）。 */
+    onOpenChat: (ConversationEntity) -> Unit = {},
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -220,9 +228,7 @@ fun ChatDetailHost(
                         isGroup = false,
                         isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
                         peerIsFriend = friend?.status == FriendEntry.ACCEPTED,
-                        // 本页是从**聊天页**点头像进来的，会话已经开着——再给一个「消息」是废按钮。
-                        // 从通讯录/群成员进来的那条路走的是 UserProfileHost，不经这里。
-                        showsMessagePill = false,
+                        showsMessagePill = showsMessagePill,
                     ),
                     moreItems = DetailActions.moreFor(
                         isGroup = false,
@@ -244,8 +250,10 @@ fun ChatDetailHost(
                                     .onSuccess { toast = Str.s(R.string.friend_request_sent) }
                                     .onFailure { toast = it.userMessage(Str.s(R.string.chat_detail_add_friend_failed)) }
                             }
-                            // 已经在这个会话里了，这两个不会出现在 pills 里
-                            DetailAction.Message, DetailAction.More -> Unit
+                            // showsMessagePill=false（从聊天页自己点头像进来）时这条 pill 根本不会出现
+                            DetailAction.Message -> onOpenChat(conv)
+                            // 「更多」走下面单独的 onMore 回调，这里不会出现
+                            DetailAction.More -> Unit
                         }
                     },
                     onMore = { m ->

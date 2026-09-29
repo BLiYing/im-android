@@ -3,11 +3,12 @@ package com.libeyond.imandroid.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
-import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.ui.components.blockPointerInput
 import com.libeyond.imandroid.ui.screens.FriendPickerScreen
 import com.libeyond.mediapicker.MediaPickerHost
@@ -26,10 +27,15 @@ import com.libeyond.mediapicker.PickedMedia
 @Composable
 internal fun ChatPickerLayers(
     client: IMClient,
-    /** 点系统消息里的名字进的资料页（null = 没在看）。 */
+    /** 点 @提及 / 头像 / 系统消息里的名字进的成员资料页（uid；null = 没在看）。 */
     openUser: String?,
     /** 本地好友表：资料页进页即用它定型关系与备注，避免闪动。 */
     friendsByUid: Map<String, FriendEntry>,
+    /** 本群成员表 uid→显示名/头像：资料页首帧就有名字，不必等联网结果（超级群拿不到就空表）。 */
+    memberNames: Map<String, String> = emptyMap(),
+    memberAvatars: Map<String, String> = emptyMap(),
+    /** 资料页里点「发消息」：关掉本层、换成与该成员的单聊（由 [ChatHost] 转交 `MainScreen`）。 */
+    onOpenChat: (ConversationEntity) -> Unit = {},
     /** 选联系人发名片中（null = 不在选）。 */
     pickingFriend: List<FriendEntry>?,
     /** 选图中（自建相册页；无权限时它自己会降级到系统选择器）。 */
@@ -46,21 +52,21 @@ internal fun ChatPickerLayers(
     onFavoritesPicked: (List<MessageEntity>) -> Unit,
     onToast: (String) -> Unit,
 ) {
-    // —— 点系统消息里的名字 → 用户资料页 ——
+    // —— 点 @提及 / 头像 / 系统消息里的名字 → 群成员资料页 ——
+    // 与单聊自己的「聊天信息」同一个页面（呼叫/视频齐全），只是多一条「发消息」pill
+    // （`showsMessagePill`）——不是简化版的加好友资料卡，对齐 iOS `openMemberProfileForUID:`
+    // 的 `IMChatDetailViewController` + `showsMessagePill = YES`。
     openUser?.let { uid ->
         val f = friendsByUid[uid]
-        UserProfileHost(
+        val name = f?.nickname?.ifBlank { null } ?: memberNames[uid].orEmpty()
+        val avatar = f?.avatarUrl?.ifBlank { null } ?: memberAvatars[uid].orEmpty()
+        val stubConv = remember(uid, name, avatar) { client.conversationStubFor(uid, name, avatar) }
+        ChatDetailHost(
             client = client,
-            userId = uid,
-            knownRelation = f?.status.orEmpty(),
-            seed = UserCard(
-                userId = uid,
-                username = f?.username.orEmpty(),
-                nickname = f?.nickname.orEmpty(),
-                avatarUrl = f?.avatarUrl.orEmpty(),
-                remark = f?.remark.orEmpty(),
-            ),
-            onSendMessage = { onCloseUser() },
+            conv = stubConv,
+            knownFriends = friendsByUid,
+            showsMessagePill = true,
+            onOpenChat = { chat -> onCloseUser(); onOpenChat(chat) },
             onBack = onCloseUser,
         )
     }

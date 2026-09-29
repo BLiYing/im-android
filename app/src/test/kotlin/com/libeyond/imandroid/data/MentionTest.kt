@@ -227,19 +227,19 @@ class MentionTest {
     }
 
     @Test
-    fun `老路按昵称切段，切出来的段点不动`() {
-        val segs = Mention.segmentByNames("@小明 在吗", listOf("小明"))
-        assertEquals(listOf(MentionSegment("@小明", true, null), MentionSegment(" 在吗", false)), segs)
+    fun `老路按昵称切段，有 uid 就可点——对齐 iOS 的 mentions 字典口径`() {
+        val segs = Mention.segmentByNames("@小明 在吗", mapOf("小明" to "u1"))
+        assertEquals(listOf(MentionSegment("@小明", true, "u1"), MentionSegment(" 在吗", false)), segs)
         // 名字表为空（超级群不下发成员表）→ 整段不高亮，别在这里想办法补救
         assertEquals(
             listOf(MentionSegment("@小明 在吗", false)),
-            Mention.segmentByNames("@小明 在吗", emptyList()),
+            Mention.segmentByNames("@小明 在吗", emptyMap()),
         )
     }
 
     @Test
     fun `老路同样守长名优先`() {
-        val segs = Mention.segmentByNames("@小美丽 开会", listOf("小美", "小美丽"))
+        val segs = Mention.segmentByNames("@小美丽 开会", mapOf("小美" to "u1", "小美丽" to "u2"))
         assertEquals("@小美丽", segs[0].text)
         assertTrue(segs[0].mention)
     }

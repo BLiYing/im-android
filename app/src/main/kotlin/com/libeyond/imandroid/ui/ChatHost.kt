@@ -1,7 +1,6 @@
 package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.ui.screens.MentionPanel
-import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.data.sendTyping
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.draw.alpha
@@ -68,6 +67,8 @@ fun ChatHost(
     covered: Boolean = false,
     /** 查看器「媒体」钮：打开本会话详情的媒体页签（iOS 查看器的媒体库入口）。 */
     onOpenMediaGallery: () -> Unit = {},
+    /** 群成员资料页点「发消息」→ 换成与该成员的单聊（同 `GroupInfoHost` 的 `onOpenChat`）。 */
+    onOpenChat: (ConversationEntity) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -262,8 +263,8 @@ fun ChatHost(
     var iAmManager by remember(conv.convId) { mutableStateOf(false) }
     /** 我在本群的角色。**@所有人 只对群主/管理员出入口**（越权服务端回 300204）。 */
     var myRole by remember(conv.convId) { mutableStateOf<String?>(null) }
-    /** 本群成员显示名——**只给没有 mention_spans 的老消息兜底**，超级群拿不到就空表。 */
-    var mentionNames by remember(conv.convId) { mutableStateOf<List<String>>(emptyList()) }
+    /** 本群成员表（显示名→uid）——只给没有 mention_spans 的老消息兜底，有 uid 才可点（对齐 iOS）。 */
+    var mentionNames by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     /** 成员角色与显示名（uid 为键）：发送者徽标、名字、引用块与回复条的名字用。超级群只有我自己。 */
     var memberRoles by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     // 成员表过期（会话开着时对方改名再发消息）→ 版本号 +1 → 下面重拉群资料（MemberNameRefresh.kt）
@@ -276,7 +277,7 @@ fun ChatHost(
                     myRole = it.myRole
                     // 超级群这里只回我自己（服务端刻意不下发 2 万人的成员表），
                     // 于是老消息的 @ 在超级群里不高亮——协议里写明的降级，别在这补救
-                    mentionNames = it.members.map(GroupMember::displayName)
+                    mentionNames = it.members.associate { m -> m.displayName to m.userId }
                     memberRoles = it.members.associate { m -> m.userId to m.role }
                     memberNames = it.members.associate { m -> m.userId to m.displayName }
                     memberAvatars = it.members.associate { m -> m.userId to m.avatarUrl }
@@ -535,6 +536,9 @@ fun ChatHost(
         client = client,
         openUser = openUser,
         friendsByUid = friendsByUid,
+        memberNames = memberNames,
+        memberAvatars = memberAvatars,
+        onOpenChat = onOpenChat,
         pickingFriend = pickingFriend,
         picking = picking,
         onCloseUser = { openUser = null },
