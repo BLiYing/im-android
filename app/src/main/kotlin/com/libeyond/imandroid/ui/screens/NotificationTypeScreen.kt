@@ -104,15 +104,10 @@ internal fun NotificationTypeScreen(
                 )
             }
 
-            Spacer(Modifier.height(d.cardGap))
-            IMSectionHeader(stringResource(R.string.notif_section_exceptions))
-            if (exceptions.isEmpty()) {
-                IMSectionFooter(
-                    stringResource(
-                        if (group) R.string.notif_exceptions_empty_group else R.string.notif_exceptions_empty_private,
-                    ),
-                )
-            } else {
+            // 没有免打扰的会话时整组「例外」不画（对齐 iOS IMNotificationTypeViewController，2026-09-29 用户要求）
+            if (exceptions.isNotEmpty()) {
+                Spacer(Modifier.height(d.cardGap))
+                IMSectionHeader(stringResource(R.string.notif_section_exceptions))
                 IMSettingsGroup {
                     exceptions.forEachIndexed { i, conv ->
                         if (i > 0) IMRowDivider(insetStart = d.space4 + EXCEPTION_AVATAR + d.space3)
