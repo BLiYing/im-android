@@ -2,11 +2,13 @@ package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
@@ -53,9 +55,24 @@ fun ChatsHost(
     // 缺的只是这一层读取——同 iOS 的 `peerPresence.isOnline`，不额外发 watch（下线态本就靠
     // 下次刷新收敛，见 IMConversationListViewController.m 的同款注释，两端行为一致）。
     val presenceMap by client.presence.presence.collectAsState()
-    val onlineOf = { uid: String ->
-        val p = presenceMap[uid]
-        p != null && Presence.display(p.status, p.onlineUntil, p.lastSeen, System.currentTimeMillis()) is PresenceDisplay.Online
+    // 「租约到期」是纯粹的时间流逝，不触发任何回调；只用调用时刻的 `System.currentTimeMillis()`
+    // 算一次、往后不重算的话，用户静止不动时绿点会**永远**停在「在线」（Presence.kt 同一条纪律，
+    // `rememberChatSubtitle` 已按此心跳重算，这里此前漏了）。同用 `Presence.TICK_MS` 心跳。
+    var tick by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(Presence.TICK_MS)
+            tick = System.currentTimeMillis()
+        }
+    }
+    // `remember` 稳定它的引用：presenceMap/tick 没变时，ChatsHost 因别的状态（吐司/菜单锚点等）
+    // 重组不会连带让每一行都重算——真正"哪个 uid 的在线态变了"仍由下面 presenceMap 整份驱动
+    // （本仓会话列表规模不大，未按 uid 拆分订阅；群成员表那种量级才值得再拆）。
+    val onlineOf = remember(presenceMap, tick) {
+        { uid: String ->
+            val p = presenceMap[uid]
+            p != null && Presence.display(p.status, p.onlineUntil, p.lastSeen, tick) is PresenceDisplay.Online
+        }
     }
     var page by remember { mutableStateOf(ChatsPage.List) }
     var plusAnchor by remember { mutableStateOf<Rect?>(null) }
