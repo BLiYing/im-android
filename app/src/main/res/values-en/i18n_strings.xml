@@ -1346,7 +1346,7 @@
     <string name="notif_sound_none">None</string>
     <string name="notif_sound_rise">Rise</string>
     <string name="notif_sound_title">Sound</string>
-    <string name="notif_system_footer">Push notifications are coming soon. For now you\'re alerted only while the app is open.</string>
+    <string name="notif_system_footer_android">When the app is in the background or closed, new messages arrive as push notifications. Notification content passes through the push provider\'s servers (Google or your phone maker); to hide it, turn off “Message preview” for private and group chats.</string>
     <string name="notif_system_footer_apns">When the app is in the background or closed, new messages arrive as Apple push notifications. Notification content passes through Apple\'s servers; to hide it, turn off “Message preview” for private and group chats.</string>
     <string name="notif_system_open_settings">Open Settings</string>
     <string name="notif_system_permission">Notification permission</string>

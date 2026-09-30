@@ -1311,7 +1311,7 @@
     <string name="notif_sound_none">无</string>
     <string name="notif_sound_rise">上扬</string>
     <string name="notif_sound_title">提示音</string>
-    <string name="notif_system_footer">推送通知正在开发中。目前只有 App 打开时会提醒。</string>
+    <string name="notif_system_footer_android">App 在后台或关闭时，新消息会通过系统推送提醒你。通知内容会经过推送服务商（Google 或手机厂商）的服务器；不想显示内容，可关闭私聊和群聊里的「消息预览」。</string>
     <string name="notif_system_footer_apns">App 在后台或关闭时，新消息会通过苹果推送提醒你。通知内容会经过苹果服务器；不想显示内容，可关闭私聊和群聊里的「消息预览」。</string>
     <string name="notif_system_open_settings">去设置</string>
     <string name="notif_system_permission">通知权限</string>

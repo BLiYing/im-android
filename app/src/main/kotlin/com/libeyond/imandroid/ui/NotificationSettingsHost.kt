@@ -1,6 +1,15 @@
 package com.libeyond.imandroid.ui
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -10,13 +19,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.FcmPreference
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.NotificationExceptions
 import com.libeyond.imandroid.data.NotificationNav
 import com.libeyond.imandroid.data.NotificationPage
+import com.libeyond.imandroid.data.NotificationPermission
 import com.libeyond.imandroid.data.NotificationSettings
 import com.libeyond.imandroid.data.NotificationSettingsStore
 import com.libeyond.imandroid.data.MuteDuration
@@ -79,7 +94,38 @@ fun NotificationSettingsHost(
     // 定时免打扰到期刷新（NOTIFICATIONS_P1_DESIGN §4.4）：例外列表与选择页过滤都要跟着到点重算。
     val muteTick = rememberMuteTick(conversations)
     val hasVibrator = remember { AlertPlayer.hasVibrator(context) }
-    val comingSoonHint = stringResource(R.string.ps_coming_soon_hint)
+
+    // 「通知权限」行（M5 批次 2，判据见 data/NotificationPermission.kt）。系统没有"权限变了"的回调，
+    // 每次回到前台重查一遍——用户多半是去系统设置里改完再切回来的（同 iOS viewWillAppear 里重查）。
+    var notificationsEnabled by remember { mutableStateOf(systemNotificationsEnabled(context)) }
+    var explainPermission by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) notificationsEnabled = systemNotificationsEnabled(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+    var rationaleBeforeRequest by remember { mutableStateOf(false) }
+    val requestPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        notificationsEnabled = systemNotificationsEnabled(context)
+        if (NotificationPermission.shouldExplainAfterRequest(granted, rationaleBeforeRequest, showsRationale(context))) {
+            explainPermission = true
+        }
+    }
+    fun onPermissionRow() {
+        when (NotificationPermission.onTap(notificationsEnabled, Build.VERSION.SDK_INT)) {
+            NotificationPermission.TapAction.OpenSettings -> openNotificationSettings(context)
+            NotificationPermission.TapAction.Explain -> explainPermission = true
+            NotificationPermission.TapAction.Request -> {
+                rationaleBeforeRequest = showsRationale(context)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    requestPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        }
+    }
 
     /**
      * 私聊/群聊/角标三项是**账号级**的（M5，PROTOCOL §6.13）：本地立刻生效 + PUT 同步给服务端，
@@ -110,7 +156,8 @@ fun NotificationSettingsHost(
                         client.fcmTokenStore.setEnabled(v) { com.libeyond.imandroid.fcm.FcmToken.current() }
                     }
                 },
-                onComingSoon = { toast = comingSoonHint },
+                notificationsEnabled = notificationsEnabled,
+                onPermissionRow = { onPermissionRow() },
                 onReset = { confirmReset = true },
                 onBack = onBack,
             )
@@ -156,6 +203,17 @@ fun NotificationSettingsHost(
         )
     }
 
+    if (explainPermission) {
+        IMConfirmDialog(
+            title = stringResource(R.string.notif_system_permission),
+            message = stringResource(R.string.notif_system_permission_denied_hint),
+            confirmText = stringResource(R.string.notif_system_open_settings),
+            onConfirm = { openNotificationSettings(context) },
+            onDismiss = { explainPermission = false },
+            destructive = false,
+        )
+    }
+
     // 「添加例外」会话选择页（NOTIFICATIONS_P1_DESIGN §2 + §4.1）：复用 ForwardPickerScreen，单选、
     // 选完先弹时长菜单，选中时长才真正免打扰（不再是第一批那样点了立即永久免打扰）。
     if (addExceptionOpen) {
@@ -195,6 +253,25 @@ fun NotificationSettingsHost(
     }
 
     if (page == NotificationPage.Main) toast?.let { IMToast(it) { toast = null } }
+}
+
+private fun systemNotificationsEnabled(context: Context): Boolean =
+    NotificationManagerCompat.from(context).areNotificationsEnabled()
+
+/** 系统是否还愿意再弹一次授权框的旁证（拒绝过一次后为 true）；Android 12 及以下没有这条权限，恒 false。 */
+private fun showsRationale(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+    val activity = context as? Activity ?: return false
+    return ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)
+}
+
+/** 跳系统的「本应用通知设置」页（minSdk 26 起就有这个入口，不用退到应用详情页）。 */
+private fun openNotificationSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }
+        .onFailure { log.w("open_notification_settings_failed", "err" to it.javaClass.simpleName) }
 }
 
 /**

@@ -36,9 +36,12 @@
 > - **设置页开关**：`ui/NotificationSettingsHost.kt`/`NotificationSettingsScreen.kt`「锁屏与后台
 >   通知」组里把原先的占位行「显示通知」换成做实的「接收离线推送」开关（i18n 串
 >   `notif_system_receive_push` 此前已经预备好、只是没接上——发现它明确对齐 iOS 侧 `PUSH_M5_DESIGN.md`
->   §5 的两行布局）；「通知权限」行仍是占位（Android 13+ 运行时权限请求 + 拒绝跳系统设置那套流程
->   本轮未接，父任务简报明确允许跳过）。`notif_system_footer` 脚注文案暂未改（跨仓 i18n 源，本仓
->   不直接改，留到「通知权限」也做实时一并请求更新）。
+>   §5 的两行布局）；「通知权限」行也已做实（行序同 iOS：权限在上、开关在下）——右值已开启/未开启，
+>   已开启点了跳系统的应用通知设置页，未开启先申请运行时权限、系统不再弹框时补「去设置」提示框，
+>   回前台重查状态；纯判据在 `data/NotificationPermission.kt`（`NotificationPermissionTest` 6 例）。
+>   脚注换成新串 `notif_system_footer_android`，旧的「推送通知正在开发中」串已从 i18n 源删除。
+>   **未在真机验证的一条**：「未开启」那一路（申请/提示框）——这台 OPPO 上 adb 撤不掉权限，只验了
+>   「已开启 → 跳系统设置」。
 > - **测试**：新增 `NotificationRouteTest`（7 例）、`FcmTokenStoreTest`（12 例，纯判据 + 编排）、
 >   `FcmPayloadTest`（5 例，data payload 解析）；`PushTokenApi`/`FcmMessagingService`/`FcmToken` 三处
 >   直接碰 HTTP/Android系统/Firebase SDK，未补测试（同 `DevicesApi` 等既有薄封装类的既有口径）。

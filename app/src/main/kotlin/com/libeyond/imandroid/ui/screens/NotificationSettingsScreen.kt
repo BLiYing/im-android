@@ -28,7 +28,7 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
  * 「通知与提示音」主页（NOTIFICATIONS_DESIGN §2.2）。iOS 逐行照抄的分组与顺序：
- * 消息通知（私聊/群聊子页入口）→ 应用内通知 → 角标计数 → 锁屏与后台通知（P2 占位）→ 重置。
+ * 消息通知（私聊/群聊子页入口）→ 应用内通知 → 角标计数 → 锁屏与后台通知（通知权限 + 接收离线推送）→ 重置。
  *
  * 纯展示，状态与写入在 `ui/NotificationSettingsHost.kt`（CODING_STYLE §7②）。
  */
@@ -45,7 +45,10 @@ internal fun NotificationSettingsScreen(
     /** 「接收离线推送（本设备）」开关当前值——M5 批次 2 已做实，FCM 令牌开关，见 [onToggleReceivePush]。 */
     receivePushEnabled: Boolean,
     onToggleReceivePush: (Boolean) -> Unit,
-    onComingSoon: (String) -> Unit,
+    /** 系统当前是否允许本 App 发通知——「通知权限」行右值（已开启/未开启）。 */
+    notificationsEnabled: Boolean,
+    /** 点「通知权限」行：申请授权 / 引导去系统设置，判据见 `data/NotificationPermission.kt`。 */
+    onPermissionRow: () -> Unit,
     onReset: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -56,7 +59,6 @@ internal fun NotificationSettingsScreen(
     val privateTitle = stringResource(R.string.notif_row_private)
     val groupTitle = stringResource(R.string.notif_row_group)
     val inAppPreviewTitle = stringResource(R.string.notif_in_app_preview)
-    val systemPermissionTitle = stringResource(R.string.notif_system_permission)
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
         IMTopBar(title = stringResource(R.string.ios_settings_row_notifications), onLeft = onBack)
@@ -121,29 +123,25 @@ internal fun NotificationSettingsScreen(
             }
             IMSectionFooter(stringResource(R.string.notif_badge_footer))
 
-            // 锁屏与后台通知：「接收离线推送」已做实（M5 批次 2，FCM，见 NotificationSettingsHost 调用点）；
-            // 「通知权限」仍是占位——那需要 Android 13+ 运行时权限请求 + 拒绝后跳系统设置整套流程，
-            // 本轮未接，留给后续（父任务简报明确允许："UI 入口超出范围就跳过，说清楚"）。
+            // 锁屏与后台通知（M5 批次 2）：行序同 iOS——通知权限在上、接收离线推送在下。
             Spacer(Modifier.height(d.cardGap))
             IMSectionHeader(stringResource(R.string.notif_section_system))
             IMSettingsGroup {
+                IMSettingsRow(
+                    title = stringResource(R.string.notif_system_permission),
+                    onClick = onPermissionRow,
+                    rightValue = stringResource(
+                        if (notificationsEnabled) R.string.notif_system_permission_on else R.string.notif_system_permission_off,
+                    ),
+                )
+                IMRowDivider(insetStart = d.space4)
                 IMSwitchRow(
                     title = stringResource(R.string.notif_system_receive_push),
                     checked = receivePushEnabled,
                     onCheckedChange = onToggleReceivePush,
                 )
-                IMRowDivider(insetStart = d.space4)
-                IMSettingsRow(
-                    title = systemPermissionTitle,
-                    onClick = { onComingSoon(systemPermissionTitle) },
-                    rightValue = stringResource(R.string.notif_system_permission_off),
-                    muted = true,
-                )
             }
-            // 文案仍是「推送通知正在开发中」这句旧占位脚注——它来自跨仓共享的 i18n 源
-            // （../../IMServer/docs/i18n/strings.json，`gen-i18n.mjs` 生成，本仓不直接改），
-            // 待「通知权限」那一半也做实后再一并请该源更新，这里不提前改错半句话。
-            IMSectionFooter(stringResource(R.string.notif_system_footer))
+            IMSectionFooter(stringResource(R.string.notif_system_footer_android))
 
             Spacer(Modifier.height(d.cardGap))
             IMSettingsGroup {
