@@ -35,6 +35,8 @@ object FrameType {
     const val WINDOW_RESP = "window_resp"
     const val MSG_HIDDEN = "msg_hidden"
     const val VOICE_TRANSCRIPT = "voice_transcript"
+    /** 账号级通知设置变更（PROTOCOL §6.13，M5）：只带版本号，收端据此决定要不要重拉。 */
+    const val NOTIFY_SETTINGS_UPDATE = "notify_settings_update"
     const val ERROR = "error"
 }
 

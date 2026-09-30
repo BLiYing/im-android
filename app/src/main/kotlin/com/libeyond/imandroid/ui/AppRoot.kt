@@ -184,6 +184,9 @@ fun AppRoot(client: IMClient) {
             // 之后「连上即重拉」与 capabilities_update 由 IMClient 负责（DownloadSettingsStore）。
             // **拉不到就按出厂默认走**，不是全关——全关会让所有图片都要手点。
             LaunchedEffect(Unit) { client.refreshDownloadSettings() }
+            // 账号级通知设置（M5）：同理先拉一次跑迁移判定（exists=false 时把本地现值传上去）；
+            // 之后「连上即重拉」与 notify_settings_update 由 IMClient 负责（AccountNotifySettingsStore）。
+            LaunchedEffect(Unit) { client.refreshAccountNotifySettings() }
             // 下载门控的环境（下载器 + 策略 + 网络类型）。**整棵树共用一份**：
             // 气泡 / 宫格 / 文件 / 详情四处必须看到同一份在途状态，
             // 各建一个的话同一条媒体会被下两遍、进度各显各的。

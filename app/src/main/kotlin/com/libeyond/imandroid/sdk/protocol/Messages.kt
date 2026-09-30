@@ -416,6 +416,16 @@ data class CapabilitiesUpdateData(
     val version: Long = 0,
 )
 
+/**
+ * notify_settings_update 下行（§6.13，M5）：账号级通知设置（私聊/群聊 `{enabled,preview,sound}`
+ * 与 `badge.include_muted`）有变。**只带版本号**，与 [CapabilitiesUpdateData] 是两条独立的版本序列，
+ * 不要混用——收端据版本去重后重拉 `GET /api/v1/notify-settings`（`AccountNotifySettingsStore`）。
+ */
+@Serializable
+data class NotifySettingsUpdateData(
+    val version: Long = 0,
+)
+
 /** presence 下行广播（§5.5 租约模型）。 */
 @Serializable
 data class PresenceFrame(

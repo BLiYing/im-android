@@ -7,6 +7,50 @@
 
 ## 当前焦点
 
+> **M5 批次 1：账号级通知设置 ✅（2026-09-30，工作区改动，未提交/未合并，未做真机验证）**：
+> `../IMServer/docs/PROTOCOL.md` §6.13/§11 + `../IMServer/docs/design/PUSH_M5_DESIGN.md` §3.3——
+> 私聊/群聊 `{enabled,preview,sound}` 与 `badge.include_muted` 三项挪到账号级、多端同步；
+> 应用内三项（声音/振动/横幅）与桌面音量仍是每台设备本地。**本批不含推送令牌/前台服务**（那是
+> M5 批次 2，后端 IMServer 与其余端正在并行做，本仓未跟）。
+> - **同步/迁移纯函数** `data/AccountNotifySettingsSync.kt`：`AccountNotifySettingsSync.decide`
+>   （GET 应答 `exists=false`→迁移本地上去 / `exists=true`→按版本号覆盖本地 / 版本过期→丢弃）+
+>   `onTrigger`（冷启动/重连：本地上次 PUT 失败过的"脏"标记→先补 PUT 不发 GET；否则正常 GET）。
+> - **编排** `AccountNotifySettingsStore`（同文件）：`start`（登录/连上时调）、`onPushed`（收
+>   `notify_settings_update` 版本号，去重后重拉）、`save`（设置页编辑三项之一→本地立刻生效 + PUT，
+>   **失败不回滚**、标脏，下次 `start` 补），`forget`（退出登录：本地三项也退回默认，否则下一个
+>   账号在这台设备上先看见上一个人的通知设置——同 `downloadSettingsStore.forget()`/
+>   `InAppBannerStore.dismiss()` 那条跨账号泄露纪律）。
+> - **JSON 编解码** `sdk/api/NotifySettingsApi.kt`：`NotifySettingsWire`（纯函数，`badge.include_muted`
+>   snake_case、`sound` 编成 wire 字符串、未知值/缺字段各自回落默认）+ `NotifySettingsApi`
+>   （`GET/PUT /api/v1/notify-settings`，解析失败回退 `exists=false` 让上层走迁移分支，不抛）。
+> - **协议**：`FrameType.NOTIFY_SETTINGS_UPDATE`（`notify_settings_update`）+ `NotifySettingsUpdateData`
+>   （`sdk/protocol/`）；`MessageService` 新增 `notifySettingsUpdates: SharedFlow<Long>`（与
+>   `capabilityUpdates` 是两条独立版本序列，不混用）。
+> - **接线**：`IMClient` 新增 `accountNotifySettingsStore`（`fetch/put` 走 `NotifySettingsApi`，
+>   `localFields/applyLocal` 读写既有 `NotificationSettingsStore` 的 `private/group/badge` 三项，
+>   `data/NotificationSettings.kt` 新增 `accountFields()`/`withAccountFields()` 这对提取/回填扩展）；
+>   `socket.state==Connected` 与 `messages.notifySettingsUpdates` 各挂一条协程，`logout()`/
+>   `sessionEnded` 都调 `forget()`。`AppRoot.kt` 进主界面后 `LaunchedEffect(Unit)` 拉一次（同
+>   `refreshDownloadSettings` 的位置与理由）。`NotificationSettingsHost.kt` 的私聊/群聊/角标三项
+>   编辑改走 `client.accountNotifySettingsStore.save(...)`（新 `updateAccount` helper），「重置」
+>   在本地 `NotificationSettingsStore.reset()` 之外补一次 `updateAccount(DEFAULT)` 把默认值 PUT 上去；
+>   应用内三项（声音/振动/预览）不变，仍是 `NotificationSettingsStore.update` 直连。
+> - **同一逻辑的另外两端**：iOS `IMNotificationSettings`、Web `notifySettings.ts`（本仓代码注释里
+>   已各处标注）；`../IMServer/docs/SYMMETRY.md` 尚未登记这一条（IMServer 那侧还在并行实现，登记
+>   由协调方补，本仓未动 IMServer/SYMMETRY.md）。
+> - `./scripts/test.sh` **1062/1062 绿**（150 个测试类；新增 `AccountNotifySettingsSyncTest`
+>   7 例、`AccountNotifySettingsStoreTest` 8 例、`NotifySettingsWireTest` 6 例，三类判据——迁移
+>   exists 分支、版本号新旧、脏了补 PUT——均临时改坏实现确认先变红过，见下方 mutation 记录）：
+>   ① `decide` 的 `!response.exists` 取反 → 4/7 红；② `start` 忽略 `dirty` 恒 `Refresh` → 2/8 红
+>   （正是「脏了补 PUT」两例）；③ `include_muted` 改回 `includeMuted` → 2/6 红（snake_case 与往返
+>   两例）。三处均已改回，最终整仓 1062/1062 绿。
+> - **未做真机验证**：真实连后端跑一遍迁移（`exists=false` 首次 PUT）、换设备登录看是否覆盖、
+>   两台设备互改验证 `notify_settings_update` 推送与去重、断网时编辑验证「不回滚+标脏+重连补 PUT」
+>   的真实观感——均只过了编译与 JVM 单测（纯逻辑，无 Compose 时序风险，但网络时序历来建议真机复核）。
+>   **后端 `GET/PUT /api/v1/notify-settings` 与 `notify_settings_update` 推送由 IMServer 侧并行实现**
+>   （本次未见 `../IMServer/docs/SYMMETRY.md` 登记，落地后建议核对协议字段与本仓 `NotifySettingsWire`
+>   逐字一致）。
+
 > **通知与提示音 P1 第二批 ✅（2026-09-29，`feature/notif-p1b` 分支，从 main 切出，未合入 main，
 > 未做真机验证）**：`../IMServer/docs/design/NOTIFICATIONS_P1_DESIGN.md` §4/§5——定时免打扰。
 > 后端已上线 `mute_until`（PROTOCOL §6.10），本轮只接客户端。详细改动清单、判定表、已知缺口见
@@ -506,7 +550,10 @@
 4. **收藏的剩余项**：「以聊天模式查看」（按来源会话分组下钻）、来源名到群昵称级（现只到好友备注/昵称/补拉名片）；**长按菜单缺项**：举报、翻译。
 5. **宫格**按 `IMAlbumRowPattern` 重写布局 + 五道防跳版闸；相册宫格逐格勾选。
 6. 按 `docs/UI_PARITY_IOS.md` 剩下的 🔴（📅/👤 已于 2026-09-23 收口）：水滴头部形变、「名片」页签、隐私页无障碍（语音页签内播放已于 2026-09-28 随语音 P1 完成，见 CLIENT_PARITY）。
-7. 按 `CLIENT_PARITY` 追 iOS：消息编辑（M4-5）→ 设置页其余 6 项 → 头像裁切页 → 推送（M5）。
+7. 按 `CLIENT_PARITY` 追 iOS：消息编辑（M4-5）→ 设置页其余 6 项 → 头像裁切页 → 推送（M5，
+   **批次 1「账号级通知设置」已实现，见「当前焦点」；批次 2「推送令牌 + 前台保活服务 + 本机通知」
+   未动**——`../IMServer/docs/design/PUSH_M5_DESIGN.md` §5/§6，需要后端 `im_push_token` 表/
+   `app_state` 帧/APNs 落地后本仓才能接令牌上报，Android 侧另需前台服务与 `NotificationCompat` 渲染）。
 8. **群成员头像图**：首字母色块对，但无头像缓存；要先做 `POST /users/batch` 解析器。
 
 ## 已知坑 / 限制

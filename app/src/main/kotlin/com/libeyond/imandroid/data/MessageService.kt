@@ -90,6 +90,13 @@ class MessageService(
      */
     val capabilityUpdates: SharedFlow<Long> = _capabilityUpdates.asSharedFlow()
 
+    private val _notifySettingsUpdates = MutableSharedFlow<Long>(extraBufferCapacity = 8)
+    /**
+     * 账号级通知设置有变（收到 `notify_settings_update`，PROTOCOL §6.13），值是服务端的新版本号。
+     * 这里只转发，**去重与重拉在 [AccountNotifySettingsStore]**——与 [capabilityUpdates] 是两条独立的版本序列。
+     */
+    val notifySettingsUpdates: SharedFlow<Long> = _notifySettingsUpdates.asSharedFlow()
+
     private val _listedConversations = kotlinx.coroutines.flow.MutableStateFlow<ListedConversations?>(null)
     /**
      * 本次进程里最近一次**成功**拉到的会话列表（哪个账号、几条）。会话列表的空态判据要它
@@ -202,6 +209,15 @@ class MessageService(
                 )
                 log.i("capabilities_update", "version" to d.version)
                 _capabilityUpdates.tryEmit(d.version)
+            }
+
+            // 账号级通知设置有变（PROTOCOL §6.13）。这里只转发版本号，去重与重拉在 AccountNotifySettingsStore
+            FrameType.NOTIFY_SETTINGS_UPDATE -> data?.let {
+                val d = ProtocolJson.decodeFromJsonElement(
+                    com.libeyond.imandroid.sdk.protocol.NotifySettingsUpdateData.serializer(), it,
+                )
+                log.i("notify_settings_update", "version" to d.version)
+                _notifySettingsUpdates.tryEmit(d.version)
             }
 
             FrameType.ERROR -> data?.let {

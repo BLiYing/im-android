@@ -71,6 +71,28 @@ fun NotificationSettings.withType(group: Boolean, transform: (NotifTypeSettings)
 fun NotificationSettings.typeOf(group: Boolean): NotifTypeSettings = if (group) this.group else this.private
 
 /**
+ * 三项**账号级**通知设置（M5，`../../IMServer/docs/PROTOCOL.md` §6.13）：私聊/群聊
+ * `{enabled,preview,sound}` 与 `badge.include_muted`。挪到账号级、多端同步——同一账号换设备登录、
+ * 或在多台设备上改，看到的是同一份。[InAppSettings]（应用内声音/振动/横幅）与 [DesktopSettings]
+ * **仍是每台设备自己的**，不在这份里（见 [NotificationSettings] 类注释、`AccountNotifySettingsStore`）。
+ *
+ * **同一套字段与迁移口径的另外两端**：iOS `IMNotificationSettings`、Web `notifySettings.ts`——
+ * 三端各自按协议独立实现，行为必须一致，改这里要一并核对那两处。
+ */
+data class AccountNotifyFields(
+    val private: NotifTypeSettings = NotifTypeSettings(),
+    val group: NotifTypeSettings = NotifTypeSettings(),
+    val badge: BadgeSettings = BadgeSettings(),
+)
+
+/** 从整份本地设置里取出账号级那三项（PUT 之前、或对比"改没改"时用）。 */
+fun NotificationSettings.accountFields(): AccountNotifyFields = AccountNotifyFields(private, group, badge)
+
+/** 把账号级那三项覆盖进整份本地设置——[InAppSettings]/[DesktopSettings] 原样保留。 */
+fun NotificationSettings.withAccountFields(f: AccountNotifyFields): NotificationSettings =
+    copy(private = f.private, group = f.group, badge = f.badge)
+
+/**
  * SharedPreferences 扁平键 ↔ 模型的编解码（**每个键独立回落默认值**，NOTIFICATIONS_DESIGN §6：
  * 「读到非法值一律回落默认」）——单个键存坏或缺失不该拖累其它字段，[decode] 逐键各自兜底，
  * 不是把整份 JSON 一次性反序列化（那样一个字段坏了整份都得回落默认）。

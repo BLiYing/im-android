@@ -17,12 +17,17 @@ import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.data.DownloadSettings
 import com.libeyond.imandroid.data.DownloadSettingsStore
+import com.libeyond.imandroid.data.AccountNotifySettingsStore
 import com.libeyond.imandroid.data.InAppBannerStore
 import com.libeyond.imandroid.data.MediaCache
 import com.libeyond.imandroid.data.MediaDownloader
+import com.libeyond.imandroid.data.NotificationSettingsStore
+import com.libeyond.imandroid.data.accountFields
+import com.libeyond.imandroid.data.withAccountFields
 import com.libeyond.imandroid.data.ThumbBackfill
 import com.libeyond.imandroid.sdk.api.DevicesApi
 import com.libeyond.imandroid.sdk.api.DownloadSettingsApi
+import com.libeyond.imandroid.sdk.api.NotifySettingsApi
 import com.libeyond.imandroid.sdk.api.ProfileApi
 import com.libeyond.imandroid.sdk.api.QrApi
 import com.libeyond.imandroid.sdk.api.RtcApi
@@ -97,6 +102,7 @@ class IMClient(context: Context) {
     /** 上传。**公开**：除消息媒体外，改头像也要用它（「我」页编辑资料）。 */
     val upload = UploadApi(http) { session.token }
     private val downloadSettingsApi = DownloadSettingsApi(http)
+    private val notifySettingsApi = NotifySettingsApi(http)
 
     /**
      * 已下载媒体的落盘 + 下载编排（M4-7）。
@@ -143,6 +149,23 @@ class IMClient(context: Context) {
     val downloadSettings: DownloadSettings get() = downloadSettingsStore.current
 
     suspend fun refreshDownloadSettings() = downloadSettingsStore.refresh("app_main")
+
+    /**
+     * 账号级通知设置（M5，PROTOCOL §6.13）：私聊/群聊 `{enabled,preview,sound}` + `badge.include_muted`
+     * 挪到账号级、多端同步。**进程内一份**，与 [downloadSettingsStore] 同理，什么时候重拉见 init：
+     * 真正连上时、收到 `notify_settings_update` 时；另有 AppRoot 登录后拉一次（跑迁移判定）。
+     *
+     * 本地存储仍是 [NotificationSettingsStore]（设置页 / [com.libeyond.imandroid.data.IncomingAlert]
+     * 继续只读那一份，不改判定路径）——这里只负责把它的账号级三项与服务端对齐。
+     */
+    val accountNotifySettingsStore = AccountNotifySettingsStore(
+        fetch = { notifySettingsApi.get() },
+        put = { notifySettingsApi.put(it) },
+        localFields = { NotificationSettingsStore.current.accountFields() },
+        applyLocal = { f -> NotificationSettingsStore.update(NotificationSettingsStore.current.withAccountFields(f)) },
+    )
+
+    suspend fun refreshAccountNotifySettings() = accountNotifySettingsStore.start("app_main")
 
     private val db = IMDatabase.get(context)
     val repo = MessageRepository(db.messages(), db.pending(), db.conversations())
@@ -279,6 +302,7 @@ class IMClient(context: Context) {
                 log.w("session_ended_clearing_credentials", "reason" to it.name)
                 session.clear()
                 downloadSettingsStore.forget()
+                accountNotifySettingsStore.forget()
                 IMLog.currentUid = "-"
             }
         }
@@ -292,6 +316,16 @@ class IMClient(context: Context) {
         }
         scope.launch {
             messages.capabilityUpdates.collect { downloadSettingsStore.onPushed(it) }
+        }
+
+        // 账号级通知设置的多端同步（M5，同上一段的道理）：
+        // ① 真正连上时补跑一次 [AccountNotifySettingsStore.start]——脏了先补 PUT，没脏就 GET；
+        // ② 收到 notify_settings_update，按版本去重后重拉。
+        scope.launch {
+            socket.state.collect { if (it == ConnState.Connected) accountNotifySettingsStore.start("ws_connected") }
+        }
+        scope.launch {
+            messages.notifySettingsUpdates.collect { accountNotifySettingsStore.onPushed(it) }
         }
 
         // 语音转文字结果下行（§6.10），只推给请求者本人——见 VoiceTranscriber 类注释。
@@ -345,6 +379,9 @@ class IMClient(context: Context) {
      * ownerUid 隔离）。真要清是「删除账号数据」那个独立功能，不是退出登录。
      *
      * 自动下载策略**要清**：它是账号级的，下一个登录的账号在拉到自己的之前不能沿用上一个人的。
+     * 账号级通知设置（M5：私聊/群聊/角标三项）**同理要清**——[NotificationSettingsStore] 是设备级
+     * 单例持久化，不清的话下一个账号在这台设备上登录、GET 迁移判定跑完之前，会先看见上一个人的私聊/群聊
+     * 通知开关与角标策略（与本段上一条同一类跨账号泄露，参见下面的横幅那条）。
      *
      * 应用内横幅**也要清**（同一条理由）：`InAppBannerStore` 是进程级单例，本账号来消息时
      * 显示的横幅在退出登录那一刻若还挂着，不清的话下一个账号登进同一个进程会先看见上一个人的
@@ -354,6 +391,7 @@ class IMClient(context: Context) {
         socket.disconnect()
         tokens.logout()
         downloadSettingsStore.forget()
+        accountNotifySettingsStore.forget()
         InAppBannerStore.dismiss()
     }
 

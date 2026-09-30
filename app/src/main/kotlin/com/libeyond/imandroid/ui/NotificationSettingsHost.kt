@@ -16,8 +16,10 @@ import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.NotificationExceptions
 import com.libeyond.imandroid.data.NotificationNav
 import com.libeyond.imandroid.data.NotificationPage
+import com.libeyond.imandroid.data.NotificationSettings
 import com.libeyond.imandroid.data.NotificationSettingsStore
 import com.libeyond.imandroid.data.MuteDuration
+import com.libeyond.imandroid.data.accountFields
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.withType
 import com.libeyond.imandroid.sdk.AlertPlayer
@@ -76,6 +78,16 @@ fun NotificationSettingsHost(
     val hasVibrator = remember { AlertPlayer.hasVibrator(context) }
     val comingSoonHint = stringResource(R.string.ps_coming_soon_hint)
 
+    /**
+     * 私聊/群聊/角标三项是**账号级**的（M5，PROTOCOL §6.13）：本地立刻生效 + PUT 同步给服务端，
+     * 由 [com.libeyond.imandroid.data.AccountNotifySettingsStore.save] 统一处理（失败不回滚、标记
+     * dirty、下次冷启动/重连再补）。应用内声音/振动/横幅（`inApp`）仍走纯本地的 [NotificationSettingsStore]，
+     * 不经过这里——同一份逻辑的另外两端见 iOS `IMNotificationSettings`、Web `notifySettings.ts`。
+     */
+    fun updateAccount(next: NotificationSettings) {
+        scope.launch { client.accountNotifySettingsStore.save(next.accountFields()) }
+    }
+
     // 离开提示音选择页（回类型页 / 直接退出整条链）就停掉可能还在响的试听（§2.4「返回时停止试听」）
     LaunchedEffect(page) { if (page != NotificationPage.Sound) AlertPlayer.stopPreview() }
 
@@ -88,7 +100,7 @@ fun NotificationSettingsHost(
                 onToggleInAppSound = { v -> NotificationSettingsStore.update(settings.copy(inApp = settings.inApp.copy(sound = v))) },
                 onToggleInAppVibrate = { v -> NotificationSettingsStore.update(settings.copy(inApp = settings.inApp.copy(vibrate = v))) },
                 onToggleInAppPreview = { v -> NotificationSettingsStore.update(settings.copy(inApp = settings.inApp.copy(preview = v))) },
-                onToggleBadge = { v -> NotificationSettingsStore.update(settings.copy(badge = settings.badge.copy(includeMuted = v))) },
+                onToggleBadge = { v -> updateAccount(settings.copy(badge = settings.badge.copy(includeMuted = v))) },
                 onComingSoon = { toast = comingSoonHint },
                 onReset = { confirmReset = true },
                 onBack = onBack,
@@ -99,8 +111,8 @@ fun NotificationSettingsHost(
                 settings = settings.let { if (kind) it.group else it.private },
                 exceptions = NotificationExceptions.of(conversations.orEmpty(), kind, muteTick),
                 nowMs = muteTick,
-                onToggleEnabled = { v -> NotificationSettingsStore.update(settings.withType(kind) { it.copy(enabled = v) }) },
-                onTogglePreview = { v -> NotificationSettingsStore.update(settings.withType(kind) { it.copy(preview = v) }) },
+                onToggleEnabled = { v -> updateAccount(settings.withType(kind) { it.copy(enabled = v) }) },
+                onTogglePreview = { v -> updateAccount(settings.withType(kind) { it.copy(preview = v) }) },
                 onOpenSound = { page = NotificationPage.Sound },
                 onAddException = { addExceptionOpen = true },
                 onUnmute = { conv -> scope.launch { unmute(client, conv) } },
@@ -111,7 +123,7 @@ fun NotificationSettingsHost(
             NotificationPage.Sound -> NotificationSoundScreen(
                 current = settings.let { if (kind) it.group.sound else it.private.sound },
                 onSelect = { sound ->
-                    NotificationSettingsStore.update(settings.withType(kind) { it.copy(sound = sound) })
+                    updateAccount(settings.withType(kind) { it.copy(sound = sound) })
                     AlertPlayer.preview(sound)
                 },
                 onBack = { page = NotificationPage.Type },
@@ -124,7 +136,13 @@ fun NotificationSettingsHost(
             title = stringResource(R.string.notif_reset_confirm_title),
             message = stringResource(R.string.notif_reset_confirm_message),
             confirmText = stringResource(R.string.notif_reset),
-            onConfirm = { NotificationSettingsStore.reset() },
+            onConfirm = {
+                // inApp/desktop 是纯本地的，reset() 先把整份（含它们）落回默认；
+                // 私聊/群聊/角标三项是账号级的，还要把默认值 PUT 上去，否则服务端仍留着改之前的值,
+                // 下次这台或别的设备重拉又把刚重置的本地覆盖回去。
+                NotificationSettingsStore.reset()
+                updateAccount(NotificationSettings.DEFAULT)
+            },
             onDismiss = { confirmReset = false },
         )
     }
