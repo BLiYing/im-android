@@ -493,7 +493,7 @@ Web：`src/messageContent.ts`（`selectableInMultiSelect` / `SELECT_MAX` / 批�
 | 转发前滤掉转不出去的，**少发几条要如实说** | 先数一次再发 | 同（`forwardPick` 回提示） | ✅ |
 | 返回键分层：多选 → 搜索 → 离开会话 | 导航栏「取消」 | 同 + 返回键（Android 特有） | 🟢 本端多一条 |
 | 动作栏格数与顺序 | 转发 / 举报 / 收藏 / 删除 **4 格**，36pt 圆钮等距 | 同（`ChatSelectionUi.kt` 的 `SelectionBar`，2026-09-10） | ✅ |
-| 批量删除 | 只给「仅为我删除」 | 同（走 REST `/messages/hide`，带二次确认） | ✅ |
+| 批量删除 | 删除钮上方气泡：「仅删除自己」恒有；所选全部有权时多一档「为所有人删除」（2026-09-30） | 底部选择单同两档（第一档 REST `/messages/hide`，第二档逐条 `msg_op delete`；判据 `ChatSelection.allDeletableForEveryone`） | ✅ |
 | 批量举报：非空 + 不含我 + 同一个人才可点；**不可点时置灰不隐藏**，点灰钮说原因 | `reportableSenderForMessages:` / `reportHintTapped:` | 同（`SelectionActions.reportableSender` / `reportBlockedHint`，一次 POST 带 `target_seqs`；成功退出多选、失败留在多选） | ✅ 2026-09-10 |
 | 转发先问「逐条转发 / 合并转发」 | 有 | 同（`ChatSelectionActions.kt`） | ✅ 2026-09-10 |
 | 逐条转发跳过失效媒体并如实说；同一相册选 ≥2 张重新分组 | 有 | 同（`SelectionActions.isExpiredMedia` / `regroupAlbums`，每个目标会话一个新 `alb-` id） | ✅ 2026-09-10 |

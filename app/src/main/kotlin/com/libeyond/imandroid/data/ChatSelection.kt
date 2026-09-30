@@ -89,4 +89,21 @@ object ChatSelection {
      * 所以调用方要拿 `ordered().size - forwardable().size` 的差额如实提示（同 iOS：先数一次再发）。
      */
     fun forwardable(msgs: List<MessageEntity>): List<MessageEntity> = msgs.filter(Forward::canForward)
+
+    /**
+     * 这批已选消息能否**整批**「为所有人删除」：非空，且逐条都过 [ArchiveActions.canDeleteForEveryone]
+     * （规则本身只有那一处，这里只定「整批」的口径）。
+     *
+     * **全有或全无**，不做"能删几条删几条"：用户点的是「为所有人删除」，却有一部分只是没删掉，
+     * 结果要靠数气泡才知道。混选了别人的消息就只给「仅删除自己」。
+     * 与 im-web `selectDelete.ts` 的 `planBatchDelete`、iOS `IMChatSelectionAllDeletableForEveryone` 同口径。
+     */
+    fun allDeletableForEveryone(
+        msgs: List<MessageEntity>,
+        myUid: String,
+        isGroup: Boolean,
+        iAmManager: Boolean,
+    ): Boolean = msgs.isNotEmpty() && msgs.all {
+        it.convSeq > 0 && ArchiveActions.canDeleteForEveryone(it.sender == myUid, isGroup, iAmManager)
+    }
 }

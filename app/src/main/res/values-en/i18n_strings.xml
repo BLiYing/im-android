@@ -389,7 +389,6 @@
     <string name="chat_search_prev_month">Previous month</string>
     <string name="chat_search_today_jump_nearest">No messages today. Jumped to %1$s.</string>
     <string name="chat_search_today_no_messages_jumped_latest">No messages today — jumped to the most recent one</string>
-    <string name="chat_select_delete_confirm_message">This only deletes from this device. Other devices and the other person aren\'t affected.</string>
     <plurals name="chat_select_delete_confirm_title">
         <item quantity="one">Delete %1$d message</item>
         <item quantity="other">Delete %1$d messages</item>

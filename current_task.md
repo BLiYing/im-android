@@ -7,6 +7,13 @@
 
 ## 当前焦点
 
+> **2026-09-30 多选删除补齐两档（未真机）**：`ui/ChatSelectionState.kt` 的 `BatchDeleteConfirm` 从确认弹窗换成
+> 选择单——「仅删除自己」（此前已走 REST hide，现成功后立刻 `applyMsgHidden` 本端移除，不等回推）+ 所选**全部**有权时的
+> 「为所有人删除」（逐条 `msg_op delete`，未连接先拦、留在多选态）。旧弹窗正文「只从本机删除，其他设备…仍能看到」
+> 与 hide 的真实语义不符，已不再使用；`chat.select.delete_confirm_message` 已从共用文案表删除并重新生成四端。
+> 整批判据 `ChatSelection.allDeletableForEveryone`（全有或全无）+ `ChatSelectionTest` 4 例（先看红）。test.sh 1102 绿。
+> **真机待验**：同 iOS 那五条（九宫格多格 / 全自己发 / 混选 / 管理员 / 断网）。
+
 > **2026-09-30 撤回 / 删除后收回通知（Android 侧）**：设计 `../IMServer/docs/design/PUSH_M5_DESIGN.md` §3.4。
 > `fcm/FcmNotifications.kt`（新）：展示通知时把 `conv_seq` 记进 extras；收到服务端 `type=retract` 的 FCM
 > （`FcmMessagingService`）或在线时 `msg_op` 撤回/删除落库（`MessageRepository.applyMsgOp`，实时与 sync 同一入口）

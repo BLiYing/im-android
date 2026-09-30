@@ -113,4 +113,34 @@ class ChatSelectionTest {
         assertEquals(listOf(7L, 8L), out.map { it.convSeq })
         assertEquals("hi", out.first().content) // 不必回查数据库
     }
+
+    // —— 多选删除给不给「为所有人删除」（2026-09-30，与 im-web selectDelete.ts / iOS 同口径）——
+
+    @Test
+    fun `全是我发的可以整批为所有人删除`() {
+        val picked = listOf(msg(1, sender = "me"), msg(2, sender = "me"))
+        assertTrue(ChatSelection.allDeletableForEveryone(picked, "me", isGroup = false, iAmManager = false))
+    }
+
+    @Test
+    fun `混选了别人的一条就整批不给`() {
+        val picked = listOf(msg(1, sender = "me"), msg(2, sender = "u2"), msg(3, sender = "me"))
+        assertFalse(ChatSelection.allDeletableForEveryone(picked, "me", isGroup = false, iAmManager = false))
+        // 群里的普通成员同样不给
+        assertFalse(ChatSelection.allDeletableForEveryone(picked, "me", isGroup = true, iAmManager = false))
+    }
+
+    @Test
+    fun `群主管理员可以整批删别人的消息 但单聊里没有管理员这回事`() {
+        val picked = listOf(msg(1, sender = "u2"), msg(2, sender = "u3"))
+        assertTrue(ChatSelection.allDeletableForEveryone(picked, "me", isGroup = true, iAmManager = true))
+        assertFalse(ChatSelection.allDeletableForEveryone(picked, "me", isGroup = false, iAmManager = true))
+    }
+
+    @Test
+    fun `空选与未落库的本地件不给`() {
+        assertFalse(ChatSelection.allDeletableForEveryone(emptyList(), "me", isGroup = true, iAmManager = true))
+        val withUnsent = listOf(msg(1, sender = "me"), msg(0, sender = "me"))
+        assertFalse(ChatSelection.allDeletableForEveryone(withUnsent, "me", isGroup = false, iAmManager = false))
+    }
 }

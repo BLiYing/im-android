@@ -495,7 +495,7 @@ fun ChatHost(
     )
     }
 
-    BatchDeleteConfirm(sel, client, conv.convId) { toast = it }
+    BatchDeleteConfirm(sel, client, conv.convId, conv.isGroup, iAmManager) { toast = it }
 
     // —— 聊天记录详情（点合并转发卡进来）。画在查看器与资料页之前：从记录里点名片进的资料页要盖在它上面 ——
     ChatRecordLayer(

@@ -378,7 +378,6 @@
     <string name="chat_search_prev_month">上个月</string>
     <string name="chat_search_today_jump_nearest">今天无消息，已跳到 %1$s</string>
     <string name="chat_search_today_no_messages_jumped_latest">今天暂无消息，已跳到最近一条</string>
-    <string name="chat_select_delete_confirm_message">只从本机删除，其他设备与对方仍能看到。</string>
     <plurals name="chat_select_delete_confirm_title">
         <item quantity="other">删除 %1$d 条消息</item>
     </plurals>
