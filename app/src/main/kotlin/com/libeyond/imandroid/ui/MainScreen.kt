@@ -53,6 +53,7 @@ import com.libeyond.imandroid.data.ConversationAction
 import com.libeyond.imandroid.data.ConversationActions
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.MuteState
+import com.libeyond.imandroid.data.NotificationRoute
 import com.libeyond.imandroid.data.PushNav
 import com.libeyond.imandroid.data.TabUnread
 import com.libeyond.imandroid.ui.components.InAppBannerHost
@@ -114,6 +115,23 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     // `CallHistoryHost` 既有的 `associateBy { it.convId }` 手法，别在导航这条热路径上现扫一遍全表
     // （`/code-review` 抓出的效率点）。
     val conversationsById = remember(conversations) { conversations.orEmpty().associateBy { it.convId } }
+
+    // 点系统推送通知跳转到会话（M5 批次 2）：MainActivity 收到 intent 后记在 NotificationRoute，
+    // 这里在主界面真正组合出来后消费——本地已有这个会话就直接用，没有就用 payload 带的标题现造一个
+    // 占位会话（同 QrRouteHost/GroupInfoHost 等处 conversationStubFor 的既有手法），真实数据到了
+    // 自然替换。owner 还没就绪（未登录）时不消费，留给账号就绪后这段 LaunchedEffect 因 owner 变化
+    // 自然重跑——不需要另起定时器重试，见 NotificationRoute 类注释。
+    val pendingNotificationRoute by NotificationRoute.pending.collectAsState()
+    LaunchedEffect(pendingNotificationRoute, conversationsById, owner) {
+        val target = pendingNotificationRoute ?: return@LaunchedEffect
+        if (owner.isEmpty()) return@LaunchedEffect
+        val conv = conversationsById[target.convId] ?: when (val kind = NotificationRoute.resolveKind(target.convId, owner)) {
+            is NotificationRoute.Kind.Private -> client.conversationStubFor(kind.peerUid, target.title, "")
+            NotificationRoute.Kind.Group -> client.groupConversationStubFor(target.convId, target.title, "")
+        }
+        openConv = conv
+        NotificationRoute.consume(target.token)
+    }
 
     val connState by client.socket.state.collectAsState()
     // 底栏「消息」蓝点：与会话行同一份数据现算，口径见 TabUnread（三端同口径）。

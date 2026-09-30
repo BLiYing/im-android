@@ -18,7 +18,12 @@ import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.data.DownloadSettings
 import com.libeyond.imandroid.data.DownloadSettingsStore
 import com.libeyond.imandroid.data.AccountNotifySettingsStore
+import com.libeyond.imandroid.data.AppActive
+import com.libeyond.imandroid.data.reportAppState
+import com.libeyond.imandroid.data.FcmPreference
+import com.libeyond.imandroid.data.FcmTokenStore
 import com.libeyond.imandroid.data.InAppBannerStore
+import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.data.MediaCache
 import com.libeyond.imandroid.data.MediaDownloader
 import com.libeyond.imandroid.data.NotificationSettingsStore
@@ -29,6 +34,7 @@ import com.libeyond.imandroid.sdk.api.DevicesApi
 import com.libeyond.imandroid.sdk.api.DownloadSettingsApi
 import com.libeyond.imandroid.sdk.api.NotifySettingsApi
 import com.libeyond.imandroid.sdk.api.ProfileApi
+import com.libeyond.imandroid.sdk.api.PushTokenApi
 import com.libeyond.imandroid.sdk.api.QrApi
 import com.libeyond.imandroid.sdk.api.RtcApi
 import com.libeyond.imandroid.sdk.api.UserCard
@@ -103,6 +109,7 @@ class IMClient(context: Context) {
     val upload = UploadApi(http) { session.token }
     private val downloadSettingsApi = DownloadSettingsApi(http)
     private val notifySettingsApi = NotifySettingsApi(http)
+    private val pushTokenApi = PushTokenApi(http)
 
     /**
      * 已下载媒体的落盘 + 下载编排（M4-7）。
@@ -166,6 +173,19 @@ class IMClient(context: Context) {
     )
 
     suspend fun refreshAccountNotifySettings() = accountNotifySettingsStore.start("app_main")
+
+    /**
+     * FCM 令牌上报编排（M5 批次 2，`../../IMServer/docs/design/PUSH_M5_DESIGN.md` §1.1）。**进程内一份**，
+     * 与 [accountNotifySettingsStore] 同理——`FcmMessagingService.onNewToken` 与"连上即补一次"
+     * （见 init）都要看到同一份"报没报过"状态，各建一个会导致重复 PUT 或漏报。
+     */
+    val fcmTokenStore = FcmTokenStore(
+        hasSession = { session.isLoggedIn },
+        isEnabled = { FcmPreference.enabled.value },
+        persistEnabled = { FcmPreference.setEnabled(it) },
+        put = { token -> pushTokenApi.put(token, LanguageStore.localeTag()) },
+        delete = { pushTokenApi.delete() },
+    )
 
     private val db = IMDatabase.get(context)
     val repo = MessageRepository(db.messages(), db.pending(), db.conversations())
@@ -303,6 +323,7 @@ class IMClient(context: Context) {
                 session.clear()
                 downloadSettingsStore.forget()
                 accountNotifySettingsStore.forget()
+                fcmTokenStore.forget()
                 IMLog.currentUid = "-"
             }
         }
@@ -328,9 +349,33 @@ class IMClient(context: Context) {
             messages.notifySettingsUpdates.collect { accountNotifySettingsStore.onPushed(it) }
         }
 
+        // FCM 令牌上报（M5 批次 2，同上两段的道理）：真正连上（= 登录/恢复会话成功）时补一次——
+        // 先补发攒下的"待上报" token（时序坑见 FcmTokenStore 类注释），再主动取一次当前 token 上报
+        // （不完全依赖 onNewToken 曾经回调过；[FcmTokenStore.reportToken] 内部按"没变/没开关/没会话"
+        // 各自短路，重复调用没有额外开销）。取 token 失败（没有 google-services.json、或网络问题）
+        // 只记日志，不影响登录流程本身。
+        scope.launch {
+            socket.state.collect {
+                if (it == ConnState.Connected) {
+                    fcmTokenStore.onSessionReady()
+                    runCatching { com.libeyond.imandroid.fcm.FcmToken.current() }
+                        .getOrNull()
+                        ?.let { token -> fcmTokenStore.reportToken(token) }
+                }
+            }
+        }
+
         // 语音转文字结果下行（§6.10），只推给请求者本人——见 VoiceTranscriber 类注释。
         scope.launch {
             messages.voiceTranscripts.collect { voiceTranscriber.applyRemote(it) }
+        }
+
+        // 前后台状态上报（app_state，PROTOCOL §6.12，M5 批次 2，见 data/AppStateReport.kt 类注释）：
+        // 真正连上（新连接/断线重连）时补发一次**当前实际状态**，不假设新连接一律前台——
+        // 覆盖"App 已经在后台、这时候连接才恢复"这种场景。App 切前后台那一刻的即时上报见
+        // MainActivity 的 AppActive.current 赋值点。
+        scope.launch {
+            socket.state.collect { if (it == ConnState.Connected) socket.reportAppState(AppActive.current) }
         }
     }
 
@@ -392,6 +437,9 @@ class IMClient(context: Context) {
         tokens.logout()
         downloadSettingsStore.forget()
         accountNotifySettingsStore.forget()
+        // 不调 fcmTokenStore 的服务端 delete：会话正常退出登录时服务端按会话联删令牌（父任务简报
+        // 明确约定），客户端不必每次登出都补一刀；forget() 只复位本地"已上报"状态，见其类注释。
+        fcmTokenStore.forget()
         InAppBannerStore.dismiss()
     }
 

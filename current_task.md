@@ -7,6 +7,59 @@
 
 ## 当前焦点
 
+> **M5 批次 2：FCM 离线推送接入 🚧（2026-09-30，工作区改动，未提交/未合并，未做真机验证——等
+> 用户拿到真实 `google-services.json`）**：`../IMServer/docs/design/PUSH_M5_DESIGN.md` 原定 Android
+> 走「后台保持连接」（文档 §6，尚未开工），**父任务简报拍板改走 FCM**（服务端 `internal/push` 正在
+> 并行加 FCM sender，协议形状已定死，本文档 §6 与 `../IMServer/docs/design/PUSH_M5_DESIGN.md` 尚未
+> 同步这个改动，留给协调方）。
+> - **Gradle**：`build.gradle.kts`/`app/build.gradle.kts` 加 `google-services` 插件（**按
+>   `app/google-services.json` 是否存在条件 apply**，没有文件时跳过插件、纯靠 `implementation`
+>   声明的 firebase-messaging 依赖照常编译）+ Firebase BoM 34.19.0 + `firebase-messaging`
+>   （主包已含 Kotlin 扩展，`-ktx` 独立产物已停更，不再单独取）+ google-services 插件 4.5.0。
+>   **已实测**：本机没有 `google-services.json` 时 `./scripts/test.sh` 全绿（见下）。
+> - **`fcm/FcmMessagingService.kt`**（新目录 `fcm/`，避免与既有 `data/PushNav.kt`/
+>   `ui/components/PushTransition.kt` 的"页面 push 转场"命名撞车）：`onNewToken` 转发给
+>   `IMClient.fcmTokenStore`；`onMessageReceived` 只读 `data` payload（不用 `notification` 字段，
+>   App 被杀死也要能自定义处理）、纯函数 `fcm/FcmPayload.kt` 解析、`NotificationCompat` 建系统通知，
+>   点击带 `conv_id`/`title` 经 `MainActivity` 落进 `data/NotificationRoute.kt`。**不在客户端重复判定
+>   该不该提醒**——服务端已经跑过 `alertDecision` 才会推。
+> - **令牌上报时序**（`data/FcmTokenStore.kt` + `sdk/api/PushTokenApi.kt`）：`FcmTokenSync.decide`
+>   纯函数（没会话 Defer / 同值 Skip / 否则 Put），`FcmTokenStore` 编排——没登录时先记 `pending`，
+>   `IMClient` 在 `socket.state==Connected` 时补 `onSessionReady()` + 主动取一次当前 token
+>   （对齐 iOS `IMProgram` 踩过的"`onNewToken` 早于登录"时序坑）。`logout()`/`sessionEnded` 只
+>   `forget()` 本地状态，**不调服务端 delete**——正常退出登录服务端按会话联删。
+> - **点通知跳转会话**（`data/NotificationRoute.kt`）：设计意图参照 iOS `IMPendingNotificationRoute`
+>   （不照抄实现）——只有 `ui/MainScreen.kt` 真把会话摆上屏幕（本地已有 or 用 `conversationStubFor`/
+>   `groupConversationStubFor` 现造占位会话，与扫码加群等入口同一手法）才 `consume`，账号未就绪时
+>   靠 Compose 因 `owner` 变化自然重跑，不用自己起重试定时器。`MainActivity` 改 `launchMode=
+>   singleTask` + `onNewIntent`，避免热启动点通知叠出第二个 Activity 实例。
+> - **设置页开关**：`ui/NotificationSettingsHost.kt`/`NotificationSettingsScreen.kt`「锁屏与后台
+>   通知」组里把原先的占位行「显示通知」换成做实的「接收离线推送」开关（i18n 串
+>   `notif_system_receive_push` 此前已经预备好、只是没接上——发现它明确对齐 iOS 侧 `PUSH_M5_DESIGN.md`
+>   §5 的两行布局）；「通知权限」行仍是占位（Android 13+ 运行时权限请求 + 拒绝跳系统设置那套流程
+>   本轮未接，父任务简报明确允许跳过）。`notif_system_footer` 脚注文案暂未改（跨仓 i18n 源，本仓
+>   不直接改，留到「通知权限」也做实时一并请求更新）。
+> - **测试**：新增 `NotificationRouteTest`（7 例）、`FcmTokenStoreTest`（12 例，纯判据 + 编排）、
+>   `FcmPayloadTest`（5 例，data payload 解析）；`PushTokenApi`/`FcmMessagingService`/`FcmToken` 三处
+>   直接碰 HTTP/Android系统/Firebase SDK，未补测试（同 `DevicesApi` 等既有薄封装类的既有口径）。
+> - **`./scripts/test.sh` 1084/1084 绿**（153 个测试类，较批次 1 完成时 +3 类）。
+> - **`app_state` 上行帧已补齐（2026-09-30，协调方后续接的）**：`sdk/protocol/Envelope.kt`
+>   `FrameType.APP_STATE` + `sdk/protocol/Messages.kt` `AppStateData`；`data/AppStateReport.kt`
+>   （`IMSocketManager.reportAppState(foreground)` 扩展函数）在两处调用——`MainActivity` 的
+>   `AppActive.current` 赋值点即时发一次（同 iOS `sceneDidEnterBackground`/`sceneWillEnterForeground`
+>   直接调用的方式，未额外引入响应式订阅）；`IMClient` 里 `socket.state` 变 `Connected`
+>   （新连接/断线重连）时补发一次**当前实际状态**——不假设新连接一律前台，同 iOS
+>   `sendAppStateAfterHandshake` 当初补的同一个坑（覆盖"App 已经在后台、连接才恢复"的场景）。
+>   未连接时 `send` 返回 false 静默丢帧，协议允许（§6.12：丢了只退化成 60 秒心跳超时前不推）。
+>   `EnvelopeTest` 补了线格式契约测试钉住 `"foreground"`/`"background"` 字面量不被手滑改错。
+>   `PUSH_M5_DESIGN.md`/`CLIENT_PARITY.md` 已同步（协调方做的）。
+> - **仍未做/已知限制**：① 没有 `google-services.json`——真实收发推送、真实 token 上报全部未验证，
+>   等用户提供后需要真机复核；② 没接 Android 13+ `POST_NOTIFICATIONS`
+>   运行时权限请求流程（manifest 已声明权限，`NotificationManager.notify()` 没权限时官方行为是
+>   静默不弹，不崩，但用户不会被引导去开）；③ `conv_seq` 只解析不用于"打开会话跳到那条消息"；
+>   ④ 没有做「App 前台时点开某会话清空该会话系统通知」这类更细联动（`setAutoCancel` 保证点开即消，
+>   仅此而已）。
+
 > **M5 批次 1：账号级通知设置 ✅（2026-09-30，工作区改动，未提交/未合并，未做真机验证）**：
 > `../IMServer/docs/PROTOCOL.md` §6.13/§11 + `../IMServer/docs/design/PUSH_M5_DESIGN.md` §3.3——
 > 私聊/群聊 `{enabled,preview,sound}` 与 `badge.include_muted` 三项挪到账号级、多端同步；

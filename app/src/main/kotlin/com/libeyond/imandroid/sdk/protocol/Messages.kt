@@ -441,6 +441,14 @@ data class PresenceFrame(
 @Serializable
 data class WatchData(val set: List<String> = emptyList())
 
+/**
+ * app_state 上行（§6.12，M5）：告诉服务端本连接所在的 App 是否在前台，服务端据此判断
+ * 要不要给这台设备发离线推送（FCM）。`state` 只有 `"foreground"`/`"background"` 两个合法值，
+ * 无回执，帧丢了只会退化成「60 秒心跳超时前不推」，不必重发。
+ */
+@Serializable
+data class AppStateData(val state: String)
+
 /** error 下行（§8）。 */
 @Serializable
 data class ErrorData(

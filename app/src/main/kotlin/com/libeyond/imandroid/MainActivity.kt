@@ -21,8 +21,11 @@ import com.libeyond.imandroid.ui.theme.isDarkFor
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import android.content.Intent
 import com.libeyond.imandroid.data.AppActive
+import com.libeyond.imandroid.data.reportAppState
 import com.libeyond.imandroid.data.LanguageStore
+import com.libeyond.imandroid.data.NotificationRoute
 import com.libeyond.imandroid.ui.AppIconSwitcher
 import com.libeyond.imandroid.ui.AppRoot
 import androidx.compose.runtime.CompositionLocalProvider
@@ -55,6 +58,10 @@ class MainActivity : ComponentActivity() {
 
         val client = (application as IMApp).client
 
+        // 点系统推送通知冷启动/从后台唤起（M5 批次 2）：把 conv_id 记进 NotificationRoute，
+        // 真正的消费（查会话/现造占位会话/设 openConv）在 ui/MainScreen.kt，这里只管"收到了"。
+        handleNotificationIntent(intent)
+
         // 回到前台即唤醒连接。判据在 IMSocketManager.wake 里（已连接只探活、
         // manualClose 后不连），这里只管发信号。
         lifecycleScope.launch {
@@ -65,13 +72,18 @@ class MainActivity : ComponentActivity() {
 
         // 通知判定 alertDecision 的 appActive 输入（NOTIFICATIONS_DESIGN §3.1）：本 App 只有一个
         // Activity，拿它的 RESUMED 区间当"前台"的代理——见 data/AppActive.kt 类注释。
+        // 同一落点上报 app_state（PROTOCOL §6.12，M5 批次 2，见 data/AppStateReport.kt 类注释）：
+        // 服务端就是靠这帧判断该不该给这条连接发离线推送（FCM）；未连接时静默丢帧没关系，
+        // IMClient 里 socket 重新连上时会补发一次当前实际状态。
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 AppActive.current = true
+                client.socket.reportAppState(true)
                 try {
                     awaitCancellation()
                 } finally {
                     AppActive.current = false
+                    client.socket.reportAppState(false)
                 }
             }
         }
@@ -104,6 +116,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * 已在运行（后台/前台）时点通知会走这里，而不是 [onCreate]——manifest 把本 Activity 设成
+     * `launchMode="singleTask"`，系统据此复用现有实例并回调 `onNewIntent`，不会在任务栈里
+     * 叠出第二个 MainActivity（同一个通知点两次、或点了通知又点桌面图标都不会开出重复页面）。
+     * `setIntent` 是必要的一步：不写的话下次 `getIntent()`/`this.intent` 读到的还是旧 intent。
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        val convId = intent?.getStringExtra(EXTRA_NOTIFICATION_CONV_ID)
+        if (convId.isNullOrBlank()) return
+        val title = intent.getStringExtra(EXTRA_NOTIFICATION_TITLE).orEmpty()
+        NotificationRoute.request(convId, title)
+    }
+
     private fun isSystemNight(): Boolean =
         (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
@@ -118,9 +149,13 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    private companion object {
-        val NAV_SCRIM_LIGHT = android.graphics.Color.argb(0xE6, 0xFF, 0xFF, 0xFF)
-        val NAV_SCRIM_DARK = android.graphics.Color.argb(0x80, 0x1B, 0x1B, 0x1B)
+    companion object {
+        private val NAV_SCRIM_LIGHT = android.graphics.Color.argb(0xE6, 0xFF, 0xFF, 0xFF)
+        private val NAV_SCRIM_DARK = android.graphics.Color.argb(0x80, 0x1B, 0x1B, 0x1B)
+
+        /** [com.libeyond.imandroid.fcm.FcmMessagingService] 点击通知构造 intent 时写这两个 extra。 */
+        const val EXTRA_NOTIFICATION_CONV_ID = "notification_conv_id"
+        const val EXTRA_NOTIFICATION_TITLE = "notification_title"
     }
 }
 

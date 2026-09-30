@@ -1,5 +1,9 @@
 package com.libeyond.imandroid.ui
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -187,6 +191,20 @@ fun AppRoot(client: IMClient) {
             // 账号级通知设置（M5）：同理先拉一次跑迁移判定（exists=false 时把本地现值传上去）；
             // 之后「连上即重拉」与 notify_settings_update 由 IMClient 负责（AccountNotifySettingsStore）。
             LaunchedEffect(Unit) { client.refreshAccountNotifySettings() }
+            // 系统通知权限：进主界面就动态申请（M5 批次 2，同 iOS `IMPushTokenManager
+            // .requestAuthorizationOnFirstMainScreen` 的落点与理由——`IMMainTabBarController
+            // .viewDidAppear` 首次进主页直接弹系统授权框，PUSH_M5_DESIGN §5/§8-4）。只有 Android 13+
+            // （`TIRAMISU`）才有这条运行时权限，以下版本装了就有权限，不用问。系统本身是幂等的：
+            // 已经决定过（同意/拒绝两次）的话直接回原结果、不重复弹框，这里不必额外判断"是不是真的
+            // 第一次登录"——每次进 `Phase.Main`（登录成功/冷启动恢复会话）都调用，多余的调用无副作用。
+            val requestNotifPermission = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission(),
+            ) { }
+            LaunchedEffect(Unit) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    requestNotifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
             // 下载门控的环境（下载器 + 策略 + 网络类型）。**整棵树共用一份**：
             // 气泡 / 宫格 / 文件 / 详情四处必须看到同一份在途状态，
             // 各建一个的话同一条媒体会被下两遍、进度各显各的。

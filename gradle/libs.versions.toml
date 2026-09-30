@@ -27,6 +27,10 @@ espresso = "3.6.1"
 exifinterface = "1.3.7"
 # Media3（ExoPlayer）：视频播放。1.4.1 是与 compileSdk 36 / AGP 8.12 稳定搭配的一档。
 media3 = "1.4.1"
+# FCM 离线推送（M5 批次 2，Android 走 FCM；国内厂商推送账号办理中，暂不接）。
+# BOM 管 firebase-messaging 的实际版本；firebase-messaging-ktx 已停更（Kotlin 扩展并入主包），故只取主包。
+firebaseBom = "34.19.0"
+googleServices = "4.5.0"
 
 [libraries]
 # --- 基础 ---
@@ -97,6 +101,10 @@ compose-ui-test-manifest    = { group = "androidx.compose.ui",       name = "ui-
 imrtc-uikit                 = { group = "com.github.BLiYing.im-rtc-android", name = "call-uikit",          version.ref = "imrtc" }
 imrtc-webrtc                = { group = "com.github.BLiYing.im-rtc-android", name = "call-engine-webrtc",   version.ref = "imrtc" }
 
+# --- FCM（离线推送，M5 批次 2）---
+firebase-bom                = { group = "com.google.firebase",       name = "firebase-bom",             version.ref = "firebaseBom" }
+firebase-messaging          = { group = "com.google.firebase",       name = "firebase-messaging" }
+
 [plugins]
 android-application  = { id = "com.android.application",                  version.ref = "agp" }
 android-library      = { id = "com.android.library",                      version.ref = "agp" }
@@ -104,3 +112,4 @@ kotlin-android       = { id = "org.jetbrains.kotlin.android",             versio
 kotlin-compose       = { id = "org.jetbrains.kotlin.plugin.compose",      version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp                  = { id = "com.google.devtools.ksp",                   version.ref = "ksp" }
+google-services      = { id = "com.google.gms.google-services",           version.ref = "googleServices" }

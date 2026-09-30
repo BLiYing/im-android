@@ -43,6 +43,13 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
+    <!--
+      FCM 离线推送展示系统通知（M5 批次 2）。Android 13（API 33）起弹通知需要这条运行时权限，
+      本轮**只声明权限、没接请求弹窗流程**（见 ui/NotificationSettingsHost.kt 调用点注释与任务收尾
+      报告）——没有它时 NotificationManager.notify() 按官方文档是静默不弹，不会崩溃。
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".IMApp"
         android:allowBackup="false"
@@ -56,8 +63,22 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.IMAndroid" />
+
+        <!--
+          FCM 离线推送服务（M5 批次 2）。exported=false：只有系统 FCM 组件能唤起它，别的 App 不行。
+          没有 google-services.json 时这条声明本身不会导致任何问题——只是永远不会真的被 FCM 唤起
+          （没有注册到真实 Firebase 项目，系统压根不知道往哪投递）。
+        -->
+        <service
+            android:name=".fcm.FcmMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <!--
           桌面入口 = 四个 activity-alias，同一时刻只启用一个（外观页「应用图标」，对齐 iOS

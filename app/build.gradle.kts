@@ -17,6 +17,12 @@ val localProps = Properties().apply {
 fun rtcProp(name: String): String =
     (localProps.getProperty(name) ?: "").trim().replace("\\", "\\\\").replace("\"", "\\\"")
 
+// FCM（M5 批次 2）：google-services 插件需要 app/google-services.json——这个文件由项目负责人去
+// Firebase 控制台注册包名 com.libeyond.imandroid 后下载，此前本地不存在。插件在 configuration
+// 阶段就会找这个文件，没有就直接构建失败，所以**只在文件存在时才 apply**：没有配置文件的人
+// （现在所有人都是）照样能 `./gradlew assembleDebug`；放进真实文件后无需再改这段代码。
+val hasGoogleServicesConfig = file("google-services.json").exists()
+
 android {
     namespace = "com.libeyond.imandroid"
     compileSdk = 36
@@ -82,6 +88,13 @@ android {
     }
 }
 
+// 见上面 hasGoogleServicesConfig 的注释：必须晚于 `android {}` 块（google-services 插件要读
+// android.namespace/applicationId 校验包名），且用命令式 apply 而不是 `plugins {}` 里的
+// `alias(...)`——后者是声明式 DSL，不支持按条件跳过。
+if (hasGoogleServicesConfig) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 dependencies {
     // 自建相册选择器。依赖方向单向：app → media-picker，模块不认识 IM 业务
     implementation(project(":media-picker"))
@@ -109,6 +122,13 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
     debugImplementation(libs.compose.ui.tooling)
+
+    // FCM 离线推送（M5 批次 2）。依赖始终声明（编译不依赖 google-services.json 是否存在，见上）；
+    // 真正能连上 Firebase 项目、拿到有效 token 才需要那个配置文件——sdk/fcm 那几处对"取不到"已做
+    // try/catch 兜底，不会因为没配置文件就崩。firebase-messaging 主包已含 Kotlin 扩展
+    // （-ktx 独立产物已停更，见 libs.versions.toml 注释）。
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     implementation(libs.okhttp)
     // im-rtc 通话 SDK：Kit 接管整套通话界面，webrtc 是媒体实现。

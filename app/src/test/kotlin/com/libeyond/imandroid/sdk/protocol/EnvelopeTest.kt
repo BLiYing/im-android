@@ -182,4 +182,18 @@ class SyncGapTest {
         assertTrue(!c.tooLong)
         assertEquals(0L, c.headConvSeq)
     }
+
+    /**
+     * app_state（PROTOCOL §6.12，M5 批次 2）线格式：只有 `state` 一个字段，值必须是
+     * 服务端认的 `"foreground"`/`"background"` 字面量——写错成别的拼法（如 `"fg"`）服务端会
+     * 按「未知 state 值」静默忽略（`internal/gateway/client.go` `applyAppState`），不报错也不生效，
+     * 这条测试钉住不会有人手滑改错字面量。
+     */
+    @Test
+    fun `AppStateData 编码出的字面量与服务端约定一致`() {
+        val fg = ProtocolJson.encodeToString(AppStateData.serializer(), AppStateData(state = "foreground"))
+        val bg = ProtocolJson.encodeToString(AppStateData.serializer(), AppStateData(state = "background"))
+        assertEquals("""{"state":"foreground"}""", fg)
+        assertEquals("""{"state":"background"}""", bg)
+    }
 }

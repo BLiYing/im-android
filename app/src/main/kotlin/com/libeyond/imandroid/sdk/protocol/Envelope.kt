@@ -37,6 +37,8 @@ object FrameType {
     const val VOICE_TRANSCRIPT = "voice_transcript"
     /** 账号级通知设置变更（PROTOCOL §6.13，M5）：只带版本号，收端据此决定要不要重拉。 */
     const val NOTIFY_SETTINGS_UPDATE = "notify_settings_update"
+    /** 前后台状态上行（PROTOCOL §6.12，M5）：服务端据此判断要不要给这条连接发离线推送。无回执。 */
+    const val APP_STATE = "app_state"
     const val ERROR = "error"
 }
 

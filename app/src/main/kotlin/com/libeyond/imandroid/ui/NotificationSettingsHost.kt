@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.FcmPreference
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.NotificationExceptions
 import com.libeyond.imandroid.data.NotificationNav
@@ -68,6 +69,8 @@ fun NotificationSettingsHost(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val settings by NotificationSettingsStore.settings.collectAsState()
+    // 「接收离线推送（本设备）」开关（M5 批次 2）：本地偏好 + FCM 令牌 PUT/DELETE，见 FcmTokenStore 类注释。
+    val receivePushEnabled by FcmPreference.enabled.collectAsState()
     val owner = client.uid.orEmpty()
     // 初值 null（不是 emptyList()）= 本地库还没回第一份，同 `MainScreen.kt` 的既有判据——
     // 「添加例外」选择页的空态文案要能分清"还没读到数据"和"读到了、真的没有可选会话"，
@@ -101,6 +104,12 @@ fun NotificationSettingsHost(
                 onToggleInAppVibrate = { v -> NotificationSettingsStore.update(settings.copy(inApp = settings.inApp.copy(vibrate = v))) },
                 onToggleInAppPreview = { v -> NotificationSettingsStore.update(settings.copy(inApp = settings.inApp.copy(preview = v))) },
                 onToggleBadge = { v -> updateAccount(settings.copy(badge = settings.badge.copy(includeMuted = v))) },
+                receivePushEnabled = receivePushEnabled,
+                onToggleReceivePush = { v ->
+                    scope.launch {
+                        client.fcmTokenStore.setEnabled(v) { com.libeyond.imandroid.fcm.FcmToken.current() }
+                    }
+                },
                 onComingSoon = { toast = comingSoonHint },
                 onReset = { confirmReset = true },
                 onBack = onBack,
