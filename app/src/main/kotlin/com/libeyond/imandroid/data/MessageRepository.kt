@@ -8,6 +8,7 @@ import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.PendingMessageDao
 import com.libeyond.imandroid.data.db.PendingMessageEntity
 import com.libeyond.imandroid.data.db.SendState
+import com.libeyond.imandroid.fcm.FcmNotifications
 import com.libeyond.imandroid.sdk.api.ConversationSummary
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.AckData
@@ -297,6 +298,9 @@ class MessageRepository(
      */
     suspend fun applyMsgOp(owner: String, op: MsgOpData) {
         val target = messages.byConvSeq(owner, op.convId, op.targetConvSeq)
+        // 撤回/删除的那条若还挂在通知栏里（后台收到的离线推送），一并收回。放在最前：本地没有这条消息
+        // （下面 RECALL 分支直接 return）时通知栏里照样可能有它。
+        if (op.op == MsgOp.RECALL || op.op == MsgOp.DELETE) FcmNotifications.retract(op.convId, op.targetConvSeq)
         when (op.op) {
             MsgOp.RECALL -> {
                 if (target == null) return

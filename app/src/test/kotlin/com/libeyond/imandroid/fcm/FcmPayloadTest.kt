@@ -53,4 +53,19 @@ class FcmPayloadTest {
         assertNull(content?.convSeq)
         assertNull(content?.badge)
     }
+
+    @Test
+    fun `type=retract——解成收回，不是新消息`() {
+        val content = FcmPayload.parse(
+            mapOf("type" to "retract", "retract" to "recall", "conv_id" to "u_1002_u_2005", "conv_seq" to "42", "body" to "对方撤回了一条消息"),
+        )
+        assertEquals(true, content?.retract)
+        assertEquals(42L, content?.convSeq)
+    }
+
+    @Test
+    fun `没有 type 或不认识的 type——按普通消息展示`() {
+        assertEquals(false, FcmPayload.parse(mapOf("conv_id" to "c"))?.retract)
+        assertEquals(false, FcmPayload.parse(mapOf("conv_id" to "c", "type" to "something_new"))?.retract)
+    }
 }

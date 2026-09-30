@@ -7,6 +7,13 @@
 
 ## 当前焦点
 
+> **2026-09-30 撤回 / 删除后收回通知（Android 侧）**：设计 `../IMServer/docs/design/PUSH_M5_DESIGN.md` §3.4。
+> `fcm/FcmNotifications.kt`（新）：展示通知时把 `conv_seq` 记进 extras；收到服务端 `type=retract` 的 FCM
+> （`FcmMessagingService`）或在线时 `msg_op` 撤回/删除落库（`MessageRepository.applyMsgOp`，实时与 sync 同一入口）
+> 都调 `retract()`——**只有通知栏里挂着的恰好是被收回的那条才取消**（同一会话只留最新一条通知）。
+> 纯判据 `shouldCancel` + `FcmNotificationsTest`，`FcmPayload` 多解一个 `retract`。
+> 「点通知定位到具体消息」不做：通知指的永远是最新一条，进会话本来就看得到。
+
 > **M5 批次 2：FCM 离线推送接入 🚧（2026-09-30，工作区改动，未提交/未合并，未做真机验证——等
 > 用户拿到真实 `google-services.json`）**：`../IMServer/docs/design/PUSH_M5_DESIGN.md` 原定 Android
 > 走「后台保持连接」（文档 §6，尚未开工），**父任务简报拍板改走 FCM**（服务端 `internal/push` 正在

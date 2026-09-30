@@ -1457,6 +1457,7 @@
     <string name="ps_who_can_see_footer">These settings control how much others can see on your profile.</string>
     <string name="push_group_body">%1$s: %2$s</string>
     <string name="push_mention_body">[Mentioned] %1$s</string>
+    <string name="push_message_deleted">A message was deleted</string>
     <string name="qr_action_add_contact">Add to contacts</string>
     <string name="qr_action_admin_only_note">This group now allows invites from admins only, so this invite is no longer valid.</string>
     <string name="qr_action_apply">Request to join</string>

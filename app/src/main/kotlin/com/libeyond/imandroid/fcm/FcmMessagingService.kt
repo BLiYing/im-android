@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -34,7 +35,10 @@ import kotlinx.coroutines.launch
  * 静掉——后台只剩本类这一条系统通知。**改动任一侧的「后台是否提醒」判据前，先确认另一侧**，
  * 否则要么后台响两次，要么两边都不响。
  *
- * **已知限制**：① `conv_seq` 只解析、不用于"打开会话后跳到那条消息"（见 [FcmPayload] 类注释）；
+ * **撤回/删除收回通知**：服务端对已推送过的消息补发 `type=retract`，这里不展示、只把通知栏里
+ * 那条取消掉（[FcmNotifications]）；App 在线时同一件事由 `msg_op` 落库触发。
+ *
+ * **已知限制**：① `conv_seq` 不用于"打开会话后跳到那条消息"（见 [FcmPayload] 类注释，是有意不做）；
  * ② 没有做「App 前台时点开对应会话即清空该会话通知」这类更细的联动，只在展示时用 `conv_id`
  * 分组、`setAutoCancel` 保证点开即消。系统通知权限（Android 13+ `POST_NOTIFICATIONS`）在进主界面时
  * 申请，见 `ui/AppRoot.kt`。
@@ -57,7 +61,11 @@ class FcmMessagingService : FirebaseMessagingService() {
             log.w("fcm_message_unparseable")
             return
         }
-        log.i("fcm_message_received", "convId" to content.convId, "convSeq" to content.convSeq)
+        log.i("fcm_message_received", "convId" to content.convId, "convSeq" to content.convSeq, "retract" to content.retract)
+        if (content.retract) {
+            FcmNotifications.retract(content.convId, content.convSeq)
+            return
+        }
         showNotification(content)
     }
 
@@ -92,11 +100,13 @@ class FcmMessagingService : FirebaseMessagingService() {
             // 同一会话叠成一组（对齐服务端设计稿里 thread-id 的意图），不是每条都单独一行
             .setGroup(content.convId)
         content.badge?.let { builder.setNumber(it) }
+        // 记下展示的是哪条消息：它被撤回/删除时据此收回这条通知（FcmNotifications.retract）。
+        content.convSeq?.let { builder.addExtras(Bundle().apply { putLong(FcmNotifications.EXTRA_CONV_SEQ, it) }) }
 
         // notify() 在没有 POST_NOTIFICATIONS 权限时是静默不弹（Android 官方行为），不会抛异常；
         // 这里仍包一层防御，避免个别机型/厂商 ROM 的非标准实现意外抛出而崩整个进程。
         // 用 (tag=convId, id 固定) 标识通知：字符串 tag 不会像 32 位 hashCode 那样让两个会话互相覆盖。
-        runCatching { nm.notify(content.convId, NOTIFICATION_ID, builder.build()) }
+        runCatching { nm.notify(content.convId, FcmNotifications.NOTIFICATION_ID, builder.build()) }
             .onFailure { log.w("fcm_notify_failed", "err" to it.javaClass.simpleName) }
     }
 
@@ -111,8 +121,5 @@ class FcmMessagingService : FirebaseMessagingService() {
     companion object {
         /** minSdk 26 = `Build.VERSION_CODES.O`，渠道 API 恒可用，不需要版本判断分支。 */
         const val CHANNEL_ID = "fcm_messages"
-
-        /** 配合 tag（= convId）使用，见 [showNotification]：同一会话的新消息替换旧通知，不同会话互不影响。 */
-        private const val NOTIFICATION_ID = 1
     }
 }

@@ -5,6 +5,7 @@ import com.libeyond.imandroid.data.AppearanceStore
 import com.libeyond.imandroid.data.FcmPreference
 import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.data.NotificationSettingsStore
+import com.libeyond.imandroid.fcm.FcmNotifications
 import com.libeyond.imandroid.i18n.ContextStringResolver
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.AlertPlayer
@@ -30,6 +31,7 @@ class IMApp : Application(), coil.ImageLoaderFactory {
         NotificationSettingsStore.init(this)
         FcmPreference.init(this)
         AlertPlayer.init(this)
+        FcmNotifications.init(this)
         client = IMClient(this)
         // 开发期日志回传到 IMServer 的 /__devlog（与 iOS / Web 同一条通道）。**仅 Debug 构建**；
         // 服务端没开 -dev-logsink 时路由不存在，请求失败就丢，不影响任何功能。

@@ -1419,6 +1419,7 @@
     <string name="ps_who_can_see_footer">这些设置决定他人在你的资料页看到多少。</string>
     <string name="push_group_body">%1$s: %2$s</string>
     <string name="push_mention_body">[有人\@我] %1$s</string>
+    <string name="push_message_deleted">一条消息已被删除</string>
     <string name="qr_action_add_contact">添加到通讯录</string>
     <string name="qr_action_admin_only_note">该群已改为仅管理员可邀请，此邀请已失效</string>
     <string name="qr_action_apply">申请加入</string>
