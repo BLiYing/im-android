@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.SoundPool
 import android.os.Build
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -29,7 +30,12 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 object AlertPlayer {
 
     private val log = IMLog.tag("IM.Alert")
-    private const val VIBRATE_MS = 40L
+    /**
+     * 原先是 40ms 且不带用途——系统把不带用途的振动归成「触摸反馈」（`dumpsys vibrator_manager` 里
+     * usage: TOUCH），强度跟着系统的触感开关走，40ms 又短到握在手里都察觉不到（2026-09-30 真机实测：
+     * 系统日志显示振了，人感觉不到）。改成 150ms 并标成通知用途，才是一次"来消息了"的振动。
+     */
+    private const val VIBRATE_MS = 150L
 
     private var appContext: Context? = null
     private var pool: SoundPool? = null
@@ -101,7 +107,19 @@ object AlertPlayer {
     private fun vibrateOnce(context: Context) {
         val v = vibrator(context) ?: return
         if (!v.hasVibrator()) return
-        v.vibrate(VibrationEffect.createOneShot(VIBRATE_MS, VibrationEffect.DEFAULT_AMPLITUDE))
+        val effect = VibrationEffect.createOneShot(VIBRATE_MS, VibrationEffect.DEFAULT_AMPLITUDE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            v.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_NOTIFICATION))
+        } else {
+            @Suppress("DEPRECATION")
+            v.vibrate(
+                effect,
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build(),
+            )
+        }
     }
 
     private fun vibrator(context: Context): Vibrator? =
