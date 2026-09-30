@@ -1347,8 +1347,14 @@
     <string name="notif_sound_rise">Rise</string>
     <string name="notif_sound_title">Sound</string>
     <string name="notif_system_footer">Push notifications are coming soon. For now you\'re alerted only while the app is open.</string>
+    <string name="notif_system_footer_apns">When the app is in the background or closed, new messages arrive as Apple push notifications. Notification content passes through Apple\'s servers; to hide it, turn off “Message preview” for private and group chats.</string>
+    <string name="notif_system_open_settings">Open Settings</string>
     <string name="notif_system_permission">Notification permission</string>
+    <string name="notif_system_permission_denied_hint">Notifications are off. Allow them in system Settings.</string>
     <string name="notif_system_permission_off">Off</string>
+    <string name="notif_system_permission_on">On</string>
+    <string name="notif_system_permission_undetermined">Not set</string>
+    <string name="notif_system_receive_push">Push notifications</string>
     <string name="notif_system_show">Show notifications</string>
     <string name="notif_type_enabled">Show notifications</string>
     <string name="notif_type_group_title">Group chats</string>
@@ -1449,6 +1455,8 @@
     <string name="ps_section_data">Data</string>
     <string name="ps_section_who_can_see">Who can see</string>
     <string name="ps_who_can_see_footer">These settings control how much others can see on your profile.</string>
+    <string name="push_group_body">%1$s: %2$s</string>
+    <string name="push_mention_body">[Mentioned] %1$s</string>
     <string name="qr_action_add_contact">Add to contacts</string>
     <string name="qr_action_admin_only_note">This group now allows invites from admins only, so this invite is no longer valid.</string>
     <string name="qr_action_apply">Request to join</string>

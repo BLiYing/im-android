@@ -1312,8 +1312,14 @@
     <string name="notif_sound_rise">上扬</string>
     <string name="notif_sound_title">提示音</string>
     <string name="notif_system_footer">推送通知正在开发中。目前只有 App 打开时会提醒。</string>
+    <string name="notif_system_footer_apns">App 在后台或关闭时，新消息会通过苹果推送提醒你。通知内容会经过苹果服务器；不想显示内容，可关闭私聊和群聊里的「消息预览」。</string>
+    <string name="notif_system_open_settings">去设置</string>
     <string name="notif_system_permission">通知权限</string>
+    <string name="notif_system_permission_denied_hint">通知权限已关闭，请到系统设置里允许通知</string>
     <string name="notif_system_permission_off">未开启</string>
+    <string name="notif_system_permission_on">已开启</string>
+    <string name="notif_system_permission_undetermined">未设置</string>
+    <string name="notif_system_receive_push">接收离线推送</string>
     <string name="notif_system_show">显示通知</string>
     <string name="notif_type_enabled">显示通知</string>
     <string name="notif_type_group_title">群聊通知</string>
@@ -1411,6 +1417,8 @@
     <string name="ps_section_data">数据</string>
     <string name="ps_section_who_can_see">谁能看到</string>
     <string name="ps_who_can_see_footer">这些设置决定他人在你的资料页看到多少。</string>
+    <string name="push_group_body">%1$s: %2$s</string>
+    <string name="push_mention_body">[有人\@我] %1$s</string>
     <string name="qr_action_add_contact">添加到通讯录</string>
     <string name="qr_action_admin_only_note">该群已改为仅管理员可邀请，此邀请已失效</string>
     <string name="qr_action_apply">申请加入</string>
