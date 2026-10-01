@@ -45,16 +45,22 @@ private val AVATAR_PALETTE = listOf(
 /**
  * 按种子稳定取色。
  *
- * 哈希用 `h = h * 31 + char`，与 iOS 逐字对齐——**换个哈希就换个颜色**，
- * 三端会各显各的。种子一律用 uid（稳定），不要用显示名（改昵称就变色）。
+ * 哈希用 `h = h * 31 + char`，与 iOS `avatarColorForSeed:`／Web `avatarColor` 逐字对齐——**换个哈希就换个
+ * 颜色**，三端会各显各的。种子一律用 uid（稳定），不要用显示名（改昵称就变色）。
+ *
+ * **必须用无符号 64 位取模**（2026-10-02 修）：iOS 用 `NSUInteger`（64 位机天然无符号）、Web 用 `BigInt`
+ * 显式 `& ((1n<<64n)-1n)` 掩码，取模时都把累加结果当无符号数算。之前这里用 `Long`（有符号）累加后直接
+ * `% size` 再"负数转正"，乘加本身的 64 位回绕是对的，但**有符号取模 ≠ 无符号取模**——`2^64` 不是
+ * `AVATAR_PALETTE.size`（6）的倍数，"负数时加 size 转正"这个补救法只在能整除时才等价于无符号取模，
+ * 对 6 不成立，于是出现同一个 uid/conv_id 三端算出不同颜色（真机实测：同一个群在 Android 上背景色
+ * 和 iOS/Web 不一致）。改用 `ULong` 做乘加与取模，全程无符号，和 iOS/Web 位对位一致。
  */
 fun avatarColorForSeed(seed: String): Color {
     if (seed.isEmpty()) return AVATAR_PALETTE[0]
-    var h = 0L
-    for (ch in seed) h = h * 31 + ch.code
-    // Kotlin 的 % 对负数返回负值，先取绝对值再取模（iOS 用的是 NSUInteger，天然非负）
-    val idx = ((h % AVATAR_PALETTE.size) + AVATAR_PALETTE.size) % AVATAR_PALETTE.size
-    return AVATAR_PALETTE[idx.toInt()]
+    var h = 0UL
+    for (ch in seed) h = h * 31u + ch.code.toUInt()
+    val idx = (h % AVATAR_PALETTE.size.toUInt()).toInt()
+    return AVATAR_PALETTE[idx]
 }
 
 /**
