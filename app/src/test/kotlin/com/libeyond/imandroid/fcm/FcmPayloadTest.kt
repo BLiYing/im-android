@@ -65,7 +65,20 @@ class FcmPayloadTest {
 
     @Test
     fun `没有 type 或不认识的 type——按普通消息展示`() {
-        assertEquals(false, FcmPayload.parse(mapOf("conv_id" to "c"))?.retract)
-        assertEquals(false, FcmPayload.parse(mapOf("conv_id" to "c", "type" to "something_new"))?.retract)
+        for (data in listOf(mapOf("conv_id" to "c"), mapOf("conv_id" to "c", "type" to "something_new"))) {
+            val content = FcmPayload.parse(data)
+            assertEquals(false, content?.retract)
+            assertEquals(false, content?.clear)
+        }
+    }
+
+    @Test
+    fun `type=clear——解成已读清通知，conv_seq 是已读位点`() {
+        val content = FcmPayload.parse(
+            mapOf("type" to "clear", "conv_id" to "u_1002_u_2005", "conv_seq" to "42", "badge" to "0", "title" to "", "body" to ""),
+        )
+        assertEquals(true, content?.clear)
+        assertEquals(false, content?.retract)
+        assertEquals(42L, content?.convSeq)
     }
 }

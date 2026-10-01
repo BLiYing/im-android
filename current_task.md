@@ -7,6 +7,8 @@
 
 ## 当前焦点
 
+> **2026-10-01 别的端已读后清手机通知/角标**（PUSH_M5_DESIGN §3.5，真机验证通过）：`fcm/FcmNotifications.clearReadThrough`：收 `type=clear`、本人 receipt 帧（`applyPeerReceipt`）、本机已读（`MessageRepository.markRead`）时取消该会话已读段的通知。
+
 > **2026-09-30 多选删除两档·改批量接口（2026-10-01 OPPO PKD130 + Pixel 2 XL 真机实测通过，已提交并推送 `a72e864`）**：`ui/ChatSelectionState.kt` 的 `BatchDeleteConfirm` 两档都改为
 > 一次请求（`ConversationsApi.hideMessages` / `deleteMessagesForEveryone`，PROTOCOL §6.7.1/§6.7.2），成功项本地移除
 > （hide → `applyMsgHidden`；everyone → `applyMsgOp(DELETE)` 顺带收回通知栏），失败汇总一句「N 条删除失败」；

@@ -37,10 +37,11 @@ import kotlinx.coroutines.launch
  *
  * **撤回/删除收回通知**：服务端对已推送过的消息补发 `type=retract`，这里不展示、只把通知栏里
  * 那条取消掉（[FcmNotifications]）；App 在线时同一件事由 `msg_op` 落库触发。
+ * **别处已读清通知**：`type=clear` 同理，取消该会话里已读那段的通知；在线时由 receipt 帧 / 本机已读触发。
  *
  * **已知限制**：① `conv_seq` 不用于"打开会话后跳到那条消息"（见 [FcmPayload] 类注释，是有意不做）；
- * ② 没有做「App 前台时点开对应会话即清空该会话通知」这类更细的联动，只在展示时用 `conv_id`
- * 分组、`setAutoCancel` 保证点开即消。系统通知权限（Android 13+ `POST_NOTIFICATIONS`）在进主界面时
+ * ② 进会话读过之后清该会话通知由 `MessageRepository.markRead` 负责（[FcmNotifications.clearReadThrough]）；
+ * 展示时用 `conv_id` 分组、`setAutoCancel` 保证点开即消。系统通知权限（Android 13+ `POST_NOTIFICATIONS`）在进主界面时
  * 申请，见 `ui/AppRoot.kt`。
  */
 class FcmMessagingService : FirebaseMessagingService() {
@@ -61,9 +62,16 @@ class FcmMessagingService : FirebaseMessagingService() {
             log.w("fcm_message_unparseable")
             return
         }
-        log.i("fcm_message_received", "convId" to content.convId, "convSeq" to content.convSeq, "retract" to content.retract)
+        log.i(
+            "fcm_message_received", "convId" to content.convId, "convSeq" to content.convSeq,
+            "retract" to content.retract, "clear" to content.clear,
+        )
         if (content.retract) {
             FcmNotifications.retract(content.convId, content.convSeq)
+            return
+        }
+        if (content.clear) {
+            FcmNotifications.clearReadThrough(content.convId, content.convSeq)
             return
         }
         showNotification(content)

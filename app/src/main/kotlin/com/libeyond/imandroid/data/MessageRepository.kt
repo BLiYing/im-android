@@ -275,10 +275,14 @@ class MessageRepository(
 
     suspend fun markRead(owner: String, convId: String, upTo: Long) {
         conversations.markRead(owner, convId, upTo)
+        FcmNotifications.clearReadThrough(convId, upTo) // 本机读过：通知栏里这段也没用了
     }
 
     suspend fun applyPeerReceipt(owner: String, r: ReceiptData) {
         if (r.status != ReceiptData.READ) return
+        // 本人其它端已读 → 通知栏里这段清掉（PUSH_M5_DESIGN §3.5）。放在查会话之前：本地还没这个会话时
+        // （App 刚被推送拉起、列表没拉过）通知栏里照样可能挂着它。
+        if (r.from == owner) FcmNotifications.clearReadThrough(r.convId, r.upToConvSeq)
         val c = conversations.byId(owner, r.convId) ?: return
         if (r.from == owner) {
             // 本人其它端已读 → 本端未读清零（多端已读同步）

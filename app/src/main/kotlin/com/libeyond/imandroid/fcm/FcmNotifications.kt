@@ -14,6 +14,10 @@ import com.libeyond.imandroid.sdk.logging.IMLog
  *
  * **与 iOS 的差异**：iOS 在 App 被杀时删不掉已展示的通知，只能把文字原地换成「对方撤回了一条消息」；
  * Android 能直接取消，所以这里是真的拿掉，不留提示。
+ *
+ * **已读清通知**（[clearReadThrough]，PUSH_M5_DESIGN §3.5）同理三条路：服务端 `type=clear`（App 不在线）、
+ * 本人其它端的 receipt 帧（`MessageRepository.applyPeerReceipt`）、本机读过（`MessageRepository.markRead`）。
+ * Android 的桌面角标跟着通知走，通知没了角标也就没了。
  */
 object FcmNotifications {
 
@@ -38,15 +42,28 @@ object FcmNotifications {
     fun shouldCancel(displayedSeq: Long?, retractedSeq: Long?): Boolean =
         displayedSeq != null && retractedSeq != null && retractedSeq > 0 && displayedSeq == retractedSeq
 
-    fun retract(convId: String, convSeq: Long?) {
+    /**
+     * 读到 [readUpTo] 之后该不该取消。挂着的那条是位点之后来的（读的同时又来了新消息）就留着；
+     * 不知道挂的是哪条（旧版本发的通知没带 seq）也留着，同 [shouldCancel]。
+     */
+    fun shouldClearOnRead(displayedSeq: Long?, readUpTo: Long?): Boolean =
+        displayedSeq != null && readUpTo != null && readUpTo > 0 && displayedSeq <= readUpTo
+
+    fun retract(convId: String, convSeq: Long?) =
+        cancelIf(convId, "fcm_notification_retracted", convSeq) { shouldCancel(it, convSeq) }
+
+    fun clearReadThrough(convId: String, readUpTo: Long?) =
+        cancelIf(convId, "fcm_notifications_read_cleared", readUpTo) { shouldClearOnRead(it, readUpTo) }
+
+    private fun cancelIf(convId: String, event: String, seq: Long?, decide: (displayed: Long?) -> Boolean) {
         val nm = appContext?.getSystemService(NotificationManager::class.java) ?: return
         runCatching {
             val shown = nm.activeNotifications.firstOrNull { it.tag == convId && it.id == NOTIFICATION_ID } ?: return
             val extras = shown.notification.extras
             val displayed = if (extras.containsKey(EXTRA_CONV_SEQ)) extras.getLong(EXTRA_CONV_SEQ) else null
-            if (!shouldCancel(displayed, convSeq)) return
+            if (!decide(displayed)) return
             nm.cancel(convId, NOTIFICATION_ID)
-            log.i("fcm_notification_retracted", "convId" to convId, "convSeq" to convSeq)
-        }.onFailure { log.w("fcm_retract_failed", "err" to it.javaClass.simpleName) }
+            log.i(event, "convId" to convId, "convSeq" to seq)
+        }.onFailure { log.w("fcm_cancel_failed", "event" to event, "err" to it.javaClass.simpleName) }
     }
 }
