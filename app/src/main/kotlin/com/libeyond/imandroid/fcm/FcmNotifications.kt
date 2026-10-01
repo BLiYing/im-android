@@ -81,6 +81,23 @@ object FcmNotifications {
         rewrite(convId, "fcm_notifications_read_cleared", upTo) { it.readThrough(upTo) }
     }
 
+    /**
+     * App 回到前台：清掉所有会话的消息通知（同 iOS `sceneDidBecomeActive` 的 removeAllDeliveredNotifications、
+     * 同微信）。人已经在 App 里了，未读数在会话列表 / 桌面角标照样看得到，通知栏再挂着就是重复。
+     * 只动本类发的那些（[CHANNEL_ID] 渠道、[NOTIFICATION_ID]），不碰来电等别的通知。
+     */
+    fun clearAll() {
+        val ctx = appContext ?: return
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        runCatching {
+            val ours = nm.activeNotifications.filter {
+                it.id == NOTIFICATION_ID && it.tag != null && it.notification.channelId == CHANNEL_ID
+            }
+            ours.forEach { nm.cancel(it.tag, it.id) }
+            if (ours.isNotEmpty()) log.i("fcm_notifications_cleared_on_open", "count" to ours.size)
+        }.onFailure { log.w("fcm_cancel_failed", "event" to "open", "err" to it.javaClass.simpleName) }
+    }
+
     /** 去掉若干行：没变就不动；一行不剩取消；还有剩就静默重发。 */
     private fun rewrite(convId: String, event: String, seq: Long, change: (ConversationLines) -> ConversationLines) {
         val ctx = appContext ?: return

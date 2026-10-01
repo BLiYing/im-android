@@ -23,6 +23,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import android.content.Intent
 import com.libeyond.imandroid.data.AppActive
+import com.libeyond.imandroid.fcm.FcmNotifications
 import com.libeyond.imandroid.data.reportAppState
 import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.data.NotificationRoute
@@ -79,6 +80,7 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 AppActive.current = true
                 client.socket.reportAppState(true)
+                FcmNotifications.clearAll() // 进了 App 通知栏就不再挂消息通知（iOS sceneDidBecomeActive 同款）
                 try {
                     awaitCancellation()
                 } finally {
