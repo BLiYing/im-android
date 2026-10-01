@@ -60,7 +60,7 @@ fun avatarColorForSeed(seed: String): Color {
 /**
  * 头像。有 `avatarUrl` 时显示图片（P7 接图片加载），否则回退**首字母圈**。
  *
- * 首字母取显示名**末两位**——三端同口径（`docs/UI.md`）。
+ * 首字母规则见 [DisplayName.initials]——三端同口径（`../IMServer/docs/UI.md`）。
  *
  * 系统通知会话（`seed == DetailActions.SYSTEM_UID`）：一律显示应用 logo（跟随当前桌面图标），不发网络请求、
  * 不落首字母/取色兜底——服务端 `avatar_url` 恒空（`SystemUserAvatarURL=""`），与 iOS

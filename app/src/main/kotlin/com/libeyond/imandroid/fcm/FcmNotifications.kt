@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
+import androidx.core.graphics.drawable.IconCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.libeyond.imandroid.MainActivity
 import com.libeyond.imandroid.R
@@ -56,7 +57,11 @@ object FcmNotifications {
         appContext = context.applicationContext
     }
 
-    /** 新消息：在这个会话的通知里加一行并提醒。[avatar] 是大图标（发送人 / 群头像），可为空。 */
+    /**
+     * 新消息：在这个会话的通知里加一行并提醒。[avatar] 是这次新取到的大图标（发送人 / 群头像），
+     * 取不到时按顺序兜底：这条会话通知**已经显示着的**头像（多半是真头像，比凭空画一张占位图更对）
+     * → 画首字母占位图（[fcmAvatarPlaceholder]，不留给系统去生成，见它的类注释）。
+     */
     fun showMessage(content: FcmNotificationContent, avatar: Bitmap?) {
         val ctx = appContext ?: return
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
@@ -67,7 +72,9 @@ object FcmNotifications {
             val after = before.append(line)
             if (after == before) return // 重投的同一条
             val meta = Meta(content.title, content.isGroup)
-            post(ctx, nm, content.convId, meta, after, avatar ?: shown?.let { iconOf(ctx, it.notification) }, alert = true)
+            val icon = avatar ?: shown?.let { iconOf(ctx, it.notification) }
+                ?: fcmAvatarPlaceholder(content.placeholderName, content.placeholderSeed, FCM_AVATAR_PX)
+            post(ctx, nm, content.convId, meta, after, icon, alert = true)
         }.onFailure { log.w("fcm_notify_failed", "err" to it.javaClass.simpleName) }
     }
 
@@ -112,7 +119,11 @@ object FcmNotifications {
                 nm.cancel(convId, NOTIFICATION_ID)
             } else {
                 val meta = Meta(extras.getString(EXTRA_TITLE).orEmpty(), extras.getBoolean(EXTRA_GROUP))
-                post(ctx, nm, convId, meta, after, iconOf(ctx, shown.notification), alert = false)
+                // 正常情况这条通知早被 showMessage() 走过完整的三层兜底、必有图标；这里仅仅是极端情况
+                // （图标解码失败、或通知是升级前的旧版本发的）的兜底，没有 senderId 可用，拿会话本身
+                // （convId + 标题）取色/取字——色板种子和 showMessage 的私聊不是同一个，但好过没有图标。
+                val icon = iconOf(ctx, shown.notification) ?: fcmAvatarPlaceholder(meta.title, convId, FCM_AVATAR_PX)
+                post(ctx, nm, convId, meta, after, icon, alert = false)
             }
             log.i(event, "convId" to convId, "convSeq" to seq, "left" to after.lines.size)
         }.onFailure { log.w("fcm_cancel_failed", "event" to event, "err" to it.javaClass.simpleName) }
@@ -148,11 +159,19 @@ object FcmNotifications {
     ) {
         ensureChannel(nm)
         val title = meta.title.ifBlank { Str.s(R.string.app_name) }
+        // MessagingStyle 展开后每一行自己的头像来自这一行的 Person——不设 icon 的话系统会按发送人姓名
+        // 自己生成一个灰底首字母圆（2026-10-01 真机实测的「用」就是这么来的），与 setLargeIcon 设的
+        // 折叠态大图标是两回事，分开控制。**群聊这里统一用同一张群头像 / 群占位图**（本函数参数 [avatar]，
+        // 调用方已按"群聊固定群头像"算好），不挂各发送人自己的头像——同折叠态的决定一致；
+        // 私聊只有对方一个人，本来就该是同一张。
+        val lineIcon = avatar?.let { IconCompat.createWithBitmap(it) }
         val style = NotificationCompat.MessagingStyle(Person.Builder().setName(Str.s(R.string.common_me)).build())
         if (meta.isGroup) style.setConversationTitle(title).setGroupConversation(true)
         state.lines.forEach { line ->
             // 单聊每行的发送人就是对方；群聊老服务端没给发送人时，正文本身带着「名字: 」，发送人用群名占位
-            style.addMessage(line.text, line.time, Person.Builder().setName(line.sender.ifBlank { title }).build())
+            val person = Person.Builder().setName(line.sender.ifBlank { title })
+            lineIcon?.let { person.setIcon(it) }
+            style.addMessage(line.text, line.time, person.build())
         }
         val latest = state.lines.last()
         // 锁屏隐藏内容时系统显示这个版本：只说有几条，不露发送人与内容。

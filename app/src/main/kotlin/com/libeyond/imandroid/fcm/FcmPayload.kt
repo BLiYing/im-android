@@ -21,16 +21,25 @@ data class FcmNotificationContent(
     val badge: Int?,
     val retract: Boolean = false,
     val clear: Boolean = false,
+    val senderId: String? = null,
     val senderAvatar: String? = null,
     val groupAvatar: String? = null,
     val senderName: String? = null,
     val bareBody: String? = null,
 ) {
-    /** 通知大图标用哪张头像（PUSH_M5_DESIGN §3.6）：群聊用群头像（没有就退回发送人），私聊用对方头像。 */
-    val iconAvatar: String? get() = groupAvatar ?: senderAvatar
+    /**
+     * 通知大图标用哪张头像（PUSH_M5_DESIGN §3.6，2026-10-02 改）：**群聊固定用群头像**，不管谁发的消息
+     * ——同 App 内会话列表（群头像与发消息的人是谁无关），不再退回发送人头像（那会导致同一个群的通知
+     * 忽而显示这个人、忽而显示那个人）。私聊用对方头像。两者都没有时画首字母占位图，见 [FcmAvatarPlaceholder]。
+     */
+    val iconAvatar: String? get() = if (isGroup) groupAvatar else senderAvatar
 
     /** 单聊的 conv_id 是 `u_<a>_u_<b>`，其余（`g_…`）都是群。 */
     val isGroup: Boolean get() = !convId.startsWith("u_")
+
+    /** 首字母占位图的种子 + 名字：群用群本身（conv_id / 标题），私聊用对方（sender_id / 对方名）。 */
+    val placeholderSeed: String get() = if (isGroup) convId else (senderId?.takeIf { it.isNotBlank() } ?: convId)
+    val placeholderName: String get() = if (isGroup) title else senderName?.takeIf { it.isNotBlank() } ?: title
 
     /**
      * 这条推送在会话通知里是哪一行（§3.7）。群聊：发送人 + 不带「发送人: 」前缀的正文（老服务端没给
@@ -68,6 +77,7 @@ object FcmPayload {
             badge = data["badge"]?.toIntOrNull(),
             retract = data["type"] == TYPE_RETRACT,
             clear = data["type"] == TYPE_CLEAR,
+            senderId = data["sender_id"]?.takeIf { it.isNotBlank() },
             senderAvatar = data["sender_avatar"]?.takeIf { it.isNotBlank() },
             groupAvatar = data["group_avatar"]?.takeIf { it.isNotBlank() },
             senderName = data["sender_name"]?.takeIf { it.isNotBlank() },

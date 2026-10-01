@@ -40,6 +40,7 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ContactSection
+import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.GroupNameDefault
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -120,7 +121,7 @@ fun CreateGroupScreen(
                             contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                         )
                         name.isNotBlank() -> Text(
-                            name.takeLast(2), color = c.onAccent,
+                            DisplayName.initials(name), color = c.onAccent,
                             style = MaterialTheme.typography.titleLarge,
                         )
                         else -> Image(

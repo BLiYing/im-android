@@ -75,8 +75,13 @@ class FcmMessagingService : FirebaseMessagingService() {
     }
 
     /**
-     * 同步取一张圆形头像做通知大图标。`onMessageReceived` 跑在 FCM 的后台线程上、消息是**串行**处理的，
-     * 所以这里最多等 [AVATAR_TIMEOUT_MS]；而且一次取失败（多半是连不上 IM 服务器）后的
+     * 同步取一张圆形头像做通知大图标；取不到（没有头像地址 / 下载失败）返回 null——**不在这里兜底画
+     * 占位图**：调用方 [FcmNotifications.showMessage] 还有一层更好的兜底，没取到新头像时先接着用
+     * 这条会话通知**已经显示着的**头像（多半是真头像，比凭空画一张占位图更对），首字母占位图只在
+     * 两层都没有时才画（见那边的 [fcmAvatarPlaceholder] 调用）。这里提前兜底会把那层挡住。
+     *
+     * `onMessageReceived` 跑在 FCM 的后台线程上、消息是**串行**处理的，所以这里最多等
+     * [AVATAR_TIMEOUT_MS]；而且一次取失败（多半是连不上 IM 服务器）后的
      * [FcmPayload.AVATAR_NETWORK_BACKOFF_MS] 内只读 Coil 的本地缓存、不再联网——否则连发几条，
      * 每条都要白等一次，后面的通知被前面的拖着晚到。同一张头像（内容寻址 URL）缓存过的照样能显示。
      */
@@ -87,7 +92,7 @@ class FcmMessagingService : FirebaseMessagingService() {
         val useNetwork = FcmPayload.avatarNetworkAllowed(lastAvatarFailureMs, now)
         val request = ImageRequest.Builder(this)
             .data(url)
-            .size(AVATAR_PX)
+            .size(FCM_AVATAR_PX)
             .transformations(CircleCropTransformation())
             .allowHardware(false) // 通知要的是软件位图，硬件位图跨进程会被拒
             .networkCachePolicy(if (useNetwork) CachePolicy.ENABLED else CachePolicy.DISABLED)
@@ -103,7 +108,6 @@ class FcmMessagingService : FirebaseMessagingService() {
     }
 
     companion object {
-        private const val AVATAR_PX = 192
         private const val AVATAR_TIMEOUT_MS = 3_000L
 
         /** 最近一次联网取头像失败的时间（进程内；FCM 服务实例每条消息可能不同，所以放这里）。 */

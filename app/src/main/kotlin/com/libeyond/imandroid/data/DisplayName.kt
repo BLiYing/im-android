@@ -52,12 +52,24 @@ object DisplayName {
         c.peerNickname.ifBlank { UNNAMED }
     }
 
-    /** 头像回退用的首字母：解析出的显示名**末两位**（三端同口径）。 */
+    /**
+     * 头像回退用的首字母（2026-10-02 改，三端同口径，见 `../IMServer/docs/UI.md`「图标与头像资源」）：
+     * 末一个字是汉字（CJK 统一表意文字及扩展）就取它（中文名去姓留名）；否则取首字母并转大写（英文名/用户名）。
+     * 按「字形簇」取字（复用 [graphemeClusters]，同一套实现也给昵称省略号 [SenderRun.ellipsize] 用），
+     * 不会把结尾的 emoji／组合字符切成半个乱码。空名返回空串（与 iOS `IMAvatarInitials` / Web `avatarInitial` 一致）。
+     */
     fun initials(displayName: String): String {
         val t = displayName.trim()
-        if (t.isEmpty()) return "?"
-        return if (t.length <= 2) t else t.takeLast(2)
+        if (t.isEmpty()) return ""
+        val clusters = graphemeClusters(t)
+        val last = clusters.last()
+        if (isHanCodePoint(last.codePointAt(0))) return last // 中文名：取末字
+        return clusters.first().uppercase(java.util.Locale.ROOT) // 英文名/用户名：取首字母，大写
     }
+
+    /// CJK 统一表意文字：基本区 + 兼容区 + 全部辅助平面扩展区（B 起，含 C/D/E/F/G…，该平面几乎全部留给 CJK 扩展）。
+    private fun isHanCodePoint(cp: Int): Boolean =
+        (cp in 0x4E00..0x9FFF) || (cp in 0x3400..0x4DBF) || (cp in 0xF900..0xFAFF) || (cp in 0x20000..0x3FFFD)
 
     /**
      * 好友在**本机界面**上的显示名：备注 > 昵称 > 用户名 > uid。

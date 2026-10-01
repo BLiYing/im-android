@@ -83,7 +83,7 @@ class FcmPayloadTest {
     }
 
     @Test
-    fun `发送人头像——群聊用群头像，私聊用对方头像，空串当没有`() {
+    fun `通知大图标——群聊固定用群头像，私聊用对方头像，空串当没有`() {
         val group = FcmPayload.parse(
             mapOf("conv_id" to "g_1", "sender_avatar" to "/avatars/a.jpg", "group_avatar" to "/avatars/g.jpg"),
         )
@@ -91,6 +91,32 @@ class FcmPayloadTest {
         val private = FcmPayload.parse(mapOf("conv_id" to "u_1_u_2", "sender_avatar" to "/avatars/a.jpg", "group_avatar" to ""))
         assertEquals("/avatars/a.jpg", private?.iconAvatar)
         assertEquals(null, FcmPayload.parse(mapOf("conv_id" to "u_1_u_2"))?.iconAvatar)
+    }
+
+    /** 2026-10-02 改：群没设群头像时，**不再**退回发送人头像——同一个群的通知不该忽而显示这个人忽而那个人。 */
+    @Test
+    fun `群没设群头像——不退回发送人头像`() {
+        val group = FcmPayload.parse(
+            mapOf("conv_id" to "g_1", "sender_avatar" to "/avatars/a.jpg", "group_avatar" to ""),
+        )
+        assertEquals(null, group?.iconAvatar)
+    }
+
+    /** 首字母占位图的种子+名字：群用群本身，私聊用发消息的那个人（sender_id，不是收信人自己）。 */
+    @Test
+    fun `占位图种子与名字——群用群本身，私聊用对方`() {
+        val group = FcmPayload.parse(mapOf("conv_id" to "g_1", "title" to "老同学群"))
+        assertEquals("g_1", group?.placeholderSeed)
+        assertEquals("老同学群", group?.placeholderName)
+        val private = FcmPayload.parse(
+            mapOf("conv_id" to "u_1_u_2", "title" to "老王", "sender_id" to "1002", "sender_name" to "老王"),
+        )
+        assertEquals("1002", private?.placeholderSeed)
+        assertEquals("老王", private?.placeholderName)
+        // 老服务端没给 sender_id / sender_name：退回 conv_id / title，不崩、不是 null 种子。
+        val legacy = FcmPayload.parse(mapOf("conv_id" to "u_1_u_2", "title" to "老王"))
+        assertEquals("u_1_u_2", legacy?.placeholderSeed)
+        assertEquals("老王", legacy?.placeholderName)
     }
 
     @Test
