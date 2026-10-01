@@ -1,31 +1,53 @@
 package com.libeyond.imandroid.fcm
 
+import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Bundle
+import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
+import androidx.core.graphics.drawable.toBitmap
+import com.libeyond.imandroid.MainActivity
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 
 /**
- * 通知栏里那条 FCM 通知的「收回」：消息被撤回 / 为所有人删除后，别让原文继续挂在通知栏里
- * （`../../IMServer/docs/design/PUSH_M5_DESIGN.md` §3.4）。
+ * 通知栏里每个会话的那条 FCM 通知（PUSH_M5_DESIGN §3.4 / §3.5 / §3.7）。
  *
- * 两条路都会调到这里，做的是同一件事：
- * - App 不在线：服务端补发一条 `type=retract` 的 FCM（[FcmMessagingService]）；
- * - App 在线：`msg_op` 帧（实时或 sync 补拉）落库时（`data/MessageRepository.applyMsgOp`）。
+ * **一个会话一条通知，展开看最近几条**（`MessagingStyle`，同 WhatsApp / Telegram）；锁屏隐藏内容时
+ * 显示「N 条新消息」（`publicVersion`）；桌面角标数（`setNumber`）是这个会话的条数，各会话加起来就是总数。
+ * 列了哪几条、累计几条存在通知自己的 extras 里（[ConversationLines]），进程被杀后 FCM 再拉起也接得上。
  *
- * **与 iOS 的差异**：iOS 在 App 被杀时删不掉已展示的通知，只能把文字原地换成「对方撤回了一条消息」；
- * Android 能直接取消，所以这里是真的拿掉，不留提示。
+ * 三件事都落到这里：
+ * - 新消息（[showMessage]，`FcmMessagingService`）：加一行，响铃 / 横幅照常；
+ * - 撤回 / 为所有人删除（[retract]）：去掉那一行；服务端 `type=retract`（App 不在线）或 `msg_op` 落库触发；
+ * - 已读（[clearReadThrough]）：去掉已读的行；服务端 `type=clear`、本人其它端的 receipt 帧、本机已读触发。
+ * 后两者去完还有剩就**静默**重发（不响不弹），一行不剩才取消。Android 的桌面角标跟着通知走。
  *
- * **已读清通知**（[clearReadThrough]，PUSH_M5_DESIGN §3.5）同理三条路：服务端 `type=clear`（App 不在线）、
- * 本人其它端的 receipt 帧（`MessageRepository.applyPeerReceipt`）、本机读过（`MessageRepository.markRead`）。
- * Android 的桌面角标跟着通知走，通知没了角标也就没了。
+ * **与 iOS 的差异**：iOS 一条消息一个通知、按会话叠放，删不掉被杀进程里的通知只能原地替换文字；
+ * Android 能直接改写 / 取消，所以这里是真的拿掉，不留提示。
  */
 object FcmNotifications {
 
-    /** 通知 extras 里记着「这条通知展示的是哪条消息」，收回时据此比对。 */
+    /** 通知 extras 里记着「最新那条是哪条消息」（老版本只认这个；现在以下面几项为准）。 */
     const val EXTRA_CONV_SEQ = "im_conv_seq"
+    private const val EXTRA_SEQS = "im_line_seqs"
+    private const val EXTRA_SENDERS = "im_line_senders"
+    private const val EXTRA_TEXTS = "im_line_texts"
+    private const val EXTRA_TIMES = "im_line_times"
+    private const val EXTRA_TOTAL = "im_line_total"
+    private const val EXTRA_TITLE = "im_conv_title"
+    private const val EXTRA_GROUP = "im_conv_group"
 
-    /** 配合 tag（= convId）使用：同一会话的新消息替换旧通知，不同会话互不影响。 */
+    /** 配合 tag（= convId）使用：一个会话一条通知，不同会话互不影响。 */
     const val NOTIFICATION_ID = 1
+    const val CHANNEL_ID = "fcm_messages"
 
     private val log = IMLog.tag("IM.Fcm")
     private var appContext: Context? = null
@@ -34,36 +56,137 @@ object FcmNotifications {
         appContext = context.applicationContext
     }
 
-    /**
-     * 该不该取消。同一会话只留一条通知（新消息替换旧的），所以**只有正挂着的恰好是被收回的那条**才取消——
-     * 被收回的是更早的一条时，通知栏里展示的是后来的消息，不能动。
-     * 任一侧不知道是哪条（旧版本发的通知没带 seq / 服务端没带）就不取消：宁可多留一条，不错杀。
-     */
-    fun shouldCancel(displayedSeq: Long?, retractedSeq: Long?): Boolean =
-        displayedSeq != null && retractedSeq != null && retractedSeq > 0 && displayedSeq == retractedSeq
-
-    /**
-     * 读到 [readUpTo] 之后该不该取消。挂着的那条是位点之后来的（读的同时又来了新消息）就留着；
-     * 不知道挂的是哪条（旧版本发的通知没带 seq）也留着，同 [shouldCancel]。
-     */
-    fun shouldClearOnRead(displayedSeq: Long?, readUpTo: Long?): Boolean =
-        displayedSeq != null && readUpTo != null && readUpTo > 0 && displayedSeq <= readUpTo
-
-    fun retract(convId: String, convSeq: Long?) =
-        cancelIf(convId, "fcm_notification_retracted", convSeq) { shouldCancel(it, convSeq) }
-
-    fun clearReadThrough(convId: String, readUpTo: Long?) =
-        cancelIf(convId, "fcm_notifications_read_cleared", readUpTo) { shouldClearOnRead(it, readUpTo) }
-
-    private fun cancelIf(convId: String, event: String, seq: Long?, decide: (displayed: Long?) -> Boolean) {
-        val nm = appContext?.getSystemService(NotificationManager::class.java) ?: return
+    /** 新消息：在这个会话的通知里加一行并提醒。[avatar] 是大图标（发送人 / 群头像），可为空。 */
+    fun showMessage(content: FcmNotificationContent, avatar: Bitmap?) {
+        val ctx = appContext ?: return
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        val line = content.toLine(System.currentTimeMillis()) ?: return
         runCatching {
-            val shown = nm.activeNotifications.firstOrNull { it.tag == convId && it.id == NOTIFICATION_ID } ?: return
+            val shown = shownFor(nm, content.convId)
+            val before = shown?.let { linesOf(it.notification.extras) } ?: ConversationLines.EMPTY
+            val after = before.append(line)
+            if (after == before) return // 重投的同一条
+            val meta = Meta(content.title, content.isGroup)
+            post(ctx, nm, content.convId, meta, after, avatar ?: shown?.let { iconOf(ctx, it.notification) }, alert = true)
+        }.onFailure { log.w("fcm_notify_failed", "err" to it.javaClass.simpleName) }
+    }
+
+    fun retract(convId: String, convSeq: Long?) {
+        val seq = convSeq?.takeIf { it > 0 } ?: return
+        rewrite(convId, "fcm_notification_retracted", seq) { it.withoutSeq(seq) }
+    }
+
+    fun clearReadThrough(convId: String, readUpTo: Long?) {
+        val upTo = readUpTo?.takeIf { it > 0 } ?: return
+        rewrite(convId, "fcm_notifications_read_cleared", upTo) { it.readThrough(upTo) }
+    }
+
+    /** 去掉若干行：没变就不动；一行不剩取消；还有剩就静默重发。 */
+    private fun rewrite(convId: String, event: String, seq: Long, change: (ConversationLines) -> ConversationLines) {
+        val ctx = appContext ?: return
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        runCatching {
+            val shown = shownFor(nm, convId) ?: return
             val extras = shown.notification.extras
-            val displayed = if (extras.containsKey(EXTRA_CONV_SEQ)) extras.getLong(EXTRA_CONV_SEQ) else null
-            if (!decide(displayed)) return
-            nm.cancel(convId, NOTIFICATION_ID)
-            log.i(event, "convId" to convId, "convSeq" to seq)
+            val before = linesOf(extras) ?: return // 老版本发的通知：认不出是哪几条，宁可留着
+            val after = change(before)
+            if (after == before) return
+            if (after.isEmpty) {
+                nm.cancel(convId, NOTIFICATION_ID)
+            } else {
+                val meta = Meta(extras.getString(EXTRA_TITLE).orEmpty(), extras.getBoolean(EXTRA_GROUP))
+                post(ctx, nm, convId, meta, after, iconOf(ctx, shown.notification), alert = false)
+            }
+            log.i(event, "convId" to convId, "convSeq" to seq, "left" to after.lines.size)
         }.onFailure { log.w("fcm_cancel_failed", "event" to event, "err" to it.javaClass.simpleName) }
+    }
+
+    private data class Meta(val title: String, val isGroup: Boolean)
+
+    private fun shownFor(nm: NotificationManager, convId: String) =
+        nm.activeNotifications.firstOrNull { it.tag == convId && it.id == NOTIFICATION_ID }
+
+    private fun iconOf(ctx: Context, n: Notification): Bitmap? =
+        runCatching { n.getLargeIcon()?.loadDrawable(ctx)?.toBitmap() }.getOrNull()
+
+    private fun linesOf(extras: Bundle): ConversationLines? {
+        val seqs = extras.getLongArray(EXTRA_SEQS) ?: return null
+        val senders = extras.getStringArray(EXTRA_SENDERS) ?: return null
+        val texts = extras.getStringArray(EXTRA_TEXTS) ?: return null
+        val times = extras.getLongArray(EXTRA_TIMES) ?: return null
+        if (senders.size != seqs.size || texts.size != seqs.size || times.size != seqs.size) return null
+        val lines = seqs.indices.map { ConversationLine(seqs[it], senders[it], texts[it], times[it]) }
+        return ConversationLines(lines, maxOf(extras.getInt(EXTRA_TOTAL), lines.size))
+    }
+
+    private fun extrasOf(state: ConversationLines, meta: Meta) = Bundle().apply {
+        putLongArray(EXTRA_SEQS, state.lines.map { it.seq }.toLongArray())
+        putStringArray(EXTRA_SENDERS, state.lines.map { it.sender }.toTypedArray())
+        putStringArray(EXTRA_TEXTS, state.lines.map { it.text }.toTypedArray())
+        putLongArray(EXTRA_TIMES, state.lines.map { it.time }.toLongArray())
+        putInt(EXTRA_TOTAL, state.total)
+        putString(EXTRA_TITLE, meta.title)
+        putBoolean(EXTRA_GROUP, meta.isGroup)
+        putLong(EXTRA_CONV_SEQ, state.lines.last().seq)
+    }
+
+    private fun post(
+        ctx: Context, nm: NotificationManager, convId: String, meta: Meta,
+        state: ConversationLines, avatar: Bitmap?, alert: Boolean,
+    ) {
+        ensureChannel(nm)
+        val title = meta.title.ifBlank { Str.s(R.string.app_name) }
+        val style = NotificationCompat.MessagingStyle(Person.Builder().setName(Str.s(R.string.common_me)).build())
+        if (meta.isGroup) style.setConversationTitle(title).setGroupConversation(true)
+        state.lines.forEach { line ->
+            // 单聊每行的发送人就是对方；群聊老服务端没给发送人时，正文本身带着「名字: 」，发送人用群名占位
+            style.addMessage(line.text, line.time, Person.Builder().setName(line.sender.ifBlank { title }).build())
+        }
+        val latest = state.lines.last()
+        // 锁屏隐藏内容时系统显示这个版本：只说有几条，不露发送人与内容。
+        val publicVersion = NotificationCompat.Builder(ctx, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(Str.s(R.string.app_name))
+            .setContentText(Str.p(R.plurals.notif_new_messages_count, state.total, state.total))
+            .build()
+        val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(if (meta.isGroup && latest.sender.isNotBlank()) "${latest.sender}: ${latest.text}" else latest.text)
+            .setStyle(style)
+            .setNumber(state.total)
+            .setPublicVersion(publicVersion)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setAutoCancel(true)
+            .setContentIntent(contentIntent(ctx, convId, meta.title))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOnlyAlertOnce(!alert) // 撤回 / 已读后的重发不响不弹
+            .addExtras(extrasOf(state, meta))
+        avatar?.let { builder.setLargeIcon(it) }
+        // notify() 在没有 POST_NOTIFICATIONS 权限时静默不弹（官方行为）；调用方仍包了 runCatching 防个别 ROM 抛异常。
+        // 用 (tag=convId, id 固定) 标识通知：字符串 tag 不会像 32 位 hashCode 那样让两个会话互相覆盖。
+        nm.notify(convId, NOTIFICATION_ID, builder.build())
+    }
+
+    private fun contentIntent(ctx: Context, convId: String, title: String): PendingIntent {
+        val intent = Intent(ctx, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            // 每个会话一个不同的 data：PendingIntent 的"是不是同一个"只看 Intent.filterEquals
+            // （action/data/type/component）+ requestCode，**不看 extras**。不设 data 的话只能靠
+            // requestCode 区分会话，而 `convId.hashCode()` 是 32 位、会撞——撞了之后 FLAG_UPDATE_CURRENT
+            // 会把先到那条通知的 extras 换成后到的，点开进错会话。
+            data = Uri.Builder().scheme("imandroid").authority("conv").appendPath(convId).build()
+            putExtra(MainActivity.EXTRA_NOTIFICATION_CONV_ID, convId)
+            putExtra(MainActivity.EXTRA_NOTIFICATION_TITLE, title)
+        }
+        return PendingIntent.getActivity(ctx, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    /** 渠道只需建一次；minSdk 26 渠道 API 恒可用。 */
+    private fun ensureChannel(nm: NotificationManager) {
+        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, Str.s(R.string.notif_section_message), NotificationManager.IMPORTANCE_HIGH),
+        )
     }
 }

@@ -1290,6 +1290,9 @@
     <string name="notif_mute_until_date">至 %1$s</string>
     <string name="notif_mute_until_today">至今天 %1$s</string>
     <string name="notif_mute_until_tomorrow">至明天 %1$s</string>
+    <plurals name="notif_new_messages_count">
+        <item quantity="other">%1$d 条新消息</item>
+    </plurals>
     <string name="notif_preview_hidden">新消息</string>
     <string name="notif_reset">重置所有通知设置</string>
     <string name="notif_reset_confirm_message">本页所有开关与提示音将恢复默认。不会取消会话的免打扰。</string>

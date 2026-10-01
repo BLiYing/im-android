@@ -81,4 +81,54 @@ class FcmPayloadTest {
         assertEquals(false, content?.retract)
         assertEquals(42L, content?.convSeq)
     }
+
+    @Test
+    fun `发送人头像——群聊用群头像，私聊用对方头像，空串当没有`() {
+        val group = FcmPayload.parse(
+            mapOf("conv_id" to "g_1", "sender_avatar" to "/avatars/a.jpg", "group_avatar" to "/avatars/g.jpg"),
+        )
+        assertEquals("/avatars/g.jpg", group?.iconAvatar)
+        val private = FcmPayload.parse(mapOf("conv_id" to "u_1_u_2", "sender_avatar" to "/avatars/a.jpg", "group_avatar" to ""))
+        assertEquals("/avatars/a.jpg", private?.iconAvatar)
+        assertEquals(null, FcmPayload.parse(mapOf("conv_id" to "u_1_u_2"))?.iconAvatar)
+    }
+
+    @Test
+    fun `头像地址只补自家服务器的 avatars 目录`() {
+        assertEquals("http://10.0.2.2:8080/avatars/a.jpg", FcmPayload.avatarUrl("/avatars/a.jpg", "10.0.2.2:8080", useTls = false))
+        assertEquals("https://im.example.com/avatars/a.jpg", FcmPayload.avatarUrl("/avatars/a.jpg", "im.example.com", useTls = true))
+        for (bad in listOf("https://evil.example/a.jpg", "/uploads/a.jpg", "/avatars/../uploads/a.jpg", "", null)) {
+            assertEquals(null, FcmPayload.avatarUrl(bad, "10.0.2.2:8080", useTls = false))
+        }
+        assertEquals(null, FcmPayload.avatarUrl("/avatars/a.jpg", "evil.example@10.0.2.2", useTls = false))
+        assertEquals(null, FcmPayload.avatarUrl("/avatars/a.jpg", "", useTls = false))
+    }
+
+    @Test
+    fun `群聊一行——发送人单列，正文不带「名字」前缀`() {
+        val line = FcmPayload.parse(
+            mapOf("conv_id" to "g_1", "conv_seq" to "7", "title" to "老同学群", "body" to "小明: 开会了",
+                "sender_name" to "小明", "bare_body" to "开会了"),
+        )?.toLine(nowMs = 5)
+        assertEquals(ConversationLine(7, "小明", "开会了", 5), line)
+    }
+
+    @Test
+    fun `群聊老服务端没给 bare_body——退回整句、发送人留空`() {
+        val line = FcmPayload.parse(mapOf("conv_id" to "g_1", "conv_seq" to "7", "body" to "小明: 开会了"))?.toLine(5)
+        assertEquals(ConversationLine(7, "", "小明: 开会了", 5), line)
+    }
+
+    @Test
+    fun `单聊一行——发送人就是标题`() {
+        val line = FcmPayload.parse(
+            mapOf("conv_id" to "u_1_u_2", "conv_seq" to "3", "title" to "老王", "body" to "在吗", "bare_body" to "x"),
+        )?.toLine(5)
+        assertEquals(ConversationLine(3, "老王", "在吗", 5), line)
+    }
+
+    @Test
+    fun `没有 seq 认不出是哪条——不成行`() {
+        assertEquals(null, FcmPayload.parse(mapOf("conv_id" to "u_1_u_2", "body" to "hi"))?.toLine(5))
+    }
 }

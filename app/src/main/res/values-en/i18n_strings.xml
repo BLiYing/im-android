@@ -1325,6 +1325,10 @@
     <string name="notif_mute_until_date">until %1$s</string>
     <string name="notif_mute_until_today">until %1$s</string>
     <string name="notif_mute_until_tomorrow">until tomorrow, %1$s</string>
+    <plurals name="notif_new_messages_count">
+        <item quantity="one">%1$d new message</item>
+        <item quantity="other">%1$d new messages</item>
+    </plurals>
     <string name="notif_preview_hidden">New message</string>
     <string name="notif_reset">Reset all notifications</string>
     <string name="notif_reset_confirm_message">All switches and sounds will be restored to defaults. Muted chats stay muted.</string>

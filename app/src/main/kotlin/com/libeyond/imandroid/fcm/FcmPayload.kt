@@ -6,8 +6,8 @@ package com.libeyond.imandroid.fcm
  * `title`/`body`/`conv_id`/`conv_seq`（数字的字符串形式，FCM data payload 只能是 string-string map）/
  * `badge`——与 iOS APNs payload 同一套字段语义。
  *
- * @param convSeq 这条通知对应哪条消息。记进通知 extras，撤回/删除时据此收回（[FcmNotifications]）。
- *   **不**用来「点开后跳到那条」：同一会话只留最新一条通知，它指的永远是最新消息，进会话本来就看得到。
+ * @param convSeq 这条通知对应哪条消息。记进通知里那一行，撤回/删除/别处已读时据此去掉（[FcmNotifications]）。
+ *   **不**用来「点开后跳到那条」：一个会话一条通知，点开进会话本来就停在首条未读。
  * @param retract 这不是新消息，而是「[convSeq] 那条已被撤回/删除，把通知收回」（服务端 `type=retract`）。
  *   此时 [title]/[body] 是给不认识该类型的旧版本看的替换文案，本版本不展示。
  * @param clear 这不是新消息，而是「本人在别的设备上把这个会话读到了 [convSeq]」（服务端 `type=clear`，
@@ -21,7 +21,32 @@ data class FcmNotificationContent(
     val badge: Int?,
     val retract: Boolean = false,
     val clear: Boolean = false,
-)
+    val senderAvatar: String? = null,
+    val groupAvatar: String? = null,
+    val senderName: String? = null,
+    val bareBody: String? = null,
+) {
+    /** 通知大图标用哪张头像（PUSH_M5_DESIGN §3.6）：群聊用群头像（没有就退回发送人），私聊用对方头像。 */
+    val iconAvatar: String? get() = groupAvatar ?: senderAvatar
+
+    /** 单聊的 conv_id 是 `u_<a>_u_<b>`，其余（`g_…`）都是群。 */
+    val isGroup: Boolean get() = !convId.startsWith("u_")
+
+    /**
+     * 这条推送在会话通知里是哪一行（§3.7）。群聊：发送人 + 不带「发送人: 」前缀的正文（老服务端没给
+     * `bare_body` 时退回带前缀的整句、发送人留空）；单聊：发送人就是标题。没有 seq 的认不出是哪条，不成行。
+     */
+    fun toLine(nowMs: Long): ConversationLine? {
+        val seq = convSeq?.takeIf { it > 0 } ?: return null
+        return if (isGroup) {
+            val bare = bareBody
+            if (bare != null) ConversationLine(seq, senderName.orEmpty(), bare, nowMs)
+            else ConversationLine(seq, "", body, nowMs)
+        } else {
+            ConversationLine(seq, title, body, nowMs)
+        }
+    }
+}
 
 /**
  * 纯函数解析——**不碰 Android/Firebase 类型**，JVM 单测不需要 Robolectric。
@@ -43,6 +68,21 @@ object FcmPayload {
             badge = data["badge"]?.toIntOrNull(),
             retract = data["type"] == TYPE_RETRACT,
             clear = data["type"] == TYPE_CLEAR,
+            senderAvatar = data["sender_avatar"]?.takeIf { it.isNotBlank() },
+            groupAvatar = data["group_avatar"]?.takeIf { it.isNotBlank() },
+            senderName = data["sender_name"]?.takeIf { it.isNotBlank() },
+            bareBody = data["bare_body"]?.takeIf { it.isNotBlank() },
         )
+    }
+
+    /**
+     * 头像相对路径补成绝对地址。**只认自家服务器的 `/avatars/`**（同 iOS `IMPushAvatarURL`）：
+     * 推送内容里塞一个外站地址 / 别的目录，不该让手机在后台去拉。
+     */
+    fun avatarUrl(path: String?, host: String, useTls: Boolean): String? {
+        if (path.isNullOrBlank() || host.isBlank()) return null
+        if (!path.startsWith("/avatars/") || path.contains("..")) return null
+        if (host.any { it == '/' || it == '@' || it.isWhitespace() }) return null
+        return (if (useTls) "https" else "http") + "://" + host + path
     }
 }
