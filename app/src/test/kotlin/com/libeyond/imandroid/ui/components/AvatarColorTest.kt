@@ -1,6 +1,5 @@
 package com.libeyond.imandroid.ui.components
 
-import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -9,19 +8,11 @@ import org.junit.Test
  * ——同一个 uid/conv_id 三端必须同色，否则换个端看头像变色会让人以为不是同一个人/同一个群
  * （2026-10-02 真机走查发现：Android 曾因取模用了有符号数而跟另外两端不一致，见下面的回归测试）。
  *
- * 下面这几个期望值是用 Web 的 `avatarColor()`（BigInt 无符号实现，当基准）离线跑出来的，
- * 不是拍脑袋编的——任何一端改了哈希/取模都会在这几个真实种子上露出来。
+ * 下面这几个期望下标是用 Web 的 `avatarColor()`（BigInt 无符号实现，当基准）离线跑出来的，
+ * 不是拍脑袋编的——哈希/取模任何一端改了都会在这几个真实种子上露出来。断言直接引用 [AVATAR_PALETTE]
+ * 本体（没有另抄一份 RGB 字面量）：这条测的是「种子选对了下标」，不是「色板颜色是哪几个」。
  */
 class AvatarColorTest {
-
-    private val palette = listOf(
-        Color(red = 0.20f, green = 0.60f, blue = 0.96f, alpha = 1f), // 蓝 0
-        Color(red = 0.31f, green = 0.78f, blue = 0.47f, alpha = 1f), // 绿 1
-        Color(red = 0.96f, green = 0.62f, blue = 0.20f, alpha = 1f), // 橙 2
-        Color(red = 0.90f, green = 0.36f, blue = 0.42f, alpha = 1f), // 红 3
-        Color(red = 0.58f, green = 0.45f, blue = 0.90f, alpha = 1f), // 紫 4
-        Color(red = 0.18f, green = 0.72f, blue = 0.74f, alpha = 1f), // 青 5
-    )
 
     @Test
     fun `与Web avatarColor 跑出的基准值逐一对齐`() {
@@ -36,13 +27,13 @@ class AvatarColorTest {
             "libeyond" to 2,
         )
         for ((seed, idx) in expected) {
-            assertEquals("seed=$seed", palette[idx], avatarColorForSeed(seed))
+            assertEquals("seed=$seed", AVATAR_PALETTE[idx], avatarColorForSeed(seed))
         }
     }
 
     @Test
     fun `空种子回落第一色`() {
-        assertEquals(palette[0], avatarColorForSeed(""))
+        assertEquals(AVATAR_PALETTE[0], avatarColorForSeed(""))
     }
 
     @Test

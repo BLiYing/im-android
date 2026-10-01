@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +34,9 @@ import com.libeyond.imandroid.ui.theme.LocalMediaHost
  * 头像取色板——**与 iOS `IMTheme.avatarColorForSeed:` 逐值对齐**。
  * 同一个用户在三端必须是同一个颜色，否则「换个端看头像变色」会让人以为不是同一个人。
  */
-private val AVATAR_PALETTE = listOf(
+// internal 而不是 private：AvatarColorTest 直接引用这份色板本身做断言，不用另抄一份 RGB 字面量
+// （抄一份的风险是色板改了测试没跟着改，静默测不出色差）。
+internal val AVATAR_PALETTE = listOf(
     Color(red = 0.20f, green = 0.60f, blue = 0.96f, alpha = 1f), // 蓝
     Color(red = 0.31f, green = 0.78f, blue = 0.47f, alpha = 1f), // 绿
     Color(red = 0.96f, green = 0.62f, blue = 0.20f, alpha = 1f), // 橙
@@ -100,8 +103,11 @@ fun IMAvatar(
     ) {
         // 首字母圈永远在底下：图片没加载出来/加载失败时它就是兜底，
         // 不需要额外的失败回调（Coil 的 error 回退还得再写一份同样的东西）
+        // `remember` 住：initials() 现在走 BreakIterator 取字形簇，比旧版 `takeLast(2)` 的纯子串贵，
+        // 这是每条会话/联系人行都会跑一次的热路径——displayName 没变就不用每次重组都重新分词。
+        val initials = remember(displayName) { DisplayName.initials(displayName) }
         Text(
-            text = DisplayName.initials(displayName),
+            text = initials,
             color = Color.White,
             fontSize = (size.value * 0.34f).sp,
             fontWeight = FontWeight.Medium,

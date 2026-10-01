@@ -155,7 +155,7 @@ object FcmNotifications {
 
     private fun post(
         ctx: Context, nm: NotificationManager, convId: String, meta: Meta,
-        state: ConversationLines, avatar: Bitmap?, alert: Boolean,
+        state: ConversationLines, avatar: Bitmap, alert: Boolean,
     ) {
         ensureChannel(nm)
         val title = meta.title.ifBlank { Str.s(R.string.app_name) }
@@ -163,14 +163,14 @@ object FcmNotifications {
         // 自己生成一个灰底首字母圆（2026-10-01 真机实测的「用」就是这么来的），与 setLargeIcon 设的
         // 折叠态大图标是两回事，分开控制。**群聊这里统一用同一张群头像 / 群占位图**（本函数参数 [avatar]，
         // 调用方已按"群聊固定群头像"算好），不挂各发送人自己的头像——同折叠态的决定一致；
-        // 私聊只有对方一个人，本来就该是同一张。
-        val lineIcon = avatar?.let { IconCompat.createWithBitmap(it) }
+        // 私聊只有对方一个人，本来就该是同一张。[avatar] 本身不可空：两个调用方都走到「取不到就画占位图」
+        // 的兜底链末尾才来这里，总有图可用。
+        val lineIcon = IconCompat.createWithBitmap(avatar)
         val style = NotificationCompat.MessagingStyle(Person.Builder().setName(Str.s(R.string.common_me)).build())
         if (meta.isGroup) style.setConversationTitle(title).setGroupConversation(true)
         state.lines.forEach { line ->
             // 单聊每行的发送人就是对方；群聊老服务端没给发送人时，正文本身带着「名字: 」，发送人用群名占位
-            val person = Person.Builder().setName(line.sender.ifBlank { title })
-            lineIcon?.let { person.setIcon(it) }
+            val person = Person.Builder().setName(line.sender.ifBlank { title }).setIcon(lineIcon)
             style.addMessage(line.text, line.time, person.build())
         }
         val latest = state.lines.last()
@@ -193,7 +193,7 @@ object FcmNotifications {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOnlyAlertOnce(!alert) // 撤回 / 已读后的重发不响不弹
             .addExtras(extrasOf(state, meta))
-        avatar?.let { builder.setLargeIcon(it) }
+        builder.setLargeIcon(avatar)
         // notify() 在没有 POST_NOTIFICATIONS 权限时静默不弹（官方行为）；调用方仍包了 runCatching 防个别 ROM 抛异常。
         // 用 (tag=convId, id 固定) 标识通知：字符串 tag 不会像 32 位 hashCode 那样让两个会话互相覆盖。
         nm.notify(convId, NOTIFICATION_ID, builder.build())
