@@ -55,7 +55,7 @@ object DisplayName {
     /**
      * 头像回退用的首字母（2026-10-02 改，三端同口径，见 `../IMServer/docs/UI.md`「图标与头像资源」）：
      * 末一个字是汉字（CJK 统一表意文字及扩展）就取它（中文名去姓留名）；否则取首字母并转大写（英文名/用户名）。
-     * 按「字形簇」取字（复用 [graphemeClusters]，同一套实现也给昵称省略号 [SenderRun.ellipsize] 用），
+     * 按「字形簇」取字（复用 [graphemeClusters]，同一套实现也给昵称省略号 [SenderRun.clampName] 用），
      * 不会把结尾的 emoji／组合字符切成半个乱码。空名返回空串（与 iOS `IMAvatarInitials` / Web `avatarInitial` 一致）。
      */
     fun initials(displayName: String): String {
@@ -64,7 +64,18 @@ object DisplayName {
         val clusters = graphemeClusters(t)
         val last = clusters.last()
         if (isHanCodePoint(last.codePointAt(0))) return last // 中文名：取末字
-        return clusters.first().uppercase(java.util.Locale.ROOT) // 英文名/用户名：取首字母，大写
+        return uppercaseInitial(clusters.first()) // 英文名/用户名：取首字母，大写
+    }
+
+    /**
+     * 大写一个字，但保证还是「一个字」——`String.uppercase()` 走完整 Unicode 大小写折叠，极少数字符
+     * 会一拆二（德语 ß → "SS"，两个字符），破坏首字母头像"只有一个字"的前提（画出来的圆里挤进两个字母）。
+     * 改用 `Character.toUpperCase(Int)` 的「简单大写映射」：没有对应大写形式的字符原样返回，绝不增字。
+     */
+    private fun uppercaseInitial(grapheme: String): String {
+        val cp = grapheme.codePointAt(0)
+        val upperCp = Character.toUpperCase(cp)
+        return String(Character.toChars(upperCp)) + grapheme.substring(Character.charCount(cp))
     }
 
     /// CJK 统一表意文字：基本区 + 兼容区 + 全部辅助平面扩展区（B 起，含 C/D/E/F/G…，该平面几乎全部留给 CJK 扩展）。

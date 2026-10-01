@@ -52,4 +52,15 @@ class DisplayNameInitialsTest {
     fun `扩展C汉字识别为汉字`() {
         assertEquals("𪜀", DisplayName.initials("小𪜀")) // U+2A700，CJK 扩展 C 第一个字
     }
+
+    /**
+     * 大写不能把一个字拆成两个——`String.uppercase()` 的完整 Unicode 大小写折叠会把德语 ß 变成
+     * 两个字符 "SS"，画到头像圆里就是挤进两个字母。改用简单大写映射，没有大写形式就原样返回。
+     */
+    @Test
+    fun `大写不把一个字拆成两个`() {
+        val result = DisplayName.initials("ßtraße99")
+        assertEquals(1, result.length)
+        assertEquals("ß", result) // ß 没有「简单大写映射」，原样返回，不是 "SS"
+    }
 }
