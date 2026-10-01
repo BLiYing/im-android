@@ -1,6 +1,8 @@
 package com.libeyond.imandroid.fcm
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -60,15 +62,44 @@ class ConversationLinesTest {
     }
 
     @Test
-    fun `读到的位置比列表里最早的还早——不动，挤出去的那些读没读不知道`() {
-        val s = linesOf(*(1L..10L).toList().toLongArray())
-        assertSame(s, s.readThrough(3))
+    fun `撤回一条早被挤出显示的消息——行不变，条数照样减一`() {
+        val s = linesOf(*(1L..10L).toList().toLongArray()).withoutSeq(2)
+        assertEquals((5L..10L).toList(), s.lines.map { it.seq })
+        assertEquals(9, s.total)
     }
 
     @Test
-    fun `被挤出去的都比留着的早——读掉了留着的一部分，条数就等于剩下的行数`() {
+    fun `读到的位置比显示的最早一行还早——行不变，读掉的那几条照样扣`() {
+        val s = linesOf(*(1L..10L).toList().toLongArray()).readThrough(3)
+        assertEquals((5L..10L).toList(), s.lines.map { it.seq })
+        assertEquals(7, s.total)
+    }
+
+    @Test
+    fun `读到显示的中间——读过的行去掉，条数等于剩下的`() {
         val s = linesOf(*(1L..10L).toList().toLongArray()).readThrough(7)
         assertEquals(listOf(8L, 9L, 10L), s.lines.map { it.seq })
         assertEquals(3, s.total)
+    }
+
+    @Test
+    fun `存进通知 extras 再读回来——原样`() {
+        val s = linesOf(*(1L..8L).toList().toLongArray())
+        val back = ConversationLines.fromArrays(s.lineSeqs, s.lineSenders, s.lineTexts, s.lineTimes, s.allSeqs)
+        assertEquals(s, back)
+        assertArrayEquals((1L..8L).toList().toLongArray(), back!!.allSeqs)
+    }
+
+    @Test
+    fun `extras 缺一项或长度对不上——认不出，返回 null`() {
+        val s = linesOf(1, 2)
+        assertNull(ConversationLines.fromArrays(s.lineSeqs, null, s.lineTexts, s.lineTimes, s.allSeqs))
+        assertNull(ConversationLines.fromArrays(s.lineSeqs, arrayOf("x"), s.lineTexts, s.lineTimes, s.allSeqs))
+    }
+
+    @Test
+    fun `早一版写的通知没有全部序号——按显示的几行算`() {
+        val s = linesOf(1, 2)
+        assertEquals(2, ConversationLines.fromArrays(s.lineSeqs, s.lineSenders, s.lineTexts, s.lineTimes, null)?.total)
     }
 }

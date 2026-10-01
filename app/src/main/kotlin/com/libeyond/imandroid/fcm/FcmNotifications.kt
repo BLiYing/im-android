@@ -41,7 +41,7 @@ object FcmNotifications {
     private const val EXTRA_SENDERS = "im_line_senders"
     private const val EXTRA_TEXTS = "im_line_texts"
     private const val EXTRA_TIMES = "im_line_times"
-    private const val EXTRA_TOTAL = "im_line_total"
+    private const val EXTRA_ALL_SEQS = "im_all_seqs"
     private const val EXTRA_TITLE = "im_conv_title"
     private const val EXTRA_GROUP = "im_conv_group"
 
@@ -91,7 +91,7 @@ object FcmNotifications {
             val before = linesOf(extras) ?: return // 老版本发的通知：认不出是哪几条，宁可留着
             val after = change(before)
             if (after == before) return
-            if (after.isEmpty) {
+            if (after.lines.isEmpty()) { // 显示的几行都没了（挤出去的更早那些也就不必再提醒）：整条取消
                 nm.cancel(convId, NOTIFICATION_ID)
             } else {
                 val meta = Meta(extras.getString(EXTRA_TITLE).orEmpty(), extras.getBoolean(EXTRA_GROUP))
@@ -109,25 +109,20 @@ object FcmNotifications {
     private fun iconOf(ctx: Context, n: Notification): Bitmap? =
         runCatching { n.getLargeIcon()?.loadDrawable(ctx)?.toBitmap() }.getOrNull()
 
-    private fun linesOf(extras: Bundle): ConversationLines? {
-        val seqs = extras.getLongArray(EXTRA_SEQS) ?: return null
-        val senders = extras.getStringArray(EXTRA_SENDERS) ?: return null
-        val texts = extras.getStringArray(EXTRA_TEXTS) ?: return null
-        val times = extras.getLongArray(EXTRA_TIMES) ?: return null
-        if (senders.size != seqs.size || texts.size != seqs.size || times.size != seqs.size) return null
-        val lines = seqs.indices.map { ConversationLine(seqs[it], senders[it], texts[it], times[it]) }
-        return ConversationLines(lines, maxOf(extras.getInt(EXTRA_TOTAL), lines.size))
-    }
+    private fun linesOf(extras: Bundle): ConversationLines? = ConversationLines.fromArrays(
+        extras.getLongArray(EXTRA_SEQS), extras.getStringArray(EXTRA_SENDERS), extras.getStringArray(EXTRA_TEXTS),
+        extras.getLongArray(EXTRA_TIMES), extras.getLongArray(EXTRA_ALL_SEQS),
+    )
 
     private fun extrasOf(state: ConversationLines, meta: Meta) = Bundle().apply {
-        putLongArray(EXTRA_SEQS, state.lines.map { it.seq }.toLongArray())
-        putStringArray(EXTRA_SENDERS, state.lines.map { it.sender }.toTypedArray())
-        putStringArray(EXTRA_TEXTS, state.lines.map { it.text }.toTypedArray())
-        putLongArray(EXTRA_TIMES, state.lines.map { it.time }.toLongArray())
-        putInt(EXTRA_TOTAL, state.total)
+        putLongArray(EXTRA_SEQS, state.lineSeqs)
+        putStringArray(EXTRA_SENDERS, state.lineSenders)
+        putStringArray(EXTRA_TEXTS, state.lineTexts)
+        putLongArray(EXTRA_TIMES, state.lineTimes)
+        putLongArray(EXTRA_ALL_SEQS, state.allSeqs)
         putString(EXTRA_TITLE, meta.title)
         putBoolean(EXTRA_GROUP, meta.isGroup)
-        putLong(EXTRA_CONV_SEQ, state.lines.last().seq)
+        state.lines.lastOrNull()?.let { putLong(EXTRA_CONV_SEQ, it.seq) }
     }
 
     private fun post(

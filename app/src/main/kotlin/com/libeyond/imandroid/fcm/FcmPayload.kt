@@ -75,6 +75,12 @@ object FcmPayload {
         )
     }
 
+    /** 联网取头像失败后，这么久之内只用本地缓存（见 `FcmMessagingService.loadAvatar`）。 */
+    const val AVATAR_NETWORK_BACKOFF_MS = 60_000L
+
+    fun avatarNetworkAllowed(lastFailureMs: Long, nowMs: Long): Boolean =
+        lastFailureMs <= 0 || nowMs - lastFailureMs >= AVATAR_NETWORK_BACKOFF_MS
+
     /**
      * 头像相对路径补成绝对地址。**只认自家服务器的 `/avatars/`**（同 iOS `IMPushAvatarURL`）：
      * 推送内容里塞一个外站地址 / 别的目录，不该让手机在后台去拉。

@@ -131,4 +131,11 @@ class FcmPayloadTest {
     fun `没有 seq 认不出是哪条——不成行`() {
         assertEquals(null, FcmPayload.parse(mapOf("conv_id" to "u_1_u_2", "body" to "hi"))?.toLine(5))
     }
+
+    @Test
+    fun `头像取失败后一分钟内只用本地缓存，之后再联网`() {
+        assertEquals(true, FcmPayload.avatarNetworkAllowed(lastFailureMs = 0, nowMs = 5))
+        assertEquals(false, FcmPayload.avatarNetworkAllowed(lastFailureMs = 1_000, nowMs = 1_000 + 59_999))
+        assertEquals(true, FcmPayload.avatarNetworkAllowed(lastFailureMs = 1_000, nowMs = 1_000 + 60_000))
+    }
 }

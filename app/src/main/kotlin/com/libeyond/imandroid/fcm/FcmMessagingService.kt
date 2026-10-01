@@ -3,6 +3,7 @@ package com.libeyond.imandroid.fcm
 import android.graphics.Bitmap
 import androidx.core.graphics.drawable.toBitmap
 import coil.imageLoader
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.transform.CircleCropTransformation
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -74,28 +75,38 @@ class FcmMessagingService : FirebaseMessagingService() {
     }
 
     /**
-     * 同步取一张圆形头像做通知大图标。`onMessageReceived` 本就跑在后台线程、系统给约 10 秒，
-     * 这里最多等 [AVATAR_TIMEOUT_MS]——宁可没头像也别拖住通知。走全局 Coil loader，
-     * 同一张头像（内容寻址 URL）第二次起命中磁盘缓存。
+     * 同步取一张圆形头像做通知大图标。`onMessageReceived` 跑在 FCM 的后台线程上、消息是**串行**处理的，
+     * 所以这里最多等 [AVATAR_TIMEOUT_MS]；而且一次取失败（多半是连不上 IM 服务器）后的
+     * [FcmPayload.AVATAR_NETWORK_BACKOFF_MS] 内只读 Coil 的本地缓存、不再联网——否则连发几条，
+     * 每条都要白等一次，后面的通知被前面的拖着晚到。同一张头像（内容寻址 URL）缓存过的照样能显示。
      */
     private fun loadAvatar(path: String?): Bitmap? {
         val client = (application as? IMApp)?.client ?: return null
         val url = FcmPayload.avatarUrl(path, client.host, BuildConfig.USE_TLS) ?: return null
+        val now = System.currentTimeMillis()
+        val useNetwork = FcmPayload.avatarNetworkAllowed(lastAvatarFailureMs, now)
         val request = ImageRequest.Builder(this)
             .data(url)
             .size(AVATAR_PX)
             .transformations(CircleCropTransformation())
             .allowHardware(false) // 通知要的是软件位图，硬件位图跨进程会被拒
+            .networkCachePolicy(if (useNetwork) CachePolicy.ENABLED else CachePolicy.DISABLED)
             .build()
         val bitmap = runCatching {
             runBlocking { withTimeoutOrNull(AVATAR_TIMEOUT_MS) { imageLoader.execute(request).drawable?.toBitmap() } }
         }.getOrNull()
-        if (bitmap == null) log.w("fcm_avatar_load_failed", "path" to path)
+        if (bitmap == null) {
+            if (useNetwork) lastAvatarFailureMs = now
+            log.w("fcm_avatar_load_failed", "path" to path, "network" to useNetwork)
+        }
         return bitmap
     }
 
     companion object {
         private const val AVATAR_PX = 192
-        private const val AVATAR_TIMEOUT_MS = 5_000L
+        private const val AVATAR_TIMEOUT_MS = 3_000L
+
+        /** 最近一次联网取头像失败的时间（进程内；FCM 服务实例每条消息可能不同，所以放这里）。 */
+        @Volatile private var lastAvatarFailureMs = 0L
     }
 }
