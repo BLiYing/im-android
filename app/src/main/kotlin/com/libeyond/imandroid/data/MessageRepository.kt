@@ -347,6 +347,17 @@ class MessageRepository(
         log.i("conv_update_applied", "convId" to u.convId, "action" to u.action)
     }
 
+    /**
+     * 批量物理移除（批量删除广播帧 / 批量删除 REST 成功项 / msg_hidden 批量帧共用）：一条 `DELETE … IN`，
+     * 聊天页只刷新一次。[retract]：为所有人删除要一并收回通知栏里的原文（与单条 applyMsgOp(DELETE) 同）。
+     */
+    suspend fun removeMessages(owner: String, convId: String, seqs: List<Long>, retract: Boolean) {
+        if (seqs.isEmpty()) return
+        if (retract) seqs.forEach { FcmNotifications.retract(convId, it) }
+        messages.deleteSeqs(owner, convId, seqs)
+        log.i("messages_removed", "convId" to convId, "count" to seqs.size, "retract" to retract)
+    }
+
     /** 「仅为我删除」：收端**物理移除**（§6.7.1）。 */
     suspend fun applyMsgHidden(owner: String, convId: String, convSeq: Long) {
         messages.delete(owner, convId, convSeq)

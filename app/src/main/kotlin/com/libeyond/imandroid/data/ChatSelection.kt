@@ -52,6 +52,17 @@ object ChatSelection {
             msg.contentType != ContentType.CALL   // 通话记录不可勾选（不可转发 / 收藏）
 
     /**
+     * 宫格里**一格**的选择圈状态：`null` = 不画圈（不在多选态，或这一格不可勾）；
+     * `true/false` = 画圈，已勾 / 未勾。
+     *
+     * 宫格每格是一条独立消息（可单独撤回 / 引用 / 转发 / 删除），多选时必须**逐格**勾——
+     * 和 iOS `IMAlbumCell` / Web 一样每格右上角一个圈。此前整行只在左侧画圈、而宫格行不是
+     * `Confirmed` 所以一个圈都没有，点其它格还会打开查看器，用户只能选中长按的那一格。
+     */
+    fun tileMark(selection: Map<Long, MessageEntity>?, msg: MessageEntity): Boolean? =
+        if (selection != null && selectable(msg)) selection.containsKey(msg.convSeq) else null
+
+    /**
      * 勾选 / 取消勾选的**唯一写入口**。到上限就拒（返回 null），由调用方吐司说明——
      * **绝不静默吞掉这一下点击**。
      *

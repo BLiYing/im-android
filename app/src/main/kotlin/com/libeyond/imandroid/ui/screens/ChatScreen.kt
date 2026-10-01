@@ -450,6 +450,7 @@ fun ChatScreen(
                     onCallBack = onCallBack,
                     // 宫格：长按的那一格自己隐形（整行不隐，其余格仍在原位）
                     hiddenTile = if (r0 is ChatRow.Album) menuForSeq else 0L,
+                    selection = if (r0 is ChatRow.Album) selection else null, onToggleSelect = onToggleSelect, // 只宫格要逐格圈：别的行不吃 selection，免得每勾一下全体行重组
                 )
                 }
             }

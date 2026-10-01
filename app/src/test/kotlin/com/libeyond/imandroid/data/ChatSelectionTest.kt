@@ -143,4 +143,17 @@ class ChatSelectionTest {
         val withUnsent = listOf(msg(1, sender = "me"), msg(0, sender = "me"))
         assertFalse(ChatSelection.allDeletableForEveryone(withUnsent, "me", isGroup = false, iAmManager = false))
     }
+
+    @Test
+    fun `宫格逐格选择圈：不在多选态不画，可勾的画且反映已勾，不可勾的不画`() {
+        val a = msg(10)
+        val b = msg(11)
+        val recalled = msg(12, recalled = 5L)
+        val sel = mapOf(10L to a)
+        assertNull("不在多选态不画圈", ChatSelection.tileMark(null, a))
+        assertEquals("已勾的格", true, ChatSelection.tileMark(sel, a))
+        assertEquals("未勾的格", false, ChatSelection.tileMark(sel, b))
+        assertNull("撤回成墓碑的格不可勾，不画圈", ChatSelection.tileMark(sel, recalled))
+        assertNull("未落库（conv_seq<=0）的格不画圈", ChatSelection.tileMark(sel, msg(0)))
+    }
 }

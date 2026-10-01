@@ -85,6 +85,11 @@ internal data class AlbumTile(
     val thumb: String? = null,
     /** 服务端给的字节数（自动下载的大小闸要用）。 */
     val sizeBytes: Long = 0,
+    /**
+     * 多选态下这一格的选择圈：`null` = 不画（不在多选态 / 这一格不可勾，判据见 `ChatSelection.tileMark`）；
+     * `true/false` = 画圈，已勾 / 未勾。**逐格一个圈**，与 iOS `IMAlbumCell` / Web 一致。
+     */
+    val mark: Boolean? = null,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -105,8 +110,13 @@ internal fun AlbumBubble(
      * 与"按住哪张浮哪张"的直觉对不上。
      */
     onLongPressTile: (Int, Rect) -> Unit,
-    /** 点开第 n 格（**逐格**，不是整格一个回调）。 */
+    /** 点开第 n 格（**逐格**，不是整格一个回调）。多选态下由调用方改成「勾选这一格」。 */
     onTapTile: (Int) -> Unit = {},
+    /**
+     * 多选态：点一格 = 勾选它（不管下没下载完，**不开查看器、不触发下载**），长按也不再弹菜单。
+     * 与单条气泡在多选态「整行点一下勾选」同口径。
+     */
+    selecting: Boolean = false,
     /** 要隐形的那一格（长按时它由浮层接管，原位留空避免"重叠感"）。-1 = 都不隐。 */
     hiddenIndex: Int = -1,
     // —— 发送者头与头像列：口径与 [Bubble] 同一套（见那边同名参数的注释）——
@@ -181,6 +191,7 @@ internal fun AlbumBubble(
                                     onTap = { onTapTile(at) },
                                     onLongPress = { r -> onLongPressTile(at, r) },
                                     hidden = at == hiddenIndex,
+                                    selecting = selecting,
                                 )
                             }
                         }
@@ -220,6 +231,7 @@ private fun AlbumTileView(
     onTap: () -> Unit = {},
     onLongPress: (Rect) -> Unit = {},
     hidden: Boolean = false,
+    selecting: Boolean = false,
 ) {
     val c = IMTheme.colors
     // 每一格记住**自己**的矩形：长按浮起的是这一格，不是整个宫格。
@@ -244,8 +256,9 @@ private fun AlbumTileView(
             .alpha(if (hidden) 0f else 1f)
             .combinedClickable(
                 // 没下下来的格子点一下是下载（开始 / 暂停 / 重试，失效不做事），**不打开**（iOS `IMAlbumCell` 同）
-                onClick = { if (!ungated && gate != null && !gate.ready) gate.onTap() else onTap() },
-                onLongClick = { onLongPress(tileRect.value) },
+                // 多选态：一律是「勾选这一格」，不触发下载也不开查看器
+                onClick = { if (!selecting && !ungated && gate != null && !gate.ready) gate.onTap() else onTap() },
+                onLongClick = if (selecting) null else { { onLongPress(tileRect.value) } },
             ),
     ) {
         val frosted = rememberFrostedPainter(m.thumb)
@@ -316,6 +329,14 @@ private fun AlbumTileView(
         // （与详情页 / 收藏页宫格共用同一枚角标）
         if (m.contentType == ContentType.VIDEO && (ungated || gate?.ready == true)) {
             TileDurationChip(m.durationMs)
+        }
+        // 多选圈：右上角（左上角是门控角标 / 视频时长），盖在图上所以要半透明黑底白圈
+        m.mark?.let { picked ->
+            SelectionCheck(
+                selected = picked,
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                overMedia = true,
+            )
         }
     }
 }

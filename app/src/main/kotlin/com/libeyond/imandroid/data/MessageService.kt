@@ -180,7 +180,11 @@ class MessageService(
             }
 
             FrameType.MSG_OP -> data?.let { el ->
-                repo.applyMsgOp(owner, ProtocolJson.decodeFromJsonElement(MsgOpData.serializer(), el))
+                val op = ProtocolJson.decodeFromJsonElement(MsgOpData.serializer(), el)
+                // 批量「为所有人删除」一次只来一帧 targets（PROTOCOL §6.7.2）：整批一条语句移除。
+                val batch = op.batchDeleteSeqs()
+                if (batch != null) repo.removeMessages(owner, op.convId, batch, retract = true)
+                else repo.applyMsgOp(owner, op)
             }
 
             FrameType.CONV_UPDATE -> data?.let { el ->
@@ -189,7 +193,7 @@ class MessageService(
 
             FrameType.MSG_HIDDEN -> data?.let { el ->
                 val d = ProtocolJson.decodeFromJsonElement(MsgHiddenData.serializer(), el)
-                repo.applyMsgHidden(owner, d.convId, d.convSeq)
+                repo.removeMessages(owner, d.convId, d.seqs(), retract = false)
             }
 
             FrameType.VOICE_TRANSCRIPT -> data?.let { el ->

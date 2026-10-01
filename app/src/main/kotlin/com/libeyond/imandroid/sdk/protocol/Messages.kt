@@ -352,9 +352,10 @@ data class MsgOpData(
     /** recall | edit | pin | delete */
     val op: String,
     @SerialName("conv_id") val convId: String,
-    @SerialName("target_conv_seq") val targetConvSeq: Long,
-    /** 幂等键：重发命中即不重复应用。 */
-    @SerialName("client_msg_id") val clientMsgId: String,
+    /** 批量删除广播帧不带（改看 [targets]），故有默认值——没有的话整帧反序列化失败。 */
+    @SerialName("target_conv_seq") val targetConvSeq: Long = 0,
+    /** 幂等键：重发命中即不重复应用。批量帧里是整单那个（可能省略）。 */
+    @SerialName("client_msg_id") val clientMsgId: String = "",
     /** 仅 edit。 */
     val content: String? = null,
     /**
@@ -367,6 +368,22 @@ data class MsgOpData(
     /** 下行追加：操作者。 */
     val by: String = "",
     val timestamp: Long = 0,
+    /**
+     * 只出现在**批量「为所有人删除」的实时广播帧**（PROTOCOL §6.7.2）：一次批量每个成员只收这一帧，
+     * 逐项给被删消息与其事件行的 conv_seq。离线 sync 的事件行仍是每条一行、单条形状。
+     */
+    val targets: List<MsgOpTarget>? = null,
+) {
+    /** 批量删除帧要删的 seq（按帧内顺序）；不是批量删除帧返回 null，按单条处理。与 im-web `batchDeleteTargetsOf` 同口径。 */
+    fun batchDeleteSeqs(): List<Long>? =
+        if (op == MsgOp.DELETE) targets?.map { it.targetConvSeq }?.filter { it > 0 } else null
+}
+
+/** 批量删除广播帧里的一项。 */
+@Serializable
+data class MsgOpTarget(
+    @SerialName("target_conv_seq") val targetConvSeq: Long = 0,
+    @SerialName("op_conv_seq") val opConvSeq: Long = 0,
 )
 
 /** conv_update 下行（§6.8）。**携带变更后的完整状态（非增量）**，收端直接覆盖本地。 */
@@ -384,12 +401,19 @@ data class ConvUpdateData(
     @SerialName("cleared_at") val clearedAt: Long = 0,
 )
 
-/** msg_hidden 下行（§6.7.1）：仅为我删除，收端**物理移除**该消息。 */
+/**
+ * msg_hidden 下行（§6.7.1）：仅为我删除，收端**物理移除**该消息。
+ * 批量隐藏合成一帧：`conv_seqs` 带全集、`conv_seq` 取首条；单条帧不带 `conv_seqs`。收端一律走 [seqs]。
+ */
 @Serializable
 data class MsgHiddenData(
     @SerialName("conv_id") val convId: String = "",
     @SerialName("conv_seq") val convSeq: Long = 0,
-)
+    @SerialName("conv_seqs") val convSeqs: List<Long>? = null,
+) {
+    /** 要移除的 seq：优先 conv_seqs（批量帧），缺省退回 conv_seq（单条帧 / 老服务端）。 */
+    fun seqs(): List<Long> = convSeqs?.filter { it > 0 } ?: listOfNotNull(convSeq.takeIf { it > 0 })
+}
 
 /**
  * voice_transcript 下行（§6.10），也是 `POST /voice/transcripts` REST 响应的 `data`（同一套字段，

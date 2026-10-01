@@ -7,12 +7,12 @@
 
 ## 当前焦点
 
-> **2026-09-30 多选删除补齐两档（未真机）**：`ui/ChatSelectionState.kt` 的 `BatchDeleteConfirm` 从确认弹窗换成
-> 选择单——「仅删除自己」（此前已走 REST hide，现成功后立刻 `applyMsgHidden` 本端移除，不等回推）+ 所选**全部**有权时的
-> 「为所有人删除」（逐条 `msg_op delete`，未连接先拦、留在多选态）。旧弹窗正文「只从本机删除，其他设备…仍能看到」
-> 与 hide 的真实语义不符，已不再使用；`chat.select.delete_confirm_message` 已从共用文案表删除并重新生成四端。
-> 整批判据 `ChatSelection.allDeletableForEveryone`（全有或全无）+ `ChatSelectionTest` 4 例（先看红）。test.sh 1102 绿。
-> **真机待验**：同 iOS 那五条（九宫格多格 / 全自己发 / 混选 / 管理员 / 断网）。
+> **2026-09-30 多选删除两档·改批量接口（2026-10-01 OPPO PKD130 真机实测通过，未提交）**：`ui/ChatSelectionState.kt` 的 `BatchDeleteConfirm` 两档都改为
+> 一次请求（`ConversationsApi.hideMessages` / `deleteMessagesForEveryone`，PROTOCOL §6.7.1/§6.7.2），成功项本地移除
+> （hide → `applyMsgHidden`；everyone → `applyMsgOp(DELETE)` 顺带收回通知栏），失败汇总一句「N 条删除失败」；
+> 第二档走 REST，断线也能删（不再先拦）。结果对回请求 `sdk/api/BatchDelete.okSeqs`，`msg_hidden` 批量帧 `MsgHiddenData.seqs()`；批量删除广播帧（一帧 `targets`，2026-10-01）`MsgOpData.batchDeleteSeqs` → `repo.removeMessages`（一条 `DELETE … IN`，Room 只失效一次）；
+> `BatchDeleteWireTest` 3 例（先看红）。test.sh 1105 绿。本端**没有置顶横幅**，任务 3 不适用。
+> **2026-10-01 真机已验**（`adb reverse` 走 USB，登录页服务器地址临时改成 127.0.0.1:18080，用完请改回）：两档批量、收/发整批一帧（日志 `messages_removed count=3`）、混选只一档、断服务「2 条删除失败」。群成员侧收「群主删他人」整批帧已验。**宫格逐格勾选已补齐（2026-10-01 真机验证）**：每格右上角一个选择圈（`AlbumTile.mark` ← `ChatSelection.tileMark`），多选态点一格=勾这一格（不开查看器、不触发门控下载），长按不再弹菜单；此前只能选中长按的那一格。`ChatSelectionTest` 新增 1 例（先看红）。
 
 > **2026-09-30 撤回 / 删除后收回通知（Android 侧）**：设计 `../IMServer/docs/design/PUSH_M5_DESIGN.md` §3.4。
 > `fcm/FcmNotifications.kt`（新）：展示通知时把 `conv_seq` 记进 extras；收到服务端 `type=retract` 的 FCM

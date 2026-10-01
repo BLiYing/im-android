@@ -5,7 +5,9 @@ import com.libeyond.imandroid.sdk.protocol.MessageData
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 /**
  * 会话摘要（对齐后端 `internal/conversation.Summary`）。
@@ -218,6 +220,28 @@ class ConversationsApi(private val http: HttpClient) {
 
     suspend fun serverConfig(): ServerConfig =
         decode(http.call("GET", "/api/v1/server-config"), ServerConfig.serializer())
+
+    /**
+     * 多选「仅删除自己」（§6.7.1 批量，≤[BatchDelete.MAX]）：一次请求，服务端逐条回成败；
+     * 随后推**一帧** msg_hidden（带 conv_seqs）给本人全部设备。整单失败（断网/非成员）抛异常。
+     */
+    suspend fun hideMessages(convId: String, convSeqs: List<Long>): List<BatchItemResult> =
+        decode(http.call("POST", "/api/v1/messages/hide", buildJsonObject {
+            put("conv_id", convId)
+            putJsonArray("conv_seqs") { convSeqs.forEach { add(it) } }
+        }), BatchResults.serializer()).results
+
+    /**
+     * 多选「为所有人删除」（§6.7.2，≤[BatchDelete.MAX]）：规则与单条 WS msg_op delete 同源，逐条回成败
+     * （300005 不存在 / 300006 无权）。成功项服务端合成**一帧** msg_op{op:delete, targets} 广播（§6.7.2）。
+     * [clientMsgId] 是整单幂等键：重试不会重复登记事件行。整单失败抛异常。
+     */
+    suspend fun deleteMessagesForEveryone(convId: String, convSeqs: List<Long>, clientMsgId: String): List<BatchItemResult> =
+        decode(http.call("POST", "/api/v1/messages/delete", buildJsonObject {
+            put("conv_id", convId)
+            putJsonArray("conv_seqs") { convSeqs.forEach { add(it) } }
+            put("client_msg_id", clientMsgId)
+        }), BatchResults.serializer()).results
 
     /** 「仅为我删除」一条消息（§6.7.1）。服务端随后推 msg_hidden 给本人全部设备。 */
     suspend fun hideMessage(convId: String, convSeq: Long) {

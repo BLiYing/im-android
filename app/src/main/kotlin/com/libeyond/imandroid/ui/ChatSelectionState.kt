@@ -2,7 +2,6 @@ package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -13,13 +12,12 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.data.ChatSelection
 import com.libeyond.imandroid.data.db.MessageEntity
-import com.libeyond.imandroid.data.sendMsgOp
 import com.libeyond.imandroid.sdk.IMClient
-import com.libeyond.imandroid.sdk.protocol.MsgOp
-import com.libeyond.imandroid.sdk.ws.ConnState
+import com.libeyond.imandroid.sdk.api.BatchDelete
 import com.libeyond.imandroid.ui.components.ActionSheet
 import com.libeyond.imandroid.ui.components.SheetItem
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * 聊天页多选态的**状态持有者**（M4-3）。判据全在 `data/ChatSelection.kt`，这里只管"记着谁被勾了"。
@@ -97,11 +95,14 @@ internal fun rememberChatSelection(convId: String): ChatSelectionController =
 /**
  * 批量删除的档位选择单（三端同口径，2026-09-30）：
  *
- * - **仅删除自己**恒有：走 REST `/messages/hide`——每用户私有偏好，落服务端隐藏表并同步本人其它设备，
+ * - **仅删除自己**恒有：一次批量 REST `/messages/hide`——每用户私有偏好，落服务端隐藏表并同步本人其它设备，
  *   不进会话事件流、不占 conv_seq、不广播给其他成员（PROTOCOL §6.7.1）。
  * - **为所有人删除**只在所选**全部**有权时才给（[ChatSelection.allDeletableForEveryone]：全有或全无，
- *   避免"选了 10 条只删掉 3 条"的怪相）：逐条 `msg_op delete`，成功由服务端广播回帧收敛，
- *   被拒（300006）走既有的操作失败提示。
+ *   避免"选了 10 条只删掉 3 条"的怪相）：一次批量 REST `/messages/delete`（§6.7.2）。走 REST 而非 WS，
+ *   断线时也删得掉，不必先判连接态。
+ *
+ * 两档服务端都逐条回成败：成功的本端立刻移除（不等回推帧，回推再来是幂等的），失败的汇总成
+ * 一句「N 条删除失败」（不再逐条提示），与 im-web / iOS 同口径。
  *
  * 此前这里是一个确认弹窗，只有第一档，正文还写着「只从本机删除，其他设备…仍能看到」——
  * 与 hide 的真实语义（本人多端同步）不符，故换成与单条删除同款的选择单，不再带那句话。
@@ -115,44 +116,39 @@ internal fun BatchDeleteConfirm(
     iAmManager: Boolean,
     onToast: (String) -> Unit,
 ) {
-    // ⚠️ 作用域必须在早退**之前**取：点下去那一刻 `sel.cancel()` 把 confirmDelete 置回 false，下一次重组就走早退。
-    // 作用域若是早退之后才 remember 的，就跟着离开组合被当场取消——第一条 hide 还挂在网络上，
-    // 后面的全都发不出去、吐司也不出（同 `MessageMenuItems.kt` 记的那条 LeftCompositionCancellationException）。
-    // 本函数由 ChatHost 无条件调用，取在这里它就与聊天页同寿命。
-    val scope = rememberCoroutineScope()
+    // 批量请求挂 client.scope（与客户端同寿命），不挂页面作用域：点完就离开聊天页的话，页面作用域一取消，
+    // 服务端那边删成了、本端却既不移除也不提示（只能等回推帧收敛）。同 DataStorageHost 的保存。
+    // 早先这里用 rememberCoroutineScope 并要求取在早退之前——那是为了躲 `sel.cancel()` 触发的离开组合取消，
+    // 换成 client.scope 后两个坑一起没了。
     if (!sel.confirmDelete) return
     val picked = sel.picked()
     val myUid = client.uid.orEmpty()
     val items = buildList {
         add(SheetItem(stringResource(R.string.delete_sheet_only_me), destructive = true) {
             sel.cancel()
-            scope.launch {
-                var failed = 0
-                picked.forEach { m ->
-                    runCatchingCancellable { client.conversationsApi.hideMessage(convId, m.convSeq) }
-                        .onSuccess {
-                            // 服务端已隐藏 → 本端立刻移除，不等回推的 msg_hidden（幂等）。本地写失败**不算删除失败**：
-                            // 服务端那边已经成了，回推帧或下次同步会把它收敛掉，算成失败只会引用户重复去删。
-                            runCatchingCancellable { client.repo.applyMsgHidden(myUid, convId, m.convSeq) }
-                        }
-                        .onFailure { failed++ }
+            client.scope.launch {
+                runBatchDelete(picked, onToast) { seqs ->
+                    val ok = BatchDelete.okSeqs(seqs, client.conversationsApi.hideMessages(convId, seqs))
+                    // 服务端已隐藏 → 本端立刻移除。本地写失败**不算删除失败**：服务端那边已经成了，
+                    // 回推的 msg_hidden 或下次同步会把它收敛掉，算成失败只会引用户重复去删。
+                    runCatchingCancellable { client.repo.removeMessages(myUid, convId, ok, retract = false) }
+                    seqs.size - ok.size
                 }
-                onToast(
-                    if (failed == 0) Str.p(R.plurals.chat_select_delete_done, picked.size, picked.size)
-                    else Str.p(R.plurals.chat_select_delete_failed_count, failed, failed),
-                )
             }
         })
         // 破坏性重的放最后（destructive-last，与长按子菜单一致）
         if (ChatSelection.allDeletableForEveryone(picked, myUid, isGroup, iAmManager)) {
             add(SheetItem(stringResource(R.string.delete_sheet_everyone), destructive = true) {
-                // 未连接时帧发不出去——先拦住并**留在多选态**，别让用户以为删掉了
-                if (client.socket.state.value != ConnState.Connected) {
-                    onToast(Str.s(R.string.conv_error_delete_failed_detail, Str.s(R.string.conn_state_disconnected)))
-                    return@SheetItem
-                }
                 sel.cancel()
-                picked.forEach { m -> client.messages.sendMsgOp(convId, MsgOp.DELETE, m.convSeq) }
+                client.scope.launch {
+                    runBatchDelete(picked, onToast) { seqs ->
+                        val results = client.conversationsApi.deleteMessagesForEveryone(convId, seqs, UUID.randomUUID().toString())
+                        val ok = BatchDelete.okSeqs(seqs, results)
+                        // 成功项本地整批移除（同广播帧的处理，顺带收回通知栏）；广播帧随后再到是幂等的。
+                        runCatchingCancellable { client.repo.removeMessages(myUid, convId, ok, retract = true) }
+                        seqs.size - ok.size
+                    }
+                }
             })
         }
     }
@@ -162,5 +158,20 @@ internal fun BatchDeleteConfirm(
         title = pluralStringResource(R.plurals.chat_select_delete_confirm_title, picked.size, picked.size),
         items = items,
         onDismiss = { sel.confirmDelete = false },
+    )
+}
+
+/**
+ * 两档共用：已落库的（conv_seq>0）发一次批量请求，[call] 回失败条数；整单失败（断网/已不在会话）按全部失败算。
+ * 失败汇总成一句提示，全成功给完成提示。
+ */
+private suspend fun runBatchDelete(picked: List<MessageEntity>, onToast: (String) -> Unit, call: suspend (List<Long>) -> Int) {
+    // 不在这里截断：多选闸已经限 100（=服务端上限）；真超了服务端整单 100001，按全部失败提示，不静默丢条目。
+    val seqs = picked.map { it.convSeq }.filter { it > 0 }.distinct()
+    if (seqs.isEmpty()) return
+    val failed = runCatchingCancellable { call(seqs) }.getOrElse { seqs.size }
+    onToast(
+        if (failed == 0) Str.p(R.plurals.chat_select_delete_done, seqs.size, seqs.size)
+        else Str.p(R.plurals.chat_select_delete_failed_count, failed, failed),
     )
 }

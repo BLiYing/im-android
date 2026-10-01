@@ -10,6 +10,7 @@ import com.libeyond.imandroid.data.ReplyNames
 import com.libeyond.imandroid.data.SenderNames
 import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.data.SysEvents
+import com.libeyond.imandroid.data.ChatSelection
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.SendState
 import com.libeyond.imandroid.sdk.api.LinkPreview
@@ -93,6 +94,10 @@ internal fun ChatRowView(
     /** 点单聊通话记录回拨（是否视频）。 */
     onCallBack: (Boolean) -> Unit = {},
     hiddenTile: Long = 0L,
+    /** 多选态的勾选集（`conv_seq → 消息`）；null = 不在多选态。宫格据此逐格画圈。 */
+    selection: Map<Long, MessageEntity>? = null,
+    /** 多选态下点宫格某一格 = 勾 / 取消勾这一格（走与整行点击同一个入口，上限吐司也在那里）。 */
+    onToggleSelect: (MessageEntity) -> Unit = {},
 ) {
     val myUid = style.myUid
     val isGroup = style.isGroup
@@ -130,6 +135,7 @@ internal fun ChatRowView(
                     is AlbumMember.Sent -> AlbumTile(
                         m.msg.content, m.msg.contentType, m.msg.duration,
                         thumb = m.msg.thumb, sizeBytes = m.msg.fileSize ?: 0L,
+                        mark = ChatSelection.tileMark(selection, m.msg),
                     )
                     is AlbumMember.Sending -> AlbumTile(
                         m.msg.content, m.msg.contentType, null,
@@ -145,8 +151,12 @@ internal fun ChatRowView(
             // 整格共用一个回调会让所有格都打开第一张。
             // **还在传的那格点不开**——本地 uri 能显示但查看器要服务端地址。
             onTapTile = { idx ->
-                (r.members.getOrNull(idx) as? AlbumMember.Sent)?.let { onOpenMedia(it.msg) }
+                (r.members.getOrNull(idx) as? AlbumMember.Sent)?.let {
+                    // 多选态下点一格是勾它（不可勾的格 toggle 当没发生），不开查看器
+                    if (selection != null) onToggleSelect(it.msg) else onOpenMedia(it.msg)
+                }
             },
+            selecting = selection != null,
             mine = albumMine,
             timestamp = when (val l = r.members.last()) {
                 is AlbumMember.Sent -> l.msg.timestamp

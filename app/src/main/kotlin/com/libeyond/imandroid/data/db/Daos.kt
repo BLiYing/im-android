@@ -233,6 +233,10 @@ interface MessageDao {
     @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId AND convSeq = :seq")
     suspend fun delete(owner: String, convId: String, seq: Long)
 
+    /** 批量物理移除：一条语句，Room 只失效一次（逐条 delete 会让观察方跟着刷 N 次）。seqs ≤100（多选上限）。 */
+    @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId AND convSeq IN (:seqs)")
+    suspend fun deleteSeqs(owner: String, convId: String, seqs: List<Long>)
+
     @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun clearConv(owner: String, convId: String)
 
