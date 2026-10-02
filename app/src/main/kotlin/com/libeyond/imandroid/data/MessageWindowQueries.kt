@@ -31,9 +31,14 @@ suspend fun MessageRepository.windowAround(
     half: Int = ChatWindows.ANCHOR_HALF,
 ): ChatWindow.Anchored? {
     val m = messages.byConvSeq(owner, convId, convSeq) ?: return null
+    // **只取目标所在的那一段**：本地有缺口时，「前后各一页」不能把缺口另一侧的旧岛拼进来（C3，段内取）；
+    // 本机清空位点以下的也不要
+    val seg = SyncRanges.rangeContaining(ranges.ranges(owner, convId), m.convSeq)
+    val from = maxOf(seg?.lo ?: 0L, ChatTailPlan.visibleFrom(conversations.byId(owner, convId)?.clearedUpTo ?: 0L))
     return ChatWindows.boundsOf(
-        before = messages.pointsBefore(owner, convId, m.timestamp, m.convSeq, half),
-        atOrAfter = messages.pointsAtOrAfter(owner, convId, m.timestamp, m.convSeq, half),
+        before = messages.pointsBefore(owner, convId, m.timestamp, m.convSeq, half).filter { it.convSeq >= from },
+        atOrAfter = messages.pointsAtOrAfter(owner, convId, m.timestamp, m.convSeq, half)
+            .filter { seg == null || it.convSeq <= seg.hi },
     )
 }
 
@@ -46,8 +51,13 @@ suspend fun MessageRepository.extendWindowOlder(
     convId: String,
     window: ChatWindow.Anchored,
     page: Int = ChatWindows.ANCHOR_PAGE,
+    /** 服务端可见下界（[HistoryFloors]）。 */
+    historyFloor: Long = 0L,
 ): ChatWindow.Anchored {
-    val older = messages.pointsBefore(owner, convId, window.loTs, window.loSeq, page)
+    // 同上：只在窗口下沿所在的那一段里往上取，不跨缺口、不越过可见起点；取不到就原样返回，调用方据此去问服务端
+    val seg = SyncRanges.rangeContaining(ranges.ranges(owner, convId), window.loSeq)
+    val from = maxOf(seg?.lo ?: 0L, ChatTailPlan.visibleFrom(conversations.byId(owner, convId)?.clearedUpTo ?: 0L, historyFloor))
+    val older = messages.pointsBefore(owner, convId, window.loTs, window.loSeq, page).filter { it.convSeq >= from }
     val lo = older.lastOrNull() ?: return window
     return window.copy(loTs = lo.timestamp, loSeq = lo.convSeq)
 }

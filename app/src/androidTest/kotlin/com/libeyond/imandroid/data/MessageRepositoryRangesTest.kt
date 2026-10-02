@@ -359,4 +359,102 @@ class MessageRepositoryRangesTest {
         repo.noteHead(me, conv, 77)
         assertEquals(77L, repo.observeHead(me, conv).first())
     }
+
+    // —— C3：进会话分流 / 本地开窗 / 段内取 ——
+
+    @Test
+    fun planEntryAsksServerWhenTheUnreadAnchorIsNotCovered() = runBlocking {
+        repo.noteHead(me, conv, 100_000)
+        val p = repo.planEntry(me, conv, readSeq = 99_000, unread = 50)
+        assertEquals(EntryPlan.Server(anchor = 99_000, before = 25, after = 100), p)
+    }
+
+    @Test
+    fun planEntryIsLocalWhenTheLatestPageIsCoveredAndPresent() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..300L).map { md(it) }, covered = 300)
+        repo.noteHead(me, conv, 300)
+        assertEquals(EntryPlan.Local, repo.planEntry(me, conv, readSeq = 300, unread = 0))
+    }
+
+    @Test
+    fun planEntryOnAClearedConversationNeverAsksTheServer() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..30L).map { md(it) }, covered = 30)
+        repo.noteHead(me, conv, 30)
+        repo.clearConversation(me, conv)
+        assertEquals(EntryPlan.Local, repo.planEntry(me, conv, readSeq = 5, unread = 25))
+    }
+
+    /** 十万未读：读位点远在 tip 之前，服务端给的那一窗不含 tip——必须是锚点窗，不能硬当尾窗（否则 bump 会把人拽走）。 */
+    @Test
+    fun farUnreadEntryIsAnAnchoredWindowAroundTheReadPositionNotATail() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..50L).map { md(it) }, covered = 50) // 旧岛：不该被拼进来
+        repo.noteHead(me, conv, 100_000)
+        repo.onWindowPage(me, conv, (975L..1100L).map { md(it) })          // 服务端给的「读位点 1000 附近」那一窗
+        val w = repo.localEntryWindow(me, conv, readSeq = 1000, unread = 99_000)
+        check(w is ChatWindow.Anchored) { "应是锚点窗，实际 $w" }
+        val rows = repo.messages.observeRange(me, conv, w.loTs, w.loSeq, w.hiTs, w.hiSeq).first().map { it.convSeq }.sorted()
+        assertEquals(976L, rows.first())  // 读位点后第一条是 1001，往前带 ENTRY_BEFORE=25 条已读上下文
+        assertEquals(1100L, rows.last())
+        assertEquals(true, rows.none { it <= 50 }) // 旧岛没被拼进来
+    }
+
+    @Test
+    fun smallUnreadInACompleteConversationStaysATailSoNewMessagesKeepComing() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..300L).map { md(it) }, covered = 300)
+        repo.noteHead(me, conv, 300)
+        val w = repo.localEntryWindow(me, conv, readSeq = 295, unread = 5)
+        assertEquals(ChatWindow.Tail(ChatWindows.TAIL_LIMIT, fromSeq = 1), w)
+    }
+
+    @Test
+    fun noUnreadEntryIsATailBoundedToTheLatestSegment() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..50L).map { md(it) }, covered = 50)
+        repo.noteHead(me, conv, 1000)
+        repo.onWindowPage(me, conv, (901L..1000L).map { md(it) })
+        val w = repo.localEntryWindow(me, conv, readSeq = 1000, unread = 0)
+        assertEquals(ChatWindow.Tail(ChatWindows.TAIL_LIMIT, fromSeq = 901), w)
+    }
+
+    /** 上滚：本段到头后 extendWindowOlder 原样返回（调用方据此去问服务端），不跨缺口拼旧岛。 */
+    @Test
+    fun extendWindowOlderStopsAtTheSegmentEdgeInsteadOfStitchingTheOldIsland() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..10L).map { md(it) }, covered = 10)
+        repo.onWindowPage(me, conv, (900L..905L).map { md(it) })
+        val w = ChatWindow.Anchored(loTs = 900, loSeq = 900, hiTs = 905, hiSeq = 905) // 显式构造：别依赖 windowAround 本身的段内取
+        assertEquals(w, repo.extendWindowOlder(me, conv, w)) // 本段 [900,905] 里没有更早的了；[1,10] 在缺口另一侧
+    }
+
+    @Test
+    fun windowAroundOnlyTakesTheTargetsOwnSegment() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..10L).map { md(it) }, covered = 10)
+        repo.onWindowPage(me, conv, (900L..905L).map { md(it) })
+        val w = repo.windowAround(me, conv, 900)!! // 前一页本该包含 [1,10] 里的行——不许
+        val rows = repo.messages.observeRange(me, conv, w.loTs, w.loSeq, w.hiTs, w.hiSeq).first().map { it.convSeq }.sorted()
+        assertEquals((900L..905L).toList(), rows)
+    }
+
+    /** 降级：有未读、读位点附近本地一条没有（服务端那一窗没取到）——不拿尾窗兜底，否则可见即读会越过缺口清掉未读。 */
+    @Test
+    fun farUnreadWithNothingLocalNearTheReadPositionHasNoSafeWindow() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..50L).map { md(it) }, covered = 50)
+        repo.noteHead(me, conv, 100_000)
+        repo.onIncoming(me, md(100_000), bumpUnread = false) // 离线期间实时进来的最新一条：孤岛，与读位点 1000 隔着缺口
+        assertNull(repo.localEntryWindow(me, conv, readSeq = 1000, unread = 99_000))
+    }
+
+    /** 读位点落在清空位点以下：锚点从可见起点算起，被清掉的行不当「读位点之后第一条」。 */
+    @Test
+    fun entryAnchorStartsFromTheVisibleFloorWhenTheReadPositionIsBelowIt() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..30L).map { md(it) }, covered = 30)
+        repo.noteHead(me, conv, 100_000)
+        repo.clearConversation(me, conv)                                  // 位点 = 100_000？不：清空取本机所知最新，这里 head 已 100_000
+        repo.onWindowPage(me, conv, (100_001L..100_200L).map { md(it) })   // 清空之后的新消息
+        val w = repo.localEntryWindow(me, conv, readSeq = 5, unread = 150)
+        val rows = when (w) {
+            is ChatWindow.Anchored -> repo.messages.observeRange(me, conv, w.loTs, w.loSeq, w.hiTs, w.hiSeq).first().map { it.convSeq }
+            is ChatWindow.Tail -> repo.observeTail(me, conv, w.fromSeq, w.limit).first().map { it.convSeq }
+            null -> emptyList()
+        }
+        assertEquals(true, rows.isNotEmpty() && rows.all { it > 100_000 }) // 绝不露出位点以下的行
+    }
 }

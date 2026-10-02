@@ -55,6 +55,15 @@ object ChatWindows {
     /** 进会话与「回到最新」的尾窗条数。 */
     const val TAIL_LIMIT = 200
 
+    /** 进会话有未读时锚点之前带多少条已读上下文（让未读分割线不贴屏幕顶）。 */
+    const val ENTRY_BEFORE = 25
+
+    /** 进会话有未读时锚点之后取多少条。 */
+    const val ENTRY_AFTER = 100
+
+    /** 向服务端要「最新一页」时取多少条（`window_req(anchor=0, before=LATEST_FETCH)`）。 */
+    const val LATEST_FETCH = 100
+
     /** 尾窗向上翻一页加多少条。 */
     const val TAIL_PAGE = 200
 

@@ -35,6 +35,7 @@ import com.libeyond.imandroid.sdk.protocol.SyncRespData
  */
 internal suspend fun MessageService.onConnected() {
     val owner = ownerProvider() ?: return
+    historyFloors.clear() // 下界会变小：重连后以服务端新说的为准
     refreshConversations()
     requestSync(owner)
     resendInFlight(owner)
@@ -192,3 +193,15 @@ internal suspend fun MessageService.resendInFlight(owner: String) {
  */
 internal fun isLocalUri(content: String): Boolean =
     content.startsWith("content://") || content.startsWith("file://")
+
+/**
+ * `has_before=false` ⇒ 本窗下沿就是我能看到的最早一条：把它记成会话级可见下界（[HistoryFloors]）。
+ * 位点取**客户端真正留下的行**里最小的 seq（不含 `msg_op` 事件行与墓碑——它们不渲染，闸钉在渲染不出的号上永不收敛）。
+ */
+internal fun MessageService.noteWindowFloor(resp: com.libeyond.imandroid.sdk.protocol.WindowRespData) {
+    if (resp.hasBefore || resp.convId.isEmpty()) return
+    val minKept = resp.messages
+        .filter { it.convSeq > 0 && IncomingRule.kindOf(it.contentType, it.deletedAt) == IncomingKind.Message }
+        .minOfOrNull { it.convSeq } ?: 0L
+    historyFloors.note(resp.convId, ChatTailPlan.floorFromWindow(minKept, resp.anchor))
+}

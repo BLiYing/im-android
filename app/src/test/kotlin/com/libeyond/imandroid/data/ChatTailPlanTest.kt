@@ -62,4 +62,35 @@ class ChatTailPlanTest {
         assertFalse(ChatTailPlan.bumpShouldCatchUp(following = true, head = 300, tailHi = 300))
         assertFalse(ChatTailPlan.bumpShouldCatchUp(following = true, head = 0, tailHi = 0))
     }
+
+    @Test
+    fun `有效可见起点取清空位点之后与服务端下界的大者`() {
+        assertEquals(31L, ChatTailPlan.visibleFrom(clearedUpTo = 30, historyFloor = 10))
+        assertEquals(500L, ChatTailPlan.visibleFrom(clearedUpTo = 30, historyFloor = 500))
+        assertEquals(0L, ChatTailPlan.visibleFrom(0, 0))
+    }
+
+    @Test
+    fun `下界记本窗留下的最小 seq 一条没留就退回锚点`() {
+        assertEquals(120L, ChatTailPlan.floorFromWindow(minKeptSeq = 120, anchor = 500))
+        assertEquals(500L, ChatTailPlan.floorFromWindow(minKeptSeq = 0, anchor = 500))
+        assertEquals(0L, ChatTailPlan.floorFromWindow(0, 0))
+    }
+
+    @Test
+    fun `下界只往小里收 未知不参与`() {
+        assertEquals(100L, ChatTailPlan.mergeHistoryFloor(current = 300, incoming = 100))
+        assertEquals(100L, ChatTailPlan.mergeHistoryFloor(current = 100, incoming = 300)) // 不被更大的值抬高
+        assertEquals(300L, ChatTailPlan.mergeHistoryFloor(current = 0, incoming = 300))
+        assertEquals(300L, ChatTailPlan.mergeHistoryFloor(current = 300, incoming = 0))
+    }
+
+    @Test
+    fun `上面还有没有 到了可见起点就没有`() {
+        assertTrue(ChatTailPlan.hasMoreAbove(oldestRendered = 50, visibleFrom = 0))
+        assertFalse(ChatTailPlan.hasMoreAbove(oldestRendered = 1, visibleFrom = 0))
+        assertFalse(ChatTailPlan.hasMoreAbove(oldestRendered = 31, visibleFrom = 31)) // 踩在清空位点之后第一条上
+        assertTrue(ChatTailPlan.hasMoreAbove(oldestRendered = 32, visibleFrom = 31))
+        assertFalse(ChatTailPlan.hasMoreAbove(oldestRendered = 0, visibleFrom = 0)) // 全是待发消息
+    }
 }

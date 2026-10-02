@@ -127,7 +127,9 @@ fun ChatHost(
     // 渲染窗口（MESSAGE_WINDOW_DESIGN §4）。两态：贴最新的尾窗 / 钉在某段历史的锚点窗。
     // **不能无界**——13 万条的会话整窗构造对象会把聊天页渲染成空白（2026-09-07 实测）。
     var window by remember(conv.convId) {
-        mutableStateOf<ChatWindow>(ChatWindow.Tail(ChatWindows.TAIL_LIMIT))
+        // 占位窗：取不到任何行。进会话先问区间清单再决定开哪一窗（ChatTailSync），决定之前列表保持为空，
+        // 首屏定位要等有行才做——这样它第一次看到的就是决定好的那一窗，而不是一屏过期的本地尾巴。
+        mutableStateOf<ChatWindow>(ChatWindow.Tail(ChatWindows.TAIL_LIMIT, fromSeq = Long.MAX_VALUE))
     }
 
     // —— 定位与会话内搜索（接线在 ChatLookups.kt：顺序有讲究，locator 先建，两者都要在 BackHandler 之前）——
@@ -200,12 +202,7 @@ fun ChatHost(
     }.collectAsState(initial = null)
     val messages = loadedMessages.orEmpty()
     val pending = loadedPending.orEmpty()
-    val rowsReady = loadedMessages != null && loadedPending != null
-    // 尾窗同步：↓ 回到最新 / bump 到了贴底补最新页（ChatTailSync.kt）
-    val tail = rememberChatTail(
-        client, conv.convId, owner, window, setWindow = { window = it },
-        tailHi = messages.lastOrNull()?.convSeq ?: 0L, connected = connected,
-    )
+    val rowsLoaded = loadedMessages != null && loadedPending != null
     com.libeyond.imandroid.ui.voice.VoiceRelayEffect(conv.convId, messages, owner) // 接力连播（语音 §6.4）
     com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave()
     com.libeyond.imandroid.ui.voice.PauseRecordingOnLeave() // 离开聊天页即中断录音（设计 §5.4）
@@ -218,6 +215,15 @@ fun ChatHost(
     // iOS/Web 同样是冻结入会话快照，不是实时值。
     val entry = remember(conv.convId) { conv.readSeq to conv.unread }
 
+    // 尾窗同步：↓ 回到最新 / bump 到了贴底补最新页（ChatTailSync.kt）
+    val tail = rememberChatTail(
+        client, conv.convId, owner, window, setWindow = { window = it },
+        tailHi = messages.lastOrNull()?.convSeq ?: 0L, connected = connected, onToast = { toast = it },
+        entryReadSeq = entry.first, entryUnread = entry.second,
+    )
+
+    // 进会话取数没决定之前不算「就绪」：占位窗读不出消息，但出箱里有待重发的行时列表并不空，首屏定位会抢跑（ChatTail.entryDecided）
+    val rowsReady = rowsLoaded && tail.entryDecided
     val rows = remember(messages, pending, entry) {
         buildChatRows(messages, pending, entry.first, entry.second)
     }
@@ -391,19 +397,7 @@ fun ChatHost(
                 AttachItems.Kind.Favorite -> pickingFavorites = true
             }
         },
-        onLoadOlder = {
-            when (val w = window) {
-                // 尾窗：只有装满时才继续加——没装满说明本地就这么多，再加只会让同一批数据反复重查
-                is ChatWindow.Tail -> if (messages.size >= w.limit) {
-                    window = w.copy(limit = w.limit + ChatWindows.TAIL_PAGE)
-                }
-                // 锚点窗：把下界再往前挪一页。到会话开头时 extendWindowOlder 原样返回，
-                // 赋回同一个值不会触发重组（data class 相等），自然停下
-                is ChatWindow.Anchored -> scope.launch {
-                    window = client.repo.extendWindowOlder(owner, conv.convId, w)
-                }
-            }
-        },
+        onLoadOlder = { tail.loadOlder(messages.firstOrNull()?.convSeq ?: 0L, messages.size) }, // 本段本地有就展开、到边缘才问服务端（ChatTailSync）
         // 「回到最新」：锚点窗要**换回尾窗**，只滚列表是回不去的（那一窗里根本没有最新那条）
         onJumpToLatest = { tail.jumpToLatest() }, // 本地没有最新页就先向服务端要（ChatTailSync.kt）
         showsJumpToLatest = { away -> tail.awayFromBottom = away; ChatWindows.showsJumpToLatest(window, away) },

@@ -68,6 +68,9 @@ class MessageService(
     /** 「按锚点开窗」的一问一答（MESSAGE_WINDOW_DESIGN §3.2），实现在 [WindowRequester]。 */
     internal val windows = WindowRequester(socket, scope)
 
+    /** 服务端可见下界（`window_resp.has_before=false`），每次连上清空，见 [HistoryFloors]。 */
+    val historyFloors = HistoryFloors()
+
     /** 已发出 `sync_req`、还没等到应答的会话（跳号自愈别叠请求）；连上时清空。仅在帧分派协程里读写。 */
     internal val syncInFlight = HashSet<String>()
 
@@ -175,6 +178,7 @@ class MessageService(
             FrameType.WINDOW_RESP -> data?.let {
                 val resp = ProtocolJson.decodeFromJsonElement(WindowRespData.serializer(), it)
                 repo.onWindowPage(owner, resp.convId, resp.messages)
+                noteWindowFloor(resp)
                 windows.deliver(resp)
                 log.i(
                     "window_applied", "convId" to resp.convId, "msgs" to resp.messages.size,

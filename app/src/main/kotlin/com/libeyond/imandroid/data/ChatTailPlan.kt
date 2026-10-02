@@ -32,6 +32,29 @@ object ChatTailPlan {
      */
     fun visibleFrom(clearedUpTo: Long): Long = if (clearedUpTo > 0) clearedUpTo + 1 else 0L
 
+    /** 有效可见起点 = max(本机清空位点之后, 服务端可见下界)。两个下界**各自独立存、用时才取大**。 */
+    fun visibleFrom(clearedUpTo: Long, historyFloor: Long): Long = maxOf(visibleFrom(clearedUpTo), maxOf(0L, historyFloor))
+
+    /**
+     * `has_before=false` 时可见下界该记在哪：**本窗下沿里客户端真正留下的最小 seq**（含）；一条没留下就退回锚点。
+     * 必须记位点不能记布尔——`has_before` 是相对**本窗下沿**说的，不是相对整条会话（从搜索结果跳进旧岛、上滑到岛顶时同样为 false）。
+     * 喂进来的 [minKeptSeq] 只能算**渲染得出来的行**（不含 msg_op 事件行与墓碑），否则闸钉在渲染不出的号上永不收敛。
+     */
+    fun floorFromWindow(minKeptSeq: Long, anchor: Long): Long = if (minKeptSeq > 0) minKeptSeq else maxOf(0L, anchor)
+
+    /** 只往小里收：下界会变小（群主关「仅可见入群后」时服务端返回更低的位点），不能被更大的旧值钉死。0 = 未知，不参与。 */
+    fun mergeHistoryFloor(current: Long, incoming: Long): Long = when {
+        incoming <= 0 -> maxOf(0L, current)
+        current <= 0 -> incoming
+        else -> minOf(current, incoming)
+    }
+
+    /** 渲染窗口最上面那条之上还有没有（本地或服务端）可看的：到了可见起点就没有了。 */
+    fun hasMoreAbove(oldestRendered: Long, visibleFrom: Long): Boolean {
+        if (oldestRendered <= 0) return false // 窗口里全是待发消息：没有可作边界的位点
+        return oldestRendered > maxOf(1L, visibleFrom)
+    }
+
     /**
      * 要不要去服务端取最新一页。
      * @param covered 最新页 `[latestPageLowAboveFloor, tip]` 是否被**同一段**区间覆盖

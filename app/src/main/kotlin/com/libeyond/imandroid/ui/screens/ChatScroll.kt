@@ -12,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -31,6 +32,7 @@ import com.libeyond.imandroid.data.ChatScroll
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.logging.PerfMarks
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
@@ -39,6 +41,9 @@ import kotlinx.coroutines.ensureActive
 // 判据（该不该滚、算不算点击）是纯函数，在 `data/ChatScroll.kt`；这里只放**动手**的那一半。
 
 private val log = IMLog.tag("IM.Chat")
+
+/** 上滚请求发出后多久行数仍没涨就认为这次没取回东西、允许再触发。 */
+private const val OLDER_RETRY_MS = 2_000L
 
 /**
  * 聊天列表上**只记、不驱动重组**的簿记。
@@ -283,6 +288,15 @@ internal fun ChatListSync(
     //    补偿一律**按同一条消息**（下标 + 新增条数），不按 contentSize 差值。
     var pendingOlder by remember(convId) { mutableStateOf(false) }
     var rowsBeforeLoad by remember(convId) { mutableStateOf(0) }
+
+    // 上一页没回来（离线 / 超时 / 已到可见起点 / 本段恰好装满一窗）时行数不涨，pendingOlder 会一直为 true，
+    // 之后再也不触发上滚（C3 复查抓出）。兜底：过了一阵行数仍没涨就复位，下次滚动再试（loadOlderStep 自己有在途去重与下界闸）。
+    val rowsNow by rememberUpdatedState(rows.size)
+    LaunchedEffect(pendingOlder) {
+        if (!pendingOlder) return@LaunchedEffect
+        delay(OLDER_RETRY_MS)
+        if (pendingOlder && rowsNow <= rowsBeforeLoad) pendingOlder = false
+    }
 
     LaunchedEffect(rows.size, listState.firstVisibleItemIndex) {
         if (!marks.didEntry || rows.isEmpty()) return@LaunchedEffect

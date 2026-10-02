@@ -339,6 +339,8 @@ data class WindowReqData(
 @Serializable
 data class WindowRespData(
     @SerialName("conv_id") val convId: String = "",
+    /** 原样回显请求里的锚点（0=取最新）。`has_before=false` 记可见下界时，没有可渲染行就退回它。 */
+    val anchor: Long = 0,
     /** conv_seq 升序，含锚点本身（若它对我可见）。 */
     val messages: List<MessageData> = emptyList(),
     /**

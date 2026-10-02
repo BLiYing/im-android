@@ -78,6 +78,14 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun countIn(owner: String, convId: String): Int
 
+    /** `convSeq > :seq` 的本地消息条数（进会话判「首条未读是否就在尾窗里」用）。 */
+    @Query("SELECT COUNT(*) FROM message WHERE ownerUid = :owner AND convId = :convId AND convSeq > :seq")
+    suspend fun countAfter(owner: String, convId: String, seq: Long): Int
+
+    /** `convSeq > :seq` 的第一条本地消息（读位点之后第一条）；没有则 null。 */
+    @Query("SELECT * FROM message WHERE ownerUid = :owner AND convId = :convId AND convSeq > :seq ORDER BY convSeq ASC LIMIT 1")
+    suspend fun nextAfterSeq(owner: String, convId: String, seq: Long): MessageEntity?
+
     /**
      * 会话媒体时间线（查看器左右翻页用）：**整个会话**里最新的 [limit] 条图片/视频。
      *
