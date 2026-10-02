@@ -108,6 +108,12 @@ class MessageRepository(
     fun observeMessages(owner: String, convId: String, limit: Int): Flow<List<MessageEntity>> =
         messages.observeWindow(owner, convId, limit).map { it.asReversed() }
 
+    /** 尾窗带下界的观察（[ChatWindow.Tail.fromSeq]），返回显示序（旧→新）。 */
+    fun observeTail(owner: String, convId: String, fromSeq: Long, limit: Int): Flow<List<MessageEntity>> =
+        messages.observeWindowFrom(owner, convId, fromSeq, limit).map { it.asReversed() }
+
+    fun observeHead(owner: String, convId: String): Flow<Long> = conversations.observeHead(owner, convId)
+
     suspend fun messageCount(owner: String, convId: String): Int = messages.countIn(owner, convId)
 
     /**

@@ -13,7 +13,9 @@ import kotlinx.coroutines.flow.Flow
  */
 fun MessageRepository.observeWindow(owner: String, convId: String, window: ChatWindow): Flow<List<MessageEntity>> =
     when (window) {
-        is ChatWindow.Tail -> observeMessages(owner, convId, window.limit)
+        is ChatWindow.Tail ->
+            if (window.fromSeq > 0) observeTail(owner, convId, window.fromSeq, window.limit)
+            else observeMessages(owner, convId, window.limit)
         is ChatWindow.Anchored ->
             messages.observeRange(owner, convId, window.loTs, window.loSeq, window.hiTs, window.hiSeq)
     }

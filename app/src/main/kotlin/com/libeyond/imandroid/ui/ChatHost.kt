@@ -130,49 +130,16 @@ fun ChatHost(
         mutableStateOf<ChatWindow>(ChatWindow.Tail(ChatWindows.TAIL_LIMIT))
     }
 
-    // —— 定位与会话内搜索 ——
-    // 顺序有讲究：locator 先建（search 要用它当跳转出口），两者都要在 BackHandler 之前
-    // ——返回键第一层关的是搜索态。
+    // —— 定位与会话内搜索（接线在 ChatLookups.kt：顺序有讲究，locator 先建，两者都要在 BackHandler 之前）——
     val connected = client.socket.state.collectAsState().value == ConnState.Connected
-    val locator = rememberChatLocator(
-        client = client,
-        convId = conv.convId,
-        onOpenWindow = { window = it },
-        onToast = { toast = it },
+    val lookups = rememberChatLookups(
+        client, conv.convId, owner, connected, onOpenWindow = { window = it }, onToast = { toast = it },
+        friendsByUid, memberNames, memberAvatars,
     )
-    val search = rememberChatSearch(
-        client = client,
-        convId = conv.convId,
-        online = connected,
-        // 拒绝原因由搜索那侧接管（写进搜索条上方那一行）——搜索态下键盘占着下半屏，
-        // 吐司恰好落在键盘背后，等于没提示。
-        onLocate = { seq, refuse -> locator.locate(seq, refuse) },
-    )
-    // 📅 日历跳转：独立状态机（不影响搜索命中集），复用同一个 locator 出口
-    val calendar = rememberChatCalendar(
-        client = client,
-        convId = conv.convId,
-        online = connected,
-        onLocate = { seq, refuse -> locator.locate(seq, refuse) },
-        onLocateEarliest = { refuse -> locator.locateEarliest(refuse) },
-        onToast = { toast = it },
-    )
-    // 👤「来自」候选：面板一开才查 uid 去重集（不是每次进搜索态都查一遍库）；
-    // 名字/头像**不进这个 effect**——单独 remember 派生，friendsByUid/memberNames 稍后才拉到时
-    // （群资料是异步的）面板还开着的话也能跟着刷新，不必再开一次面板重新查一遍库。
-    var searchFromUids by remember(conv.convId) { mutableStateOf<List<String>>(emptyList()) }
-    LaunchedEffect(search.fromPickerOpen, conv.convId, owner) {
-        if (!search.fromPickerOpen || owner.isEmpty()) return@LaunchedEffect
-        searchFromUids = client.repo.distinctSenders(owner, conv.convId)
-    }
-    val searchFromCandidates = remember(searchFromUids, friendsByUid, memberNames, memberAvatars) {
-        searchFromUids.map { uid ->
-            val name = friendsByUid[uid]?.let { DisplayName.ofFriend(it) }
-                ?: memberNames[uid]
-                ?: uid
-            SearchSenderCandidate(uid, name, friendsByUid[uid]?.avatarUrl ?: memberAvatars[uid].orEmpty())
-        }
-    }
+    val locator = lookups.locator
+    val search = lookups.search
+    val calendar = lookups.calendar
+    val searchFromCandidates = lookups.fromCandidates
     // 详情页/群资料带回来的待办（见 ChatArm 的注释：那两页关掉之后才轮得到这里）
     LaunchedEffect(arm) {
         if (arm.isEmpty) return@LaunchedEffect
@@ -234,6 +201,11 @@ fun ChatHost(
     val messages = loadedMessages.orEmpty()
     val pending = loadedPending.orEmpty()
     val rowsReady = loadedMessages != null && loadedPending != null
+    // 尾窗同步：↓ 回到最新 / bump 到了贴底补最新页（ChatTailSync.kt）
+    val tail = rememberChatTail(
+        client, conv.convId, owner, window, setWindow = { window = it },
+        tailHi = messages.lastOrNull()?.convSeq ?: 0L, connected = connected,
+    )
     com.libeyond.imandroid.ui.voice.VoiceRelayEffect(conv.convId, messages, owner) // 接力连播（语音 §6.4）
     com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave()
     com.libeyond.imandroid.ui.voice.PauseRecordingOnLeave() // 离开聊天页即中断录音（设计 §5.4）
@@ -423,7 +395,7 @@ fun ChatHost(
             when (val w = window) {
                 // 尾窗：只有装满时才继续加——没装满说明本地就这么多，再加只会让同一批数据反复重查
                 is ChatWindow.Tail -> if (messages.size >= w.limit) {
-                    window = ChatWindow.Tail(w.limit + ChatWindows.TAIL_PAGE)
+                    window = w.copy(limit = w.limit + ChatWindows.TAIL_PAGE)
                 }
                 // 锚点窗：把下界再往前挪一页。到会话开头时 extendWindowOlder 原样返回，
                 // 赋回同一个值不会触发重组（data class 相等），自然停下
@@ -433,8 +405,8 @@ fun ChatHost(
             }
         },
         // 「回到最新」：锚点窗要**换回尾窗**，只滚列表是回不去的（那一窗里根本没有最新那条）
-        onJumpToLatest = { com.libeyond.imandroid.sdk.logging.PerfMarks.jumpBottomBegin(conv.convId); window = ChatWindow.Tail(ChatWindows.TAIL_LIMIT) },
-        showsJumpToLatest = { away -> ChatWindows.showsJumpToLatest(window, away) },
+        onJumpToLatest = { tail.jumpToLatest() }, // 本地没有最新页就先向服务端要（ChatTailSync.kt）
+        showsJumpToLatest = { away -> tail.awayFromBottom = away; ChatWindows.showsJumpToLatest(window, away) },
         onLongPress = { m, rect -> menuFor = m; menuAnchor = rect },
         onOpenMedia = { viewing = it },
         replyTo = replyTo,
@@ -491,7 +463,7 @@ fun ChatHost(
         // **自己发消息必须回到最新**：停在历史时发出去的那条在锚点窗里看不见，用户会以为没发出去。
         // 收口在「出箱回显」这一个入口（im-web 2026-09-05 同一条）——此前只挂在发文本上，
         // 发图/文件/名片停在历史时都不回来。已在尾窗就不动，免得把翻出来的更早几页收回去（iOS 同）。
-        onOutgoingEcho = { if (window !is ChatWindow.Tail) window = ChatWindow.Tail(ChatWindows.TAIL_LIMIT) },
+        onOutgoingEcho = { if (window !is ChatWindow.Tail) tail.returnToTail() },
         covered = covered,
     )
     }

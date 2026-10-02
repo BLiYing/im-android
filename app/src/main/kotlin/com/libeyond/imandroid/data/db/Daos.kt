@@ -66,6 +66,15 @@ interface MessageDao {
     """)
     fun observeWindow(owner: String, convId: String, limit: Int): Flow<List<MessageEntity>>
 
+    /** 同 [observeWindow]，但**下界**固定在 `convSeq >= :fromSeq`——尾窗只取最新那一段，不跨缺口拼旧岛（C4b）。 */
+    @Query("""
+        SELECT * FROM message
+        WHERE ownerUid = :owner AND convId = :convId AND convSeq >= :fromSeq
+        ORDER BY timestamp DESC, convSeq DESC
+        LIMIT :limit
+    """)
+    fun observeWindowFrom(owner: String, convId: String, fromSeq: Long, limit: Int): Flow<List<MessageEntity>>
+
     @Query("SELECT COUNT(*) FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun countIn(owner: String, convId: String): Int
 
@@ -314,6 +323,10 @@ interface ConversationDao {
      */
     @Query("UPDATE conversation SET headConvSeq = :head WHERE ownerUid = :owner AND convId = :convId AND headConvSeq < :head")
     suspend fun raiseHead(owner: String, convId: String, head: Long)
+
+    /** 服务端最新位点的变化流（C4b：bump 到了且用户贴底就补最新一页）。会话行不存在时无发射。 */
+    @Query("SELECT headConvSeq FROM conversation WHERE ownerUid = :owner AND convId = :convId")
+    fun observeHead(owner: String, convId: String): kotlinx.coroutines.flow.Flow<Long>
 
     /** 本机清空位点**只增不减**（[ConversationEntity.clearedUpTo]）。 */
     @Query("UPDATE conversation SET clearedUpTo = :seq WHERE ownerUid = :owner AND convId = :convId AND clearedUpTo < :seq")

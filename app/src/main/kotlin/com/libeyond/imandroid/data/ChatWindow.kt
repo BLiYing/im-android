@@ -22,8 +22,14 @@ import com.libeyond.imandroid.i18n.Str
  */
 sealed interface ChatWindow {
 
-    /** 贴着最新的一窗（进会话、回到最新）。 */
-    data class Tail(val limit: Int) : ChatWindow
+    /**
+     * 贴着最新的一窗（进会话、回到最新）。
+     *
+     * [fromSeq] 是**下界**（含，`conv_seq`）：0 = 不设。本地有缺口（区间清单里有多段）时尾窗必须只取**最新那一段**，
+     * 否则「最近 N 条」会把缺口另一侧的旧岛拼到窗口里——用户看到的是跨了缺口的假连续。
+     * 值取最新那一段的 `lo`（[MessageRepository.tailState]）。单段完整会话它就是 1，与不设等价。
+     */
+    data class Tail(val limit: Int, val fromSeq: Long = 0) : ChatWindow
 
     /**
      * 钉在某段区间上的一窗，边界用**显示序坐标**（timestamp 主排、同毫秒按 conv_seq）。

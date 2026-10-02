@@ -16,6 +16,7 @@ import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.protocol.ConvBumpItem
 import com.libeyond.imandroid.sdk.protocol.MessageData
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -295,5 +296,67 @@ class MessageRepositoryRangesTest {
     fun bumpForUnknownConversationOnlyAttemptsHeadAndCreatesNoPlaceholderRow() = runBlocking {
         repo.applyBumpSignal(me, ConvBumpItem(convId = "g_unknown", latestSeq = 7, preview = "x"))
         assertNull(db.conversations().byId(me, "g_unknown"))
+    }
+
+    // —— C4b：最新页现状 / 尾窗下界 / head 流 ——
+
+    @Test
+    fun tailStateSingleCompleteSegmentIsCoveredAndStartsAtOne() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..300L).map { md(it) }, covered = 300)
+        repo.noteHead(me, conv, 300)
+        val st = repo.tailState(me, conv, 100)
+        assertEquals(300L, st.tip)
+        assertEquals(true, st.covered)
+        assertEquals(1L, st.segmentLo)
+    }
+
+    /** 缺口：旧段 [1,300]、最新只收到一个孤岛 [900,900]，head=1000——最新页没被覆盖，尾窗下界是孤岛而不是 1。 */
+    @Test
+    fun tailStateWithGapIsNotCoveredAndNeverStitchesTheOldIsland() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..300L).map { md(it) }, covered = 300)
+        repo.noteHead(me, conv, 1000)
+        repo.onIncoming(me, md(1000), bumpUnread = false) // 跳号实时消息登记成孤岛 [1000,1000]
+        val st = repo.tailState(me, conv, 100)
+        assertEquals(1000L, st.tip)
+        assertEquals(false, st.covered) // 本地最大 seq 已经 == head，但 [901,1000] 没被同一段盖住
+        assertEquals(1000L, st.segmentLo)
+    }
+
+    @Test
+    fun tailStateAfterServerWindowIsCoveredByTheNewSegment() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..300L).map { md(it) }, covered = 300)
+        repo.noteHead(me, conv, 1000)
+        repo.onWindowPage(me, conv, (901L..1000L).map { md(it) }) // window_req(anchor=0, before=100) 的结果
+        val st = repo.tailState(me, conv, 100)
+        assertEquals(true, st.covered) // 下沿 tip-page+1=901：刚取回的一页必须判齐，不能每次 ↓ 白问
+        assertEquals(901L, st.segmentLo)
+    }
+
+    @Test
+    fun tailStateRespectsClearedFloor() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..30L).map { md(it) }, covered = 30)
+        repo.noteHead(me, conv, 30)
+        repo.clearConversation(me, conv)
+        val st = repo.tailState(me, conv, 100)
+        assertEquals(31L, st.visibleFrom)
+        assertEquals(true, st.covered) // tip(30) < visibleFrom(31)：可见范围内没有东西，视为齐
+        assertEquals(false, ChatTailPlan.shouldRequestTail(st.tip, st.covered, 0, st.visibleFrom))
+    }
+
+    @Test
+    fun observeTailFromNeverIncludesRowsBelowTheBound() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..10L).map { md(it) }, covered = 10)
+        repo.onWindowPage(me, conv, (900L..905L).map { md(it) })
+        val rows = repo.observeTail(me, conv, fromSeq = 900, limit = 200).first()
+        assertEquals((900L..905L).toList(), rows.map { it.convSeq })
+        val all = repo.observeTail(me, conv, fromSeq = 1, limit = 200).first()
+        assertEquals(16, all.size)
+    }
+
+    @Test
+    fun observeHeadEmitsOnRaiseAndNotForMissingRow() = runBlocking {
+        assertEquals(0L, repo.observeHead(me, conv).first())
+        repo.noteHead(me, conv, 77)
+        assertEquals(77L, repo.observeHead(me, conv).first())
     }
 }
