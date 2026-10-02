@@ -50,8 +50,11 @@ internal suspend fun MessageService.onConnected() {
  * 超级群重连也会把积压整段抄完（`IncomingRule.kt` 头注释记着 2026-09-09 在 11 万条大群真机撞见过）。
  * 普通会话发 [SyncDefaults.MAX_GAP]，**超级群发 0**（永远 `too_long`、永不自动补拉），见 [BacklogGap]。
  */
-internal suspend fun MessageService.requestSync(owner: String) {
-    val cursors = repo.syncCursors(owner)
+internal suspend fun MessageService.requestSync(owner: String, only: String? = null) {
+    // 全量（连上时）：连接是新的，之前的在途标记作废；单会话（跳号自愈）：已有一个在途的就别再叠一个
+    if (only == null) syncInFlight.clear()
+    val cursors = repo.syncCursors(owner).filter { only == null || (it.convId == only && syncInFlight.add(it.convId)) }
+    if (only == null) syncInFlight.addAll(cursors.map { it.convId })
     if (cursors.isEmpty()) return
     socket.send(
         FrameType.SYNC_REQ,
@@ -73,6 +76,7 @@ internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData)
     // 游标一次读全：重连时一帧 sync_resp 带几十个会话，逐页各读一次库在真机上是可测的开销
     val sinceBy = repo.syncCursors(owner).associate { it.convId to it.sinceConvSeq }
     for (c in resp.conversations) {
+        syncInFlight.remove(c.convId)
         val applyStart = android.os.SystemClock.elapsedRealtime()
         val firstFailed = repo.onSyncPage(owner, c.convId, c.messages, c.coveredConvSeq, sinceHint = sinceBy[c.convId] ?: 0L)
         val applyMs = android.os.SystemClock.elapsedRealtime() - applyStart

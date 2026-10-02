@@ -5,6 +5,7 @@ import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.sdk.protocol.ConvBumpData
 import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -42,7 +43,7 @@ import kotlinx.serialization.json.JsonElement
  * **协议知识集中在这里**，仓库只管落库，UI 只管读库。
  */
 class MessageService(
-    private val scope: CoroutineScope,
+    internal val scope: CoroutineScope,
     internal val socket: IMSocketManager,
     /**
      * 仓库。与 [ownerProvider] / [media] / [transmit] 一样是 `internal` 而不是 `private`，
@@ -66,6 +67,12 @@ class MessageService(
 ) {
     /** 「按锚点开窗」的一问一答（MESSAGE_WINDOW_DESIGN §3.2），实现在 [WindowRequester]。 */
     internal val windows = WindowRequester(socket, scope)
+
+    /** 已发出 `sync_req`、还没等到应答的会话（跳号自愈别叠请求）；连上时清空。仅在帧分派协程里读写。 */
+    internal val syncInFlight = HashSet<String>()
+
+    /** `conv_bump` 触发的整表刷新是否已排上（合并用）。 */
+    internal var bumpRefreshScheduled = false
 
     /** `delivered` 回执合批（C5）：实时消息与 sync 补拉都经这里，按会话取最大位点、120ms 一帧。 */
     internal val deliveredReceipts = ReceiptBatcher(scope, { convId, upTo ->
@@ -140,7 +147,10 @@ class MessageService(
 
             FrameType.NEW_MSG -> data?.let {
                 val m = ProtocolJson.decodeFromJsonElement(MessageData.serializer(), it)
+                val prevSynced = repo.syncedOf(owner, m.convId) // 落库前的游标，跳号判定要用
                 val createdStub = repo.onIncoming(owner, m, bumpUnread = true)
+                // 跳号：只发一次 sync_req，补还是 too_long 由服务端按 max_gap 定（GapRule）
+                if (GapRule.needsCatchUp(prevSynced, m.convSeq)) requestSync(owner, only = m.convId)
                 // 新会话只落了个没名字的壳：拉一次权威列表补标题/头像（不阻塞帧分发）
                 if (createdStub) scope.launch { refreshConversations() }
                 // §4.3 末：接收方收到后**必须回 receipt(delivered)**
@@ -150,6 +160,10 @@ class MessageService(
                     // sync/window 补拉都不经过这里——见 IncomingAlert 类注释。
                     IncomingAlert.handle(owner, m, repo)
                 }
+            }
+
+            FrameType.CONV_BUMP -> data?.let {
+                applyConvBump(owner, ProtocolJson.decodeFromJsonElement(ConvBumpData.serializer(), it))
             }
 
             FrameType.SYNC_RESP -> data?.let {

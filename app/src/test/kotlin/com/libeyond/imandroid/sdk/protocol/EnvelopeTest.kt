@@ -156,6 +156,25 @@ class SyncGapTest {
         assertTrue(json.contains("\"max_gap\":400"))
     }
 
+    @Test
+    fun `conv_bump 解析出最新位点与极简预览`() {
+        val json = """{"items":[{"conv_id":"g_super","latest_seq":101200,"from":"u1","from_nickname":"小明","preview":"[图片]"}]}"""
+        val d = ProtocolJson.decodeFromString(com.libeyond.imandroid.sdk.protocol.ConvBumpData.serializer(), json)
+        val i = d.items.single()
+        assertEquals("g_super", i.convId)
+        assertEquals(101200L, i.latestSeq)
+        assertEquals("[图片]", i.preview)
+        assertEquals("小明", i.fromNickname)
+    }
+
+    @Test
+    fun `conv_bump 缺字段不崩 老服务端兼容`() {
+        val d = ProtocolJson.decodeFromString(
+            com.libeyond.imandroid.sdk.protocol.ConvBumpData.serializer(), """{"items":[{"conv_id":"g","latest_seq":5}]}""",
+        )
+        assertEquals("", d.items.single().preview)
+    }
+
     /** 超级群发 0：**0 不是「省略」**。若被当默认值丢掉，服务端会按老客户端不限深度、整段追平。 */
     @Test
     fun `maxGap 为 0 时仍编码 max_gap（超级群的永不自动补拉）`() {

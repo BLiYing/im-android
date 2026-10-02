@@ -128,6 +128,18 @@ class MessageRepository(
     suspend fun syncCursors(owner: String): List<SyncCursorItem> =
         conversations.all(owner).map { BacklogGap.cursorOf(it.convId, it.syncedConvSeq, it.isSuper) }
 
+    /** 本会话当前连续游标（落库前读，给跳号判定用）；会话行不存在按 0。 */
+    suspend fun syncedOf(owner: String, convId: String): Long = conversations.byId(owner, convId)?.syncedConvSeq ?: 0L
+
+    /**
+     * 实时消息 / 自己 ack 恰好接在游标后面（`seq == 游标+1`）就把游标推过去，与落库**同事务**调用。
+     * 不推的话游标只在 sync 页里动，实时收到的每一条下次重连都要重拉；更糟的是下一条实时消息会被误判成「跳号」。
+     */
+    internal suspend fun advanceSyncedIfNext(owner: String, convId: String, seq: Long) {
+        val cur = conversations.byId(owner, convId)?.syncedConvSeq ?: return
+        if (GapRule.isNextContiguous(cur, seq)) conversations.setSyncedConvSeq(owner, convId, seq)
+    }
+
     /** 本会话是不是超级群（决定续页 `max_gap`）。查不到（会话行没建）按普通会话。 */
     suspend fun isSuperConv(owner: String, convId: String): Boolean = conversations.byId(owner, convId)?.isSuper == true
 
@@ -162,6 +174,7 @@ class MessageRepository(
         tx.run {
             messages.upsert(row)
             if (m.convSeq > 0) ranges.register(owner, m.convId, m.convSeq, m.convSeq)
+            advanceSyncedIfNext(owner, m.convId, m.convSeq)
         }
         return bumpConversation(owner, m.convId, row, incUnread = bumpUnread && IncomingRule.countsAsUnread(m.from, m.contentType, owner))
     }

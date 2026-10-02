@@ -187,6 +187,7 @@ suspend fun MessageRepository.onAck(owner: String, ack: AckData) {
     tx.run {
         messages.upsert(row)
         if (ack.convSeq > 0) ranges.register(owner, ack.convId, ack.convSeq, ack.convSeq)
+        advanceSyncedIfNext(owner, ack.convId, ack.convSeq)
     }
     pending.remove(owner, ack.clientMsgId)
     bumpConversation(owner, ack.convId, row)

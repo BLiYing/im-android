@@ -297,6 +297,22 @@ object SyncDefaults {
     const val MAX_GAP = 400L
 }
 
+/**
+ * `conv_bump` 的一项（超级群只推信号、不推全文，SUPERGROUP_DESIGN §5）：该会话**当前最新**位点 + 最新一条的极简预览。
+ * 只为让会话列表立刻显示对的那一行；正文要等打开会话时才取。
+ */
+@Serializable
+data class ConvBumpItem(
+    @SerialName("conv_id") val convId: String = "",
+    @SerialName("latest_seq") val latestSeq: Long = 0,
+    val from: String = "",
+    @SerialName("from_nickname") val fromNickname: String = "",
+    val preview: String = "",
+)
+
+@Serializable
+data class ConvBumpData(val items: List<ConvBumpItem> = emptyList())
+
 @Serializable
 data class SyncRespData(val conversations: List<SyncConversation> = emptyList())
 

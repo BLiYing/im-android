@@ -14,6 +14,7 @@ import com.libeyond.imandroid.data.db.RoomTx
 import com.libeyond.imandroid.sdk.api.ConversationSummary
 import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.sdk.protocol.ConvBumpItem
 import com.libeyond.imandroid.sdk.protocol.MessageData
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -248,5 +249,51 @@ class MessageRepositoryRangesTest {
         repo.clearAccount(me)
         assertEquals(emptyList<SeqRange>(), ranges())
         assertEquals(0, db.messages().countIn(me, conv))
+    }
+
+    // —— C4：实时消息推进游标 / conv_bump ——
+
+    @Test
+    fun realtimeMessageAdvancesCursorOnlyWhenContiguous() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        repo.onIncoming(me, md(4), bumpUnread = false)
+        assertEquals(4L, synced()) // 接在游标后面：游标跟着走（不然下次重连把它重拉一遍）
+        repo.onIncoming(me, md(9), bumpUnread = false)
+        assertEquals(4L, synced()) // 跳号：游标绝不越过没收到的 5..8
+        assertEquals(listOf(SeqRange(1, 4), SeqRange(9, 9)), ranges())
+    }
+
+    @Test
+    fun ownAckAdvancesCursorWhenContiguous() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        repo.onAck(me, AckData(clientMsgId = "c1", serverMsgId = "s1", convId = conv, convSeq = 4, timestamp = 4))
+        assertEquals(4L, synced())
+    }
+
+    @Test
+    fun bumpSignalRaisesHeadAndRefreshesTheListRowWithoutTouchingUnread() = runBlocking {
+        db.conversations().upsert(ConversationEntity(ownerUid = me, convId = conv, lastConvSeq = 10, lastContent = "旧", unread = 3))
+        repo.applyBumpSignal(me, ConvBumpItem(convId = conv, latestSeq = 500, from = "u9", fromNickname = "小明", preview = "[图片]"))
+        val c = db.conversations().byId(me, conv)!!
+        assertEquals(500L, c.headConvSeq)
+        assertEquals(500L, c.lastConvSeq)
+        assertEquals("[图片]", c.lastContent)
+        assertEquals("小明", c.lastFromNickname)
+        assertEquals(3, c.unread) // 未读走整表刷新的服务端权威值，这里不瞎加
+    }
+
+    @Test
+    fun staleBumpSignalDoesNotRegressThePreview() = runBlocking {
+        db.conversations().upsert(ConversationEntity(ownerUid = me, convId = conv, lastConvSeq = 500, lastContent = "新"))
+        repo.applyBumpSignal(me, ConvBumpItem(convId = conv, latestSeq = 300, preview = "旧信号"))
+        val c = db.conversations().byId(me, conv)!!
+        assertEquals("新", c.lastContent)
+        assertEquals(500L, c.lastConvSeq)
+    }
+
+    @Test
+    fun bumpForUnknownConversationOnlyAttemptsHeadAndCreatesNoPlaceholderRow() = runBlocking {
+        repo.applyBumpSignal(me, ConvBumpItem(convId = "g_unknown", latestSeq = 7, preview = "x"))
+        assertNull(db.conversations().byId(me, "g_unknown"))
     }
 }
