@@ -433,7 +433,7 @@ fun ChatHost(
             }
         },
         // 「回到最新」：锚点窗要**换回尾窗**，只滚列表是回不去的（那一窗里根本没有最新那条）
-        onJumpToLatest = { window = ChatWindow.Tail(ChatWindows.TAIL_LIMIT) },
+        onJumpToLatest = { com.libeyond.imandroid.sdk.logging.PerfMarks.jumpBottomBegin(conv.convId); window = ChatWindow.Tail(ChatWindows.TAIL_LIMIT) },
         showsJumpToLatest = { away -> ChatWindows.showsJumpToLatest(window, away) },
         onLongPress = { m, rect -> menuFor = m; menuAnchor = rect },
         onOpenMedia = { viewing = it },

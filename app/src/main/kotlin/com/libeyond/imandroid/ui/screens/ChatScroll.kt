@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.data.ChatScroll
 import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.sdk.logging.PerfMarks
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -224,6 +225,12 @@ internal fun ChatListSync(
         marks.outgoing = outgoingKeysOf(rows) // 进来时就躺在出箱里的（失败待重发）不算"刚发的"
         listState.requestScrollToItem(idx)
     }
+    // 压测埋点：首屏定位指令发出后的下一帧（口径见 PerfMarks）
+    LaunchedEffect(entryReady) {
+        if (!entryReady) return@LaunchedEffect
+        withFrameNanos { }
+        PerfMarks.chatInitialPosition(convId)
+    }
     // 贴底那一支还欠一次收敛：对齐的是最后一行的**顶**，最后一行比屏高（长文/竖图）时停在它开头
     LaunchedEffect(entryReady) {
         if (!entryReady || !marks.entryAtBottom) return@LaunchedEffect
@@ -251,6 +258,7 @@ internal fun ChatListSync(
         if (SystemClock.uptimeMillis() < marks.locatingUntil) return@LaunchedEffect
         if (SystemClock.uptimeMillis() < marks.stickUntil && !listDragged) {
             stickToBottom(listState)
+            PerfMarks.jumpBottomDone(convId)
             return@LaunchedEffect
         }
         // 只在**变多**时跟：ack 把待发换成已确认、行数不变，那时 animateScrollToItem 会把比屏高的最后一行滚回开头

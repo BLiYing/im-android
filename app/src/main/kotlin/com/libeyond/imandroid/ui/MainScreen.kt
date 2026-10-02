@@ -47,6 +47,7 @@ import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.UserCard
+import com.libeyond.imandroid.sdk.logging.PerfMarks
 import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.ConversationAction
@@ -103,6 +104,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     // 不只是横幅自己被点开这一条路径，群资料里点成员「发消息」这类别的入口进同一会话也该收。
     LaunchedEffect(openConv) {
         com.libeyond.imandroid.data.ViewingConv.current = openConv?.convId
+        openConv?.let { PerfMarks.chatOpen(it.convId) }
         openConv?.let { com.libeyond.imandroid.data.InAppBannerStore.dismissIfShowing(it.convId) }
     }
 
@@ -111,6 +113,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     val conversations by remember(owner) {
         if (owner.isEmpty()) emptyFlow() else client.repo.observeConversations(owner)
     }.collectAsState(initial = null)
+    LaunchedEffect(conversations != null) { if (conversations != null) PerfMarks.conversationListVisible() }
     // 应用内横幅点击按 convId 查会话：O(1) 查表，同 `Forward.kt#targetsInOrder`/`FavoritesHost`/
     // `CallHistoryHost` 既有的 `associateBy { it.convId }` 手法，别在导航这条热路径上现扫一遍全表
     // （`/code-review` 抓出的效率点）。
