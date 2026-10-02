@@ -79,6 +79,8 @@ internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData)
         // 补收的这一页要跟着 bump 会话列表快照，否则重连补收的消息只进聊天页、
         // 不进列表排序（见 MessageRepository.bumpConversationFromLatest 的注释）。
         if (c.messages.isNotEmpty()) repo.bumpConversationFromLatest(owner, c.convId)
+        // 补拉回来的消息对端也要看到「已送达」：按页一次、位点取别人发的最大 seq（C5；window 路径刻意不回）
+        deliveredReceipts.queue(c.convId, DeliveredUpTo.forSyncPage(c.messages, owner, firstFailed))
         repo.noteHead(owner, c.convId, c.headConvSeq) // 带了 max_gap 的游标服务端才回 head；0 不写
         log.i(
             "sync_page_applied",

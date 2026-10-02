@@ -67,6 +67,12 @@ class MessageService(
     /** 「按锚点开窗」的一问一答（MESSAGE_WINDOW_DESIGN §3.2），实现在 [WindowRequester]。 */
     internal val windows = WindowRequester(socket, scope)
 
+    /** `delivered` 回执合批（C5）：实时消息与 sync 补拉都经这里，按会话取最大位点、120ms 一帧。 */
+    internal val deliveredReceipts = ReceiptBatcher(scope, { convId, upTo ->
+        log.i("delivered_sent", "convId" to convId, "upTo" to upTo) // 每帧一条，补拉积压时拿它数帧数
+        sendReceipt(convId, ReceiptData.DELIVERED, upTo)
+    })
+
     internal val log = IMLog.tag("IM.Msg")
 
     /**
@@ -139,7 +145,7 @@ class MessageService(
                 if (createdStub) scope.launch { refreshConversations() }
                 // §4.3 末：接收方收到后**必须回 receipt(delivered)**
                 if (m.from != owner) {
-                    sendReceipt(m.convId, ReceiptData.DELIVERED, m.convSeq)
+                    deliveredReceipts.queue(m.convId, m.convSeq)
                     // 通知与提示音（NOTIFICATIONS_DESIGN §3.1）：只有这一条实时路径会调判定，
                     // sync/window 补拉都不经过这里——见 IncomingAlert 类注释。
                     IncomingAlert.handle(owner, m, repo)
