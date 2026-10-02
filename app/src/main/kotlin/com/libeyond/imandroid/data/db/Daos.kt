@@ -315,6 +315,10 @@ interface ConversationDao {
     @Query("UPDATE conversation SET headConvSeq = :head WHERE ownerUid = :owner AND convId = :convId AND headConvSeq < :head")
     suspend fun raiseHead(owner: String, convId: String, head: Long)
 
+    /** 本机清空位点**只增不减**（[ConversationEntity.clearedUpTo]）。 */
+    @Query("UPDATE conversation SET clearedUpTo = :seq WHERE ownerUid = :owner AND convId = :convId AND clearedUpTo < :seq")
+    suspend fun raiseClearedUpTo(owner: String, convId: String, seq: Long)
+
     /**
      * 推进已读位点。**用 MAX 保证单调不倒退**。
      *

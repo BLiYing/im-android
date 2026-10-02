@@ -239,4 +239,11 @@ data class ConversationEntity(
      * 0 = 未知。
      */
     val headConvSeq: Long = 0,
+    /**
+     * **本机清空位点**：用户在详情页「清空聊天记录」时，≤ 它的消息已被清掉——**不再落库、不算缺口、不再向服务端要**
+     * （只清本机、不动服务端，所以服务端仍有这些消息；没有这一位，进会话会把最近一页又拉回来）。
+     * 只增不减。0 = 没清过。判据与写入口见 [com.libeyond.imandroid.data.ClearFloor]；
+     * 消费方（C3 进会话 / C4 ↓ / C6 服务端搜索）取 `max(服务端可见下界, clearedUpTo)` 当有效下界。
+     */
+    val clearedUpTo: Long = 0,
 )

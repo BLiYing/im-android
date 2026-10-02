@@ -11,6 +11,7 @@ import com.libeyond.imandroid.data.db.IMDatabase
 import com.libeyond.imandroid.data.db.MessageDao
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.RoomTx
+import com.libeyond.imandroid.sdk.api.ConversationSummary
 import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.protocol.MessageData
@@ -159,12 +160,53 @@ class MessageRepositoryRangesTest {
     }
 
     @Test
-    fun clearConversationClearsRangesButKeepsCursor() = runBlocking {
+    fun clearConversationClearsRangesAndSetsFloorAtLatestKnown() = runBlocking {
         repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
         repo.clearConversation(me, conv)
         assertEquals(0, db.messages().countIn(me, conv))
         assertEquals(emptyList<SeqRange>(), ranges())
+        assertEquals(3L, db.conversations().byId(me, conv)!!.clearedUpTo)
         assertEquals(3L, synced())
+    }
+
+    /** 本地有缺口时清空：位点取 head（服务端最新），游标一并推过去，不会再从旧游标把清掉的重拉。 */
+    @Test
+    fun clearWithGapRaisesFloorAndCursorToHead() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3, 4, 5), covered = 5)
+        repo.noteHead(me, conv, 100)
+        repo.clearConversation(me, conv)
+        val c = db.conversations().byId(me, conv)!!
+        assertEquals(100L, c.clearedUpTo)
+        assertEquals(100L, c.syncedConvSeq)
+    }
+
+    /** 清掉的那一段不能被 window / sync 又带回来；位点之后的照收。 */
+    @Test
+    fun clearedSpanIsNeverWrittenBackByWindowOrSync() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3, 4, 5), covered = 5)
+        repo.clearConversation(me, conv)
+        repo.onWindowPage(me, conv, page(3, 4, 6, 7)) // 3、4 ≤ 位点 5：丢；6、7 收
+        assertEquals(listOf(6L, 7L), db.messages().latestWindow(me, conv, 10).map { it.convSeq }.sorted())
+        repo.onSyncPage(me, conv, page(1, 8), covered = 8) // 迟到的旧页里也夹着旧序号
+        assertEquals(listOf(6L, 7L, 8L), db.messages().latestWindow(me, conv, 10).map { it.convSeq }.sorted())
+    }
+
+    /** 会话列表刷新是整行重写——位点是纯本机状态，不能被刷掉（否则清掉的历史下次进会话又拉回来）。 */
+    @Test
+    fun conversationListRefreshKeepsClearedFloor() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        repo.clearConversation(me, conv)
+        repo.applyConversationList(me, listOf(ConversationSummary(convId = conv, isGroup = true, latestConvSeq = 9)))
+        val c = db.conversations().byId(me, conv)!!
+        assertEquals(3L, c.clearedUpTo)
+        assertEquals(9L, c.headConvSeq)
+    }
+
+    @Test
+    fun clearedFloorOnlyMovesForward() = runBlocking {
+        db.conversations().raiseClearedUpTo(me, conv, 50)
+        db.conversations().raiseClearedUpTo(me, conv, 20)
+        assertEquals(50L, db.conversations().byId(me, conv)!!.clearedUpTo)
     }
 
     /** 复查抓出的遗漏：实时 msg_op 事件行占号，不登记则下一条成孤岛、清单永远差一格。 */

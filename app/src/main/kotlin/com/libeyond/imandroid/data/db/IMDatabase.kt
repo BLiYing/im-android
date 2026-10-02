@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class, ConvRangeEntity::class],
-    version = 15,
+    version = 16,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -220,6 +220,26 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /**
+         * 15→16：本机清空位点 `clearedUpTo`（见 [ConversationEntity.clearedUpTo]）。
+         *
+         * **回填**：升级前「清空聊天记录」只删消息、游标原样保留，**没有任何痕迹**；而 14→15 回填的区间 `[1, synced]`
+         * 会宣称「这段齐全」。不处理的话，C3 的「清单说齐、手里没东西 → 问服务端」兜底会把这些会话清掉的历史又拉回来。
+         * 判据：游标以内**本地一条都没有**的那一截就当作用户清掉的——有消息时取（最小本地 seq − 1），一条没有取游标本身。
+         * 误伤面：群 `history_visible` 抬高的下界、开头几条是不落库的事件行——那些序号下本来就没有可显示的东西，当下界无害。
+         */
+        internal val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversation ADD COLUMN clearedUpTo INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "UPDATE conversation SET clearedUpTo = COALESCE(" +
+                        "(SELECT MIN(m.convSeq) FROM message m WHERE m.ownerUid = conversation.ownerUid " +
+                        "AND m.convId = conversation.convId AND m.convSeq > 0 AND m.convSeq <= conversation.syncedConvSeq) - 1, " +
+                        "syncedConvSeq) WHERE syncedConvSeq > 0",
+                )
+            }
+        }
+
         fun get(context: Context): IMDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -231,7 +251,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15,
+                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
                 )
                 .build().also { instance = it }
         }

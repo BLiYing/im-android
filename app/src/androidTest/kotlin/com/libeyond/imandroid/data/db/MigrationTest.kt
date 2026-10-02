@@ -100,6 +100,40 @@ class MigrationTest {
         }
     }
 
+    /** 15→16 回填 `clearedUpTo`：游标以内本地没有的那一截，当作用户清掉的。 */
+    @Test
+    fun migrate15To16DerivesClearedFloorFromLocalRows() {
+        helper.createDatabase(DB, 15).use { db ->
+            fun conv(id: String, synced: Int) = db.execSQL(
+                """INSERT INTO conversation (ownerUid, convId, isGroup, peerUid, title, avatarUrl, peerRemark,
+                   lastContent, lastContentType, lastTimestamp, lastConvSeq, lastFrom, lastFromNickname, lastRecalled,
+                   lastSysEvent, lastSysArgs, lastSysSegments, unread, mentionUnread, readSeq, peerReadSeq,
+                   syncedConvSeq, pinnedAt, muted, muteUntil, markedUnread, isSuper, headConvSeq)
+                   VALUES ('me', '$id', 1, '', 'G', '', '', '', 'text', 0, 0, '', '', 0,
+                   '', '', '', 0, 0, 0, 0, $synced, 0, 0, 0, 0, 0, 0)""",
+            )
+            fun msg(id: String, seq: Int) = db.execSQL(
+                """INSERT INTO message (ownerUid, convId, convSeq, serverMsgId, clientMsgId, sender, contentType, content, timestamp)
+                   VALUES ('me', '$id', $seq, 's$seq', 'c$seq', 'peer', 'text', 'x', $seq)""",
+            )
+            conv("g_full", 9); (1..9).forEach { msg("g_full", it) }          // 从 1 起齐全：位点 0
+            conv("g_partial", 9); (5..9).forEach { msg("g_partial", it) }    // 清过后又收了 5..9：位点 4
+            conv("g_cleared", 7)                                            // 游标 7 而一条没有：位点 7
+            conv("g_fresh", 0)                                              // 游标 0：位点 0
+            conv("g_island", 500); msg("g_island", 900)                     // ≤ 游标的一条没有（900 是孤岛）：位点 500
+        }
+        helper.runMigrationsAndValidate(DB, 16, true, IMDatabase.MIGRATION_15_16).use { db ->
+            db.query("SELECT convId, clearedUpTo FROM conversation ORDER BY convId").use { c ->
+                val got = buildMap { while (c.moveToNext()) put(c.getString(0), c.getLong(1)) }
+                assertEquals(0L, got["g_full"])
+                assertEquals(4L, got["g_partial"])
+                assertEquals(7L, got["g_cleared"])
+                assertEquals(0L, got["g_fresh"])
+                assertEquals(500L, got["g_island"])
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

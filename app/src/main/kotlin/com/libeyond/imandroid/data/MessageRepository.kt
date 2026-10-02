@@ -191,6 +191,15 @@ class MessageRepository(
         for (m in list) {
             if (!routeNonMessage(owner, m)) plain += m
         }
+        // 用户清掉的那一段不能被 sync / window 又带回来（只在有消息要落时才读这一行，空页不多花一次查询）
+        if (plain.isNotEmpty()) {
+            val floor = conversations.byId(owner, convId)?.clearedUpTo ?: 0L
+            if (floor > 0) {
+                val kept = ClearFloor.dropCleared(plain, floor)
+                plain.clear()
+                plain += kept
+            }
+        }
         // 无事可写（没有可落的消息、也没有要登记的区间——`too_long` 与「没有新消息」都是这样）就别开事务：
         // 重连时几十个会话各来一个空页，每个都白付一次事务提交（真机 34 个空页合计 625 ms，埋点抓到的）。
         // 游标不会漏推：covered 比游标大时 [range] 必非空。
@@ -332,6 +341,7 @@ class MessageRepository(
                 isSuper = s.isSuper,
                 // head 只增不减：列表的 latest_conv_seq 与本地已记的取大（sync 的 too_long 也往这写）
                 headConvSeq = maxOf(existing?.headConvSeq ?: 0L, s.latestConvSeq),
+                clearedUpTo = existing?.clearedUpTo ?: 0L, // 纯本机状态，服务端快照里没有——整行重写会把它清零
             ).keepNewerLocalTail(existing)
         }
         conversations.upsert(rows)
@@ -440,15 +450,27 @@ class MessageRepository(
      * （群聊那句提示就写着"仅清空本机记录，不影响其他成员"）。服务端没有对应接口，
      * 也不该有：那会变成"替所有人删历史"。
      *
-     * **同步游标 `syncedConvSeq` 原样保留**：清空后不该再把刚删掉的那些拉回来。
+     * **清空位点 [ConversationEntity.clearedUpTo]**：清空后不该再把刚删掉的那些拉回来——游标保留不够，
+     * 区间清单（C1）一清，进会话会把最近一页又要回来；位点让「用户不要」与「还没下载」分开（[ClearFloor]）。
      * 会话行留着（列表里仍能看到这个人），只把预览清成空。
      */
     suspend fun clearConversation(owner: String, convId: String) {
         // 区间清单必须**连消息一起清**（三端契约，localStore.contract.ts 有断言）：只清消息的话，清单仍宣称
         // 「这段齐全」、手里却一条没有——表现是会话空白且上滑/点↓都不自愈。游标 syncedConvSeq 照旧保留。
+        val conv = conversations.byId(owner, convId)
+        // 位点 = 本机所知的最新位置；之后 ≤ 它的消息不再落库、不算缺口（见 [ClearFloor]）。
+        // 游标一并推到位点：那段是用户主动不要的，sync 不必再从旧游标重拉一遍再丢掉。
+        val floor = ClearFloor.floorAtClear(
+            head = conv?.headConvSeq ?: 0, lastConvSeq = conv?.lastConvSeq ?: 0,
+            synced = conv?.syncedConvSeq ?: 0, maxLocalSeq = messages.maxConvSeq(owner, convId) ?: 0,
+        )
         tx.run {
             messages.clearConv(owner, convId)
             ranges.clearConv(owner, convId)
+            if (floor > 0) {
+                conversations.raiseClearedUpTo(owner, convId, floor)
+                conversations.setSyncedConvSeq(owner, convId, maxOf(conv?.syncedConvSeq ?: 0L, floor))
+            }
         }
         pending.clearConv(owner, convId)
         conversations.byId(owner, convId)?.let {
