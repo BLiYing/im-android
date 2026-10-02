@@ -1,0 +1,210 @@
+package com.libeyond.imandroid.data
+
+import androidx.room.Room
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.libeyond.imandroid.data.db.ConvRangeDao
+import com.libeyond.imandroid.data.db.ConvRangeEntity
+import com.libeyond.imandroid.data.db.ConversationDao
+import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.data.db.IMDatabase
+import com.libeyond.imandroid.data.db.MessageDao
+import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.data.db.RoomTx
+import com.libeyond.imandroid.sdk.protocol.AckData
+import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.sdk.protocol.MessageData
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * **I1（OFFLINE_BACKLOG_DESIGN §4.2）的真实事务语义**：区间只断言「已落库」，写消息、登记区间、推游标同一事务。
+ * 用真 Room（内存库）+ 会按需抛错的 DAO 代理，验证回滚方向对不对——JVM 单测里没有事务，测不出。
+ */
+@RunWith(AndroidJUnit4::class)
+class MessageRepositoryRangesTest {
+    private lateinit var db: IMDatabase
+    private var failBatch = false
+    private var failSingleSeq: Long? = null
+    private var failRangeInsert = false
+    private var failCursorWrite = false
+    private lateinit var repo: MessageRepository
+
+    private val me = "me"
+    private val conv = "g_c"
+
+    @Before
+    fun setUp() = runBlocking {
+        db = Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext, IMDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val realMessages = db.messages()
+        val messages = object : MessageDao by realMessages {
+            override suspend fun upsert(messages: List<MessageEntity>) {
+                if (failBatch) error("boom-batch")
+                realMessages.upsert(messages)
+            }
+
+            override suspend fun upsert(message: MessageEntity) {
+                if (message.convSeq == failSingleSeq) error("boom-single")
+                realMessages.upsert(message)
+            }
+        }
+        val realRanges = db.ranges()
+        val rangeDao = object : ConvRangeDao by realRanges {
+            override suspend fun insert(row: ConvRangeEntity) {
+                if (failRangeInsert) error("boom-range")
+                realRanges.insert(row)
+            }
+        }
+        val realConvs = db.conversations()
+        val convs = object : ConversationDao by realConvs {
+            override suspend fun setSyncedConvSeq(owner: String, convId: String, seq: Long) {
+                if (failCursorWrite) error("boom-cursor")
+                realConvs.setSyncedConvSeq(owner, convId, seq)
+            }
+        }
+        repo = MessageRepository(messages, db.pending(), convs, ConvRanges(rangeDao), RoomTx(db))
+        db.conversations().upsert(ConversationEntity(ownerUid = me, convId = conv))
+    }
+
+    @After
+    fun close() = db.close()
+
+    private fun md(seq: Long) = MessageData(convId = conv, convSeq = seq, from = "peer", content = "m$seq", timestamp = seq)
+    private fun page(vararg seqs: Long) = seqs.map { md(it) }
+    private suspend fun synced() = db.conversations().byId(me, conv)!!.syncedConvSeq
+    private suspend fun ranges() = repo.ranges.ranges(me, conv)
+
+    @Test
+    fun syncPageWritesMessagesRangeAndCursorTogether() = runBlocking {
+        assertNull(repo.onSyncPage(me, conv, page(1, 2, 3, 4, 5), covered = 5))
+        assertEquals(5, db.messages().countIn(me, conv))
+        assertEquals(listOf(SeqRange(1, 5)), ranges())
+        assertEquals(5L, synced())
+    }
+
+    @Test
+    fun syncPageRangeCoversHiddenSeqsUpToCovered() = runBlocking {
+        // 服务端只下发 1、2、5，但断言 (0, 8] 全部看过（3、4 是事件行/不可见，6~8 是墓碑等）
+        repo.onSyncPage(me, conv, page(1, 2, 5), covered = 8)
+        assertEquals(listOf(SeqRange(1, 8)), ranges())
+        assertEquals(8L, synced())
+    }
+
+    @Test
+    fun tooLongPageRegistersNothingAndKeepsCursor() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        repo.onSyncPage(me, conv, emptyList(), covered = 3) // too_long：无消息、covered == since
+        assertEquals(listOf(SeqRange(1, 3)), ranges())
+        assertEquals(3L, synced())
+    }
+
+    @Test
+    fun batchFailureRollsBackThenRetriesPerRowAndStillRegistersWholeRange() = runBlocking {
+        failBatch = true // 整页写失败，但逐条能写
+        assertNull(repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3))
+        assertEquals(3, db.messages().countIn(me, conv))
+        assertEquals(listOf(SeqRange(1, 3)), ranges())
+        assertEquals(3L, synced())
+    }
+
+    @Test
+    fun rowFailureStopsRangeAndCursorBeforeFirstFailedSeq() = runBlocking {
+        failBatch = true
+        failSingleSeq = 3
+        assertEquals(3L, repo.onSyncPage(me, conv, page(1, 2, 3, 4, 5), covered = 5))
+        assertEquals(2, db.messages().countIn(me, conv)) // 只有 1、2 落了
+        assertEquals(listOf(SeqRange(1, 2)), ranges()) // 区间绝不越过没落库的那条
+        assertEquals(2L, synced())
+    }
+
+    /** I1 的方向：登记区间失败 → 整个事务回滚，不会出现「游标/区间走在消息前面」。 */
+    @Test
+    fun rangeFailureNeverLeavesCursorOrRangeAheadOfRows() = runBlocking {
+        failRangeInsert = true
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        assertEquals(emptyList<SeqRange>(), ranges())
+        assertEquals(0L, synced()) // 游标没推：下次重拉（幂等）
+    }
+
+    /** 事务的另一个方向：区间已登记、游标写失败 → 区间必须一起回滚（否则区间与游标各走各的）。 */
+    @Test
+    fun cursorWriteFailureRollsTheRangeBack() = runBlocking {
+        failCursorWrite = true
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        assertEquals(emptyList<SeqRange>(), ranges())
+        assertEquals(0L, synced())
+    }
+
+    @Test
+    fun windowRegistersItsSpanButNeverMovesTheCursor() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2), covered = 2)
+        assertNull(repo.onWindowPage(me, conv, page(100, 101, 103))) // 102 是占号行：区间含它，因为在 [100,103] 内
+        assertEquals(listOf(SeqRange(1, 2), SeqRange(100, 103)), ranges())
+        assertEquals(2L, synced())
+    }
+
+    @Test
+    fun realtimeMessageRegistersItselfAndMergesWithTail() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        repo.onIncoming(me, md(4), bumpUnread = false)
+        assertEquals(listOf(SeqRange(1, 4)), ranges())
+        repo.onIncoming(me, md(9), bumpUnread = false) // 跳号：登记成孤岛，不假装中间齐全
+        assertEquals(listOf(SeqRange(1, 4), SeqRange(9, 9)), ranges())
+    }
+
+    @Test
+    fun clearConversationClearsRangesButKeepsCursor() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        repo.clearConversation(me, conv)
+        assertEquals(0, db.messages().countIn(me, conv))
+        assertEquals(emptyList<SeqRange>(), ranges())
+        assertEquals(3L, synced())
+    }
+
+    /** 复查抓出的遗漏：实时 msg_op 事件行占号，不登记则下一条成孤岛、清单永远差一格。 */
+    @Test
+    fun realtimeMsgOpRowRegistersItsSeqSoTheNextMessageStaysAdjacent() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..10L).map { md(it) }, covered = 10)
+        repo.onIncoming(me, MessageData(convId = conv, convSeq = 11, from = "peer", contentType = ContentType.MSG_OP, content = "{}"), bumpUnread = false)
+        repo.onIncoming(me, md(12), bumpUnread = false)
+        assertEquals(listOf(SeqRange(1, 12)), ranges())
+    }
+
+    @Test
+    fun ownAckRegistersItsSeq() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        repo.onAck(me, AckData(clientMsgId = "c1", serverMsgId = "s1", convId = conv, convSeq = 4, timestamp = 4))
+        repo.onIncoming(me, md(5), bumpUnread = false)
+        assertEquals(listOf(SeqRange(1, 5)), ranges())
+    }
+
+    @Test
+    fun syncPageWithEventRowsStillRegistersTheWholeCoveredSpan() = runBlocking {
+        val list = listOf(md(1), MessageData(convId = conv, convSeq = 2, from = "peer", contentType = ContentType.MSG_OP, content = "{}"), md(3))
+        repo.onSyncPage(me, conv, list, covered = 3)
+        assertEquals(2, db.messages().countIn(me, conv)) // 事件行不进 message 表
+        assertEquals(listOf(SeqRange(1, 3)), ranges())
+    }
+
+    /** 会话行还没建：区间照登记（消息确实落了），游标没处可写——区间领先游标但不领先消息，无害；钉住这个行为。 */
+    @Test
+    fun missingConversationRowStillRegistersRangeButCannotMoveCursor() = runBlocking {
+        repo.onSyncPage(me, "g_ghost", page(1, 2).map { it.copy(convId = "g_ghost") }, covered = 2)
+        assertEquals(listOf(SeqRange(1, 2)), repo.ranges.ranges(me, "g_ghost"))
+        assertNull(db.conversations().byId(me, "g_ghost"))
+    }
+
+    @Test
+    fun clearAccountClearsRangesToo() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2), covered = 2)
+        repo.clearAccount(me)
+        assertEquals(emptyList<SeqRange>(), ranges())
+        assertEquals(0, db.messages().countIn(me, conv))
+    }
+}

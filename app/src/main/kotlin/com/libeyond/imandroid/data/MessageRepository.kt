@@ -2,6 +2,7 @@ package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.data.db.ConversationDao
 import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.data.db.DbTx
 import com.libeyond.imandroid.data.db.MessageDao
 import com.libeyond.imandroid.sdk.protocol.SyncCursorItem
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
@@ -21,6 +22,7 @@ import com.libeyond.imandroid.sdk.protocol.MessageData
 import com.libeyond.imandroid.sdk.protocol.MsgOp
 import com.libeyond.imandroid.sdk.protocol.MsgOpData
 import com.libeyond.imandroid.sdk.protocol.ReceiptData
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.UUID
@@ -68,6 +70,10 @@ class MessageRepository(
     /** `internal`——同上一条注释：`MessageRepositorySend.kt`（发送链路那组）也要够得着。 */
     internal val pending: PendingMessageDao,
     internal val conversations: ConversationDao,
+    /** 区间清单（C1）。写侧与消息同事务，见 [persistPage]；读侧给 C3/C4/C6 的判据用。 */
+    val ranges: ConvRanges,
+    /** 跨 DAO 事务（I1：写消息与登记区间同一事务）。 */
+    internal val tx: DbTx,
 ) {
     internal val log = IMLog.tag("IM.Msg")
 
@@ -145,43 +151,87 @@ class MessageRepository(
      *   调用方要去拉一次会话列表把名字补上，否则列表里这一行没有显示名。
      */
     suspend fun onIncoming(owner: String, m: MessageData, bumpUnread: Boolean): Boolean {
-        if (routeNonMessage(owner, m)) return false
+        if (routeNonMessage(owner, m)) {
+            // 事件行 / 墓碑也占一个 conv_seq、也是「服务端给过了」：不登记的话，紧随其后的下一条就成了孤岛，
+            // 清单永远差一格、会话被永久判成有缺口（Web `registerSeq` 同款，复查抓出）
+            if (m.convSeq > 0) ranges.register(owner, m.convId, m.convSeq, m.convSeq)
+            return false
+        }
         val row = m.toEntity(owner)
-        messages.upsert(row)
+        // 实时消息也登记 [seq, seq]（紧接尾段则并入）——漏登记的后果是刚聊完的会话被判「本地不齐」
+        tx.run {
+            messages.upsert(row)
+            if (m.convSeq > 0) ranges.register(owner, m.convId, m.convSeq, m.convSeq)
+        }
         return bumpConversation(owner, m.convId, row, incUnread = bumpUnread && IncomingRule.countsAsUnread(m.from, m.contentType, owner))
     }
 
     /**
-     * 批量落库（sync_resp）。返回首个失败的 conv_seq；全部成功返回 null。
+     * 落一页消息 + 登记区间 + 推游标，**同一事务**（OFFLINE_BACKLOG_DESIGN §4.2 I1）：
+     * 区间只断言「服务端给全了、且已落库」，所以消息没落库，区间与游标都绝不越过。
+     * 调用方：`onSyncPage`（sync_resp 一页）、`onWindowPage`（window_resp 一窗），都在 `MessageRepositoryRanges.kt`。
+     *
+     * - [range]：这一页要登记的区间（含占号不成消息的行）；null 不登记。
+     * - [covered]：非 null 时一并推进同步游标（只认 [SyncCursorRule]）；window 路径传 null——窗口是一次性快照，不推游标。
+     *
+     * 整页写入失败 → 事务整体回滚，退到逐条重试定位**首个失败的 conv_seq**；
+     * 区间与游标都只推进到它之前（其余靠退避重拉幂等收敛）。返回首个失败序号，全成功返回 null。
      *
      * **`msg_op` 事件行与已删墓碑在这里就被摘走**（[IncomingRule]），不进 `message` 表。
-     * 这不影响游标：游标推进只认服务端给的 `covered_conv_seq`（[SyncCursorRule]），
-     * 与本端存了几条无关——那些序号确实"问过了"，只是它们不成为消息。
+     * 这不影响区间/游标：那些序号确实「问过了」，只是不成为消息。
      */
-    suspend fun onIncomingBatch(owner: String, list: List<MessageData>): Long? {
-        if (list.isEmpty()) return null
+    internal suspend fun persistPage(
+        owner: String,
+        convId: String,
+        list: List<MessageData>,
+        range: SeqRange?,
+        covered: Long?,
+    ): Long? {
         val plain = mutableListOf<MessageData>()
         for (m in list) {
             if (!routeNonMessage(owner, m)) plain += m
         }
-        if (plain.isEmpty()) return null
-        return try {
-            messages.upsert(plain.map { it.toEntity(owner) })
-            null
+        // 无事可写（没有可落的消息、也没有要登记的区间——`too_long` 与「没有新消息」都是这样）就别开事务：
+        // 重连时几十个会话各来一个空页，每个都白付一次事务提交（真机 34 个空页合计 625 ms，埋点抓到的）。
+        // 游标不会漏推：covered 比游标大时 [range] 必非空。
+        if (plain.isEmpty() && range == null) return null
+        try {
+            tx.run {
+                if (plain.isNotEmpty()) messages.upsert(plain.map { it.toEntity(owner) })
+                if (range != null) ranges.register(owner, convId, range.lo, range.hi)
+                if (covered != null) advanceCursor(owner, convId, covered, null)
+            }
+            return null
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             log.w("msg_batch_write_failed", "count" to plain.size, "err" to e.javaClass.simpleName)
-            // 逐条重试，定位首个失败点——游标只能推进到它之前（SyncCursorRule）
-            var firstFailed: Long? = null
-            for (m in plain.sortedBy { it.convSeq }) {
-                try {
-                    messages.upsert(m.toEntity(owner))
-                } catch (_: Exception) {
-                    firstFailed = m.convSeq
-                    break
-                }
-            }
-            firstFailed
         }
+        // 逐条重试，定位首个失败点——区间与游标只能推进到它之前
+        var firstFailed: Long? = null
+        for (m in plain.sortedBy { it.convSeq }) {
+            try {
+                messages.upsert(m.toEntity(owner))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                firstFailed = m.convSeq
+                break
+            }
+        }
+        val upTo = firstFailed?.let { it - 1 } ?: range?.hi
+        try {
+            tx.run {
+                if (range != null && upTo != null) ranges.register(owner, convId, range.lo, upTo)
+                if (covered != null) advanceCursor(owner, convId, covered, firstFailed)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 登记/推进都没成：安全方向（少登、游标不动），下次重拉
+            log.w("msg_page_register_failed", "convId" to convId, "err" to e.javaClass.simpleName)
+        }
+        return firstFailed
     }
 
     /**
@@ -394,7 +444,12 @@ class MessageRepository(
      * 会话行留着（列表里仍能看到这个人），只把预览清成空。
      */
     suspend fun clearConversation(owner: String, convId: String) {
-        messages.clearConv(owner, convId)
+        // 区间清单必须**连消息一起清**（三端契约，localStore.contract.ts 有断言）：只清消息的话，清单仍宣称
+        // 「这段齐全」、手里却一条没有——表现是会话空白且上滑/点↓都不自愈。游标 syncedConvSeq 照旧保留。
+        tx.run {
+            messages.clearConv(owner, convId)
+            ranges.clearConv(owner, convId)
+        }
         pending.clearConv(owner, convId)
         conversations.byId(owner, convId)?.let {
             conversations.upsert(
@@ -412,7 +467,10 @@ class MessageRepository(
     }
 
     suspend fun clearAccount(owner: String) {
-        messages.clearAccount(owner)
+        tx.run {
+            messages.clearAccount(owner)
+            ranges.clearAccount(owner) // 同一事务：崩在中间会留下「清单说齐、消息已空」，会话空白且不自愈
+        }
         pending.clearAccount(owner)
         conversations.clearAccount(owner)
     }

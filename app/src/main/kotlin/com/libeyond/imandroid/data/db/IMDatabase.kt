@@ -14,14 +14,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * 这样切回旧账号时数据还在（iOS/Web 同构）。
  */
 @Database(
-    entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 14,
+    entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class, ConvRangeEntity::class],
+    version = 15,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
     abstract fun messages(): MessageDao
     abstract fun pending(): PendingMessageDao
     abstract fun conversations(): ConversationDao
+    abstract fun ranges(): ConvRangeDao
 
     companion object {
         @Volatile private var instance: IMDatabase? = null
@@ -197,6 +198,28 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /**
+         * 14→15：离线积压 C1 区间清单表 `conv_range_local`（OFFLINE_BACKLOG_DESIGN §4.2）。
+         *
+         * **回填**：升级前本地是「从头连续拉到游标处」，正好是一段 `[1, syncedConvSeq]`——不回填的话所有老用户
+         * 升级后都会被判成「整个会话有缺口」。这与 iOS/Web 不同：它们在**读**时用 `[1,synced]` 兜底（没有任何区间行才生效，
+         * 一旦登记了第一个孤岛兜底就失效），Android 一次性**物化**成行，之后只有一种来源。
+         * ⚠️ 已知偏差：升级前「清空聊天记录」过的会话，游标保留而消息已没，回填会宣称「齐全」却一条没有——
+         * 进会话判据（C3）必须带「清单说齐、手里没东西 → 问服务端」的兜底（Web `planEntryWindow` 同款）。
+         */
+        internal val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `conv_range_local` (`ownerUid` TEXT NOT NULL, `convId` TEXT NOT NULL, " +
+                        "`lo` INTEGER NOT NULL, `hi` INTEGER NOT NULL, PRIMARY KEY(`ownerUid`, `convId`, `lo`))",
+                )
+                db.execSQL(
+                    "INSERT INTO conv_range_local (ownerUid, convId, lo, hi) " +
+                        "SELECT ownerUid, convId, 1, syncedConvSeq FROM conversation WHERE syncedConvSeq > 0",
+                )
+            }
+        }
+
         fun get(context: Context): IMDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -208,7 +231,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14,
+                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15,
                 )
                 .build().also { instance = it }
         }

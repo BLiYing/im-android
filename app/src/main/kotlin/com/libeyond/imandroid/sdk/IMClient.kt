@@ -4,10 +4,12 @@ import com.libeyond.imandroid.data.convergeLegacyMsgOpRows
 import android.content.Context
 import com.libeyond.imandroid.BuildConfig
 import com.libeyond.imandroid.sdk.api.AuthApi
+import com.libeyond.imandroid.data.ConvRanges
 import com.libeyond.imandroid.data.MessageRepository
 import com.libeyond.imandroid.data.MessageService
 import com.libeyond.imandroid.data.messageAt
 import com.libeyond.imandroid.data.PresenceStore
+import com.libeyond.imandroid.data.db.RoomTx
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.IMDatabase
 import com.libeyond.imandroid.sdk.api.ContactApi
@@ -198,7 +200,7 @@ class IMClient(context: Context) {
     )
 
     private val db = IMDatabase.get(context)
-    val repo = MessageRepository(db.messages(), db.pending(), db.conversations())
+    val repo = MessageRepository(db.messages(), db.pending(), db.conversations(), ConvRanges(db.ranges()), RoomTx(db))
 
     /**
      * 老消息补种缩略（原图已在本地时自己算一张）。**只补本机、不上行、不联网**——

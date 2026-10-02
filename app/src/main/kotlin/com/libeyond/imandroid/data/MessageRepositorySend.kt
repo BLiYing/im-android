@@ -183,7 +183,11 @@ suspend fun MessageRepository.onAck(owner: String, ack: AckData) {
         ),
         cached,
     )
-    messages.upsert(row)
+    // 自己发的这一条也是「服务端给过了、本地有了」的一格：不登记，对端紧接着的下一条就成了孤岛
+    tx.run {
+        messages.upsert(row)
+        if (ack.convSeq > 0) ranges.register(owner, ack.convId, ack.convSeq, ack.convSeq)
+    }
     pending.remove(owner, ack.clientMsgId)
     bumpConversation(owner, ack.convId, row)
     log.i("msg_acked", "convId" to ack.convId, "seq" to ack.convSeq, "cid" to ack.clientMsgId)

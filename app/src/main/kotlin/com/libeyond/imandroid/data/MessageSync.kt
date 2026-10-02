@@ -63,28 +63,30 @@ internal suspend fun MessageService.requestSync(owner: String) {
 /**
  * 应用一页同步结果。
  *
- * 游标推进严格走 [SyncCursorRule]：**先把本页按序落库，成功了才推进到 covered**。
+ * 落库、登记区间、推进游标是**同一事务**（`MessageRepository.persistPage`）：游标推进严格走 [SyncCursorRule]，
+ * 本页没落库成功就不推进到 covered，区间也不越过。
  * `has_more` 时以**新游标**续拉，不是以 latest。
  */
 internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData) {
     var needMore = false
     val nextCursors = mutableListOf<SyncCursorItem>()
+    // 游标一次读全：重连时一帧 sync_resp 带几十个会话，逐页各读一次库在真机上是可测的开销
+    val sinceBy = repo.syncCursors(owner).associate { it.convId to it.sinceConvSeq }
     for (c in resp.conversations) {
         val applyStart = android.os.SystemClock.elapsedRealtime()
-        val firstFailed = repo.onIncomingBatch(owner, c.messages)
+        val firstFailed = repo.onSyncPage(owner, c.convId, c.messages, c.coveredConvSeq, sinceHint = sinceBy[c.convId] ?: 0L)
         val applyMs = android.os.SystemClock.elapsedRealtime() - applyStart
         // 补收的这一页要跟着 bump 会话列表快照，否则重连补收的消息只进聊天页、
         // 不进列表排序（见 MessageRepository.bumpConversationFromLatest 的注释）。
         if (c.messages.isNotEmpty()) repo.bumpConversationFromLatest(owner, c.convId)
         repo.noteHead(owner, c.convId, c.headConvSeq) // 带了 max_gap 的游标服务端才回 head；0 不写
-        repo.advanceCursor(owner, c.convId, c.coveredConvSeq, firstFailed)
         log.i(
             "sync_page_applied",
             "convId" to c.convId, "msgs" to c.messages.size,
             "covered" to c.coveredConvSeq, "hasMore" to c.hasMore,
             "apply_ms" to applyMs, // 压测埋点：一页落库耗时（LOAD_TESTING B0/B5）
         )
-        // 服务端判它「太长了」：本页没有消息、游标原地不动（advanceCursor 上面那行是空写），head 已在上面记下。
+        // 服务端判它「太长了」：本页没有消息、游标原地不动（`onSyncPage` 里推进是空写），head 已在上面记下。
         // 只留痕，不重试——重试只会立刻拿到同一个 too_long（缺口本身要等 C1 落地才谈得上按需补）。
         if (c.tooLong) {
             log.i("sync_backlog_too_long", "convId" to c.convId, "head" to c.headConvSeq)
@@ -112,7 +114,7 @@ internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData)
  * 用某会话此刻已落库的最新一条 bump 会话列表快照（预览文案 / `lastTimestamp` / `lastConvSeq`），
  * **不碰未读**——未读走上面 [applySync] 末尾 `refreshConversations()` 的服务端权威值，这里瞎加会跟它打架。
  *
- * 断线重连补收（`sync_resp`）专用：[MessageRepository.onIncomingBatch] 只管落 `message` 表，
+ * 断线重连补收（`sync_resp`）专用：[MessageRepository.persistPage] 只管落 `message` 表，
  * 从不碰 `conversation` 表，于是补收的这批消息只进得了聊天页、进不了会话列表排序——会话不上移、
  * 预览还停在断线前那条（2026-09-28 用户报「收到新消息，会话没有上移到前面」）。
  * `window_resp`（锚点开窗，见 [MessageService] 的 `WINDOW_RESP` 分支）**不该**调用这个：

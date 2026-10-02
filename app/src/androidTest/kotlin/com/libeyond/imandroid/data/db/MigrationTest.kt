@@ -74,6 +74,32 @@ class MigrationTest {
         }
     }
 
+    /** 14→15 建 `conv_range_local` 并回填：升级前「从头连续拉到游标处」就是一段 `[1, synced]`。 */
+    @Test
+    fun migrate14To15BackfillsPrefixRangeFromCursor() {
+        helper.createDatabase(DB, 14).use { db ->
+            fun conv(id: String, synced: Int) = db.execSQL(
+                """INSERT INTO conversation (ownerUid, convId, isGroup, peerUid, title, avatarUrl, peerRemark,
+                   lastContent, lastContentType, lastTimestamp, lastConvSeq, lastFrom, lastFromNickname, lastRecalled,
+                   lastSysEvent, lastSysArgs, lastSysSegments, unread, mentionUnread, readSeq, peerReadSeq,
+                   syncedConvSeq, pinnedAt, muted, muteUntil, markedUnread, isSuper, headConvSeq)
+                   VALUES ('me', '$id', 1, '', 'G', '', '', '', 'text', 0, 0, '', '', 0,
+                   '', '', '', 0, 0, 0, 0, $synced, 0, 0, 0, 0, 0, 0)""",
+            )
+            conv("g_synced", 7)
+            conv("g_fresh", 0)
+        }
+        helper.runMigrationsAndValidate(DB, 15, true, IMDatabase.MIGRATION_14_15).use { db ->
+            db.query("SELECT convId, lo, hi FROM conv_range_local ORDER BY convId").use { c ->
+                assertEquals(1, c.count) // 游标为 0 的会话不回填
+                c.moveToFirst()
+                assertEquals("g_synced", c.getString(0))
+                assertEquals(1L, c.getLong(1))
+                assertEquals(7L, c.getLong(2))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

@@ -154,7 +154,7 @@ class MessageService(
             // 窗口取数是一次性快照，推进游标会让 sync 以为这一段已经覆盖过了。
             FrameType.WINDOW_RESP -> data?.let {
                 val resp = ProtocolJson.decodeFromJsonElement(WindowRespData.serializer(), it)
-                repo.onIncomingBatch(owner, resp.messages)
+                repo.onWindowPage(owner, resp.convId, resp.messages)
                 windows.deliver(resp)
                 log.i(
                     "window_applied", "convId" to resp.convId, "msgs" to resp.messages.size,
