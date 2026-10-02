@@ -449,6 +449,29 @@ class MessageRepositoryRangesTest {
         assertEquals(0L, repo.conversationMediaInSegment(me, conv, 500).second)
     }
 
+    /** ↓N 读库那一半：10 万积压、本地只有最前 50 条——数出来必须是 10 万量级，不是已加载的 50。 */
+    @Test
+    fun unreadBelowFactsGiveTheBacklogCountNotTheLoadedRowCount() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..50L).map { md(it) }, covered = 50)
+        repo.noteHead(me, conv, 100_000)
+        val f = repo.unreadBelowFacts(me, conv, historyFloor = 0)
+        assertEquals(100_000L, f.tip)
+        assertEquals(50L, f.localNewest)
+        val covered = SyncRanges.coversSpan(f.ranges, 11, f.tip)
+        assertEquals(false, covered)
+        assertEquals(99_990, UnreadBelow.count(f.tip, pendingRead = 10, loadedBelow = 40, covered = covered, localNewest = f.localNewest, floor = f.floor))
+    }
+
+    /** 清空过的会话：floor = 位点；读位点在位点以内也从位点数起，不把刚清掉的算成未读。 */
+    @Test
+    fun unreadBelowFactsAfterClearStartFromTheClearedFloor() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..30L).map { md(it) }, covered = 30)
+        repo.clearConversation(me, conv)
+        val f = repo.unreadBelowFacts(me, conv, historyFloor = 0)
+        assertEquals(30L, f.floor)
+        assertEquals(0, UnreadBelow.count(f.tip, pendingRead = 5, loadedBelow = 0, covered = false, localNewest = 0, floor = f.floor))
+    }
+
     @Test
     fun windowAroundOnlyTakesTheTargetsOwnSegment() = runBlocking {
         repo.onSyncPage(me, conv, (1L..10L).map { md(it) }, covered = 10)
