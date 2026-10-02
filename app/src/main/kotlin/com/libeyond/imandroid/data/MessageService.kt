@@ -134,7 +134,9 @@ class MessageService(
 
             FrameType.NEW_MSG -> data?.let {
                 val m = ProtocolJson.decodeFromJsonElement(MessageData.serializer(), it)
-                repo.onIncoming(owner, m, bumpUnread = true)
+                val createdStub = repo.onIncoming(owner, m, bumpUnread = true)
+                // 新会话只落了个没名字的壳：拉一次权威列表补标题/头像（不阻塞帧分发）
+                if (createdStub) scope.launch { refreshConversations() }
                 // §4.3 末：接收方收到后**必须回 receipt(delivered)**
                 if (m.from != owner) {
                     sendReceipt(m.convId, ReceiptData.DELIVERED, m.convSeq)

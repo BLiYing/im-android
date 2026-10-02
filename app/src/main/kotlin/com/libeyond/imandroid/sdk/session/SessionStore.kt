@@ -66,8 +66,16 @@ class SessionStore(context: Context) {
      * 清掉会让用户每次退出后都要重填一遍内网 IP。
      */
     fun clear() {
-        prefs.edit().remove(KEY_TOKEN).remove(KEY_REFRESH).remove(KEY_UID).remove(KEY_USERNAME).apply()
+        prefs.edit().remove(KEY_TOKEN).remove(KEY_REFRESH).remove(KEY_UID).remove(KEY_USERNAME).remove(KEY_MY_PROFILE).apply()
     }
+
+    /**
+     * 本人资料的本地副本（「我」页头部）：断网/断连时 `GET /users/me` 拿不到，头部不能退回「未命名用户」+ 首字母圈。
+     * 带 uid 存、按 uid 取（[MyProfileCodec]），换号读不到上一个账号的；[clear] 一并擦掉。
+     */
+    var myProfileJson: String?
+        get() = prefs.getString(KEY_MY_PROFILE, null)
+        set(v) = prefs.edit().apply { if (v == null) remove(KEY_MY_PROFILE) else putString(KEY_MY_PROFILE, v) }.apply()
 
     /**
      * 「历史遗留 `msg_op` 事件行已收敛过」的一次性标记（按账号）。
@@ -90,6 +98,7 @@ class SessionStore(context: Context) {
         const val KEY_UID = "uid"
         const val KEY_USERNAME = "username"
         const val KEY_HOST = "host"
+        const val KEY_MY_PROFILE = "my_profile"
         const val KEY_MSGOP_CONVERGED = "msgop_converged_"
     }
 }

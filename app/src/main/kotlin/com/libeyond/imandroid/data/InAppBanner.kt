@@ -47,7 +47,7 @@ object BannerFormat {
          *  对此有现成的退化路径（回退服务端快照昵称），与 `ChatRowView` 等处的默认值同一口径。 */
         nameOf: (String) -> String? = { null },
     ): BannerContent {
-        val title = conv.title.ifBlank { conv.convId }
+        val title = Forward.titleOf(conv, nameOf)
         val body = if (previewOn) ConversationPreview.of(conv, myUid, nameOf) else Str.s(R.string.notif_preview_hidden)
         val seed = if (conv.isGroup) conv.convId else conv.peerUid.ifBlank { conv.convId }
         return BannerContent(convId = conv.convId, avatarSeed = seed, avatarUrl = conv.avatarUrl, title = title, body = body)

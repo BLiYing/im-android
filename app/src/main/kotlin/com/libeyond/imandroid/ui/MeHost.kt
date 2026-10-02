@@ -38,7 +38,8 @@ fun MeHost(
     onOpenChat: (com.libeyond.imandroid.data.db.ConversationEntity) -> Unit = {},
 ) {
     var page by remember { mutableStateOf(MePage.List) }
-    var me by remember { mutableStateOf<UserCard?>(null) }
+    // 先用本机副本顶上：断网拉不到 /users/me 时头部仍是真名字，不掉成「未命名用户」
+    var me by remember { mutableStateOf<UserCard?>(client.cachedMyProfile()) }
     var confirmLogout by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
 
@@ -49,8 +50,8 @@ fun MeHost(
     LaunchedEffect(page) {
         if (page == MePage.List) {
             runCatchingCancellable { client.contacts.me() }
-                .onSuccess { me = it }
-                .onFailure { /* 静默：头部回退本地句柄 + 首字母圈，不为一次拉取失败挡住整页 */ }
+                .onSuccess { me = it; client.cacheMyProfile(it) }
+                .onFailure { /* 静默：头部沿用本机副本（没有才回退句柄 + 首字母圈），不为一次拉取失败挡住整页 */ }
         }
     }
 
@@ -80,7 +81,7 @@ fun MeHost(
             MePage.Profile -> MyProfileHost(
                 client = client,
                 card = me,
-                onChanged = { me = it },
+                onChanged = { me = it; client.cacheMyProfile(it) },
                 onBack = { page = MePage.List },
             )
             MePage.List -> {

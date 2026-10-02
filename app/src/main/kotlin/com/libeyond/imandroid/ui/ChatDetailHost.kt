@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
+import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.ChatDetailNav
@@ -84,7 +85,7 @@ fun ChatDetailHost(
     // 「链接」页签点一条在 App 内打开（宿主在 WebLinkHost，iOS `openLink:`）
     val openLink = LocalOpenLink.current
     val owner = client.uid.orEmpty()
-    val title = conv.title.ifBlank { conv.peerUid }
+    val title = Forward.titleOf(conv)
 
     var profile by remember(conv.convId) { mutableStateOf(false) }
     // 拆成两个变量（而不是用 `viewing: ConvMediaItem?` 的非空身兼"开不开"）：关闭时只翻

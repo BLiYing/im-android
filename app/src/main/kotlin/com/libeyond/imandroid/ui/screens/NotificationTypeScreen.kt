@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.MuteState
 import com.libeyond.imandroid.data.NotifTypeSettings
 import com.libeyond.imandroid.data.db.ConversationEntity
@@ -189,7 +190,7 @@ private fun AddExceptionRow(onClick: () -> Unit) {
 private fun ExceptionRow(conv: ConversationEntity, nowMs: Long, onClick: () -> Unit) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
-    val title = conv.peerRemark.ifBlank { conv.title }.ifBlank { conv.convId }
+    val title = conv.peerRemark.ifBlank { Forward.titleOf(conv) }
     // 到期时间副标题（NOTIFICATIONS_P1_DESIGN §4.2 草图 C）：永久用纯文案，定时免打扰带「至……」。
     val untilPhrase = MuteState.untilPhrase(conv.muteUntil, nowMs)
     Row(

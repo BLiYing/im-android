@@ -131,12 +131,15 @@ class MessageRepository(
      * 收到一条消息（new_msg 或 sync_resp 里的一条）。
      *
      * 幂等：主键 `(owner, convId, convSeq)` upsert，重复补拉自动收敛。
+     *
+     * @return 本地原先没有这个会话、刚造了一行**没有标题/头像的壳**（见 [bumpConversation]）——
+     *   调用方要去拉一次会话列表把名字补上，否则列表里这一行没有显示名。
      */
-    suspend fun onIncoming(owner: String, m: MessageData, bumpUnread: Boolean) {
-        if (routeNonMessage(owner, m)) return
+    suspend fun onIncoming(owner: String, m: MessageData, bumpUnread: Boolean): Boolean {
+        if (routeNonMessage(owner, m)) return false
         val row = m.toEntity(owner)
         messages.upsert(row)
-        bumpConversation(owner, m.convId, row, incUnread = bumpUnread && IncomingRule.countsAsUnread(m.from, m.contentType, owner))
+        return bumpConversation(owner, m.convId, row, incUnread = bumpUnread && IncomingRule.countsAsUnread(m.from, m.contentType, owner))
     }
 
     /**
@@ -267,7 +270,7 @@ class MessageRepository(
                 muted = s.muted,
                 muteUntil = s.muteUntil,
                 markedUnread = s.markedUnread,
-            )
+            ).keepNewerLocalTail(existing)
         }
         conversations.upsert(rows)
         log.i("conversations_applied", "count" to rows.size)
@@ -413,12 +416,12 @@ class MessageRepository(
         convId: String,
         row: MessageEntity,
         incUnread: Boolean = false,
-    ) {
-        val c = conversations.byId(owner, convId) ?: ConversationEntity(
-            ownerUid = owner,
-            convId = convId,
-            isGroup = convId.startsWith("g_"),
-        )
+    ): Boolean {
+        val existing = conversations.byId(owner, convId)
+        // 本地没有这个会话（对方第一次给我发消息）：先造一行壳。**必须带 peerUid**——
+        // 标题此时还不知道（空串），列表行靠 peerUid 去好友表取名；两样都空就一路回退成 convId
+        // （`u_1000156391_u_1199353701` 露在列表上，2026-10-02 用户报）。
+        val c = existing ?: newConversationStub(owner, convId)
         conversations.upsert(
             c.copy(
                 lastContent = MessagePreview.of(row.contentType, row.content, row.caption, viewerIsSender = row.sender == owner),
@@ -435,5 +438,6 @@ class MessageRepository(
                 unread = if (incUnread) c.unread + 1 else c.unread,
             )
         )
+        return existing == null
     }
 }

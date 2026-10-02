@@ -41,6 +41,7 @@ import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.HttpClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.session.DeviceIdentity
+import com.libeyond.imandroid.sdk.session.MyProfileCodec
 import com.libeyond.imandroid.sdk.session.RestoreOutcome
 import com.libeyond.imandroid.sdk.session.SessionStore
 import com.libeyond.imandroid.sdk.session.TokenSession
@@ -65,6 +66,15 @@ class IMClient(context: Context) {
     val scope = CoroutineScope(SupervisorJob())
 
     private val session = SessionStore(context)
+
+    /** 本机缓存的本人资料（上次 `GET /users/me` 成功的结果）；没有 / 换号 → null。「我」页头部断网兜底用。 */
+    fun cachedMyProfile(): UserCard? = MyProfileCodec.decode(session.uid.orEmpty(), session.myProfileJson)
+
+    /** 拉到或改完本人资料后调用，覆盖本机副本。 */
+    fun cacheMyProfile(card: UserCard) {
+        val uid = session.uid.orEmpty().ifEmpty { return }
+        session.myProfileJson = MyProfileCodec.encode(uid, card)
+    }
 
     /**
      * 账号就绪后跑一次的数据订正：把历史遗留的 `msg_op` 事件行补应用并删掉

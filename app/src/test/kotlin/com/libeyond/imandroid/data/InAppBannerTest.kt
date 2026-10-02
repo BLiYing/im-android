@@ -55,9 +55,18 @@ class InAppBannerTest {
     }
 
     @Test
-    fun `标题取不到时回退 convId——与会话列表行同一口径`() {
+    fun `标题取不到时回退「未命名」，绝不露 convId——与会话列表行同一口径`() {
         val c = BannerFormat.of(conv(id = "c9", title = ""), previewOn = true, myUid = "me")
-        assertEquals("c9", c.title)
+        assertEquals(DisplayName.UNNAMED, c.title)
+    }
+
+    @Test
+    fun `标题为空的单聊先用本机好友名`() {
+        val c = BannerFormat.of(
+            conv(group = false, peer = "p1", title = ""), previewOn = true, myUid = "me",
+            nameOf = { if (it == "p1") "老王" else null },
+        )
+        assertEquals("老王", c.title)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,6 +53,8 @@ fun ChatsHost(
     /** 定时免打扰到期刷新用的当前时刻（NOTIFICATIONS_P1_DESIGN §4.4）——喂给 [ConversationListScreen]
      *  的铃铛/未读徽标；由调用方（`MainScreen`）算一次，不在这里另起一份定时器。 */
     muteNow: Long = System.currentTimeMillis(),
+    /** 会话列表滚动位置：进会话时本 Tab 整层离开组合，状态必须挂在更外层（`MainScreen`）才不丢。 */
+    listState: LazyListState,
 ) {
     val owner = client.uid.orEmpty()
     // 在线态绿点：数据链路早已在（HTTP 快照 seed + presence 帧增量更新，见 data/Presence.kt），
@@ -107,6 +110,7 @@ fun ChatsHost(
                     onPlus = { plusAnchor = it },
                     connected = connected,
                     nowMs = muteNow,
+                    listState = listState,
                 )
             }
             ChatsPage.AddFriend -> AddFriendHost(

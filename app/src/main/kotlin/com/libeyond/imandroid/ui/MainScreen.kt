@@ -173,6 +173,10 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
      */
     var chatArm by remember { mutableStateOf(ChatArm()) }
 
+    // 会话列表滚动位置：进聊天页时 Tab 层整个离开组合，放在 ChatsHost/列表里会随之丢失（返回回顶部）
+    val chatsListState = androidx.compose.runtime.saveable.rememberSaveable(saver = androidx.compose.foundation.lazy.LazyListState.Saver) {
+        androidx.compose.foundation.lazy.LazyListState()
+    }
     var menuFor by remember { mutableStateOf<ConversationEntity?>(null) }
     var menuAnchor by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     // 会话列表左滑/长按「免打扰」的时长菜单（NOTIFICATIONS_P1_DESIGN §4.1/§4.2）：非空 = 敞开着，
@@ -214,6 +218,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                 onLongPress = { c, rect -> menuFor = c; menuAnchor = rect },
                                 bottomBar = bottomBar,
                                 muteNow = muteTick,
+                                listState = chatsListState,
                             )
                             Tab.Contacts -> ContactsHost(client = client, onOpenChat = { openConv = it }, bottomBar = bottomBar)
                             Tab.Me -> MeHost(

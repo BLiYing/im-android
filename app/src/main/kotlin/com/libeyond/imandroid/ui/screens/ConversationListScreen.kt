@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,8 +45,10 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.ConversationListPhase
+import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.ConversationPreview
 import com.libeyond.imandroid.data.MuteState
 import com.libeyond.imandroid.data.db.ConversationEntity
@@ -84,6 +86,8 @@ fun ConversationListScreen(
     /** 判「是否免打扰」的当前时刻（定时免打扰到期刷新，NOTIFICATIONS_P1_DESIGN §4.4）：
      *  纯展示不持业务状态（CODING_STYLE §7②），由调用方喂 `ui/components/MuteTick.kt` 的 tick。 */
     nowMs: Long = System.currentTimeMillis(),
+    /** 滚动位置由调用方持有：点进会话时本页整个离开组合，页内 remember 的状态会丢，返回就被甩回顶部。 */
+    listState: LazyListState,
 ) {
     val c = IMTheme.colors
     var plusRect by remember { mutableStateOf(Rect.Zero) }
@@ -114,7 +118,6 @@ fun ConversationListScreen(
             ConversationListPhase.Loading -> Unit
             ConversationListPhase.Empty -> EmptyState()
             ConversationListPhase.List -> {
-                val listState = rememberLazyListState()
                 // 列表按 convId 做 key：新消息把某会话顶到第一行时，LazyColumn 会**锚住原来的第一行**，
                 // 新顶上来的会话被挤到屏幕上方、看起来像「消失了」（2026-09-29 真机）。
                 // 用户本来就停在顶部时跟着回顶；往下翻着看时不动，不打断阅读。
@@ -152,7 +155,8 @@ private fun ConversationRow(
     var rect by remember { mutableStateOf(Rect.Zero) }
     val c = IMTheme.colors
     val d = IMTheme.dimens
-    val title = conv.title.ifBlank { conv.convId }
+    // 标题为空（刚收到陌生人首条消息、列表还没拉回来）：先用本机好友表的名字，再退「未命名」，**绝不露 convId**
+    val title = Forward.titleOf(conv, localNameOf)
     // 不用 remember：算的是字符串拼接，比记忆化本身还便宜；
     // 记了反而会在 localNameOf 解析结果变化（改备注）时读到 (conv, myUid) 没变的旧值。
     val preview = ConversationPreview.of(conv, myUid, localNameOf)

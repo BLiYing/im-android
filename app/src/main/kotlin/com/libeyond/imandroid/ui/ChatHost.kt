@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.ui.screens.MentionPanel
+import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.sendTyping
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.draw.alpha
@@ -326,7 +327,7 @@ fun ChatHost(
     Box(Modifier.fillMaxSize().then(if (covered) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier)) {
     ChatScreen(
         convId = conv.convId,
-        title = conv.title.ifBlank { conv.convId },
+        title = Forward.titleOf(conv) { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
         avatarUrl = conv.avatarUrl,
         avatarSeed = if (conv.isGroup) conv.convId else conv.peerUid.ifBlank { conv.convId },
         myUid = owner,
