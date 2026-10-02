@@ -137,6 +137,8 @@ internal fun MediaViewerScreen(
      * **在途守卫与「还有没有更早」由调用方判**（`MediaTimeline.wantsOlder`）——那两个事实在 Host 手上。
      */
     onNearOldest: (index: Int) -> Unit = {},
+    /** 快翻到**最新**那一端了（本地段上沿）：调用方可去服务端要更新的一页（`MediaTimeline.wantsNewer`）。 */
+    onNearNewest: (index: Int) -> Unit = {},
     onClose: () -> Unit,
 ) {
     if (pages.isEmpty()) return
@@ -160,6 +162,7 @@ internal fun MediaViewerScreen(
     }
     LaunchedEffect(state.currentPage, pages.size) {
         if (state.currentPage <= MediaTimeline.PREFETCH_MARGIN) onNearOldest(state.currentPage)
+        if (state.currentPage >= pages.size - 1 - MediaTimeline.PREFETCH_MARGIN) onNearNewest(state.currentPage)
     }
 
     var moreOpen by remember { mutableStateOf(false) }

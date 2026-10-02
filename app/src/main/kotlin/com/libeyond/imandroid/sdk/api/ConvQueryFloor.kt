@@ -28,6 +28,10 @@ object ConvQueryFloor {
             hasMore = hasMoreAboveFloor(page.hasMore, page.nextCursor, clearedUpTo),
         )
 
+    /** 向更新方向的一页：只丢位点以内的项；`has_more` / 游标不动（向新翻不会碰到位点之下）。 */
+    fun mediaNewer(page: ConvMediaPage, clearedUpTo: Long): ConvMediaPage =
+        if (clearedUpTo <= 0) page else page.copy(items = page.items.filter { it.convSeq > clearedUpTo })
+
     /** 「当天第一条」在位点以内的日子，服务端计数里掺着已清掉的消息——整天丢掉（位点之后本机新收的消息由本地打点补上）。 */
     fun calendar(res: ConvCalendarResult, clearedUpTo: Long): ConvCalendarResult =
         if (clearedUpTo <= 0) res else res.copy(days = res.days.filter { it.firstConvSeq > clearedUpTo })

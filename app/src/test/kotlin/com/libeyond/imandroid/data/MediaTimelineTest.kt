@@ -161,4 +161,30 @@ class MediaTimelineTest {
         ).toViewerMedia()
         assertEquals("", m!!.poster)
     }
+
+    // ————————————————— 向更新方向（本地段上沿，服务端 after=） —————————————————
+
+    @Test
+    fun `快翻到最新一端才续拉更新的，且要守在途与还有没有`() {
+        assertTrue(MediaTimeline.wantsNewer(index = 9, count = 10, hasMoreNewer = true, loading = false))
+        assertTrue(MediaTimeline.wantsNewer(index = 7, count = 10, hasMoreNewer = true, loading = false)) // 留余量
+        assertFalse(MediaTimeline.wantsNewer(index = 3, count = 10, hasMoreNewer = true, loading = false))
+        assertFalse(MediaTimeline.wantsNewer(index = 9, count = 10, hasMoreNewer = false, loading = false))
+        assertFalse(MediaTimeline.wantsNewer(index = 9, count = 10, hasMoreNewer = true, loading = true)) // 在途不叠请求
+        assertFalse(MediaTimeline.wantsNewer(index = 0, count = 0, hasMoreNewer = true, loading = false))
+    }
+
+    @Test
+    fun `更新的一页拼到后面，只收比最新还新的，下标不挪`() {
+        val r = MediaTimeline.appendNewer(listOf(media(10), media(20)), listOf(media(40), media(30), media(20), media(5)))
+        assertEquals(listOf(10L, 20L, 30L, 40L), r.items.map { it.convSeq })
+        assertEquals(2, r.added)
+    }
+
+    @Test
+    fun `重复页与非正序号不进更新序列`() {
+        val r = MediaTimeline.appendNewer(listOf(media(10)), listOf(media(10), media(0), media(15), media(15)))
+        assertEquals(listOf(10L, 15L), r.items.map { it.convSeq })
+        assertEquals(1, r.added)
+    }
 }

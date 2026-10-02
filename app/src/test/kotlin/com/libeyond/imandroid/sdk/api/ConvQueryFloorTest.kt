@@ -55,4 +55,13 @@ class ConvQueryFloorTest {
         ))
         assertEquals(listOf(2L), ConvQueryFloor.calendar(r, 50).days.map { it.dayStartMs })
     }
+
+    @Test
+    fun `向更新的一页只丢位点以内的项，has_more 与游标不动`() {
+        val p = ConvMediaPage(items = listOf(m(40), m(70), m(90)), nextCursor = 90, hasMore = true)
+        val r = ConvQueryFloor.mediaNewer(p, 50)
+        assertEquals(listOf(70L, 90L), r.items.map { it.convSeq })
+        assertTrue(r.hasMore)            // 向新翻不会碰到位点之下，不套 hasMoreAboveFloor
+        assertEquals(90L, r.nextCursor)
+    }
 }

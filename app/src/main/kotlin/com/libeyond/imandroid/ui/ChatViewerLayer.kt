@@ -154,6 +154,7 @@ internal fun ChatViewerLayer(
                 onOpenGallery()
             },
             onNearOldest = { idx -> timeline.loadOlderIfNeeded(idx) },
+            onNearNewest = { idx -> timeline.loadNewerIfNeeded(idx) },
             onClose = onClose,
         )
     }

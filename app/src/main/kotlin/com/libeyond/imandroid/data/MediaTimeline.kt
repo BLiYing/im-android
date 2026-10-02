@@ -62,6 +62,27 @@ object MediaTimeline {
         hasMore && !loading && count > 0 && index <= PREFETCH_MARGIN
 
     /**
+     * 现在该不该去拉更新的一页（本地段上沿之外，服务端 `after=` 方向）。判据与 [wantsOlder] 对称：在途守卫不能省。
+     */
+    fun wantsNewer(index: Int, count: Int, hasMoreNewer: Boolean, loading: Boolean): Boolean =
+        hasMoreNewer && !loading && count > 0 && index >= count - 1 - PREFETCH_MARGIN
+
+    /**
+     * 把更新的一页并到序列**后面**，回报真正新增了几条。只收比当前最新还新的、按 conv_seq 去重；
+     * 追加在末尾，**当前下标不需要挪**（与 [prependOlder] 的区别）。
+     */
+    fun appendNewer(current: List<ViewerMedia>, page: List<ViewerMedia>): AppendResult {
+        val newest = current.lastOrNull()?.convSeq
+        val seen = current.mapTo(HashSet()) { it.convSeq }
+        val newer = page
+            .filter { it.convSeq > 0 && (newest == null || it.convSeq > newest) && seen.add(it.convSeq) }
+            .sortedBy { it.convSeq }
+        return AppendResult(current + newer, newer.size)
+    }
+
+    data class AppendResult(val items: List<ViewerMedia>, val added: Int)
+
+    /**
      * 把更早的一页并到序列**前面**，并回报真正新增了几条。
      *
      * 判据与会话内搜索翻页同源（iOS `IMChatSearchPrependOlderHits` / im-web `searchPaging.ts`）：

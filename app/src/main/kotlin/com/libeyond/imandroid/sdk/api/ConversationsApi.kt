@@ -142,16 +142,17 @@ class ConversationsApi(private val http: HttpClient) {
      * **「链接」这一格服务端不覆盖**：链接不是独立的 content_type，是从文本里识别出来的，
      * 服务端没有可索引的列（`internal/conversation/media.go` 开头写明了）。
      */
-    suspend fun media(convId: String, kind: String, cursor: Long = 0, limit: Int = 60, clearedUpTo: Long = 0): ConvMediaPage {
+    suspend fun media(convId: String, kind: String, cursor: Long = 0, limit: Int = 60, clearedUpTo: Long = 0, after: Long = 0): ConvMediaPage {
         val query = buildMap {
             put("kind", kind)
             put("limit", limit.toString())
-            if (cursor > 0) put("cursor", cursor.toString())
+            // after = 向更新方向（升序，紧挨 after 的最近 limit 条），与 cursor（向更旧）互斥
+            if (after > 0) put("after", after.toString()) else if (cursor > 0) put("cursor", cursor.toString())
         }
         return decode(
             http.call("GET", "/api/v1/conversations/$convId/media", query = query),
             ConvMediaPage.serializer(),
-        ).let { ConvQueryFloor.media(it, clearedUpTo) }
+        ).let { if (after > 0) ConvQueryFloor.mediaNewer(it, clearedUpTo) else ConvQueryFloor.media(it, clearedUpTo) }
     }
 
     /**

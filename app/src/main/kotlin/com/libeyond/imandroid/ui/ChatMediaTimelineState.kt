@@ -46,6 +46,19 @@ internal class ChatMediaTimeline internal constructor() {
         internal set
 
     /**
+     * 本地段上沿之外服务端还有更新的（只在本地有缺口时才可能为真）。初值 = 打底取的是**缺口会话里的一段**；
+     * 拉到空页 / 到头 / 失败后置假（失败也停：同 [hasMore]，离线时别每翻到头都重试）。
+     */
+    var hasMoreNewer by mutableStateOf(false)
+        internal set
+    internal var loadNewerImpl: () -> Unit = {}
+
+    /** 快翻到**最新**那一端时调（本地段上沿，向服务端 `after=` 方向续拉）。 */
+    fun loadNewerIfNeeded(index: Int) {
+        if (MediaTimeline.wantsNewer(index, items.size, hasMoreNewer, loading)) loadNewerImpl()
+    }
+
+    /**
      * 服务端那边还有没有更早的。
      *
      * 初值 `true` = **还不知道**（本地那段之前很可能还有）。拉到空页或失败后置 false：
@@ -106,6 +119,29 @@ internal fun rememberChatMediaTimeline(client: IMClient, convId: String, viewing
 
     // 进会话（或换会话）先从本地库打底。**不观察 Flow**：序列是"打开查看器那一刻的整条会话媒体"，
     // 看图期间新来的图不该把序列在脚下改长（iOS 同样是打开时查一次）。
+    timeline.loadNewerImpl = {
+        if (!timeline.loading) {
+            timeline.loading = true
+            scope.launch {
+                val after = timeline.items.lastOrNull()?.convSeq ?: 0L
+                runCatchingCancellable { client.conversationsApi.media(convId, MediaKind.MEDIA, after = after, clearedUpTo = client.repo.clearedUpTo(owner, convId)) }
+                    .onSuccess { page ->
+                        val merged = MediaTimeline.appendNewer(timeline.items, page.items.mapNotNull { it.toViewerMedia() })
+                        timeline.items = merged.items
+                        // 服务端说没有了，或这一页一条都没并进来（重复页 / 全被过滤）→ 停，别空转
+                        timeline.hasMoreNewer = page.hasMore && merged.added > 0
+                        timeline.notice = null
+                    }
+                    .onFailure {
+                        timeline.hasMoreNewer = false
+                        timeline.notice = Str.s(R.string.media_viewer_offline_partial_notice)
+                        log.w("viewer_media_newer_failed", "conv" to convId)
+                    }
+                timeline.loading = false
+            }
+        }
+    }
+
     // **本地有缺口时只取点中那条所在的本地段**（[conversationMediaInSegment]），不拼缺口另一侧的旧岛：
     // 否则「往更旧续拉」的游标取的是最旧岛的第一张，两段之间缺口里的图永远翻不到。
     LaunchedEffect(convId, owner, viewingSeq) {
@@ -123,6 +159,8 @@ internal fun rememberChatMediaTimeline(client: IMClient, convId: String, viewing
             val visibleFrom = ChatTailPlan.visibleFrom(client.repo.clearedUpTo(owner, convId), floor)
             // 段下沿已经是可见起点（或 1）就没有更旧的可问；其余初值 true = 还不知道
             timeline.hasMore = base.second == 0L || base.second > maxOf(1L, visibleFrom)
+            // 取的是缺口会话里的一段（segLo>0）：段上沿之外服务端可能还有更新的
+            timeline.hasMoreNewer = !complete && viewingSeq > 0L && base.second > 0L
             timeline.notice = null
         }
     }
