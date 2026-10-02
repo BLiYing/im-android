@@ -49,6 +49,31 @@ class MigrationTest {
         }
     }
 
+    /** 13→14 加 `isSuper` / `headConvSeq`：老行原样还在，新列取默认（普通会话、head 未知）。 */
+    @Test
+    fun migrate13To14AddsBacklogColumnsWithDefaults() {
+        helper.createDatabase(DB, 13).use { db ->
+            db.execSQL(
+                """INSERT INTO conversation (ownerUid, convId, isGroup, peerUid, title, avatarUrl, peerRemark,
+                   lastContent, lastContentType, lastTimestamp, lastConvSeq, lastFrom, lastFromNickname, lastRecalled,
+                   lastSysEvent, lastSysArgs, lastSysSegments, unread, mentionUnread, readSeq, peerReadSeq,
+                   syncedConvSeq, pinnedAt, muted, muteUntil, markedUnread)
+                   VALUES ('me', 'g_x', 1, '', 'G', '', '', 'hi', 'text', 100, 7, 'b', '', 0,
+                   '', '', '', 3, 0, 5, 0, 7, 0, 0, 0, 0)""",
+            )
+        }
+        helper.runMigrationsAndValidate(DB, 14, true, IMDatabase.MIGRATION_13_14).use { db ->
+            db.query("SELECT isSuper, headConvSeq, syncedConvSeq, lastContent FROM conversation WHERE convId = 'g_x'").use { c ->
+                assertEquals(1, c.count)
+                c.moveToFirst()
+                assertEquals(0, c.getInt(0))
+                assertEquals(0L, c.getLong(1))
+                assertEquals(7L, c.getLong(2))
+                assertEquals("hi", c.getString(3))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

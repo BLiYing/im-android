@@ -226,4 +226,17 @@ data class ConversationEntity(
      */
     val muteUntil: Long = 0,
     val markedUnread: Boolean = false,
+    /**
+     * 超级群（只推 `conv_bump` 信号、永不自动补拉正文）。**只由会话列表快照写**（`is_super` 带 omitempty，
+     * 缺省 = 普通会话，所以快照可以放心整值覆盖）。决定 `sync_req` 的 `max_gap`，见 [com.libeyond.imandroid.data.BacklogGap]。
+     * ⚠️ 别在别处顺手写它：iOS 曾因聊天页进会话传了「非超级群」把标记清掉，该群 `max_gap` 退回 400、自动补拉复发。
+     */
+    val isSuper: Boolean = false,
+    /**
+     * 服务端会话**真实最新位点**（OFFLINE_BACKLOG_DESIGN §4.4 `head_conv_seq`），**只增不减**。
+     * 与 [lastConvSeq] 不同：后者跟着「最后一条消息」的预览走，这个只回答「服务端到哪了」。
+     * 来源：会话列表 `latest_conv_seq`、`sync_resp.head_conv_seq`（含 `too_long`）；写入口 `ConversationDao.raiseHead`。
+     * 0 = 未知。
+     */
+    val headConvSeq: Long = 0,
 )

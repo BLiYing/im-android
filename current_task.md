@@ -18,10 +18,12 @@
    - 设置 ▸ 最近通话剩余项：滚动分页时序、「未接」tab 连续翻页观感、`callEnded` 重拉首页、群聊行跳转、空/401/网络错误三态——需攒几通真实通话（含群通话）。
    - 群资料页「成员」tab 搜索：>50 人入口门槛、搜索/去抖/翻页、选中跳资料页——需 50+ 人的测试群。
    - 归档查看器「更多」五项、合并转发记录页内翻页、长按预览里点图/点链接只关菜单；转发带 @ 图片到群后「别人视角」点被 @ 的名字与强提醒；「对方撤回」两种文案（单设备单账号测不出）。
-2. **离线积压**（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 / §5 B3a）：C2（sync 带 `max_gap`）最小切片已做，余下按 C1→C6 一次做一块。**别照抄 Web/iOS 补丁**——设计文档原话："Android 进会话根本不走锚点开窗"，要从 §4 重新走。
-   - **C2 收尾**：`too_long` 真机验证；超级群 `max_gap=0` 需先给 `ConversationEntity` 加 `isSuper` 列（迁移）并在拉群资料时回填。
-   - **C1 区间清单**（后面几项的地基，建议下一块做）：Room 表 `conv_range_local(owner_uid, conv_id, lo, hi)` + 纯函数（合并相邻区间/查询某段是否齐全，参照 Web `ranges.ts`，带单测）；写消息与扩区间同一事务。
-   - **C3** `ui/ChatHost.kt` 固定本地 `ChatWindow.Tail`，要接锚点开窗与上滚查区间清单；**C4** `conv_bump` 在 `MessageService.kt` 落进忽略分支、↓ 无「最新一页齐不齐」判据；**C5** `delivered` 回执只在 `NEW_MSG` 分支回，sync/window 不回；**C6** 八项分流剩余（查看器翻页缺离线降级提示、日历/置顶判定未接）。
+2. **离线积压**（`../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §4.11.1 / §5 B3a；**别照抄 Web/iOS 补丁**，按 §4 重走）：
+   - **已做**：**C2 ✅ 2026-10-02**（超级群 `max_gap=0`、`too_long`/`head` 落 `headConvSeq`、`isSuper` 列、Room 13→14，未提交）；**压测埋点**（`sdk/logging/PerfMarks.kt` + `apply_ms`，未提交）；**B0 基线已跑**（`../IMServer/docs/ops/LOAD_TESTING.md` §11）：进 10 万积压会话**聊天页空白、永不收敛**（只读本地尾窗，本地为空又不发 `window_req`）。
+   - **顺序（每块一次一个）**：~~C2 收尾~~ ✅ → **C1**（Room 表 `conv_range_local` + 新文件纯函数 + `withTransaction` 写消息/区间/游标；老库用 `[1,synced]` 反推首段；清空聊天记录连区间一起清）→ **C5**（sync 整页一次 `delivered`，按会话取最大位点 120ms 合批；**window 路径不回**）→ **C4**（`conv_bump` 只记 head/刷列表行；实时登记 `[seq,seq]`；↓ 判据 = 区间覆盖 `[tip-page+1, tip]`）→ **C3**（进会话锚点开窗：`readSeq=0` 夹到 1、有无未读只认服务端 unread；上滚 本地段内取→下界闸→`window_req`；应答时现算边界）→ 复压 → **C6**（先搜索翻页/日历/跳最早/媒体离线提示，再发件人候选/置顶/↓N）。
+   - **体量**：`ChatHost.kt` 599、`GroupInfoHost.kt` 589、`MessageService.kt` 574 贴 600 闸，C1/C3 新增一律放新文件；动 `ChatHost` 前先拆。`Daos.kt` 别再加。
+   - **验收**：纯函数 JVM 单测 + 变异；DAO/@Query/迁移走 instrumented（`installDebugAndroidTest` + `adb shell am instrument`，别用 `connectedAndroidTest`）；真机 `GMGY7XF6LBJB6PFU` 走大群进会话/↓/上滚。
+   - 压测装机：真机连 `127.0.0.1:8099` 要 `adb reverse`；OPPO 禁 `pm clear`/`pm grant`，装包与通知权限各点一次（见 LOAD_TESTING §11.1）。⚠️ 本机已被我卸载重装并登录到 :8099 副本（原 :8080 登录态已清）。
 3. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：`ChatDetailHost` 已全部接完，`GroupInfoHost` 仅 `Media` 一支已接。
    - 根因：`ui/components/PushTransition.kt` 要退场页按冻结的 `state` 渲染，而这些 host 是「关闭即把数据变量置空」，退场时数据已没，半路变白。改法 = 「是否打开」与「显示什么数据」拆两个变量，关闭只翻布尔（参照 `ChatDetailHost` 的 `viewingOpen`/`viewingData`）。
    - 余 8 支未动（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/Manage/Qr），逐支来；**全部改完才把 9 支统一进一个 `PushTransition(page, depthOf)`**。`GroupInfoHost.kt` 已贴 600 行硬闸，**动它之前先拆文件**。

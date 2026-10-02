@@ -3,6 +3,7 @@ package com.libeyond.imandroid.data
 import com.libeyond.imandroid.data.db.ConversationDao
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageDao
+import com.libeyond.imandroid.sdk.protocol.SyncCursorItem
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.PendingMessageDao
@@ -118,8 +119,16 @@ class MessageRepository(
     fun observePending(owner: String, convId: String): Flow<List<PendingMessageEntity>> =
         pending.observe(owner, convId)
 
-    suspend fun syncCursors(owner: String): List<Pair<String, Long>> =
-        conversations.all(owner).map { it.convId to it.syncedConvSeq }
+    suspend fun syncCursors(owner: String): List<SyncCursorItem> =
+        conversations.all(owner).map { BacklogGap.cursorOf(it.convId, it.syncedConvSeq, it.isSuper) }
+
+    /** 本会话是不是超级群（决定续页 `max_gap`）。查不到（会话行没建）按普通会话。 */
+    suspend fun isSuperConv(owner: String, convId: String): Boolean = conversations.byId(owner, convId)?.isSuper == true
+
+    /** 记下服务端最新位点（只增不减）。`head<=0`（没问过 / 老服务端）不写。 */
+    suspend fun noteHead(owner: String, convId: String, head: Long) {
+        if (head > 0) conversations.raiseHead(owner, convId, head)
+    }
 
     // ————————————————— 发 —————————————————
     // 待发行的创建/更新、ack/拒绝的落地——整组搬到 MessageRepositorySend.kt（CODING_STYLE §7②，
@@ -270,6 +279,9 @@ class MessageRepository(
                 muted = s.muted,
                 muteUntil = s.muteUntil,
                 markedUnread = s.markedUnread,
+                isSuper = s.isSuper,
+                // head 只增不减：列表的 latest_conv_seq 与本地已记的取大（sync 的 too_long 也往这写）
+                headConvSeq = maxOf(existing?.headConvSeq ?: 0L, s.latestConvSeq),
             ).keepNewerLocalTail(existing)
         }
         conversations.upsert(rows)

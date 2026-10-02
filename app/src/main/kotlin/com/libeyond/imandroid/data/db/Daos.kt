@@ -309,6 +309,13 @@ interface ConversationDao {
     suspend fun setSyncedConvSeq(owner: String, convId: String, seq: Long)
 
     /**
+     * 服务端最新位点**只增不减**（[ConversationEntity.headConvSeq]）。会话行还没建时影响 0 行——
+     * **刻意不插占位行**，否则列表里会冒出无名空会话（iOS `updateHeadConvSeq` 同款取舍）。
+     */
+    @Query("UPDATE conversation SET headConvSeq = :head WHERE ownerUid = :owner AND convId = :convId AND headConvSeq < :head")
+    suspend fun raiseHead(owner: String, convId: String, head: Long)
+
+    /**
      * 推进已读位点。**用 MAX 保证单调不倒退**。
      *
      * 无条件 `readSeq = :seq` 是错的：可见即读上报的是「当前可见的最大 conv_seq」，

@@ -156,6 +156,16 @@ class SyncGapTest {
         assertTrue(json.contains("\"max_gap\":400"))
     }
 
+    /** 超级群发 0：**0 不是「省略」**。若被当默认值丢掉，服务端会按老客户端不限深度、整段追平。 */
+    @Test
+    fun `maxGap 为 0 时仍编码 max_gap（超级群的永不自动补拉）`() {
+        val json = ProtocolJson.encodeToString(
+            com.libeyond.imandroid.sdk.protocol.SyncCursorItem.serializer(),
+            com.libeyond.imandroid.sdk.protocol.SyncCursorItem("g_super", 57L, maxGap = 0L),
+        )
+        assertTrue(json, json.contains("\"max_gap\":0"))
+    }
+
     @Test
     fun `too_long 响应解析出 head_conv_seq 且游标原样不动`() {
         val json = """

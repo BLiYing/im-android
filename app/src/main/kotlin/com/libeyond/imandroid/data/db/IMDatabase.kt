@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -185,6 +185,18 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /**
+         * 13→14：离线积压 C2 收尾（OFFLINE_BACKLOG_DESIGN §4.5）。加 `isSuper`（超级群 `max_gap=0`）与
+         * `headConvSeq`（服务端最新位点，只增不减）。老行取 0/false：下次拉会话列表立刻回填真实值，
+         * 而 `connect → refreshConversations → requestSync` 的顺序保证首次 sync 之前列表已刷过。
+         */
+        internal val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversation ADD COLUMN isSuper INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE conversation ADD COLUMN headConvSeq INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): IMDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -196,7 +208,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
+                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14,
                 )
                 .build().also { instance = it }
         }

@@ -46,13 +46,12 @@ internal suspend fun MessageService.onConnected() {
 /**
  * 按各会话的本地游标发一次 `sync_req`（增量补拉）。开窗取数走 `windows`，不是这一路。
  *
- * **每条游标都带 `max_gap`**（OFFLINE_BACKLOG_DESIGN §4.11.1 C2，Android 审计建议的第一条）：
- * 不带的话服务端不限深度、追平为止——超级群重连也会把积压整段抄完（`IncomingRule.kt` 头注释
- * 记着 2026-09-09 在 11 万条大群真机撞见过）。恒发 [SyncDefaults.MAX_GAP]，暂不按超级群降到
- * 0（那需要本地知道"这个会话是不是超级群"，`ConversationEntity` 目前不落这一列，留给 C1）。
+ * **每条游标都带 `max_gap`**（OFFLINE_BACKLOG_DESIGN §4.5 C2）：不带的话服务端不限深度、追平为止——
+ * 超级群重连也会把积压整段抄完（`IncomingRule.kt` 头注释记着 2026-09-09 在 11 万条大群真机撞见过）。
+ * 普通会话发 [SyncDefaults.MAX_GAP]，**超级群发 0**（永远 `too_long`、永不自动补拉），见 [BacklogGap]。
  */
 internal suspend fun MessageService.requestSync(owner: String) {
-    val cursors = repo.syncCursors(owner).map { (convId, seq) -> SyncCursorItem(convId, seq, maxGap = SyncDefaults.MAX_GAP) }
+    val cursors = repo.syncCursors(owner)
     if (cursors.isEmpty()) return
     socket.send(
         FrameType.SYNC_REQ,
@@ -71,17 +70,21 @@ internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData)
     var needMore = false
     val nextCursors = mutableListOf<SyncCursorItem>()
     for (c in resp.conversations) {
+        val applyStart = android.os.SystemClock.elapsedRealtime()
         val firstFailed = repo.onIncomingBatch(owner, c.messages)
+        val applyMs = android.os.SystemClock.elapsedRealtime() - applyStart
         // 补收的这一页要跟着 bump 会话列表快照，否则重连补收的消息只进聊天页、
         // 不进列表排序（见 MessageRepository.bumpConversationFromLatest 的注释）。
         if (c.messages.isNotEmpty()) repo.bumpConversationFromLatest(owner, c.convId)
+        repo.noteHead(owner, c.convId, c.headConvSeq) // 带了 max_gap 的游标服务端才回 head；0 不写
         repo.advanceCursor(owner, c.convId, c.coveredConvSeq, firstFailed)
         log.i(
             "sync_page_applied",
             "convId" to c.convId, "msgs" to c.messages.size,
             "covered" to c.coveredConvSeq, "hasMore" to c.hasMore,
+            "apply_ms" to applyMs, // 压测埋点：一页落库耗时（LOAD_TESTING B0/B5）
         )
-        // 服务端判它「太长了」：本页没有消息、游标原地不动（advanceCursor 上面那行是空写）。
+        // 服务端判它「太长了」：本页没有消息、游标原地不动（advanceCursor 上面那行是空写），head 已在上面记下。
         // 只留痕，不重试——重试只会立刻拿到同一个 too_long（缺口本身要等 C1 落地才谈得上按需补）。
         if (c.tooLong) {
             log.i("sync_backlog_too_long", "convId" to c.convId, "head" to c.headConvSeq)
@@ -90,7 +93,9 @@ internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData)
             needMore = true
             // 续页沿用同一个 max_gap 预算：page 1 通过闸门后，别让 page 2 在两页之间悄悄变回不限深度
             // （极端场景：page 1 与 page 2 之间又涌进一大批新消息，把 head 顶远了）。
-            nextCursors += SyncCursorItem(c.convId, SyncCursorRule.nextSince(c.coveredConvSeq), maxGap = SyncDefaults.MAX_GAP)
+            nextCursors += BacklogGap.cursorOf(
+                c.convId, SyncCursorRule.nextSince(c.coveredConvSeq), repo.isSuperConv(owner, c.convId),
+            )
         }
     }
     if (needMore) {
