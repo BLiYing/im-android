@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import com.libeyond.imandroid.data.sendText
 import com.libeyond.imandroid.ui.screens.MentionPanel
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.sendTyping

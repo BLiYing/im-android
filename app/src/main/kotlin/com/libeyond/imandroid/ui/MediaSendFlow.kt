@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import com.libeyond.imandroid.data.sendCard
 import android.content.Context
 import android.net.Uri
 import com.libeyond.imandroid.data.CardContent
