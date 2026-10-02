@@ -61,7 +61,7 @@ internal fun ChatViewerLayer(
     /** 等用户在「仅删除自己 / 为所有人删除」里挑一档的那条及可选的档（null = 没在挑）。 */
     var deleting by remember(conv.convId) { mutableStateOf<Pair<MessageEntity, List<MessageAction>>?>(null) }
     // 会话媒体时间线（本地打底 + 翻到最旧时向服务端续拉）。**本层恒在组合里，所以它只建一次**
-    val timeline = rememberChatMediaTimeline(client, conv.convId)
+    val timeline = rememberChatMediaTimeline(client, conv.convId, viewing?.convSeq ?: 0L)
 
     viewing?.let { m ->
         // 定位不到就只看这一条（未确认的、或超出本地取数上限的那些）——不假装能翻

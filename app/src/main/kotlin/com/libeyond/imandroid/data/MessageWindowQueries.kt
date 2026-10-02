@@ -165,6 +165,17 @@ suspend fun MessageRepository.isLocalComplete(owner: String, convId: String, his
     )
 }
 
+/**
+ * 查看器的本地打底：**点中那条所在本地段**里的媒体（升序）+ 该段的下沿 `segLo`（0 = 点中的不在任何段内，退回整条会话的本地媒体）。
+ * 有缺口时不能把缺口另一侧的旧岛拼进来——否则翻页会静默跳过缺口里的图；段之外更旧的由服务端续拉
+ * （游标取本段第一张，服务端严格更旧于它）。段上沿之外更新的拿不到：用查看器上的「媒体」入口看完整的。
+ */
+suspend fun MessageRepository.conversationMediaInSegment(owner: String, convId: String, seq: Long): Pair<List<MessageEntity>, Long> {
+    val all = conversationMedia(owner, convId)
+    val seg = SyncRanges.rangeContaining(ranges.ranges(owner, convId), seq) ?: return all to 0L
+    return all.filter { it.convSeq in seg.lo..seg.hi } to seg.lo
+}
+
 /** 本机清空位点（设计 §6.7）；服务端的搜索 / 日历 / 媒体结果要用它滤掉位点以内的条目。没有会话行 = 0。 */
 suspend fun MessageRepository.clearedUpTo(owner: String, convId: String): Long =
     conversations.byId(owner, convId)?.clearedUpTo ?: 0L

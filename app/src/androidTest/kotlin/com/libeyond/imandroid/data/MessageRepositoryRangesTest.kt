@@ -78,6 +78,7 @@ class MessageRepositoryRangesTest {
     @After
     fun close() = db.close()
 
+    private fun mdImg(seq: Long) = MessageData(convId = conv, convSeq = seq, from = "peer", content = "/u/$seq.jpg", contentType = ContentType.IMAGE, timestamp = seq)
     private fun md(seq: Long) = MessageData(convId = conv, convSeq = seq, from = "peer", content = "m$seq", timestamp = seq)
     private fun page(vararg seqs: Long) = seqs.map { md(it) }
     private suspend fun synced() = db.conversations().byId(me, conv)!!.syncedConvSeq
@@ -434,6 +435,18 @@ class MessageRepositoryRangesTest {
         assertEquals(7L, grown.hiSeq) // 一页 = 4 条，段内
         val edge = repo.extendWindowNewer(me, conv, grown.copy(hiTs = 10, hiSeq = 10), page = 4)
         assertEquals(10L, edge.hiSeq) // 本段到 10 为止，不拼 900 那一岛
+    }
+
+    /** 查看器本地打底：只取点中那条所在段里的媒体，不拼缺口另一侧的旧岛（否则两段之间缺口里的图翻不到）。 */
+    @Test
+    fun conversationMediaInSegmentIgnoresTheIslandAcrossTheGap() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..10L).map { mdImg(it) }, covered = 10)        // 旧岛 [1,10] 全是图
+        repo.onWindowPage(me, conv, (900L..905L).map { mdImg(it) })                  // 另一段 [900,905]
+        val (items, segLo) = repo.conversationMediaInSegment(me, conv, 902)
+        assertEquals((900L..905L).toList(), items.map { it.convSeq })
+        assertEquals(900L, segLo)
+        // 点中的不在任何段内：退回整条会话（segLo=0）
+        assertEquals(0L, repo.conversationMediaInSegment(me, conv, 500).second)
     }
 
     @Test

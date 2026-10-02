@@ -8,9 +8,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.libeyond.imandroid.data.ChatTailPlan
 import com.libeyond.imandroid.data.MediaTimeline
+import com.libeyond.imandroid.data.isLocalComplete
 import com.libeyond.imandroid.data.ViewerMedia
 import com.libeyond.imandroid.data.clearedUpTo
+import com.libeyond.imandroid.data.conversationMediaInSegment
 import com.libeyond.imandroid.data.toViewerMedia
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
@@ -68,7 +71,7 @@ internal class ChatMediaTimeline internal constructor() {
 }
 
 @Composable
-internal fun rememberChatMediaTimeline(client: IMClient, convId: String): ChatMediaTimeline {
+internal fun rememberChatMediaTimeline(client: IMClient, convId: String, viewingSeq: Long = 0L): ChatMediaTimeline {
     val scope = rememberCoroutineScope()
     val owner = client.uid.orEmpty()
     val timeline = remember(convId, owner) { ChatMediaTimeline() }
@@ -103,15 +106,23 @@ internal fun rememberChatMediaTimeline(client: IMClient, convId: String): ChatMe
 
     // 进会话（或换会话）先从本地库打底。**不观察 Flow**：序列是"打开查看器那一刻的整条会话媒体"，
     // 看图期间新来的图不该把序列在脚下改长（iOS 同样是打开时查一次）。
-    LaunchedEffect(convId, owner) {
+    // **本地有缺口时只取点中那条所在的本地段**（[conversationMediaInSegment]），不拼缺口另一侧的旧岛：
+    // 否则「往更旧续拉」的游标取的是最旧岛的第一张，两段之间缺口里的图永远翻不到。
+    LaunchedEffect(convId, owner, viewingSeq) {
         if (owner.isNotEmpty()) {
-            timeline.items = runCatchingCancellable { client.repo.conversationMedia(owner, convId) }
-                .getOrElse {
-                    log.w("viewer_media_local_failed", "conv" to convId)
-                    emptyList()
-                }
-                .mapNotNull { it.toViewerMedia() }
-            timeline.hasMore = true
+            val floor = client.messages.historyFloors.get(convId)
+            val complete = client.repo.isLocalComplete(owner, convId, floor)
+            val base = runCatchingCancellable {
+                if (complete || viewingSeq <= 0L) client.repo.conversationMedia(owner, convId) to 0L
+                else client.repo.conversationMediaInSegment(owner, convId, viewingSeq)
+            }.getOrElse {
+                log.w("viewer_media_local_failed", "conv" to convId)
+                emptyList<com.libeyond.imandroid.data.db.MessageEntity>() to 0L
+            }
+            timeline.items = base.first.mapNotNull { it.toViewerMedia() }
+            val visibleFrom = ChatTailPlan.visibleFrom(client.repo.clearedUpTo(owner, convId), floor)
+            // 段下沿已经是可见起点（或 1）就没有更旧的可问；其余初值 true = 还不知道
+            timeline.hasMore = base.second == 0L || base.second > maxOf(1L, visibleFrom)
             timeline.notice = null
         }
     }
