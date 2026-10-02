@@ -170,6 +170,19 @@ interface MessageDao {
     suspend fun firstConvSeqAtOrAfter(owner: String, convId: String, fromMs: Long): Long?
 
     /**
+     * 同上，但**限定在 `[fromMs, toMs)` 内**：本地有缺口且拿不到服务端日历时用——
+     * 「那天或之后第一条」会跳过缺口静默落到别的日子，限定在当天内才不会答错（没有就说需要联网）。
+     */
+    @Query("""
+        SELECT convSeq FROM message
+        WHERE ownerUid = :owner AND convId = :convId AND timestamp >= :fromMs AND timestamp < :toMs
+          AND recalledAt IS NULL AND deletedAt IS NULL AND contentType <> 'system' AND convSeq > 0
+        ORDER BY timestamp ASC, convSeq ASC
+        LIMIT 1
+    """)
+    suspend fun firstConvSeqBetween(owner: String, convId: String, fromMs: Long, toMs: Long): Long?
+
+    /**
      * 日历打点：本地库里"有消息的整天"集合（本地时区分桶 ms，公式与
      * [com.libeyond.imandroid.data.ChatCalendar.dayStartMs] 逐字一致——同一份 [utcOffsetMs]
      * 算出来的桶才能直接跟服务端 `ConvCalendarDay.dayStartMs` 求并集）。

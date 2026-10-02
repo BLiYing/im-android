@@ -142,7 +142,7 @@ class ConversationsApi(private val http: HttpClient) {
      * **「链接」这一格服务端不覆盖**：链接不是独立的 content_type，是从文本里识别出来的，
      * 服务端没有可索引的列（`internal/conversation/media.go` 开头写明了）。
      */
-    suspend fun media(convId: String, kind: String, cursor: Long = 0, limit: Int = 60): ConvMediaPage {
+    suspend fun media(convId: String, kind: String, cursor: Long = 0, limit: Int = 60, clearedUpTo: Long = 0): ConvMediaPage {
         val query = buildMap {
             put("kind", kind)
             put("limit", limit.toString())
@@ -151,7 +151,7 @@ class ConversationsApi(private val http: HttpClient) {
         return decode(
             http.call("GET", "/api/v1/conversations/$convId/media", query = query),
             ConvMediaPage.serializer(),
-        )
+        ).let { ConvQueryFloor.media(it, clearedUpTo) }
     }
 
     /**
@@ -161,7 +161,8 @@ class ConversationsApi(private val http: HttpClient) {
      * 本地齐全时问服务端没有任何好处，还慢。
      *
      * 服务端按 `conv_seq` **倒序**回，上限 50 条一页；`has_more` 为真表示命中更多，
-     * 端上要把计数补 `+`（本端不翻更多页，与 iOS/Web 同一处欠账）。
+     * 端上要把计数补 `+`，▲ 翻过最旧一条时用 `next_cursor` 再取一页（`SearchPaging`）。
+     * [clearedUpTo]（本机清空位点，设计 §6.7）以内的命中在这里滤掉，见 [ConvQueryFloor]。
      * 命中口径（text content / caption / file_name 子串、排除撤回删除、尊重入群下界）由服务端保证，
      * 端上**不要**再判一遍——判据分叉的表现是"搜索结果和聊天页对不上"。
      */
@@ -171,6 +172,7 @@ class ConversationsApi(private val http: HttpClient) {
         from: String = "",
         cursor: Long = 0,
         limit: Int = 50,
+        clearedUpTo: Long = 0,
     ): ConvSearchPage {
         val query = buildMap {
             put("q", q)
@@ -181,7 +183,7 @@ class ConversationsApi(private val http: HttpClient) {
         return decode(
             http.call("GET", "/api/v1/conversations/$convId/messages/search", query = query),
             ConvSearchPage.serializer(),
-        )
+        ).let { ConvQueryFloor.search(it, clearedUpTo) }
     }
 
     /**
@@ -193,14 +195,14 @@ class ConversationsApi(private val http: HttpClient) {
      * 消息可能整天都在缺口里，只有服务端能给出权威答案——**日历接口存在的唯一理由就是这个**。
      * 服务端对跨度有上限（约 13 个月），端上一次性拉近两年会被拒；调用方按需求收窄区间。
      */
-    suspend fun calendar(convId: String, fromMs: Long, toMs: Long, utcOffsetMs: Long): ConvCalendarResult =
+    suspend fun calendar(convId: String, fromMs: Long, toMs: Long, utcOffsetMs: Long, clearedUpTo: Long = 0): ConvCalendarResult =
         decode(
             http.call(
                 "GET", "/api/v1/conversations/$convId/calendar",
                 query = mapOf("from" to fromMs.toString(), "to" to toMs.toString(), "utc_offset_ms" to utcOffsetMs.toString()),
             ),
             ConvCalendarResult.serializer(),
-        )
+        ).let { ConvQueryFloor.calendar(it, clearedUpTo) }
 
     /**
      * 会话备注（G1，仅本人可见、多端同步）。与 [updateSettings] 解耦——PUT 是各自独立的

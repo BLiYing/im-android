@@ -6,10 +6,13 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.searchMessages
 import com.libeyond.imandroid.data.isLocalComplete
 import com.libeyond.imandroid.data.ChatSearch
+import com.libeyond.imandroid.data.SearchPaging
+import com.libeyond.imandroid.data.clearedUpTo
 import com.libeyond.imandroid.data.QuerySource
 import com.libeyond.imandroid.data.SearchHit
 import com.libeyond.imandroid.R
@@ -17,6 +20,7 @@ import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** 输入过程中不要每敲一个字打一次库/服务端（同 im-web 的 250ms）。 */
 private const val SEARCH_DEBOUNCE_MS = 250L
@@ -72,6 +76,19 @@ class ChatSearchController internal constructor() {
     var truncated by mutableStateOf(false)
         internal set
 
+    /**
+     * 服务端还有更旧的一页（只在走服务端、且上一页 `has_more` 且游标仍在清空位点之上时为真）。
+     * 为真时 ▲ 翻过最旧一条会去取下一页，而不是停住——否则大群里搜出 50+ 条就只能看到前 50 条。
+     */
+    var canLoadOlder by mutableStateOf(false)
+        internal set
+
+    /** 下一页游标（上一页的 `next_cursor`）；只在 [canLoadOlder] 时有意义。 */
+    internal var serverCursor: Long = 0L
+
+    /** 「取更早一页」的执行体（由 [rememberChatSearch] 接上，要用它的协程作用域与查询代次）。 */
+    internal var loadOlder: () -> Unit = {}
+
     /** 需要如实告诉用户的一句话（离线降级 / 搜索失败）。空串 = 没有。 */
     var notice by mutableStateOf("")
         internal set
@@ -104,7 +121,7 @@ class ChatSearchController internal constructor() {
     /** 有没有"在搜"这件事——关键词或「来自」筛选任一非空都算，同 iOS `hasQuery` 的判据。 */
     val hasQuery: Boolean get() = needle.isNotEmpty() || fromUid != null
     val navLabel: String get() = ChatSearch.hitLabel(hitIdx, hits.size, truncated, hasQuery = hasQuery)
-    val canPrev: Boolean get() = hits.isNotEmpty() && hitIdx > 0
+    val canPrev: Boolean get() = hits.isNotEmpty() && (hitIdx > 0 || canLoadOlder)
     val canNext: Boolean get() = hits.isNotEmpty() && hitIdx < hits.size - 1
 
     /** 命中词高亮用（已 trim；空串 = 不高亮）。 */
@@ -128,6 +145,8 @@ class ChatSearchController internal constructor() {
         truncated = false
         notice = ""
         jumpedSig = ""
+        canLoadOlder = false
+        serverCursor = 0L
         fromUid = null
         fromName = ""
         fromPickerOpen = false
@@ -168,6 +187,8 @@ class ChatSearchController internal constructor() {
     /** ▲ 更旧 / ▼ 更新。命中可能不在渲染窗口里，所以一律走 [onLocate] 而不是只滚列表。 */
     fun goto(idx: Int) {
         if (hits.isEmpty()) return
+        // 翻过已取回的最旧命中：服务端还有更早的页就去取（取回后自动落到紧挨着的那一条）
+        if (idx < 0 && canLoadOlder) { loadOlder(); return }
         val i = ChatSearch.clampHitIndex(idx, hits.size)
         hitIdx = i
         notice = "" // 先清掉上一次的拒绝提示，跳成了就不该还挂着
@@ -199,8 +220,14 @@ fun rememberChatSearch(
     var complete by remember(convId) { mutableStateOf(true) }
     LaunchedEffect(convId, owner, ctl.open) {
         if (owner.isEmpty() || !ctl.open) return@LaunchedEffect
-        complete = client.repo.isLocalComplete(owner, convId)
+        complete = client.repo.isLocalComplete(owner, convId, client.messages.historyFloors.get(convId))
     }
+
+    val scope = rememberCoroutineScope()
+    // 查询代次：词 / 发件人 / 会话 / 数据源一变就 +1，在途的旧页回来时对不上就丢，
+    // 否则旧词的第二页会混进新词的命中集（Web `searchGenRef` 同款）。
+    val gen = remember(convId) { intArrayOf(0) }
+    var loadingOlder by remember(convId) { mutableStateOf(false) }
 
     val source = ChatSearch.pickSource(complete, online)
     val needle = ctl.needle
@@ -210,12 +237,16 @@ fun rememberChatSearch(
     // key 里带 source 与 fromUid：断线重连/同步追平换数据源、选或清「来自」都要重取。
     // **但这个 effect 只管数据，不碰 hitIdx、不主动跳** —— 见下面 ② 的注释。
     LaunchedEffect(ctl.open, needle, fromUid, convId, source, owner) {
+        gen[0]++ // 先于一切早退：在途的旧页回来对不上代次就丢，且 loadingOlder 无条件复位（同 Web effect 开头）
+        loadingOlder = false
+        ctl.canLoadOlder = false
         if (!ctl.open || (needle.isEmpty() && fromUid.isEmpty()) || owner.isEmpty()) {
             ctl.applyHits(emptyList(), truncated = false, notice = "")
             return@LaunchedEffect
         }
         delay(SEARCH_DEBOUNCE_MS)
         val log = IMLog.tag("IM.Search")
+        val floor = client.repo.clearedUpTo(owner, convId)
         when (source) {
             QuerySource.Local, QuerySource.LocalDegraded -> {
                 val page = client.repo.searchMessages(owner, convId, needle, fromUid)
@@ -231,9 +262,12 @@ fun rememberChatSearch(
                 runCatchingCancellable {
                     client.conversationsApi.searchMessages(
                         convId = convId, q = needle, from = fromUid, limit = ChatSearch.SERVER_PAGE_LIMIT,
+                        clearedUpTo = floor,
                     )
                 }
                     .onSuccess { page ->
+                        ctl.serverCursor = page.nextCursor
+                        ctl.canLoadOlder = page.hasMore
                         ctl.applyHits(
                             hits = page.items.map { SearchHit(it.convSeq, it.timestamp) }.reversed(),
                             truncated = page.hasMore,
@@ -248,6 +282,45 @@ fun rememberChatSearch(
             }
         }
         log.d("conv_search_done", "convId" to convId, "src" to source.name, "hits" to ctl.hits.size)
+    }
+
+    // ===== 取服务端更早的一页（▲ 翻过最旧一条）=====
+    ctl.loadOlder = loadOlder@{
+        if (loadingOlder || !ctl.canLoadOlder || source != QuerySource.Server) return@loadOlder
+        loadingOlder = true
+        val myGen = gen[0]
+        scope.launch {
+            val log = IMLog.tag("IM.Search")
+            try {
+                val floor = client.repo.clearedUpTo(owner, convId)
+                // 服务端可能回空页却仍 has_more（逐人隐藏过滤掉了一整页），此时接着往前翻，但有上限
+                for (attempt in 0..SearchPaging.MAX_EMPTY_PAGES) {
+                    val page = client.conversationsApi.searchMessages(
+                        convId = convId, q = needle, from = fromUid, cursor = ctl.serverCursor,
+                        limit = ChatSearch.SERVER_PAGE_LIMIT, clearedUpTo = floor,
+                    )
+                    if (myGen != gen[0]) return@launch // 词 / 发件人 / 会话在途中变了：这页属于上一次搜索
+                    ctl.serverCursor = page.nextCursor
+                    val merged = SearchPaging.prependOlder(ctl.hits, page.items.map { SearchHit(it.convSeq, it.timestamp) })
+                    if (merged.added == 0 && page.hasMore) continue
+                    ctl.canLoadOlder = page.hasMore
+                    ctl.truncated = page.hasMore
+                    if (merged.added == 0) return@launch
+                    ctl.hits = merged.hits
+                    ctl.hitIdx = merged.added - 1
+                    ctl.notice = ""
+                    ctl.onLocate(merged.hits[merged.added - 1].convSeq, ctl::setNotice)
+                    return@launch
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (myGen == gen[0]) ctl.notice = Str.s(R.string.chat_search_load_older_failed)
+                log.w("conv_search_older_failed", "convId" to convId, "err" to e.javaClass.simpleName)
+            } finally {
+                if (myGen == gen[0]) loadingOlder = false
+            }
+        }
     }
 
     // ===== ② 默认跳「最新一条命中」=====

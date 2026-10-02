@@ -10,7 +10,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.ChatCalendar
 import com.libeyond.imandroid.data.activeLocalDayStarts
+import com.libeyond.imandroid.data.clearedUpTo
+import com.libeyond.imandroid.data.ChatWindows
 import com.libeyond.imandroid.data.firstConvSeqAtOrAfter
+import com.libeyond.imandroid.data.firstConvSeqOnDay
 import com.libeyond.imandroid.data.isLocalComplete
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.ConvCalendarDay
@@ -99,7 +102,7 @@ fun rememberChatCalendar(
         // `activeDaysFromMessages` 恒查库，不是只在"本地完整"分支才查）。
         val localDays = client.repo.activeLocalDayStarts(owner, convId, offset)
         ctl.activeDays = localDays
-        val complete = client.repo.isLocalComplete(owner, convId)
+        val complete = client.repo.isLocalComplete(owner, convId, client.messages.historyFloors.get(convId))
         if (complete) {
             ctl.serverDays = null
             return@LaunchedEffect
@@ -112,7 +115,7 @@ fun rememberChatCalendar(
             return@LaunchedEffect
         }
         runCatchingCancellable {
-            client.conversationsApi.calendar(convId, nowMs - ChatCalendar.QUERY_SPAN_MS, nowMs, offset)
+            client.conversationsApi.calendar(convId, nowMs - ChatCalendar.QUERY_SPAN_MS, nowMs, offset, client.repo.clearedUpTo(owner, convId))
         }
             .onSuccess { resp ->
                 ctl.serverDays = resp.days
@@ -126,9 +129,24 @@ fun rememberChatCalendar(
     ctl.pickDay = { localDayStart ->
         ctl.open = false
         scope.launch {
-            val seq = ctl.serverDays?.let { ChatCalendar.firstSeqOnOrAfter(it, localDayStart) }
-                ?: client.repo.firstConvSeqAtOrAfter(owner, convId, localDayStart)
-            if (seq != null) onLocate(seq, onToast) else onToast(ChatCalendar.NO_MESSAGE_ON_OR_AFTER)
+            // 服务端天表会把「当天第一条在清空位点以内」的整天丢掉（ConvQueryFloor），而那天清空后本机又收到的新消息
+            // 只在本地打点里——所以本地当天有就取较小者，别被天表带到后面某一天去
+            val serverSeq = ctl.serverDays?.let { ChatCalendar.firstSeqOnOrAfter(it, localDayStart) }
+            val localDay = client.repo.firstConvSeqOnDay(owner, convId, localDayStart)
+            val fromServer = listOfNotNull(serverSeq, localDay).minOrNull()
+            val complete = client.repo.isLocalComplete(owner, convId, client.messages.historyFloors.get(convId))
+            // 本地有缺口又没有服务端天表（离线 / 拉取失败）：「那天或之后第一条」会跳过缺口静默落到别的日子，
+            // 只认当天；找不到不能说「没有消息」，缺口里可能就有——如实说需要联网（§4.9 第 4 项）。
+            val seq = fromServer ?: if (complete) {
+                client.repo.firstConvSeqAtOrAfter(owner, convId, localDayStart)
+            } else {
+                client.repo.firstConvSeqOnDay(owner, convId, localDayStart)
+            }
+            when {
+                seq != null -> onLocate(seq, onToast)
+                complete || ctl.serverDays != null -> onToast(ChatCalendar.NO_MESSAGE_ON_OR_AFTER)
+                else -> onToast(ChatWindows.NEED_NETWORK_NOTICE)
+            }
         }
     }
 
@@ -144,17 +162,23 @@ fun rememberChatCalendar(
         scope.launch {
             val offset = TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()
             val todayStart = ChatCalendar.dayStartMs(System.currentTimeMillis(), offset)
-            val seq = client.repo.firstConvSeqAtOrAfter(owner, convId, todayStart)
-            if (seq != null) {
-                onLocate(seq, onToast)
+            val complete = client.repo.isLocalComplete(owner, convId, client.messages.historyFloors.get(convId))
+            // 有缺口时「今天有没有消息」本地答不了：有服务端天表就看它里面今天那一格，没有就只认本地当天的，
+            // 都没有也**不能**宣布「今天没有消息」（缺口里可能就有）——如实说需要联网。
+            val seq = if (complete) {
+                client.repo.firstConvSeqAtOrAfter(owner, convId, todayStart)
             } else {
-                // 今天没有消息：退到会话最新一条，且必须说清楚退了——不能装作用户要的就是这条
-                val conv = client.repo.conversation(owner, convId)
-                if (conv != null && conv.lastConvSeq > 0) {
+                ctl.serverDays?.firstOrNull { it.dayStartMs == todayStart }?.firstConvSeq?.takeIf { it > 0 }
+                    ?: client.repo.firstConvSeqOnDay(owner, convId, todayStart)
+            }
+            when {
+                seq != null -> onLocate(seq, onToast)
+                !complete && ctl.serverDays == null -> onToast(ChatWindows.NEED_NETWORK_NOTICE)
+                else -> {
+                    // 今天没有消息：退到会话最新一条，且必须说清楚退了——不能装作用户要的就是这条
+                    val conv = client.repo.conversation(owner, convId)
                     onToast(ChatCalendar.NOTHING_TODAY)
-                    onLocate(conv.lastConvSeq, onToast)
-                } else {
-                    onToast(ChatCalendar.NOTHING_TODAY)
+                    if (conv != null && conv.lastConvSeq > 0) onLocate(conv.lastConvSeq, onToast)
                 }
             }
         }

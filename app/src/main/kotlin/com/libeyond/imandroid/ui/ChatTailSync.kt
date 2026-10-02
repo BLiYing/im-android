@@ -13,6 +13,11 @@ import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.ChatTailPlan
 import com.libeyond.imandroid.data.ChatWindow
 import com.libeyond.imandroid.data.ChatWindows
+import com.libeyond.imandroid.data.SyncRanges
+import com.libeyond.imandroid.data.UnreadBelow
+import com.libeyond.imandroid.data.UnreadBelowFacts
+import com.libeyond.imandroid.data.unreadBelowFacts
+import com.libeyond.imandroid.data.extendWindowNewer
 import com.libeyond.imandroid.data.extendWindowOlder
 import com.libeyond.imandroid.data.localEntryWindow
 import com.libeyond.imandroid.data.planEntry
@@ -55,6 +60,26 @@ class ChatTail internal constructor() {
     fun returnToTail() = back()
 
     internal var older: (Long, Int) -> Unit = { _, _ -> }
+    internal var newer: (Long) -> Unit = { _ -> }
+
+    /**
+     * 滚到锚点窗底部了要更新的：本段本地还有就展开，到本段上沿且不是 tip 才向服务端要一页（只对锚点窗有意义，尾窗是空操作）。
+     * 读完锚点窗那 100 条不必再靠 ↓ 跳最新（Android 此前没有这条，设计 §4.7 的「下滚」）。
+     */
+    fun loadNewer(newestRendered: Long) = newer(newestRendered)
+
+    /** ↓N 要的本地事实（读库快照，随 head / 窗口 / 区间变化刷新；`null` = 还没读到，退回数已加载的）。 */
+    internal var unreadFacts by mutableStateOf<UnreadBelowFacts?>(null)
+
+    /**
+     * ↓N：已滚入位点之下仍未读的对端消息数（[UnreadBelow]）。在组合里调用——读的是 State，facts 变了会重组。
+     * @param loadedBelow 已渲染窗口里位于 [pendingRead] 之下的对端消息数
+     */
+    fun unreadBelow(pendingRead: Long, loadedBelow: Int): Int {
+        val f = unreadFacts ?: return loadedBelow
+        val covered = f.tip > 0 && SyncRanges.coversSpan(f.ranges, maxOf(pendingRead, f.floor) + 1, f.tip)
+        return UnreadBelow.count(f.tip, pendingRead, loadedBelow, covered, f.localNewest, f.floor)
+    }
 
     /**
      * 进会话的取数决定下来了（含失败降级）。**并进 `rowsReady`**：占位窗读不出消息，但出箱里有失败待重发的行时
@@ -138,6 +163,18 @@ fun rememberChatTail(
         }
     }
 
+    var newerBusy by remember(convId) { mutableStateOf(false) }
+    tail.newer = { newestRendered ->
+        if (!newerBusy) scope.launch {
+            newerBusy = true
+            try {
+                loadNewerStep(client, convId, owner, windowNow, newestRendered, connectedNow, setWindow)
+            } finally {
+                newerBusy = false
+            }
+        }
+    }
+
     var olderBusy by remember(convId) { mutableStateOf(false) }
     tail.older = { oldestRendered, renderedCount ->
         if (!olderBusy) scope.launch {
@@ -185,6 +222,11 @@ fun rememberChatTail(
             setWindow(ChatWindow.Tail(ChatWindows.TAIL_LIMIT, st.segmentLo))
         }
     }
+
+    // ↓N 的取数：head 抬高 / 窗口尾部变（新页落库）/ 换窗都重读一次。读的是几个标量 + 区间清单，不数消息
+    LaunchedEffect(owner, convId, head, tailHi, window) {
+        tail.unreadFacts = client.repo.unreadBelowFacts(owner, convId, floorNow())
+    }
     return tail
 }
 
@@ -228,6 +270,28 @@ private suspend fun loadOlderStep(
             setWindow(client.repo.extendWindowOlder(owner, convId, window, historyFloor = client.messages.historyFloors.get(convId)))
         }
     }
+}
+
+/**
+ * 下滚一步（对称 [loadOlderStep]）：**本段本地还有就展开 → 已到会话最新位点就停（不发请求）→ 否则向服务端要一页再展开**。
+ * 只处理 [ChatWindow.Anchored]；尾窗新消息本来就会进来。
+ */
+private suspend fun loadNewerStep(
+    client: IMClient,
+    convId: String,
+    owner: String,
+    window: ChatWindow,
+    newestRendered: Long,
+    connected: Boolean,
+    setWindow: (ChatWindow) -> Unit,
+) {
+    if (window !is ChatWindow.Anchored) return
+    val local = client.repo.extendWindowNewer(owner, convId, window)
+    if (local != window) { setWindow(local); return }
+    val tip = client.repo.tailState(owner, convId, ChatWindows.LATEST_FETCH, client.messages.historyFloors.get(convId)).tip
+    if (tip <= 0 || newestRendered >= tip || !connected) return
+    if (client.messages.windows.await(convId, newestRendered, 0, ChatWindows.ANCHOR_PAGE) == null) return
+    setWindow(client.repo.extendWindowNewer(owner, convId, window))
 }
 
 /** 到可见起点就不问；在线才问；返回「是否真的取回了一页」。 */

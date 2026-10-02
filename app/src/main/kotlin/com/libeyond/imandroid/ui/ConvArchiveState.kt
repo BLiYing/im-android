@@ -11,6 +11,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.DetailTab
 import com.libeyond.imandroid.data.DetailTabs
+import com.libeyond.imandroid.data.clearedUpTo
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
@@ -80,7 +81,7 @@ internal fun rememberConvArchive(client: IMClient, convId: String, tab: DetailTa
             scope.launch {
                 // 同 ChatMediaTimelineState：裸 runCatching 连 CancellationException 一起吞，
                 // 页面被关掉时 onFailure 还会去写 failed 标志
-                runCatchingCancellable { client.conversationsApi.media(convId, kind, if (reset) 0L else archive.cursor) }
+                runCatchingCancellable { client.conversationsApi.media(convId, kind, if (reset) 0L else archive.cursor, clearedUpTo = client.repo.clearedUpTo(client.uid.orEmpty(), convId)) }
                     .onSuccess { p ->
                         archive.items = if (reset) {
                             p.items

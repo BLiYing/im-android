@@ -108,11 +108,15 @@ fun ChatScreen(
     onCancelReply: () -> Unit,
     /** 滚到顶部附近时回调，加载更早的消息。 */
     onLoadOlder: () -> Unit,
+    /** 锚点窗滚到底要更新的一页（尾窗宿主传空操作）。 */
+    onLoadNewer: () -> Unit = {},
     /**
      * 「回到最新」。**不是"滚到列表底部"**——窗口停在历史时，最新那条根本不在这一窗里，
      * 只滚列表回不去（`MESSAGE_WINDOW_DESIGN` §4.2：跳转即换窗，回最新要换回尾窗）。
      */
     onJumpToLatest: () -> Unit = {},
+    /** ↓N 的数法（宿主查区间清单 / tip），在组合里调用；默认只数已加载的。 */
+    unreadBelowOf: (pendingRead: Long, loadedBelow: Int) -> Int = { _, loaded -> loaded },
     /**
      * 「回到最新」按钮该不该亮。判据在 `ChatWindows.showsJumpToLatest`：
      * **窗口停在历史时必须亮**——跳转不产生滚动事件，而且跳过去的那一段常常整屏放得下，
@@ -245,10 +249,8 @@ fun ChatScreen(
     val listDragged by listState.interactionSource.collectIsDraggedAsState()
 
     // ↓N 角标（CHAT_UX §7）：已滚入位点(pendingReadSeq)之下、仍未读的对端消息数，随滚动递减。
-    // **本端未接入离线积压区间清单**（OFFLINE_BACKLOG_DESIGN C1~C6 未做，没有 head/覆盖索引可查）——
-    // 只能数**当前已加载窗口**内的，窗口很深、未覆盖到最新时会偏小；iOS/Web 在同样查不到 head 时
-    // 也是退回"数本地"这一条兜底（`windowUnreadBelowCount`/`loadedBelow`），口径一致，不是本端独有的简化。
-    // 与未读分割线用的 readSeq 不同：分割线冻结在进会话那一刻，这个要随「可见即读」实时推进。
+    // 数法在 `UnreadBelow`（盖住就数已加载的，盖不住按 tip 减读位点），宿主经 [unreadBelowOf] 给；
+    // 与未读分割线的 readSeq 不同：分割线冻结在进会话那一刻，这个随「可见即读」实时推进。
     var pendingReadSeq by remember(convId) { mutableStateOf(readSeq) }
 
     // ➕ 面板与键盘**互斥**（微信/iOS 同款）：展开面板要收键盘，弹键盘要收面板——
@@ -278,6 +280,7 @@ fun ChatScreen(
         listDragged = listDragged,
         covered = covered,
         onLoadOlder = onLoadOlder,
+        onLoadNewer = onLoadNewer,
         onOutgoingEcho = onOutgoingEcho,
         onVisibleSeq = { seq ->
             if (seq > pendingReadSeq) pendingReadSeq = seq
@@ -456,66 +459,12 @@ fun ChatScreen(
             }
         }
 
-        // ↓ 悬浮跳转：离底较远、**或窗口停在历史**时出现
-        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-        val awayFromBottom = rows.isNotEmpty() && lastVisible in 0 until (rows.size - 1 - ChatEntry.NEAR_BOTTOM_SLACK)
-        if (showsJumpToLatest(awayFromBottom)) {
-            val scope = rememberCoroutineScope()
-            // 已加载窗口内、已滚入位点之下的对端消息数（见上面 pendingReadSeq 的注释）
-            val unreadBelow = remember(rows, pendingReadSeq, myUid) {
-                rows.count { row ->
-                    (row as? ChatRow.Confirmed)?.msg?.let { it.convSeq > pendingReadSeq && it.sender != myUid } == true
-                }
-            }
-            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(end = d.space4, bottom = d.space3)) {
-                Box(
-                    modifier = Modifier
-                        .size(d.jumpButton)
-                        .clip(CircleShape)
-                        .background(c.surfaceElevated)
-                        .clickable {
-                            // 先请宿主换回尾窗（历史窗里没有"最新那条"可滚）。换窗是异步的，此刻 rows 还是
-                            // 旧那一窗（真机撞见：从会话开头点↓，落在半空中），所以记一个**带保质期**的贴底，
-                            // 新的一窗在保质期内到了，上面那个 effect 会再贴一次。
-                            // **保质期不能省**：已经在尾窗时换窗不产生新的 rows，不失效的待办会一直挂着，
-                            // 等用户滚上去读历史时来一条新消息，被当成"刚点过 ↓"一把甩到底。
-                            onJumpToLatest()
-                            marks.stickUntil = SystemClock.uptimeMillis() + ChatScroll.STICK_BOTTOM_ARM_MS
-                            // 本来就在尾窗里（只是离底远）时不会有新数据到达，直接贴
-                            scope.launch { stickToBottom(listState) }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Image(
-                        imageVector = Lucide.ChevronDown,
-                        contentDescription = stringResource(R.string.chat_jump_to_latest),
-                        modifier = Modifier.size(20.dp),
-                        colorFilter = ColorFilter.tint(c.accent),
-                    )
-                }
-                if (unreadBelow > 0) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 4.dp, y = (-4).dp)
-                            .height(d.unreadBadgeHeight)
-                            .widthIn(min = d.unreadBadgeHeight)
-                            .clip(CircleShape)
-                            .background(c.unreadBadge)
-                            .padding(horizontal = 6.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = if (unreadBelow > 99) "99+" else unreadBelow.toString(),
-                            color = c.onAccent,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    }
-                }
-            }
+        JumpToLatestButton(
+            listState = listState, marks = marks, rows = rows, pendingReadSeq = pendingReadSeq, myUid = myUid,
+            showsJumpToLatest = showsJumpToLatest, unreadBelowOf = unreadBelowOf, onJumpToLatest = onJumpToLatest,
+        )
         }
-        }
+
 
         // 搜索态：底部换成命中导航条（输入栏与引用条都让位——搜索时发不了消息，
         // 摆一个能打字的输入框只会让人以为搜的是"要发的内容"）。

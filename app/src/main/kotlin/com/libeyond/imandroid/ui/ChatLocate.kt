@@ -8,6 +8,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.windowAround
+import com.libeyond.imandroid.data.ChatTailPlan
+import com.libeyond.imandroid.data.clearedUpTo
 import com.libeyond.imandroid.data.isLocalComplete
 import com.libeyond.imandroid.data.firstConvSeqAtOrAfter
 import com.libeyond.imandroid.data.ChatSearch
@@ -89,7 +91,7 @@ fun rememberChatLocator(
                 if (window == null) {
                     // ② 本地没有。有缺口且在线 → 问服务端要一窗（window_req）；
                     //    本地齐全 → 它是真的没了（撤回 / 为所有人删除 / 仅为我删除都是物理删行）。
-                    if (client.repo.isLocalComplete(owner, convId)) {
+                    if (client.repo.isLocalComplete(owner, convId, client.messages.historyFloors.get(convId))) {
                         refuse(ChatWindows.GONE_NOTICE)
                         return@launch
                     }
@@ -141,8 +143,11 @@ fun rememberChatLocator(
                     refuse(ChatWindows.NO_MESSAGES_NOTICE)
                     return@launch
                 }
-                if (localEarliest <= 1L) {
-                    // 本地已经拿到 1 号，就是真的握着会话开头——直接走通用路开窗即可。
+                val floor = client.messages.historyFloors.get(convId)
+                val visibleFrom = ChatTailPlan.visibleFrom(client.repo.clearedUpTo(owner, convId), floor)
+                if (localEarliest <= maxOf(1L, visibleFrom) || client.repo.isLocalComplete(owner, convId, floor)) {
+                    // 本地握着的就是会话开头（拿到了可见下界那一条 / 区间清单说齐了：清空过的会话下界之下本机永远没有）——
+                    // 直接走通用路开窗即可，不必为一个问不出新东西的答案去等服务端。
                     locator.request(localEarliest, onRefused)
                     return@launch
                 }

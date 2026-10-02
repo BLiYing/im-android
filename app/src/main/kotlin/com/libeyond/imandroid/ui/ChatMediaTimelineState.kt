@@ -10,6 +10,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.MediaTimeline
 import com.libeyond.imandroid.data.ViewerMedia
+import com.libeyond.imandroid.data.clearedUpTo
 import com.libeyond.imandroid.data.toViewerMedia
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
@@ -81,7 +82,7 @@ internal fun rememberChatMediaTimeline(client: IMClient, convId: String): ChatMe
                 val cursor = timeline.items.firstOrNull()?.convSeq ?: 0L
                 // 用 runCatchingCancellable：裸 runCatching 会把 CancellationException 也吞掉，
                 // 关掉查看器时恰好撞上挂起点的话，onFailure 还会去写 hasMore/notice（取消传播被破坏）
-                runCatchingCancellable { client.conversationsApi.media(convId, MediaKind.MEDIA, cursor = cursor) }
+                runCatchingCancellable { client.conversationsApi.media(convId, MediaKind.MEDIA, cursor = cursor, clearedUpTo = client.repo.clearedUpTo(owner, convId)) }
                     .onSuccess { page ->
                         val older = page.items.mapNotNull { it.toViewerMedia() }
                         val merged = MediaTimeline.prependOlder(timeline.items, older)

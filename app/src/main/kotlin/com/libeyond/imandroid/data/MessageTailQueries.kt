@@ -105,3 +105,16 @@ private suspend fun MessageRepository.anchoredAroundReadSeq(
         .filter { seg == null || it.convSeq <= seg.hi }
     return ChatWindows.boundsOf(before, atOrAfter)
 }
+
+/** ↓N 取数要的本地事实（[UnreadBelow.count] 的输入里「端上读库」的那部分）。 */
+data class UnreadBelowFacts(val tip: Long, val floor: Long, val ranges: List<SeqRange>, val localNewest: Long)
+
+suspend fun MessageRepository.unreadBelowFacts(owner: String, convId: String, historyFloor: Long): UnreadBelowFacts {
+    val c = conversations.byId(owner, convId)
+    return UnreadBelowFacts(
+        tip = ChatTailPlan.tip(c?.headConvSeq ?: 0L, c?.lastConvSeq ?: 0L),
+        floor = maxOf(0L, ChatTailPlan.visibleFrom(c?.clearedUpTo ?: 0L, historyFloor) - 1),
+        ranges = ranges.ranges(owner, convId),
+        localNewest = messages.maxConvSeq(owner, convId) ?: 0L,
+    )
+}

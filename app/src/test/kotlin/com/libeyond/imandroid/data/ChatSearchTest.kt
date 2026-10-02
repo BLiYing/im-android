@@ -37,24 +37,35 @@ class ChatSearchTest {
 
     // ————————————————— 本地齐不齐 —————————————————
 
+    private fun r(lo: Long, hi: Long) = SeqRange(lo, hi)
+
     @Test
-    fun `游标追上会话上界才算齐全`() {
-        assertTrue(ChatSearch.isLocalComplete(syncedConvSeq = 120, lastConvSeq = 120))
-        assertTrue(ChatSearch.isLocalComplete(syncedConvSeq = 130, lastConvSeq = 120))
-        assertFalse(ChatSearch.isLocalComplete(syncedConvSeq = 80, lastConvSeq = 120))
+    fun `可见范围被同一段盖住才算齐全`() {
+        assertTrue(ChatSearch.isComplete(listOf(r(1, 120)), tip = 120, visibleFrom = 0))
+        assertFalse(ChatSearch.isComplete(listOf(r(1, 80)), tip = 120, visibleFrom = 0))
+        // 缺口在中间：两头都有、中间没有——游标判据会误判齐全，清单不会
+        assertFalse(ChatSearch.isComplete(listOf(r(1, 40), r(60, 120)), tip = 120, visibleFrom = 0))
+    }
+
+    @Test
+    fun `有效下界之下的缺口不算缺口`() {
+        // 入群前历史 / 清空位点之下：本机永远不会有，别因此一直问服务端
+        assertTrue(ChatSearch.isComplete(listOf(r(51, 120)), tip = 120, visibleFrom = 51))
+        assertFalse(ChatSearch.isComplete(listOf(r(51, 100)), tip = 120, visibleFrom = 51))
     }
 
     @Test
     fun `空会话恒算齐全——本地就是全部`() {
-        assertTrue(ChatSearch.isLocalComplete(syncedConvSeq = 0, lastConvSeq = 0))
+        assertTrue(ChatSearch.isComplete(emptyList(), tip = 0, visibleFrom = 0))
     }
 
     @Test
     fun `清空聊天记录之后仍算齐全——搜索该如实回无匹配，不去服务端把刚清掉的搜回来`() {
-        // 清空只删本地、**刻意保留同步游标**（不该把刚删掉的再拉回来）。
-        // 判成"有缺口"的话，在线时会走服务端把用户刚亲手清掉的消息整整齐齐搜回来，
-        // 点过去还只能得到一句"这条不在本机"。im-web 的 clearMessages 同样不动区间清单。
-        assertTrue(ChatSearch.isLocalComplete(syncedConvSeq = 120, lastConvSeq = 120))
+        // 清空：区间清单清掉、位点=120 → 可见起点 121，tip 仍是 120，可见范围为空 → 齐全。
+        // 判成"有缺口"的话，在线时会走服务端把用户刚亲手清掉的消息整整齐齐搜回来。
+        assertTrue(ChatSearch.isComplete(emptyList(), tip = 120, visibleFrom = 121))
+        // 清空后又来了新消息但没落全：这时才是真缺口
+        assertFalse(ChatSearch.isComplete(listOf(r(125, 130)), tip = 130, visibleFrom = 121))
         assertEquals(QuerySource.Local, ChatSearch.pickSource(complete = true, online = true))
         // 于是命中集为空 → 界面显示「无匹配」，而不是一串跳不过去的服务端命中
         assertEquals("无匹配", ChatSearch.hitLabel(idx = 0, count = 0, truncated = false))

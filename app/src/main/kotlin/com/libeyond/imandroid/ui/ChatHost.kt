@@ -397,9 +397,11 @@ fun ChatHost(
                 AttachItems.Kind.Favorite -> pickingFavorites = true
             }
         },
+        onLoadNewer = { if (window is ChatWindow.Anchored) tail.loadNewer(messages.lastOrNull()?.convSeq ?: 0L) },
         onLoadOlder = { tail.loadOlder(messages.firstOrNull()?.convSeq ?: 0L, messages.size) }, // 本段本地有就展开、到边缘才问服务端（ChatTailSync）
         // 「回到最新」：锚点窗要**换回尾窗**，只滚列表是回不去的（那一窗里根本没有最新那条）
         onJumpToLatest = { tail.jumpToLatest() }, // 本地没有最新页就先向服务端要（ChatTailSync.kt）
+        unreadBelowOf = tail::unreadBelow,
         showsJumpToLatest = { away -> tail.awayFromBottom = away; ChatWindows.showsJumpToLatest(window, away) },
         onLongPress = { m, rect -> menuFor = m; menuAnchor = rect },
         onOpenMedia = { viewing = it },

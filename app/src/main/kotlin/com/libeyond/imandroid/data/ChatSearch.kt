@@ -60,7 +60,7 @@ object ChatSearch {
     val EMPTY_QUERY_LABEL: String get() = Str.s(R.string.chat_search_empty_query_hint)
 
     /**
-     * @param complete 本地这个会话齐不齐（见 [isLocalComplete]）
+     * @param complete 本地这个会话齐不齐（见 [isComplete]）
      * @param online   现在能不能上网
      */
     fun pickSource(complete: Boolean, online: Boolean): QuerySource = when {
@@ -71,21 +71,20 @@ object ChatSearch {
     }
 
     /**
-     * 本地这个会话是不是齐全的。
+     * 本地这个会话是不是齐全的：**问区间清单**——有效可见范围 `[visibleFrom, tip]` 被同一段完整盖住。
      *
-     * 本端的同步游标是**从 0 开始连续推进**的（`SyncCursorRule`：本页全部落库成功才推进），
-     * 所以本地覆盖的一定是连续区间 `[1, syncedConvSeq]`，会话上界是 `lastConvSeq`。
-     * 判据因此简化成一句「游标追上上界了没有」——不必像 im-web 那样维护区间清单，
-     * **但要一致的是「有没有缺口」这个不变式，不是清单那种手段**（`SYMMETRY.md` 那条）。
+     * 这是三端统一的判据（Web `windowPlan.ts`、iOS `IMChatWindowPlan`），不再用「游标追上上界」的老代理：
+     * 游标只管连续追平，上滑补出来的缺口、跳到最新页后的孤岛它都看不见；清单记的是服务端「给过了」的范围，是正面证据。
+     * - [tip] 未知（`≤0`）：空会话，本地就是全部；
+     * - [tip] 在有效下界之下（清空后一条新的都没有）：可见范围是空的，**算齐全**——
+     *   刚清掉的东西不能再被「有缺口→问服务端」搜回来（设计 §6.7）。
      *
-     * **「清空聊天记录」之后仍然算齐全**，尽管本地一条都没有了——这是刻意的，且与 im-web 一致
-     * （它的 `localStore.clearMessages` 同样只删消息行、不动区间清单）。理由是清空的语义就是
-     * "**本机**不留了"：这时跑去问服务端，会把用户刚亲手清掉的消息整整齐齐搜回来，
-     * 点过去还只能得到一句"这条不在本机"。如实回「无匹配」才是这个动作该有的结果。
-     * 本端保留同步游标也是同一个理由（`MessageRepository.clearConversation`）。
+     * @param visibleFrom 有效可见起点（含）：`max(服务端 historyFloor, 本机清空位点 + 1)`，`0` = 不设
      */
-    fun isLocalComplete(syncedConvSeq: Long, lastConvSeq: Long): Boolean =
-        lastConvSeq <= 0L || syncedConvSeq >= lastConvSeq // 空会话：本地就是全部
+    fun isComplete(ranges: List<SeqRange>, tip: Long, visibleFrom: Long): Boolean {
+        if (tip <= 0L || tip < visibleFrom) return true
+        return SyncRanges.coversSpan(ranges, maxOf(1L, visibleFrom), tip)
+    }
 
     /**
      * `LIKE` 通配符转义 —— **镜像后端 `internal/store/sqlite_message.go` 的 `escapeLike`**。

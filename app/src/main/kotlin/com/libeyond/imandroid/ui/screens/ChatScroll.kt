@@ -188,6 +188,7 @@ internal fun Modifier.chatListTaps(
 
 /** 距顶多少行以内就去加载更早的一页。 */
 private const val LOAD_OLDER_THRESHOLD = 3
+private const val LOAD_NEWER_THRESHOLD = 3
 
 /**
  * 聊天列表的**滚动时序**一整组：首屏定位 → 贴底收敛 → 行变后的跟底 → 翻页保位 → 可见即读。
@@ -214,6 +215,7 @@ internal fun ChatListSync(
     /** 被详情页盖住：不报已读（用户看的不是这一页）。 */
     covered: Boolean,
     onLoadOlder: () -> Unit,
+    onLoadNewer: () -> Unit,
     onOutgoingEcho: () -> Unit,
     onVisibleSeq: (Long) -> Unit,
 ) {
@@ -321,6 +323,27 @@ internal fun ChatListSync(
             pendingOlder = true
             rowsBeforeLoad = rows.size
             onLoadOlder()
+        }
+    }
+
+    // —— 滚到底部附近就加载更新的一页（只有锚点窗宿主才会真去取）——
+    // 追加在下面不挪视口，不需要保位补偿；在途守卫同上滚：行数涨了或过了一阵没涨就复位
+    var pendingNewer by remember(convId) { mutableStateOf(false) }
+    var rowsBeforeNewer by remember(convId) { mutableStateOf(0) }
+    LaunchedEffect(pendingNewer) {
+        if (!pendingNewer) return@LaunchedEffect
+        delay(OLDER_RETRY_MS)
+        if (pendingNewer && rowsNow <= rowsBeforeNewer) pendingNewer = false
+    }
+    LaunchedEffect(rows.size, listState.firstVisibleItemIndex) {
+        if (!marks.didEntry || rows.isEmpty()) return@LaunchedEffect
+        if (pendingNewer && rows.size > rowsBeforeNewer) pendingNewer = false
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
+        if (SystemClock.uptimeMillis() < marks.locatingUntil) return@LaunchedEffect
+        if (!pendingNewer && lastVisible >= rows.lastIndex - LOAD_NEWER_THRESHOLD) {
+            pendingNewer = true
+            rowsBeforeNewer = rows.size
+            onLoadNewer()
         }
     }
 

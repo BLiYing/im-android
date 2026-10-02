@@ -424,6 +424,18 @@ class MessageRepositoryRangesTest {
         assertEquals(w, repo.extendWindowOlder(me, conv, w)) // 本段 [900,905] 里没有更早的了；[1,10] 在缺口另一侧
     }
 
+    /** 下滚：段内展开；到本段上沿原样返回（调用方据此去问服务端），不跨缺口拼后面的岛。 */
+    @Test
+    fun extendWindowNewerGrowsInsideTheSegmentAndStopsAtItsUpperEdge() = runBlocking {
+        repo.onSyncPage(me, conv, (1L..10L).map { md(it) }, covered = 10)
+        repo.onWindowPage(me, conv, (900L..905L).map { md(it) }) // 缺口 [11,899] 之后的另一岛
+        val w = ChatWindow.Anchored(loTs = 1, loSeq = 1, hiTs = 3, hiSeq = 3)
+        val grown = repo.extendWindowNewer(me, conv, w, page = 4)
+        assertEquals(7L, grown.hiSeq) // 一页 = 4 条，段内
+        val edge = repo.extendWindowNewer(me, conv, grown.copy(hiTs = 10, hiSeq = 10), page = 4)
+        assertEquals(10L, edge.hiSeq) // 本段到 10 为止，不拼 900 那一岛
+    }
+
     @Test
     fun windowAroundOnlyTakesTheTargetsOwnSegment() = runBlocking {
         repo.onSyncPage(me, conv, (1L..10L).map { md(it) }, covered = 10)

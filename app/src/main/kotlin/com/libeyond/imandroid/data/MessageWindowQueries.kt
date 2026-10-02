@@ -63,6 +63,24 @@ suspend fun MessageRepository.extendWindowOlder(
 }
 
 /**
+ * 把锚点窗的**上界**再往后挪一页（向下翻页，对称 [extendWindowOlder]）。窗口上沿所在那一段里没有更新的了就原样返回——
+ * 调用方据此判断「段内到头了」：是 tip 就是真到头，不是 tip 则向服务端要一页再试。
+ */
+suspend fun MessageRepository.extendWindowNewer(
+    owner: String,
+    convId: String,
+    window: ChatWindow.Anchored,
+    page: Int = ChatWindows.ANCHOR_PAGE,
+): ChatWindow.Anchored {
+    val seg = SyncRanges.rangeContaining(ranges.ranges(owner, convId), window.hiSeq)
+    // 含窗口上沿自己，所以先丢掉第一个；不跨缺口（超出本段上沿的不要）
+    val newer = messages.pointsAtOrAfter(owner, convId, window.hiTs, window.hiSeq, page + 1)
+        .drop(1).filter { seg == null || it.convSeq <= seg.hi }
+    val hi = newer.lastOrNull() ?: return window
+    return window.copy(hiTs = hi.timestamp, hiSeq = hi.convSeq)
+}
+
+/**
  * 会话内搜索（本地库，整个会话）。返回**显示序倒序**（新在前）的命中，最多 [limit] 条。
  *
  * DAO 那条 SQL 负责收窄，[ChatSearch.matches] 是权威判定——两层的理由见它的注释。
@@ -114,6 +132,10 @@ suspend fun MessageRepository.distinctSenders(owner: String, convId: String): Li
 suspend fun MessageRepository.firstConvSeqAtOrAfter(owner: String, convId: String, fromMs: Long): Long? =
     messages.firstConvSeqAtOrAfter(owner, convId, fromMs)
 
+/** [firstConvSeqAtOrAfter] 的当天版：只在 `[dayStartMs, dayStartMs + 1 天)` 内找（有缺口又没有服务端日历时用）。 */
+suspend fun MessageRepository.firstConvSeqOnDay(owner: String, convId: String, dayStartMs: Long): Long? =
+    messages.firstConvSeqBetween(owner, convId, dayStartMs, dayStartMs + ChatCalendar.DAY_MS)
+
 /**
  * 日历弹层打点集合（本地时区分桶 ms，见 [com.libeyond.imandroid.data.db.MessageDao.activeLocalDayStarts]）。
  * 本地完整与否都查——离线/有缺口时至少能画出本地已下载部分的点，不是"没有点"。
@@ -133,8 +155,16 @@ data class LocalSearchPage(
     val truncated: Boolean,
 )
 
-/** 本地这个会话齐不齐（[ChatSearch.isLocalComplete] 的取数版本）。 */
-suspend fun MessageRepository.isLocalComplete(owner: String, convId: String): Boolean {
-    val row = conversations.byId(owner, convId)
-    return ChatSearch.isLocalComplete(row?.syncedConvSeq ?: 0L, row?.lastConvSeq ?: 0L)
+/** 本地这个会话齐不齐（[ChatSearch.isComplete] 的取数版本）。[historyFloor] 取 `client.messages.historyFloors.get(convId)`。 */
+suspend fun MessageRepository.isLocalComplete(owner: String, convId: String, historyFloor: Long = 0L): Boolean {
+    val c = conversations.byId(owner, convId)
+    return ChatSearch.isComplete(
+        ranges = ranges.ranges(owner, convId),
+        tip = ChatTailPlan.tip(c?.headConvSeq ?: 0L, c?.lastConvSeq ?: 0L),
+        visibleFrom = ChatTailPlan.visibleFrom(c?.clearedUpTo ?: 0L, historyFloor),
+    )
 }
+
+/** 本机清空位点（设计 §6.7）；服务端的搜索 / 日历 / 媒体结果要用它滤掉位点以内的条目。没有会话行 = 0。 */
+suspend fun MessageRepository.clearedUpTo(owner: String, convId: String): Long =
+    conversations.byId(owner, convId)?.clearedUpTo ?: 0L
