@@ -111,13 +111,19 @@ fun ChatDetailHost(
                 .onSuccess { list -> friend = list.firstOrNull { it.userId == conv.peerUid } }
         }
     }
+    var remark by remember(conv.convId) { mutableStateOf(conv.peerRemark) }
     // 对端权威名片：进页拉一次，并回会话行（对方改了昵称 / 头像，信息页与会话列表都跟着新；
     // 与 IMProgram `loadPeerProfile`、im-web `loadPeerCard` 同口径）。单聊才有；自己 / 空 uid 不拉；
     // 不限好友（非好友也能开这一页）；失败静默，保持旧值。
     LaunchedEffect(conv.convId, conv.peerUid) {
         if (!conv.isGroup && conv.peerUid.isNotEmpty() && conv.peerUid != owner) {
             runCatchingCancellable { client.contacts.card(conv.peerUid) }
-                .onSuccess { client.messages.applyPeerCard(conv.peerUid, it) }
+                .onSuccess {
+                    client.messages.applyPeerCard(conv.peerUid, it)
+                    // `remark` 是按打开那一刻的 `conv` 快照种下的本地状态，名片是权威值——不回填的话，
+                    // 别端 / 联系人页改过的备注在这页一直显「未设置」（2026-10-03 真机）。
+                    remark = it.remark
+                }
                 .onFailure { IMLog.tag("IM.Detail").w("peer_card_failed") }
         }
     }
@@ -143,7 +149,6 @@ fun ChatDetailHost(
             .onFailure { IMLog.tag("IM.Detail").w("conv_settings_load_failed") }
     }
     var muteSheetOpen by remember(conv.convId) { mutableStateOf(false) }
-    var remark by remember(conv.convId) { mutableStateOf(conv.peerRemark) }
     var editingRemark by remember(conv.convId) { mutableStateOf(false) }
     // 定时免打扰到期刷新（NOTIFICATIONS_P1_DESIGN §4.4）：本页只关心这一个会话，喂单元素表即可。
     val muteTick = rememberMuteTick(listOf(conv.copy(muted = muted, muteUntil = muteUntil)))
