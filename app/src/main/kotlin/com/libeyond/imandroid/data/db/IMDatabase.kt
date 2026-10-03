@@ -14,8 +14,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * 这样切回旧账号时数据还在（iOS/Web 同构）。
  */
 @Database(
-    entities = [MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class, ConvRangeEntity::class],
-    version = 16,
+    entities = [
+        MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class, ConvRangeEntity::class,
+        FriendLocalEntity::class, GroupLocalEntity::class,
+    ],
+    version = 17,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -23,6 +26,8 @@ abstract class IMDatabase : RoomDatabase() {
     abstract fun pending(): PendingMessageDao
     abstract fun conversations(): ConversationDao
     abstract fun ranges(): ConvRangeDao
+    abstract fun friendLocal(): FriendLocalDao
+    abstract fun groupLocal(): GroupLocalDao
 
     companion object {
         @Volatile private var instance: IMDatabase? = null
@@ -240,6 +245,28 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /**
+         * 16→17：好友 / 群列表的本地快照两张新表（断网回退，见 [FriendLocalEntity]）。
+         * **DDL 必须与导出的 17.json 逐字一致**（Room 迁移后会拿它校验表结构）。纯新增表，不动老数据。
+         */
+        internal val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `friend_local` (`ownerUid` TEXT NOT NULL, `userId` TEXT NOT NULL, " +
+                        "`sortOrder` INTEGER NOT NULL, `username` TEXT NOT NULL, `nickname` TEXT NOT NULL, " +
+                        "`remark` TEXT NOT NULL, `avatarUrl` TEXT NOT NULL, `blocked` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`ownerUid`, `userId`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `group_local` (`ownerUid` TEXT NOT NULL, `convId` TEXT NOT NULL, " +
+                        "`sortOrder` INTEGER NOT NULL, `name` TEXT NOT NULL, `avatarUrl` TEXT NOT NULL, " +
+                        "`owner` TEXT NOT NULL, `ownerNickname` TEXT NOT NULL, `ownerUsername` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, `myRole` TEXT NOT NULL, `memberCount` INTEGER NOT NULL, " +
+                        "`isSuper` INTEGER NOT NULL, PRIMARY KEY(`ownerUid`, `convId`))",
+                )
+            }
+        }
+
         fun get(context: Context): IMDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -251,7 +278,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
+                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                 )
                 .build().also { instance = it }
         }

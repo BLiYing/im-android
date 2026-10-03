@@ -134,6 +134,29 @@ class MigrationTest {
         }
     }
 
+    /** 16→17 新增好友/群快照两张表：老数据不动，新表可写可读。 */
+    @Test
+    fun migrate16To17CreatesRosterTables() {
+        helper.createDatabase(DB, 16).use { db ->
+            db.execSQL(
+                """INSERT INTO conv_range_local (ownerUid, convId, lo, hi) VALUES ('me', 'g', 1, 5)""",
+            )
+        }
+        helper.runMigrationsAndValidate(DB, 17, true, IMDatabase.MIGRATION_16_17).use { db ->
+            db.query("SELECT COUNT(*) FROM conv_range_local").use { c -> c.moveToFirst(); assertEquals(1, c.getInt(0)) }
+            db.execSQL(
+                """INSERT INTO friend_local (ownerUid, userId, sortOrder, username, nickname, remark, avatarUrl, blocked, updatedAt)
+                   VALUES ('me', 'u1', 0, 'a', 'A', '', '', 0, 1)""",
+            )
+            db.execSQL(
+                """INSERT INTO group_local (ownerUid, convId, sortOrder, name, avatarUrl, owner, ownerNickname, ownerUsername,
+                   createdAt, myRole, memberCount, isSuper) VALUES ('me', 'g1', 0, 'G', '', 'o', 'O', 'o', 1, 'member', 3, 0)""",
+            )
+            db.query("SELECT COUNT(*) FROM friend_local").use { c -> c.moveToFirst(); assertEquals(1, c.getInt(0)) }
+            db.query("SELECT COUNT(*) FROM group_local").use { c -> c.moveToFirst(); assertEquals(1, c.getInt(0)) }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

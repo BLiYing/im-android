@@ -61,9 +61,20 @@ fun ContactsHost(
      */
     var confirmRemove by remember { mutableStateOf<FriendEntry?>(null) }
 
+    val owner = client.uid.orEmpty()
+    // 断网回退（任务 5）：先用本地快照当首屏种子（网络刷新回来会覆盖），冷启动离线不再是一张空表。
+    // 种子只在列表还空着时落地——网络若先到了就别拿旧快照盖掉
+    LaunchedEffect(owner) {
+        runCatchingCancellable { client.roster.cachedFriends(owner) }.onSuccess { if (friends.isEmpty()) friends = it }
+        runCatchingCancellable { client.roster.cachedGroups(owner) }.onSuccess { if (groups.isEmpty()) groups = it }
+    }
+
     suspend fun reload() {
         try {
             friends = client.contacts.friends()
+            // 成功才落库（整表覆盖，空也写；只存 accepted）；写失败只记日志，不影响界面
+            runCatchingCancellable { client.roster.saveFriends(owner, friends) }
+                .onFailure { IMLog.tag("IM.Contacts").w("roster_save_failed", "err" to it.javaClass.simpleName) }
         } catch (e: ApiException) {
             // 拉不到好友列表不该白屏——保留上一次的列表。**但必须留痕**：
             // 这里原本是个空 catch（注释说"只记日志"，一行日志都没有），而 `reload()` 是
@@ -121,7 +132,10 @@ fun ContactsHost(
                         scope.launch {
                             groupsLoading = true
                             runCatching { client.groups.myGroups() }
-                                .onSuccess { groups = it }
+                                .onSuccess {
+                                    groups = it
+                                    runCatchingCancellable { client.roster.saveGroups(owner, it) }
+                                }
                                 // 拉不到就留着上一次的列表 + 一句吐司，别把页面停在"还没有加入群聊"上
                                 // ——那句空态是**结论**，网络失败时它是假的。
                                 .onFailure { toast = Str.s(R.string.contacts_groups_load_failed) }

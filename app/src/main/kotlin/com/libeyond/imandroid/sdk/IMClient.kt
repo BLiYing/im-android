@@ -206,6 +206,8 @@ class IMClient(context: Context) {
     )
 
     private val db = IMDatabase.get(context)
+    /** 好友/群列表离线快照（通讯录断网回退用，见 [RosterCache]）。 */
+    val roster = com.libeyond.imandroid.data.RosterCache(db.friendLocal(), db.groupLocal(), RoomTx(db))
     val repo = MessageRepository(db.messages(), db.pending(), db.conversations(), ConvRanges(db.ranges()), RoomTx(db))
 
     /**
