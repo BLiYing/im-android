@@ -81,6 +81,10 @@ internal data class AlbumTile(
      * 转圈会一直转下去——用户以为还在传，实际上永远不会好。
      */
     val failed: Boolean = false,
+    /** 完整传输状态（有就画 ✕ / ⏸ / ▶ 钮盘，与单条媒体气泡同一套）；null = 只有转圈/百分比。 */
+    val upload: com.libeyond.imandroid.data.UploadState? = null,
+    val onToggleUpload: () -> Unit = {},
+    val onCancelUpload: () -> Unit = {},
     /** 极小模糊缩略（M4-7）——原图到位前的磨砂占位。 */
     val thumb: String? = null,
     /** 服务端给的字节数（自动下载的大小闸要用）。 */
@@ -304,6 +308,11 @@ private fun AlbumTileView(
                 if (m.failed) {
                     // 失败：红❗（点击重发挂在格子上，与单条待发气泡同一套语义）
                     Text("！", color = c.danger, fontSize = 22.sp)
+                } else if (m.upload != null) {
+                    UploadControlDisc(
+                        state = m.upload, failed = false, onRetry = {},
+                        onToggle = m.onToggleUpload, onCancel = m.onCancelUpload, size = ring,
+                    )
                 } else if (m.progress != null) {
                     CircularProgressIndicator(
                         progress = { m.progress / 100f },

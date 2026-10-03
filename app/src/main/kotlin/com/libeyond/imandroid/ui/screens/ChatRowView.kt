@@ -166,6 +166,9 @@ internal fun ChatRowView(
                         sending = m.msg.state == SendState.Sending.name,
                         // 分片上传的百分比（视频/大文件）；图片整包上传时为 null → 转圈
                         progress = uploadProgress[m.msg.clientMsgId],
+                        upload = style.uploadStates[m.msg.clientMsgId],
+                        onToggleUpload = { onToggleUpload(m.msg.clientMsgId) },
+                        onCancelUpload = { onCancelPending(m.msg.clientMsgId) },
                         failed = m.msg.state == SendState.Failed.name && SendRejection.noteRes(m.msg.errorCode) == null,
                         thumb = m.msg.thumb,
                     )

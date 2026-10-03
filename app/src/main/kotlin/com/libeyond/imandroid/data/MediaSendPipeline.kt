@@ -153,8 +153,10 @@ internal class MediaSendPipeline(
      */
     suspend fun cancel(cid: String) {
         val owner = ownerProvider() ?: return
-        if (uploading.contains(cid)) cancelled += cid
-        jobs.remove(cid)?.cancel()
+        val chunked = jobs.remove(cid)
+        chunked?.cancel()
+        // 一次性整包路径取消不了在途 POST；还没开传（排队中）的也要记，开传时据此直接丢弃
+        if (chunked == null && (uploading.contains(cid) || uploadProgress.states.value.containsKey(cid))) cancelled += cid
         uploaders.remove(cid)
         repo.pendingByClientId(owner, cid)?.let { p -> store.fileOf(p.content)?.let(store::remove) }
         uploadProgress.clear(cid)
@@ -280,6 +282,7 @@ internal class MediaSendPipeline(
         pendingId: String? = null,
     ) {
         val owner = ownerProvider() ?: return
+        if (pendingId != null && cancelled.remove(pendingId)) return // 排队时就被用户取消了：不传、不发
         val cid = pendingId?.also {
             // 行是发送前就落的，元数据此刻才算出来——**必须回写**，否则 resend 丢字段
             repo.updatePendingMedia(owner, it, mediaW, mediaH, duration, poster, thumb, waveform)
