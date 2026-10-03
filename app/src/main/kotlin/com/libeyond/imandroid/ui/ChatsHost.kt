@@ -57,6 +57,7 @@ fun ChatsHost(
     listState: LazyListState,
 ) {
     val owner = client.uid.orEmpty()
+    val pendingCounts by client.pendingCounts.collectAsState()
     // 在线态绿点：数据链路早已在（HTTP 快照 seed + presence 帧增量更新，见 data/Presence.kt），
     // 缺的只是这一层读取——同 iOS 的 `peerPresence.isOnline`，不额外发 watch（下线态本就靠
     // 下次刷新收敛，见 IMConversationListViewController.m 的同款注释，两端行为一致）。
@@ -105,6 +106,7 @@ fun ChatsHost(
                     // 与 iOS 列表 cell 的 `lastPreviewTextForSelfUID:` 同一条退化路径（群昵称传 nil）。
                     localNameOf = { uid -> knownFriends[uid]?.displayName },
                     onlineOf = onlineOf,
+                    pendingOf = { pendingCounts[it] ?: 0 },
                     onOpen = onOpenChat,
                     onLongPress = onLongPress,
                     onPlus = { plusAnchor = it },

@@ -147,10 +147,15 @@ fun GroupInfoHost(
     val settings = rememberGroupInfoSettings(client, convId, scope)
 
     LaunchedEffect(convId) {
-        runCatching { info = client.groups.info(convId) }
-            .onFailure { IMLog.tag("IM.Group").w("group_info_failed") }
-        membersState.refresh()
+        suspend fun load() {
+            runCatching { info = client.groups.info(convId) }
+                .onFailure { IMLog.tag("IM.Group").w("group_info_failed") }
+            membersState.refresh()
+        }
+        load()
         settings.load()
+        // 别的管理员/成员改了群：收到本群的 group 帧就重拉（PROTOCOL §6.6）。被移出/解散由 GroupEventsEffect 关页，不在此拉（拉了只会 300203）
+        client.groupEvents.collect { if (it.convId == convId && !it.goneForMe(client.uid)) load() }
     }
 
     val g = info ?: return
@@ -507,7 +512,7 @@ fun GroupInfoHost(
             scope.launch {
                 runCatching { client.groups.leave(convId) }
                     .onFailure { toast = it.userMessage(Str.s(R.string.net_fallback_leave_failed)); return@launch }
-                client.messages.refreshConversations()
+                client.messages.dropConversation(convId)
                 onLeft()
             }
         },
@@ -516,7 +521,7 @@ fun GroupInfoHost(
             scope.launch {
                 runCatching { client.groups.dissolve(convId) }
                     .onFailure { toast = it.userMessage(Str.s(R.string.net_fallback_dissolve_failed)); return@launch }
-                client.messages.refreshConversations()
+                client.messages.dropConversation(convId)
                 onLeft()
             }
         },

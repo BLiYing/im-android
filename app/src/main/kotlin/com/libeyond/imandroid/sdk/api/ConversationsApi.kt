@@ -39,6 +39,8 @@ data class ConversationSummary(
     @SerialName("read_seq") val readSeq: Long = 0,
     @SerialName("peer_read_seq") val peerReadSeq: Long = 0,
     @SerialName("group_read_seq") val groupReadSeq: Long = 0,
+    /** 群待审入群申请数（G3，仅群主/管理员下发，普通成员省略）：会话列表红字「[N 待审]」前缀。 */
+    @SerialName("pending_count") val pendingCount: Int = 0,
     @SerialName("pinned_at") val pinnedAt: Long = 0,
     val muted: Boolean = false,
     /**

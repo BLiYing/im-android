@@ -262,6 +262,12 @@ class IMClient(context: Context) {
      */
     val friendEvents: SharedFlow<Unit> get() = messages.friendEvents
 
+    /** 群变更帧（PROTOCOL §6.6）：群资料页/聊天页按 convId 过滤，被移出/解散时退出。 */
+    val groupEvents: SharedFlow<com.libeyond.imandroid.sdk.protocol.GroupEventData> get() = messages.groupEvents
+
+    /** 群待审入群申请数（convId → N，仅群主/管理员），会话列表红字前缀用。 */
+    val pendingCounts: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> get() = messages.pendingCounts
+
     /**
      * 为一个还没有会话行的对端造一个「会话壳」，让 UI 能直接进聊天页。
      *

@@ -285,6 +285,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                 }
             }
         }
+        // 提示条是铺满全屏的 Box，必须画在内容之后（最上层），否则被盖住看不见
+        GroupEventsEffect(client, openConv?.convId) { infoForConv = null; openConv = null }
         InAppBannerHost(
             onOpen = { convId ->
                 val conv = conversationsById[convId]

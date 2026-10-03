@@ -5,6 +5,7 @@ import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.sdk.protocol.GroupEventData
 import com.libeyond.imandroid.sdk.protocol.ConvBumpData
 import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.data.db.MessageEntity
@@ -94,6 +95,14 @@ class MessageService(
     private val _friendEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     /** 好友关系有变（收到 friend 帧）。UI 据此重拉 /friends。 */
     val friendEvents: SharedFlow<Unit> = _friendEvents.asSharedFlow()
+
+    private val _groupEvents = MutableSharedFlow<GroupEventData>(extraBufferCapacity = 16)
+    /** 收到 `group` 帧（§6.6）。各页面按自己的 convId 过滤；全局级的（入群结果提示）在 `AppRoot` 订。 */
+    val groupEvents: SharedFlow<GroupEventData> = _groupEvents.asSharedFlow()
+
+    private val _pendingCounts = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Int>>(emptyMap())
+    /** 群待审入群申请数（convId → N，仅群主/管理员有）。**不落库**：每次拉会话列表整份覆盖，同 iOS 内存字段。 */
+    val pendingCounts: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> = _pendingCounts
 
     private val _voiceTranscripts = MutableSharedFlow<VoiceTranscriptData>(extraBufferCapacity = 8)
     /** 收到 `voice_transcript` 帧（§6.10）。只推给请求者本人，见 [com.libeyond.imandroid.voice.VoiceTranscriber]。 */
@@ -230,6 +239,15 @@ class MessageService(
             FrameType.FRIEND -> {
                 log.i("friend_event")
                 _friendEvents.tryEmit(Unit)
+            }
+
+            FrameType.GROUP -> data?.let { el ->
+                val d = ProtocolJson.decodeFromJsonElement(GroupEventData.serializer(), el)
+                log.i("group_event", "event" to d.event)
+                _groupEvents.tryEmit(d)
+                // 新入群申请 / 我被移出 / 群解散：会话列表要跟着变（待审红字、会话消失）
+                if (d.goneForMe(owner)) repo.removeConversation(owner, d.convId)
+                if (d.event == GroupEventData.JOIN_REQUEST || d.event == GroupEventData.JOIN_RESULT) refreshConversations()
             }
 
             // 账号级能力有变（PROTOCOL §6.9）。这里只转发版本号，去重与重拉在 DownloadSettingsStore
@@ -532,12 +550,19 @@ class MessageService(
         repo.applyPeerCard(owner, peerUid, card)
     }
 
+    /** 退群/解散成功后：本机立刻移除该会话（本机 upsert 不会自己删行）。 */
+    suspend fun dropConversation(convId: String) {
+        val owner = ownerProvider() ?: return
+        repo.removeConversation(owner, convId)
+    }
+
     /** 拉会话列表（权威快照）。 */
     suspend fun refreshConversations() {
         val owner = ownerProvider() ?: return
         try {
             val list = conversationsApi.list()
             repo.applyConversationList(owner, list, presence)
+            _pendingCounts.value = list.filter { it.isGroup && it.pendingCount > 0 }.associate { it.convId to it.pendingCount }
             _listedConversations.value = ListedConversations(owner, list.size)
         } catch (e: Exception) {
             log.w("conversations_refresh_failed", "err" to e.javaClass.simpleName)

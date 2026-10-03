@@ -367,6 +367,10 @@ interface ConversationDao {
     """)
     suspend fun markRead(owner: String, convId: String, seq: Long)
 
+    /** 退群/被移出/解散：这一行从列表消失（[com.libeyond.imandroid.data.MessageRepository.removeConversation]）。 */
+    @Query("DELETE FROM conversation WHERE ownerUid = :owner AND convId = :convId")
+    suspend fun deleteConv(owner: String, convId: String)
+
     @Query("DELETE FROM conversation WHERE ownerUid = :owner")
     suspend fun clearAccount(owner: String)
 }

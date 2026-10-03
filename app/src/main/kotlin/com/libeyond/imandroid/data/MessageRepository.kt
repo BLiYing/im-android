@@ -473,6 +473,20 @@ class MessageRepository(
      * 区间清单（C1）一清，进会话会把最近一页又要回来；位点让「用户不要」与「还没下载」分开（[ClearFloor]）。
      * 会话行留着（列表里仍能看到这个人），只把预览清成空。
      */
+    /**
+     * 本群对我已不可用（退群 / 被移出 / 解散）：会话行与本机消息整条移除。
+     * 与 [clearConversation]（只清消息、行留着）不同——这里人已不在群里，留着只会是点不进的死行。
+     */
+    suspend fun removeConversation(owner: String, convId: String) {
+        tx.run {
+            messages.clearConv(owner, convId)
+            ranges.clearConv(owner, convId)
+            conversations.deleteConv(owner, convId)
+        }
+        pending.clearConv(owner, convId)
+        log.i("conversation_removed", "convId" to convId)
+    }
+
     suspend fun clearConversation(owner: String, convId: String) {
         // 区间清单必须**连消息一起清**（三端契约，localStore.contract.ts 有断言）：只清消息的话，清单仍宣称
         // 「这段齐全」、手里却一条没有——表现是会话空白且上滑/点↓都不自愈。游标 syncedConvSeq 照旧保留。

@@ -77,6 +77,8 @@ fun ConversationListScreen(
     /** 对端在线态（仅单聊；群聊调用方不必关心）——同 iOS `peerPresence.isOnline`，快照来自
      * 会话列表接口，此后靠 presence 帧增量更新（`data/Presence.kt`）。 */
     onlineOf: (String) -> Boolean,
+    /** 群待审入群申请数（仅群主/管理员有，其余 0）：预览前红字「[N 待审]」前缀（iOS `pendingCount`）。 */
+    pendingOf: (String) -> Int = { 0 },
     onOpen: (ConversationEntity) -> Unit,
     /** 长按一行，带上它在窗口坐标系里的矩形——菜单要贴着这一行弹（对齐 iOS UIContextMenu）。 */
     onLongPress: (ConversationEntity, Rect) -> Unit,
@@ -131,7 +133,7 @@ fun ConversationListScreen(
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 items(conversations, key = { it.convId }) { conv ->
                     ConversationRow(
-                        conv, myUid, localNameOf, onlineOf, nowMs,
+                        conv, myUid, localNameOf, onlineOf, pendingOf(conv.convId), nowMs,
                         onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) },
                     )
                 }
@@ -148,6 +150,7 @@ private fun ConversationRow(
     myUid: String,
     localNameOf: (String) -> String?,
     onlineOf: (String) -> Boolean,
+    pendingCount: Int,
     nowMs: Long,
     onClick: () -> Unit,
     onLongClick: (Rect) -> Unit,
@@ -217,6 +220,14 @@ private fun ConversationRow(
                 if (conv.mentionUnread) {
                     Text(
                         text = stringResource(R.string.conv_list_mention_tag) + " ",
+                        color = c.danger,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                // 群「待审入群申请」红字前缀（G3，仅群主/管理员）：进群管理才发现太深，顶到会话列表
+                if (conv.isGroup && pendingCount > 0) {
+                    Text(
+                        text = stringResource(R.string.conv_list_pending_tag, pendingCount) + " ",
                         color = c.danger,
                         style = MaterialTheme.typography.bodyMedium,
                     )
