@@ -170,11 +170,14 @@ suspend fun MessageRepository.isLocalComplete(owner: String, convId: String, his
  * 有缺口时不能把缺口另一侧的旧岛拼进来——否则翻页会静默跳过缺口里的图；段之外更旧的由服务端续拉
  * （游标取本段第一张，服务端严格更旧于它）。段上沿之外更新的拿不到：用查看器上的「媒体」入口看完整的。
  */
-suspend fun MessageRepository.conversationMediaInSegment(owner: String, convId: String, seq: Long): Pair<List<MessageEntity>, Long> {
+suspend fun MessageRepository.conversationMediaInSegment(owner: String, convId: String, seq: Long): SegmentMedia {
     val all = conversationMedia(owner, convId)
-    val seg = SyncRanges.rangeContaining(ranges.ranges(owner, convId), seq) ?: return all to 0L
-    return all.filter { it.convSeq in seg.lo..seg.hi } to seg.lo
+    val seg = SyncRanges.rangeContaining(ranges.ranges(owner, convId), seq) ?: return SegmentMedia(all, 0L, 0L)
+    return SegmentMedia(all.filter { it.convSeq in seg.lo..seg.hi }, seg.lo, seg.hi)
 }
+
+/** [conversationMediaInSegment] 的结果：本段媒体（升序）+ 段下沿 [lo] / 上沿 [hi]（点中的不在任何段内时都是 0）。 */
+data class SegmentMedia(val items: List<MessageEntity>, val lo: Long, val hi: Long)
 
 /** 本机清空位点（设计 §6.7）；服务端的搜索 / 日历 / 媒体结果要用它滤掉位点以内的条目。没有会话行 = 0。 */
 suspend fun MessageRepository.clearedUpTo(owner: String, convId: String): Long =

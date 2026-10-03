@@ -164,13 +164,15 @@ fun rememberChatTail(
     }
 
     var newerBusy by remember(convId) { mutableStateOf(false) }
-    tail.newer = { newestRendered ->
-        if (!newerBusy) scope.launch {
-            newerBusy = true
-            try {
-                loadNewerStep(client, convId, owner, windowNow, newestRendered, connectedNow, setWindow)
-            } finally {
-                newerBusy = false
+    tail.newer = { _ ->
+        if (!newerBusy) {
+            newerBusy = true // 先同步置位再 launch：中间隔一次调度，连调两次会并发两个 step
+            scope.launch {
+                try {
+                    loadNewerStep(client, convId, owner, windowNow, connectedNow, setWindow)
+                } finally {
+                    newerBusy = false
+                }
             }
         }
     }
@@ -281,16 +283,16 @@ private suspend fun loadNewerStep(
     convId: String,
     owner: String,
     window: ChatWindow,
-    newestRendered: Long,
     connected: Boolean,
     setWindow: (ChatWindow) -> Unit,
 ) {
     if (window !is ChatWindow.Anchored) return
+    // 游标与到头判断都用窗口上沿 hiSeq（与 extendWindowNewer 同源）：渲染行里可能混着 convSeq=0 的待发行
     val local = client.repo.extendWindowNewer(owner, convId, window)
     if (local != window) { setWindow(local); return }
     val tip = client.repo.tailState(owner, convId, ChatWindows.LATEST_FETCH, client.messages.historyFloors.get(convId)).tip
-    if (tip <= 0 || newestRendered >= tip || !connected) return
-    if (client.messages.windows.await(convId, newestRendered, 0, ChatWindows.ANCHOR_PAGE) == null) return
+    if (tip <= 0 || window.hiSeq >= tip || !connected) return
+    if (client.messages.windows.await(convId, window.hiSeq, 0, ChatWindows.ANCHOR_PAGE) == null) return
     setWindow(client.repo.extendWindowNewer(owner, convId, window))
 }
 

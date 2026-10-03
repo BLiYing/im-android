@@ -445,8 +445,9 @@ class MessageRepositoryRangesTest {
         val (items, segLo) = repo.conversationMediaInSegment(me, conv, 902)
         assertEquals((900L..905L).toList(), items.map { it.convSeq })
         assertEquals(900L, segLo)
+        assertEquals(905L, repo.conversationMediaInSegment(me, conv, 902).hi)
         // 点中的不在任何段内：退回整条会话（segLo=0）
-        assertEquals(0L, repo.conversationMediaInSegment(me, conv, 500).second)
+        assertEquals(0L, repo.conversationMediaInSegment(me, conv, 500).lo)
     }
 
     /** ↓N 读库那一半：10 万积压、本地只有最前 50 条——数出来必须是 10 万量级，不是已加载的 50。 */
