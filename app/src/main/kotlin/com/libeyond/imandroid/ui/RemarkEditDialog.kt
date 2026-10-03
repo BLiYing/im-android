@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -10,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.R
 
 /**
@@ -34,12 +37,15 @@ fun RemarkEditDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.contact_edit_remark_placeholder)) },
         text = {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { draft = it },
-                singleLine = true,
-                placeholder = { Text(placeholderNickname) },
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.chat_detail_remark_alert_message))
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    singleLine = true,
+                    placeholder = { Text(placeholderNickname) },
+                )
+            }
         },
         confirmButton = { TextButton(onClick = { onConfirm(draft.trim()) }) { Text(stringResource(R.string.common_save)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },

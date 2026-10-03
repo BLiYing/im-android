@@ -16,7 +16,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import coil.compose.AsyncImage
+import androidx.compose.foundation.layout.Box
+import com.libeyond.imandroid.ui.screens.AlbumTile
+import com.libeyond.imandroid.ui.screens.AlbumTilePreview
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Eye
@@ -222,23 +224,18 @@ internal fun ChatMessageMenu(
             if (row is ChatRow.Album) {
                 // 宫格浮起的是**手指按住的那一格**（同 iOS）：anchor 就是那一格的矩形，
                 // 这里按它铺满即可（格子是正方形）。
-                AsyncImage(
-                    model = MediaUrl.absolute(
-                        target.content, client.host, com.libeyond.imandroid.BuildConfig.USE_TLS,
-                    ),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                        .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
-                        // 预览里点图片 = **关菜单**（不开查看器）：预览层的约定是点哪儿都穿透到
-                        // 背景把菜单关掉，而这一格原先压根没挂点击，点了毫无反应（2026-09-16 用户报）。
-                        // 不要涟漪——预览是"原位浮起的那一格"，它不是个按钮。
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onDismiss,
+                val tileSize = with(androidx.compose.ui.platform.LocalDensity.current) { anchor.width.toDp() }
+                Box(Modifier.clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))) {
+                    // 与宫格原位同一份渲染（门控磨砂等）；点图片 = 关菜单（见 AlbumTilePreview）
+                    AlbumTilePreview(
+                        tile = AlbumTile(
+                            target.content, target.contentType, target.duration,
+                            thumb = target.thumb, sizeBytes = target.fileSize ?: 0L,
                         ),
-                )
+                        size = tileSize, host = client.host, useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
+                        isGroup = conv.isGroup, mine = target.sender == owner, onDismiss = onDismiss,
+                    )
+                }
             } else if (idx >= 0) {
                 // 预览里的链接**只高亮不可点**：预览层的约定是点哪儿都穿透到背景把菜单关掉，
                 // 链接可点的话会在菜单还开着时再盖一层浏览器（2026-09-16 code-reviewer 抓出）

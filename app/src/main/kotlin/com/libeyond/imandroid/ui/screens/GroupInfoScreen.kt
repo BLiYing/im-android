@@ -384,11 +384,14 @@ fun GroupInfoScreen(
 
 @Composable
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-internal fun MemberRow(m: GroupMember, onClick: () -> Unit, onLongClick: () -> Unit) {
+internal fun MemberRow(
+    m: GroupMember, onClick: () -> Unit, onLongClick: () -> Unit,
+    background: androidx.compose.ui.graphics.Color = IMTheme.colors.pageBackground,
+) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Row(
-        modifier = Modifier.fillMaxWidth().background(c.pageBackground).combinedClickable(onClick = onClick, onLongClick = onLongClick)
+        modifier = Modifier.fillMaxWidth().background(background).combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = d.space4, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

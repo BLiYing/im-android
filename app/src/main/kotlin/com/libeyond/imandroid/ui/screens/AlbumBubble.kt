@@ -19,7 +19,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -34,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.AlbumLayout
+import com.libeyond.imandroid.data.PendingMenu
 import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.ui.rememberFrostedPainter
 import com.libeyond.imandroid.ui.components.AlbumTileGate
@@ -94,6 +98,11 @@ internal data class AlbumTile(
      * `true/false` = 画圈，已勾 / 未勾。**逐格一个圈**，与 iOS `IMAlbumCell` / Web 一致。
      */
     val mark: Boolean? = null,
+    /**
+     * 待发件的真实状态是 Failed（**含被服务端拒收**那类——它们不画红叉，[failed] 为 false）。
+     * 只给长按菜单用：待发格要有「取消发送 / 删除」（iOS `alb.menuForItem` 把待发格也交给同一份菜单）。
+     */
+    val failedState: Boolean = false,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -222,6 +231,23 @@ internal fun AlbumBubble(
     }
 }
 
+/**
+ * 长按菜单里「浮起的那一格」——**必须与宫格里的那一格同一份渲染**（门控磨砂 / 角标 / 时长）。
+ * 此前预览直接 `AsyncImage(原图地址)`：没下载的格子长按后磨砂没了、原图直接露出来
+ * （2026-10-03 用户报「长按九宫格图片，高斯模糊没有了」）。
+ * 点击只关菜单：走 `selecting = true` 那条分支（不触发下载、不开查看器、无长按）。
+ */
+@Composable
+internal fun AlbumTilePreview(
+    tile: AlbumTile,
+    size: androidx.compose.ui.unit.Dp,
+    host: String,
+    useTls: Boolean,
+    isGroup: Boolean,
+    mine: Boolean,
+    onDismiss: () -> Unit,
+) = AlbumTileView(tile, size, host, useTls, isGroup, mine, onTap = onDismiss, selecting = true)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AlbumTileView(
@@ -248,6 +274,13 @@ private fun AlbumTileView(
     // **我自己发的同样不门控**（2026-09-17）：多图转发在自己这一侧本机并没有那些字节，
     // 门控会把我刚发出去的一整组图渲染成一片带 ↓ 的空格子（单图那条见 `MediaContent.mine`）。
     val sending = m.sending || m.failed
+    // 待发格的长按菜单（取消发送 / 删除）：本格自己弹，不走聊天页的消息菜单（那条要 conv_seq）
+    var pendingOpen by remember { mutableStateOf(false) }
+    val pendingActs = if (m.sending || m.failed || m.failedState) {
+        PendingMenu.actions(m.contentType, failed = m.failed || m.failedState, hasCopyText = false)
+    } else {
+        emptyList()
+    }
     val gate = if (sending) null else rememberGate(m.url, m.contentType, m.sizeBytes, isGroup)
     // 待发那格、以及自己发的那几格都不门控；**但「已失效」不豁免**
     // （2026-09-17 `/code-review` 抓出，同 `MediaBubbles.ImageContent` 的 `ungated`）：
@@ -262,9 +295,12 @@ private fun AlbumTileView(
                 // 没下下来的格子点一下是下载（开始 / 暂停 / 重试，失效不做事），**不打开**（iOS `IMAlbumCell` 同）
                 // 多选态：一律是「勾选这一格」，不触发下载也不开查看器
                 onClick = { if (!selecting && !ungated && gate != null && !gate.ready) gate.onTap() else onTap() },
-                onLongClick = if (selecting) null else { { onLongPress(tileRect.value) } },
+                onLongClick = if (selecting) null else {
+                    { if (pendingActs.isNotEmpty()) pendingOpen = true else onLongPress(tileRect.value) }
+                },
             ),
     ) {
+        PendingMenuPopup(pendingOpen, pendingActs, null, m.onCancelUpload) { pendingOpen = false }
         val frosted = rememberFrostedPainter(m.thumb)
         AsyncImage(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，所以选完立刻有图、

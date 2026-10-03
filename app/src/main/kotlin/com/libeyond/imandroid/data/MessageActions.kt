@@ -78,9 +78,13 @@ object MessageActions {
         if (msg.convSeq <= 0) return emptyList()
 
         // 通话记录是系统事实不是「说过的话」：长按只有「仅删除自己」（无复制 / 引用 / 转发 / 收藏 / 撤回 / 多选）
-        if (msg.contentType == ContentType.CALL) return listOf(MessageAction.HideForMe)
-
+        // （iOS `messageActionsForMessage:` 的 call 分支只 return 删除项，而删除项走 `deleteMenuActionForMessage:`
+        //  的两档判据：我发的 / 群主·管理员还有「为所有人删除」）
         val mine = msg.sender == myUid
+        if (msg.contentType == ContentType.CALL) {
+            return if (mine || (isGroup && iAmManager)) listOf(MessageAction.DeleteForEveryone, MessageAction.HideForMe)
+            else listOf(MessageAction.HideForMe)
+        }
         val out = mutableListOf<MessageAction>()
 
         // 语音转文字：放在最前（对齐 iOS/Web 长按菜单顶部靠前的位置）。只对语音消息出现，
@@ -105,11 +109,6 @@ object MessageActions {
         // 此前本端长按菜单没有这一项（2026-09-17 用户报），只能先进多选再收藏。
         if (SelectionActions.favoritable(listOf(msg)).isNotEmpty()) out += MessageAction.Favorite
 
-        // 多选：判据比转发**宽一档**（走 ChatSelection.selectable），因为进多选后还能勾上
-        // 空内容/已删除那些"能勾但转不出去"的条目——它们由发送前的复核滤掉并如实提示。
-        // 从一条转不出去的消息进多选是合理的（用户可能想批量删它们）。
-        if (ChatSelection.selectable(msg)) out += MessageAction.MultiSelect
-
         // 撤回：仅本人，且在时间窗内。服务端超窗回 300008
         if (mine && now - msg.timestamp <= RECALL_WINDOW_MS) out += MessageAction.Recall
 
@@ -118,6 +117,12 @@ object MessageActions {
         // 编辑：仅本人文本消息，无时间窗（服务端同判：非本人 300006、非文本/已撤回 300007）。
         // convSeq>0 必须——待确认行走编辑会落到「发新消息」分支（iOS 注释）
         if (mine && msg.contentType == ContentType.TEXT && msg.content.isNotBlank()) out += MessageAction.Edit
+
+        // 多选（顺序对齐 iOS：… 撤回 · 置顶 · 编辑 · 多选 · 翻译 · 举报 · 删除；此前排在撤回之前）。
+        // 判据比转发**宽一档**（走 ChatSelection.selectable），因为进多选后还能勾上
+        // 空内容/已删除那些"能勾但转不出去"的条目——它们由发送前的复核滤掉并如实提示。
+        // 从一条转不出去的消息进多选是合理的（用户可能想批量删它们）。
+        if (ChatSelection.selectable(msg)) out += MessageAction.MultiSelect
 
         // 为所有人删除：发送者本人恒可；群聊中群主/管理员亦可删他人。**无时间窗**
         if (mine || (isGroup && iAmManager)) out += MessageAction.DeleteForEveryone

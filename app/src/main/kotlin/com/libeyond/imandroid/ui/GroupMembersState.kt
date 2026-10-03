@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.rtc.RtcCall
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupMember
+import com.libeyond.imandroid.sdk.api.GroupMembersPage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -18,7 +19,21 @@ import kotlinx.coroutines.launch
  * "长按管理动作后刷新首页"并发写 `members`/`cursor`/`hasMore`，旧游标数据拼接出成员区间空洞
  * （`/code-review` 抓出，对齐 iOS 每个动作后都调 `loadGroupInfo` 的同一取舍）。
  */
-internal class GroupMembersState(private val client: IMClient, private val convId: String) {
+internal class GroupMembersState(
+    /** 拉一页（游标空=首页）；失败回 null，调用方保留旧数据。 */
+    private val fetch: suspend (cursor: String) -> GroupMembersPage?,
+    /** 首页到手后的副作用（喂 [RtcCall] 的名字/头像缓存）。 */
+    private val onFirstPage: (List<GroupMember>) -> Unit = {},
+) {
+    constructor(client: IMClient, convId: String) : this(
+        fetch = { cursor ->
+            var got: GroupMembersPage? = null
+            loadMore(client, convId, cursor) { got = it }
+            got
+        },
+        onFirstPage = { RtcCall.onGroupMembers(convId, it) },
+    )
+
     var members by mutableStateOf<List<GroupMember>>(emptyList())
         private set
     var cursor by mutableStateOf("")
@@ -28,20 +43,32 @@ internal class GroupMembersState(private val client: IMClient, private val convI
     var loading by mutableStateOf(false)
         private set
 
+    /** 有人在 [loading] 期间要求刷新：在途那次的数据可能早于刚发生的写，必须再来一轮。 */
+    private var dirty = false
+
     /**
      * 首页整页替换：初次进页、或任意写接口调完之后。服务端是权威，别本地猜新状态。
-     * 顺手喂给 [RtcCall]（群通话按这份表取名字与头像）——单纯的缓存写入，任何刷新场景下都该做。
+     *
+     * **在途时不能直接丢弃请求**：在途那次可能发出于写操作之前（如撤销管理员的 `group` 帧触发的重拉），
+     * 返回的是旧角色；丢掉本次等于让旧数据留在屏上（撤销最后一位管理员后他还挂在列表里）。
+     * 故打 [dirty] 标记，由在途方收尾后再补一轮，直到没有新请求为止。
      */
     suspend fun refresh() {
-        if (loading) return
-        loading = true
-        loadMore(client, convId, "") { page ->
-            RtcCall.onGroupMembers(convId, page.items)
-            members = page.items
-            cursor = page.nextCursor
-            hasMore = page.hasMore
+        if (loading) {
+            dirty = true
+            return
         }
-        loading = false
+        do {
+            dirty = false
+            loading = true
+            fetch("")?.let { page ->
+                onFirstPage(page.items)
+                members = page.items
+                cursor = page.nextCursor
+                hasMore = page.hasMore
+            }
+            loading = false
+        } while (dirty)
     }
 
     /**
@@ -52,13 +79,14 @@ internal class GroupMembersState(private val client: IMClient, private val convI
         if (loading || !hasMore) return
         loading = true
         scope.launch {
-            loadMore(client, convId, cursor) { page ->
+            fetch(cursor)?.let { page ->
                 val existing = members.mapTo(HashSet()) { it.userId }
                 members = members + page.items.filter { it.userId !in existing }
                 cursor = page.nextCursor
                 hasMore = page.hasMore
             }
             loading = false
+            if (dirty) refresh() // 续拉期间有人要求刷新：续拉的游标已过期，整页重来
         }
     }
 }

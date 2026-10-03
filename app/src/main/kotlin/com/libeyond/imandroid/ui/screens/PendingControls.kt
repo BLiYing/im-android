@@ -35,6 +35,8 @@ import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.RotateCw
 import com.composables.icons.lucide.X
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.PendingAction
+import com.libeyond.imandroid.data.PendingMenu
 import com.libeyond.imandroid.data.UploadState
 import com.libeyond.imandroid.data.UploadStateText
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
@@ -120,42 +122,62 @@ internal fun UploadBadge(state: UploadState, modifier: Modifier = Modifier) {
 }
 
 /**
- * 待发气泡的长按菜单（iOS 同口径）：复制（有文字才有）/ 取消发送（发送中）/ 删除（失败）。
+ * 待发气泡的长按菜单（iOS 同口径，判据见 [PendingMenu]）：复制（有文字才有）/ 取消发送（本地媒体件）/ 删除（失败）。
  * **没有「重发」项**（重发走红❗/ ↻）；菜单路径**不二次确认**——长按再点一下已是明确意图，
  * 二次确认只给「点排队气泡上的 ✕」那条易误触的路径。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun PendingActions(
+    contentType: String,
     failed: Boolean,
     copyText: String?,
     onCancel: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    val clipboard = LocalClipboardManager.current
+    val acts = PendingMenu.actions(contentType, failed, !copyText.isNullOrEmpty())
     Box(
-        Modifier.combinedClickable(
+        if (acts.isEmpty()) Modifier else Modifier.combinedClickable(
             onClick = {}, onLongClick = { open = true },
             indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
         ),
     ) {
         content()
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            if (!copyText.isNullOrEmpty()) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.common_copy)) },
-                    onClick = { open = false; clipboard.setText(AnnotatedString(copyText)) },
-                )
-            }
+        PendingMenuPopup(open, acts, copyText, onCancel) { open = false }
+    }
+}
+
+/** 待发菜单的弹层本体：单条待发气泡与宫格里的待发格共用（iOS 同一份 `messageActionsForMessage:`）。 */
+@Composable
+internal fun PendingMenuPopup(
+    open: Boolean,
+    acts: List<PendingAction>,
+    copyText: String?,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
+    DropdownMenu(expanded = open && acts.isNotEmpty(), onDismissRequest = onDismiss) {
+        acts.forEach { a ->
+            val danger = a != PendingAction.Copy
             DropdownMenuItem(
                 text = {
                     Text(
-                        stringResource(if (failed) R.string.common_delete else R.string.chat_msg_menu_cancel_send),
-                        color = IMTheme.colors.danger,
+                        stringResource(
+                            when (a) {
+                                PendingAction.Copy -> R.string.common_copy
+                                PendingAction.CancelSend -> R.string.chat_msg_menu_cancel_send
+                                PendingAction.Delete -> R.string.common_delete
+                            },
+                        ),
+                        color = if (danger) IMTheme.colors.danger else IMTheme.colors.textPrimary,
                     )
                 },
-                onClick = { open = false; onCancel() },
+                onClick = {
+                    onDismiss()
+                    if (a == PendingAction.Copy) clipboard.setText(AnnotatedString(copyText.orEmpty())) else onCancel()
+                },
             )
         }
     }

@@ -171,6 +171,7 @@ internal fun ChatRowView(
                         onCancelUpload = { onCancelPending(m.msg.clientMsgId) },
                         failed = m.msg.state == SendState.Failed.name && SendRejection.noteRes(m.msg.errorCode) == null,
                         thumb = m.msg.thumb,
+                        failedState = m.msg.state == SendState.Failed.name,
                     )
                 }
             },
@@ -317,6 +318,7 @@ internal fun ChatRowView(
             val shownFailed = r.msg.state == SendState.Failed.name && rejectRes == null
             Column {
             PendingActions(
+                contentType = r.msg.contentType,
                 failed = r.msg.state == SendState.Failed.name,
                 copyText = if (r.msg.contentType == ContentType.TEXT) r.msg.content else r.msg.caption,
                 onCancel = { onCancelPending(cid) },

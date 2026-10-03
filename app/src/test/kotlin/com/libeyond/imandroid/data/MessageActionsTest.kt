@@ -88,11 +88,34 @@ class MessageActionsTest {
     }
 
     @Test
-    fun `通话记录长按只剩仅删除自己`() {
-        for (sender in listOf(ME, OTHER)) {
-            val a = actions(msg(sender = sender, type = ContentType.CALL, content = """{"cid":"c1","m":"audio","r":"hangup","d":5}"""))
-            assertEquals(listOf(MessageAction.HideForMe), a)
-        }
+    fun `通话记录长按只剩删除档（对齐 iOS 两档判据）`() {
+        val call = """{"cid":"c1","m":"audio","r":"hangup","d":5}"""
+        // 别人发的、我不是管理员：只有「仅删除自己」
+        assertEquals(listOf(MessageAction.HideForMe), actions(msg(sender = OTHER, type = ContentType.CALL, content = call)))
+        // 我发的：多一档「为所有人删除」
+        assertEquals(
+            listOf(MessageAction.DeleteForEveryone, MessageAction.HideForMe),
+            actions(msg(sender = ME, type = ContentType.CALL, content = call)),
+        )
+        // 群里别人发的、我是管理员：同样两档
+        assertEquals(
+            listOf(MessageAction.DeleteForEveryone, MessageAction.HideForMe),
+            actions(msg(sender = OTHER, type = ContentType.CALL, content = call), isGroup = true, manager = true),
+        )
+    }
+
+    /** iOS 顺序：… 撤回 · 置顶 · 编辑 · 多选 · 翻译 · 举报 · 删除（多选此前排在撤回之前）。 */
+    @Test
+    fun `多选排在撤回置顶编辑之后翻译举报之前`() {
+        val mine = MessageActions.availableFor(msg(), ME, false, false, NOW, canPin = true)
+        val i = { a: MessageAction -> mine.indexOf(a) }
+        assertTrue(i(MessageAction.Recall) < i(MessageAction.Pin))
+        assertTrue(i(MessageAction.Pin) < i(MessageAction.Edit))
+        assertTrue(i(MessageAction.Edit) < i(MessageAction.MultiSelect))
+        assertTrue(i(MessageAction.MultiSelect) < i(MessageAction.Translate))
+        val theirs = MessageActions.availableFor(msg(sender = OTHER), ME, false, false, NOW)
+        assertTrue(theirs.indexOf(MessageAction.MultiSelect) < theirs.indexOf(MessageAction.Translate))
+        assertTrue(theirs.indexOf(MessageAction.Translate) < theirs.indexOf(MessageAction.Report))
     }
 
     @Test
