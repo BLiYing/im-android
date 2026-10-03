@@ -112,6 +112,7 @@ fun ChatScreen(
     replyTitleOverride: String? = null,
     /** 译文（convSeq → 文本），挂在气泡内。 */
     translations: Map<Long, String> = emptyMap(),
+    avatarOf: (String) -> String = { "" },
     /** 展开着的长文本（convSeq）与点长文本气泡的处理（返回是否已处理）。 */
     expandedTexts: List<Long> = emptyList(),
     onTapLongText: (MessageEntity) -> Boolean = { false },
@@ -390,6 +391,7 @@ fun ChatScreen(
             useTls = useTls,
             peerReadSeq = peerReadSeq,
             translations = translations,
+            avatarOf = avatarOf,
             expandedTexts = expandedTexts,
             uploadProgress = uploadProgress,
             localNameOf = localNameOf,

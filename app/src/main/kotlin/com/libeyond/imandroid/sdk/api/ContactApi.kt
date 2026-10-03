@@ -159,6 +159,16 @@ class ContactApi(private val http: HttpClient) {
         })
     }
 
+    /**
+     * 批量取资料（`POST /users/batch`，单次 ≤100 个、每账号 60 次/分）。返回的卡片**不含 phone/在线态/备注**
+     * （备注是查看者私有数据，端上自己叠）。`missing` 是查无此人的 uid，给负缓存用——不是错误。
+     */
+    suspend fun usersBatch(ids: List<String>): com.libeyond.imandroid.data.ProfileBatch {
+        val data = http.call("POST", "/api/v1/users/batch", buildJsonObject { putJsonArray("ids") { ids.forEach { add(it) } } })
+        val r = decode(data, UsersBatchResp.serializer())
+        return com.libeyond.imandroid.data.ProfileBatch(r.users, r.missing)
+    }
+
     /** 设备注名。空串=清除。须已是好友，否则 200103。 */
     suspend fun setRemark(userId: String, remark: String) {
         http.call("POST", "/api/v1/friends/remark", buildJsonObject {
@@ -167,3 +177,6 @@ class ContactApi(private val http: HttpClient) {
         })
     }
 }
+
+@Serializable
+private data class UsersBatchResp(val users: List<UserCard> = emptyList(), val missing: List<String> = emptyList())

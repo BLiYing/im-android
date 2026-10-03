@@ -20,6 +20,7 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.http.ApiException
+import com.libeyond.imandroid.ui.screens.CreateGroupProfileScreen
 import com.libeyond.imandroid.ui.screens.CreateGroupScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -31,9 +32,9 @@ import kotlinx.coroutines.withContext
  *
  * 布局/交互对齐 iOS `IMGroupCreateViewController`（2026-09-23 用户报「和 iOS 拉齐」）：
  * 头像可选、群名有 rune 计数与上限、按已选成员自动预填群名（手改过就不再覆盖）。
- * **未对齐的一处是刻意的**：iOS 建群分两步（先选人的独立页，再是头像/群名页），本端保留单页——
- * 拆成两页要么新写一套联系人搜索+索引页、要么把 `FriendPickerScreen`（单选专用、无搜索）
- * 硬改成多选，两条路都比"单页里加搜索+索引"改动面大、回归风险高，产出的体验差异对用户不明显。
+ * **两步流**（2026-10-03 起，对齐 iOS）：第一步选好友（`CreateGroupScreen`，搜索 + 索引），右上「下一步」；
+ * 第二步群资料（`CreateGroupProfileScreen`：头像 / 群名 / 成员条可 ✕ 移除、「＋ 添加」回第一步）。此前保留单页是为省改动，
+ * 现在两页都复用已有的联系人分组/索引组件，没有另起一套。
  *
  * @param seedFriends 调用方手上已有的好友表，先用它画，进页再拉一次新的——不然从消息页进来
  *                    （主界面那份好友表只在登录时拉过一次）会漏掉之后才加的好友。
@@ -46,7 +47,9 @@ fun CreateGroupHost(
     onCreated: (GroupInfo) -> Unit,
     onBack: () -> Unit,
 ) {
-    BackHandler(onBack = onBack)
+    // 两步流：0 = 选好友，1 = 群资料。第二步按返回回第一步（勾选保留），不是直接退出建群
+    var step by remember { mutableStateOf(0) }
+    BackHandler { if (step == 1) step = 0 else onBack() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var friends by remember { mutableStateOf(seedFriends.filter { it.status == FriendEntry.ACCEPTED }) }
@@ -107,33 +110,49 @@ fun CreateGroupHost(
         }
     }
 
-    CreateGroupScreen(
-        name = name,
-        onNameChange = { input ->
-            nameEdited = true
-            name = GroupNameDefault.truncateToRunes(input, GroupNameDefault.MAX_LENGTH)
-        },
-        friends = friends,
-        selected = picks,
-        onToggle = { id -> picks = if (id in picks) picks - id else picks + id },
-        maxMembers = maxMembers,
-        busy = creating,
-        error = error,
-        avatarUrl = avatarUrl,
-        avatarUploading = avatarUploading,
-        onPickAvatar = { avatarPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-        onCreate = {
-            scope.launch {
-                creating = true; error = ""
-                try {
-                    val group = client.groups.create(name.trim(), picks.toList(), avatarUrl)
-                    client.messages.refreshConversations()
-                    onCreated(group)
-                } catch (e: ApiException) {
-                    error = if (e.isTransport) Str.s(R.string.net_error_generic) else e.message
-                } finally { creating = false }
-            }
-        },
-        onBack = onBack,
-    )
+    com.libeyond.imandroid.ui.components.PushTransition(targetState = step, depthOf = { it }) { st ->
+        if (st == 0) {
+            CreateGroupScreen(
+                friends = friends,
+                selected = picks,
+                onToggle = { id -> picks = if (id in picks) picks - id else picks + id },
+                maxMembers = maxMembers,
+                onNext = { step = 1 },
+                onBack = onBack,
+            )
+        } else {
+            CreateGroupProfileScreen(
+                name = name,
+                onNameChange = { input ->
+                    nameEdited = true
+                    name = GroupNameDefault.truncateToRunes(input, GroupNameDefault.MAX_LENGTH)
+                },
+                members = friends.filter { it.userId in picks },
+                onRemove = { id ->
+                    // 不能删到 0：到 1 个时再点就说一声（iOS group.create.min_friends）
+                    if (picks.size <= 1) error = Str.s(R.string.group_create_min_friends) else { picks = picks - id; error = "" }
+                },
+                onAddMore = { step = 0 },
+                maxMembers = maxMembers,
+                busy = creating,
+                error = error,
+                avatarUrl = avatarUrl,
+                avatarUploading = avatarUploading,
+                onPickAvatar = { avatarPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onCreate = {
+                    scope.launch {
+                        creating = true; error = ""
+                        try {
+                            val group = client.groups.create(name.trim(), picks.toList(), avatarUrl)
+                            client.messages.refreshConversations()
+                            onCreated(group)
+                        } catch (e: ApiException) {
+                            error = if (e.isTransport) Str.s(R.string.net_error_generic) else e.message
+                        } finally { creating = false }
+                    }
+                },
+                onBack = { step = 0 },
+            )
+        }
+    }
 }

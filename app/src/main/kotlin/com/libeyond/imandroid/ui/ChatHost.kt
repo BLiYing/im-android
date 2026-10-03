@@ -241,6 +241,12 @@ fun ChatHost(
     var lastTypingSent by remember(conv.convId) { mutableStateOf(0L) }
     var replyTo by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
     // 已读详情 / 翻译 / 编辑 / 举报（状态与动作在 ChatMessageOps.kt）
+    // 发送者头像：成员表 > 全局解析器（`POST /users/batch`，合批/负缓存/退避都在缓存里）。读 revision = 解析完重组
+    val profilesRev by client.profiles.revision.collectAsState()
+    val avatarOf: (String) -> String = { uid ->
+        profilesRev.let { memberAvatars[uid]?.takeIf { u -> u.isNotBlank() } ?: client.profiles.peek(uid)?.avatarUrl
+            ?: run { client.profiles.request(uid); "" } }
+    }
     val ops = remember(conv.convId) { ChatMessageOps(client, conv, scope) }.also {
         it.toast = { m -> toast = m }
         it.prefill = { t -> replyTo = null; input = TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length)) }
@@ -290,6 +296,7 @@ fun ChatHost(
     // （ChatScreen 自己也用 ChatRowStyle 组一份，字段来源相同）。
     val rowStyle = ChatRowStyle(
         translations = ops.translations,
+        avatarOf = avatarOf,
         expandedTexts = ops.expanded,
         myUid = owner,
         isGroup = conv.isGroup,
@@ -304,7 +311,7 @@ fun ChatHost(
         mentionNames = mentionNames,
         searchHighlight = search.needle,
         roleOf = { uid -> memberRoles[uid] },
-        memberNameOf = { uid -> memberNames[uid] },
+        memberNameOf = { uid -> memberNames[uid] ?: client.profiles.peek(uid)?.nickname?.takeIf { it.isNotBlank() } },
     )
 
     // 被盖住时不画、不进无障碍树：它还在组合里（为了返回保位），但读屏不该念出一页看不见的聊天。
@@ -323,6 +330,7 @@ fun ChatHost(
         isGroup = conv.isGroup,
         peerReadSeq = ReadTick.seqFor(conv.isGroup, conv.isSuper, conv.peerReadSeq),
         translations = ops.translations,
+        avatarOf = avatarOf,
         expandedTexts = ops.expanded,
         onTapLongText = ops::tapLongText,
         input = input,
@@ -445,7 +453,7 @@ fun ChatHost(
         onDeleteSelected = { sel.confirmDelete = true },
         mentionNames = mentionNames,
         roleOf = { uid -> memberRoles[uid] },
-        memberNameOf = { uid -> memberNames[uid] },
+        memberNameOf = { uid -> memberNames[uid] ?: client.profiles.peek(uid)?.nickname?.takeIf { it.isNotBlank() } },
         remarkOf = { uid -> friendsByUid[uid]?.remark?.takeIf { it.isNotBlank() } },
         latestNicknameOf = { uid -> latestNicks[uid] },
         onOpenRecord = { recordNav.push(it) },

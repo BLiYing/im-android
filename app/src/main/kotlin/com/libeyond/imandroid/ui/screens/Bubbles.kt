@@ -120,6 +120,8 @@ internal fun Bubble(
     showAvatar: Boolean = false,
     /** 头像取色种子——用 uid 不用昵称，改昵称不该换颜色。 */
     avatarSeed: String = "",
+    /** 群聊对方头像的真图 URL（成员表 > 全局解析器）；空 = 首字母色块。 */
+    senderAvatarUrl: String = "",
     /** 点群聊对方头像 → 进该成员资料页（对齐 iOS `onAvatarTap`）。null = 不可点（单聊/自己不挂）。 */
     onAvatarTap: (() -> Unit)? = null,
     /** 群聊——自动下载策略的单聊/群聊分档要用。 */
@@ -185,7 +187,7 @@ internal fun Bubble(
                     IMAvatar(
                         displayName = senderName.orEmpty().ifBlank { avatarSeed },
                         seed = avatarSeed,
-                        avatarUrl = "",   // TODO 群成员头像 URL 尚无本地缓存，先走首字母色块
+                        avatarUrl = senderAvatarUrl,
                         size = d.chatAvatar,
                     )
                 }

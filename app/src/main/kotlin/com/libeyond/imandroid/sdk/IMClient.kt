@@ -108,6 +108,12 @@ class IMClient(context: Context) {
     val devices = DevicesApi(http)
     val conversationsApi = ConversationsApi(http)
     val contacts = ContactApi(http)
+
+    /** uid → 头像/显名 解析器（成员表给不出身份时兜底，见 [UserProfileCache]）。内存缓存。 */
+    val profiles = com.libeyond.imandroid.data.UserProfileCache(
+        scope = scope,
+        fetch = { ids -> contacts.usersBatch(ids) },
+    )
     /** 收藏（M4-4）：加（长按菜单 / 多选底栏 / 查看器「更多」）、列表与删除（「我 ▸ 收藏消息」）。 */
     val favorites = FavoriteApi(http)
     val groups = GroupApi(http)
@@ -462,6 +468,7 @@ class IMClient(context: Context) {
         // 明确约定），客户端不必每次登出都补一刀；forget() 只复位本地"已上报"状态，见其类注释。
         fcmTokenStore.forget()
         InAppBannerStore.dismiss()
+        profiles.clear() // 资料解析缓存属于上一个账号
     }
 
     /** 网络恢复 / 回到前台。 */

@@ -47,6 +47,8 @@ fun ChatGroupLoad(client: IMClient, conv: ConversationEntity, gs: ChatGroupState
         if (!conv.isGroup) return@LaunchedEffect
         runCatchingCancellable { client.groups.info(conv.convId) }.onSuccess {
             gs.info = it
+            // 全局昵称/头像喂进解析器（**不喂群昵称**：A 群的昵称不能漏到 B 群）
+            client.profiles.ingest(it.members.map { m -> com.libeyond.imandroid.sdk.api.UserCard(userId = m.userId, username = m.username, nickname = m.nickname, avatarUrl = m.avatarUrl) })
             gs.iAmManager = it.iAmManager
             gs.myRole = it.myRole
             gs.myMuteUntil = it.myMuteUntil

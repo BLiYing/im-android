@@ -37,6 +37,8 @@ internal data class ChatRowStyle(
     val peerReadSeq: Long,
     /** 译文（convSeq → 文本，只在内存）：挂在文本气泡里，原文之后。 */
     val translations: Map<Long, String> = emptyMap(),
+    /** 发送者头像 URL：成员表 > 全局解析器（miss 时顺手排队去补）。 */
+    val avatarOf: (String) -> String = { "" },
     /** 展开着的长文本（convSeq）。 */
     val expandedTexts: List<Long> = emptyList(),
     /** 分片上传进度：clientMsgId → 百分比。 */
@@ -284,6 +286,7 @@ internal fun ChatRowView(
             reserveAvatarColumn = isGroup && m.sender != myUid,
             showAvatar = showsSenderAvatar(rows, i, myUid, isGroup),
             avatarSeed = m.sender,
+            senderAvatarUrl = if (isGroup && m.sender != myUid) style.avatarOf(m.sender) else "",
             // 点群聊对方头像 → 进该成员资料页（此前只有 @提及能跳，头像点了没反应）
             onAvatarTap = if (isGroup && m.sender != myUid) { { onOpenUser(m.sender) } } else null,
             loadLinkPreview = loadLinkPreview,
