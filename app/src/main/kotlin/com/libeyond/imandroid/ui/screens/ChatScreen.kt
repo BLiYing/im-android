@@ -112,6 +112,9 @@ fun ChatScreen(
     replyTitleOverride: String? = null,
     /** 译文（convSeq → 文本），挂在气泡内。 */
     translations: Map<Long, String> = emptyMap(),
+    /** 展开着的长文本（convSeq）与点长文本气泡的处理（返回是否已处理）。 */
+    expandedTexts: List<Long> = emptyList(),
+    onTapLongText: (MessageEntity) -> Boolean = { false },
     /** 滚到顶部附近时回调，加载更早的消息。 */
     onLoadOlder: () -> Unit,
     /** 锚点窗滚到底要更新的一页（尾窗宿主传空操作）。 */
@@ -384,6 +387,7 @@ fun ChatScreen(
             useTls = useTls,
             peerReadSeq = peerReadSeq,
             translations = translations,
+            expandedTexts = expandedTexts,
             uploadProgress = uploadProgress,
             localNameOf = localNameOf,
             loadLinkPreview = loadLinkPreview,
@@ -475,6 +479,7 @@ fun ChatScreen(
                     onOpenMedia = onOpenMedia,
                     onOpenUser = onOpenUser,
                     onRetry = onRetry,
+                    onTapLongText = onTapLongText,
                     onAddFriend = onAddFriendFromNote,
                     onJumpToSeq = onJumpToSeq,
                     onOpenRecord = onOpenRecord,

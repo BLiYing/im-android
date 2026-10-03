@@ -288,6 +288,7 @@ fun ChatHost(
     // （ChatScreen 自己也用 ChatRowStyle 组一份，字段来源相同）。
     val rowStyle = ChatRowStyle(
         translations = ops.translations,
+        expandedTexts = ops.expanded,
         myUid = owner,
         isGroup = conv.isGroup,
         host = client.host,
@@ -320,6 +321,8 @@ fun ChatHost(
         isGroup = conv.isGroup,
         peerReadSeq = ReadTick.seqFor(conv.isGroup, conv.isSuper, conv.peerReadSeq),
         translations = ops.translations,
+        expandedTexts = ops.expanded,
+        onTapLongText = ops::tapLongText,
         input = input,
         onInputChange = {
             // 系统把 URI 型剪贴项 coerce 成文本插进来：把图摘走，剩下的字回填
@@ -537,6 +540,7 @@ fun ChatHost(
 
     banners.Dialogs(canPin)
     ops.Layers(
+        chatFontSize = com.libeyond.imandroid.ui.theme.IMTheme.appearance.chatFontSize.value,
         nameOf = { uid -> friendsByUid[uid]?.displayName ?: memberNames[uid] ?: uid },
         avatarOf = { uid -> memberAvatars[uid].orEmpty() },
         roleOf = { uid -> memberRoles[uid] },

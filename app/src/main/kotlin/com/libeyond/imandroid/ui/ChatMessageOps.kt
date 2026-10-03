@@ -39,6 +39,24 @@ class ChatMessageOps(
     /** 正在编辑的消息（与回复条互斥，共用同一条）。 */
     var editing by mutableStateOf<MessageEntity?>(null)
 
+    /** 展开着的长文本（convSeq）。只在内存，退出聊天页即复位（iOS `expandedTextKeys` 同）。 */
+    val expanded = androidx.compose.runtime.mutableStateListOf<Long>()
+
+    /** 正在全文阅读的那条（超长文本摘要卡点开）。 */
+    var reading by mutableStateOf<MessageEntity?>(null)
+
+    /**
+     * 点长文本气泡：Huge → 开阅读页；Long → 展开/收起；Short 不处理。
+     * **要排在引用跳转之前**（调用方 onTapBubble 先问这里）：否则一条引用回复的长文本永远展不开。
+     */
+    fun tapLongText(m: MessageEntity): Boolean = if (m.contentType != com.libeyond.imandroid.sdk.protocol.ContentType.TEXT ||
+        (m.recalledAt ?: 0L) > 0L
+    ) false else when (com.libeyond.imandroid.data.LongText.tierOf(m.content)) {
+        com.libeyond.imandroid.data.TextTier.Huge -> { reading = m; true }
+        com.libeyond.imandroid.data.TextTier.Long -> { if (!expanded.remove(m.convSeq)) expanded.add(m.convSeq); true }
+        com.libeyond.imandroid.data.TextTier.Short -> false
+    }
+
     /** 正在举报的那条（弹理由框）。 */
     var reporting by mutableStateOf<MessageEntity?>(null)
 
@@ -90,10 +108,11 @@ class ChatMessageOps(
 
     /** 已读详情卡片 + 举报理由框。 */
     @Composable
-    fun Layers(nameOf: (String) -> String, avatarOf: (String) -> String, roleOf: (String) -> String?, onOpenUser: (String) -> Unit) {
+    fun Layers(chatFontSize: Float, nameOf: (String) -> String, avatarOf: (String) -> String, roleOf: (String) -> String?, onOpenUser: (String) -> Unit) {
         readReceipts?.let { rb ->
             ReadReceiptsSheet(rb, nameOf, avatarOf, roleOf, onOpenUser, onDismissed = { readReceipts = null })
         }
+        reading?.let { m -> TextReader(m, chatFontSize, onToast = toast, onDismiss = { reading = null }) }
         reporting?.let { m ->
             IMTextPrompt(
                 title = stringResource(R.string.chat_report_single_title),

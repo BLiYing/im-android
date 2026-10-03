@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.data.LongText
+import com.libeyond.imandroid.data.TextTier
 import com.libeyond.imandroid.data.BubbleCaption
 import com.libeyond.imandroid.data.CaptionPlacement
 import com.libeyond.imandroid.data.CallRecord
@@ -76,6 +78,10 @@ internal fun Bubble(
     pendingType: String? = null,
     /** 译文（只在内存，对齐 iOS：挂在同一气泡里、原文之后，14sp 次要色）。 */
     translation: String? = null,
+    /** 长文本（≥300 字或 ≥10 行）当前是不是展开着。 */
+    textExpanded: Boolean = false,
+    /** 点气泡先问长文本处理（展开/收起/开阅读页）；返回 true = 已处理。 */
+    onTapLongText: ((MessageEntity) -> Boolean)? = null,
     /** 媒体地址补全用的当前 host。 */
     host: String = "",
     useTls: Boolean = false,
@@ -222,7 +228,9 @@ internal fun Bubble(
                                 indication = null,
                                 // 合并转发卡点开详情页；其余类型点击**不做事**——文本气泡点一下就跳走是很怪的交互。
                                 // 图/视频由媒体块自己接（得先看下没下下来，见 MediaContent 的 onOpenMedia）
-                                onClick = { msg?.let { onTapBubble(it, onOpenRecord, onCallBack) } },
+                                onClick = {
+                                    msg?.let { if (onTapLongText?.invoke(it) != true) onTapBubble(it, onOpenRecord, onCallBack) }
+                                },
                                 onLongClick = { onLongPress(bubbleRect) },
                             )
                         } else Modifier
@@ -270,6 +278,11 @@ internal fun Bubble(
                     val isCard = !recalled && !isMedia &&
                         (msg?.contentType == ContentType.CONTACT || msg?.contentType == ContentType.CHAT_RECORD ||
                             (msg?.contentType ?: pendingType) == ContentType.CALL)
+                    // 长文本三档（对齐 iOS/Web，阈值见 LongText）：只对已确认、未撤回的文本消息
+                    val tier = if (msg != null && msg.contentType == ContentType.TEXT && !recalled) LongText.tierOf(text) else TextTier.Short
+                    // 搜索命中词在折叠段之外时自动展开，免得命中了却看不见（iOS 不做，属体验改良）
+                    val collapsedNow = tier == TextTier.Long && !textExpanded &&
+                        !(searchHighlight.isNotBlank() && text.contains(searchHighlight, ignoreCase = true))
                     val timeMeta: @Composable () -> Unit = {
                         BubbleTimeMeta(
                             timestamp, mine, sending = sending, delivered = delivered, read = read,
@@ -310,10 +323,11 @@ internal fun Bubble(
                         (msg?.contentType ?: pendingType) == ContentType.CALL ->
                             CallRecordContent(text, viewerIsSender = mine, footerTrailing = timeMeta)
                         else -> Column {
+                        if (tier == TextTier.Huge) LongTextCard(text, appearance.chatFontSize) else {
                         Text(
                             // @提及高亮、链接、搜索命中底色是同一次遍历铺的几层（见 chatBodyText）
                             text = chatBodyText(
-                                text = text,
+                                text = if (collapsedNow) LongText.collapsed(text) + "…" else text,
                                 spans = remember(mentionSpansJson, msg?.mentionSpans) {
                                     Mention.parseSpans(mentionSpansJson ?: msg?.mentionSpans)
                                 },
@@ -330,9 +344,11 @@ internal fun Bubble(
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
                         )
-                        // 译文：同一气泡、原文之后，不加标签与分隔线（iOS 同）
-                        if (!translation.isNullOrBlank() && !recalled) {
+                        if (tier == TextTier.Long) LongTextAffordance(expanded = !collapsedNow)
+                        // 译文：同一气泡、原文之后，不加标签与分隔线（iOS 同）；折叠态不画（展开后才出现）
+                        if (!translation.isNullOrBlank() && !recalled && !collapsedNow) {
                             Text(translation, color = c.textSecondary, fontSize = 14.sp)
+                        }
                         }
                         }
                     }

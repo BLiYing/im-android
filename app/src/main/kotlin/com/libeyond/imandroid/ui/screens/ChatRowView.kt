@@ -37,6 +37,8 @@ internal data class ChatRowStyle(
     val peerReadSeq: Long,
     /** 译文（convSeq → 文本，只在内存）：挂在文本气泡里，原文之后。 */
     val translations: Map<Long, String> = emptyMap(),
+    /** 展开着的长文本（convSeq）。 */
+    val expandedTexts: List<Long> = emptyList(),
     /** 分片上传进度：clientMsgId → 百分比。 */
     val uploadProgress: Map<String, Int> = emptyMap(),
     /** 系统消息里名字段的本地显示名（备注/群昵称）。 */
@@ -95,6 +97,8 @@ internal fun ChatRowView(
     onRetry: (String) -> Unit = {},
     /** 点拒收行里的「发送好友申请」（200103 的恢复入口）。 */
     onAddFriend: () -> Unit = {},
+    /** 点长文本气泡：返回 true = 已处理（展开/收起/开阅读页），不再走别的点击。 */
+    onTapLongText: (MessageEntity) -> Boolean = { false },
     /** 点引用块跳到原消息（按 conv_seq）。 */
     onJumpToSeq: (Long) -> Unit = {},
     /** 点合并转发卡 → 聊天记录详情页（参数是那条的 content）。 */
@@ -272,6 +276,8 @@ internal fun ChatRowView(
             },
             // 已读双勾：我发的、且对端读位点已越过它
             translation = style.translations[m.convSeq],
+            textExpanded = m.convSeq in style.expandedTexts,
+            onTapLongText = onTapLongText,
             read = m.sender == myUid && ReadTick.isRead(peerReadSeq, m.convSeq),
             delivered = m.sender == myUid && peerReadSeq != ReadTick.HIDDEN, // 超级群不画任何勾
             reserveAvatarColumn = isGroup && m.sender != myUid,
