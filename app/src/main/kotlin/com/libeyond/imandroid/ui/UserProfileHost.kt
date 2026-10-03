@@ -11,6 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.UserCard
@@ -78,7 +80,8 @@ fun UserProfileHost(
                     // 对方先申请过我：直接同意，不必再填验证消息
                     scope.launch {
                         runCatching { client.contacts.accept(userId) }
-                        relation = FriendEntry.ACCEPTED
+                            .onSuccess { relation = FriendEntry.ACCEPTED }
+                            .onFailure { toast = it.userMessage(Str.s(R.string.friend_request_send_failed)) }
                     }
                 } else {
                     askFriend = FriendRequestTarget(userId, card.remark.ifBlank { card.nickname })

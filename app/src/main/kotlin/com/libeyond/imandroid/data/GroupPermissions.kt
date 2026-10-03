@@ -77,12 +77,6 @@ object GroupPermissions {
     /** 邀请人入群：所有人可邀，除非群开了「仅管理员可邀请」。语义同 [canEditInfo] 那条注释。 */
     fun canInvite(info: GroupInfo): Boolean = info.iAmManager || !info.permInvite
 
-    /** 我现在是不是被禁言（全员禁言或单独禁言）。`-1` 是永久。 */
-    fun amMuted(info: GroupInfo, now: Long = System.currentTimeMillis()): Boolean {
-        if (info.iAmManager) return false          // 管理层不受全员禁言限制
-        return isMuteActive(info.muteUntil, now) || isMuteActive(info.myMuteUntil, now)
-    }
-
     /** 一个 mute_until 值现在是否生效。`0`=没禁 / `-1`=永久 / 其余=到期毫秒。 */
     fun isMuteActive(until: Long, now: Long = System.currentTimeMillis()): Boolean =
         until == -1L || (until > 0 && until > now)

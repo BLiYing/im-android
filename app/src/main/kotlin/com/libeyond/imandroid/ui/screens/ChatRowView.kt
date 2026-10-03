@@ -120,6 +120,10 @@ internal fun ChatRowView(
             val firstSent = (r.members.first() as? AlbumMember.Sent)?.msg
             val albumMine = firstSent == null || firstSent.sender == myUid
             val albumShowName = showsSenderName(rows, i, myUid, isGroup)
+            // 一批图被服务端明确拒收（非好友/禁言…）：同单条待发——不给红 ❗，宫格下方给一行说明（SendRejection）
+            val albumRejectCode = r.members.asSequence().mapNotNull { (it as? AlbumMember.Sending)?.msg }
+                .firstOrNull { it.state == SendState.Failed.name && SendRejection.noteRes(it.errorCode) != null }?.errorCode
+            Column {
             AlbumBubble(
             isGroup = isGroup,
             // 发送者头与头像列：与下面 Confirmed 分支同一套口径（名字源 / 首条显名 / 段末挂头像）
@@ -147,7 +151,7 @@ internal fun ChatRowView(
                         sending = m.msg.state == SendState.Sending.name,
                         // 分片上传的百分比（视频/大文件）；图片整包上传时为 null → 转圈
                         progress = uploadProgress[m.msg.clientMsgId],
-                        failed = m.msg.state == SendState.Failed.name,
+                        failed = m.msg.state == SendState.Failed.name && SendRejection.noteRes(m.msg.errorCode) == null,
                         thumb = m.msg.thumb,
                     )
                 }
@@ -180,6 +184,14 @@ internal fun ChatRowView(
                 -1
             },
             )
+            if (albumRejectCode != null) {
+                RejectNote(
+                    text = Str.s(SendRejection.noteRes(albumRejectCode)!!),
+                    actionable = SendRejection.isActionable(albumRejectCode),
+                    onAction = onAddFriend,
+                )
+            }
+            }
         }
         // 系统消息走居中灰字，不进气泡分支（iOS IMSystemCell / Web .sys-note）。
         // 不用 `when` 卫语句（Kotlin 2.0 仍是实验特性），在分支内早退。

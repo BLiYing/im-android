@@ -32,8 +32,10 @@ fun FriendRequestPrompt(
     onToast: (String) -> Unit,
     onSent: (becameFriend: Boolean) -> Unit = {},
 ) {
-    if (target == null) return
+    // scope 必须在早退**之前**取：确认时会先把 target 置空（弹窗关闭），早退之后 remember 被丢弃，
+    // 正在发的请求连同「已发送」提示与 onSent 一起被取消（/code-review：请求发出去了但界面毫无反应）
     val scope = rememberCoroutineScope()
+    if (target == null) return
     // 预填要用我的公开昵称，而本机副本只有进过「我」页才有：没有就先拉一次（拉不到按空预填），再弹窗——
     // IMTextPrompt 的初值只在首次组合时读，不能先弹后补。
     val myNick by produceState<String?>(null, target) {

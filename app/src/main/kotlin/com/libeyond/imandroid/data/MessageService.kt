@@ -246,8 +246,13 @@ class MessageService(
                 log.i("group_event", "event" to d.event)
                 _groupEvents.tryEmit(d)
                 // 新入群申请 / 我被移出 / 群解散：会话列表要跟着变（待审红字、会话消失）
-                if (d.goneForMe(owner)) repo.removeConversation(owner, d.convId)
-                if (d.event == GroupEventData.JOIN_REQUEST || d.event == GroupEventData.JOIN_RESULT) refreshConversations()
+                if (d.goneForMe(owner)) {
+                    repo.removeConversation(owner, d.convId)
+                    _pendingCounts.value = _pendingCounts.value - d.convId
+                }
+                // 任意群帧都重拉会话列表（PROTOCOL §6.6、iOS 列表同）：改名/改头像/禁言/待审数都挂在它上面。
+                // launch 不阻塞帧分发（同 NEW_MSG 分支）
+                scope.launch { refreshConversations() }
             }
 
             // 账号级能力有变（PROTOCOL §6.9）。这里只转发版本号，去重与重拉在 DownloadSettingsStore
@@ -554,6 +559,7 @@ class MessageService(
     suspend fun dropConversation(convId: String) {
         val owner = ownerProvider() ?: return
         repo.removeConversation(owner, convId)
+        _pendingCounts.value = _pendingCounts.value - convId
     }
 
     /** 拉会话列表（权威快照）。 */

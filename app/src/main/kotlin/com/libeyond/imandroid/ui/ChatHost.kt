@@ -247,6 +247,8 @@ fun ChatHost(
     var groupMuteUntil by remember(conv.convId) { mutableStateOf(0L) }
     // 点被拒收行的「发送好友申请」→ 验证消息弹窗（FriendRequestPrompt）
     var askFriend by remember(conv.convId) { mutableStateOf<FriendRequestTarget?>(null) }
+    var friendAsked by remember(conv.convId) { mutableStateOf(false) }
+    val lockNow = rememberLockNow(myMuteUntil, groupMuteUntil)
     /** 我在本群的角色。**@所有人 只对群主/管理员出入口**（越权服务端回 300204）。 */
     var myRole by remember(conv.convId) { mutableStateOf<String?>(null) }
     /** 本群成员表（显示名→uid）——只给没有 mention_spans 的老消息兜底，有 uid 才可点（对齐 iOS）。 */
@@ -339,9 +341,13 @@ fun ChatHost(
         },
         // 粘贴条只负责"挂着、可逐张撤掉"，发送归输入栏那颗发送键（对齐 iOS）
         extraSendable = !paste.isEmpty,
-        composerLock = ComposerLock.reasonRes(conv.isGroup, conv.peerUid, myRole, myMuteUntil, groupMuteUntil)
+        composerLock = ComposerLock.reasonRes(conv.isGroup, conv.peerUid, myRole, myMuteUntil, groupMuteUntil, lockNow)
             ?.let { Str.s(it) },
-        onAddFriendFromNote = { askFriend = FriendRequestTarget(conv.peerUid, conv.title) },
+        // 已发过申请就别再弹（再点只会重复申请）；拒收行本身是瞬态说明，不随关系变化消失
+        onAddFriendFromNote = {
+            if (friendAsked) toast = Str.s(R.string.friend_request_sent)
+            else askFriend = FriendRequestTarget(conv.peerUid, conv.title)
+        },
         composerAbove = {
             if (!paste.isEmpty) PasteImageBar(paste)
             if (mention.panelOpen) {
@@ -482,7 +488,7 @@ fun ChatHost(
     }
 
     BatchDeleteConfirm(sel, client, conv.convId, conv.isGroup, iAmManager) { toast = it }
-    FriendRequestPrompt(client, askFriend, onDismiss = { askFriend = null }, onToast = { toast = it })
+    FriendRequestPrompt(client, askFriend, onDismiss = { askFriend = null }, onToast = { toast = it }) { friendAsked = true }
 
     // —— 聊天记录详情（点合并转发卡进来）。画在查看器与资料页之前：从记录里点名片进的资料页要盖在它上面 ——
     ChatRecordLayer(

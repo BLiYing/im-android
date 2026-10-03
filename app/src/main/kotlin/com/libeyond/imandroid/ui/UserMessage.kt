@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.ErrorText
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.http.ApiException
 
@@ -8,7 +9,8 @@ import com.libeyond.imandroid.sdk.http.ApiException
  * 把一个异常翻译成**给用户看的**一句话。
  *
  * 两条纪律：
- *  ① 服务端明确拒绝（有业务码）就用服务端的文案——它知道为什么拒；
+ *  ① 服务端明确拒绝（有业务码）：收录了本地化的码用本地化文案（[ErrorText]，服务端 message 是英文），
+ *     没收录的才用服务端文案——它知道为什么拒；
  *  ② 传输层失败**不能**照抄 OkHttp 的英文异常（`failed to connect to /10.0.2.2`），
  *    那对用户毫无意义，且会把内网地址泄在界面上。
  *
@@ -17,6 +19,8 @@ import com.libeyond.imandroid.sdk.http.ApiException
 internal fun Throwable.userMessage(fallback: String): String {
     val api = this as? ApiException ?: return fallback
     if (api.isTransport) return Str.s(R.string.common_error_network_unavailable_detail, fallback)
+    // 有本地化文案的码先走本地化（服务端 message 是英文）；没收录的才回退服务端原文
+    ErrorText.friendlyRes(api.code)?.let { return Str.s(it) }
     return api.message.ifBlank { fallback }
 }
 

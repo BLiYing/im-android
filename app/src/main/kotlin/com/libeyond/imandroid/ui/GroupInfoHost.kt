@@ -146,17 +146,7 @@ fun GroupInfoHost(
     // 置顶/免打扰/群昵称/群备注（对齐 iOS Settings 区）+ 公告/简介全文，状态见 GroupInfoSettings.kt
     val settings = rememberGroupInfoSettings(client, convId, scope)
 
-    LaunchedEffect(convId) {
-        suspend fun load() {
-            runCatching { info = client.groups.info(convId) }
-                .onFailure { IMLog.tag("IM.Group").w("group_info_failed") }
-            membersState.refresh()
-        }
-        load()
-        settings.load()
-        // 别的管理员/成员改了群：收到本群的 group 帧就重拉（PROTOCOL §6.6）。被移出/解散由 GroupEventsEffect 关页，不在此拉（拉了只会 300203）
-        client.groupEvents.collect { if (it.convId == convId && !it.goneForMe(client.uid)) load() }
-    }
+    GroupInfoLiveLoad(client, convId, onInfo = { info = it }, refreshMembers = { membersState.refresh() }) { settings.load() }
 
     val g = info ?: return
 
@@ -305,6 +295,7 @@ fun GroupInfoHost(
                     reloadJoinRequests()
                     // 顺带刷群资料，pending_count 角标要跟着掉
                     runCatching { client.groups.info(convId) }.onSuccess { info = it }
+                client.messages.refreshConversations() // 会话列表的「[N 待审]」红字也要跟着掉
                     deciding = ""
                 }
             },

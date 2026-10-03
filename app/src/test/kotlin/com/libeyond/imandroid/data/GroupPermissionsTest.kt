@@ -99,16 +99,6 @@ class GroupPermissionsTest {
         assertFalse("已过期不算禁言", GroupPermissions.isMuteActive(now - 1000, now))
     }
 
-    @Test
-    fun `管理层不受全员禁言限制，普通成员受`() {
-        val now = 1_000_000L
-        assertTrue(GroupPermissions.amMuted(info(plain, muteAll = -1), now))
-        assertFalse("管理员发得出话", GroupPermissions.amMuted(info(admin, muteAll = -1), now))
-        assertFalse(GroupPermissions.amMuted(info(owner, muteAll = -1), now))
-        // 单独禁言也要认
-        assertTrue(GroupPermissions.amMuted(info(plain, myMute = now + 5000), now))
-    }
-
     /**
      * **这两个开关的名字是「仅管理员可…」，不是「允许成员…」**——服务端语义见
      * `internal/group/group.go`（`perm_invite` 开启后仅群主/管理员可邀请；

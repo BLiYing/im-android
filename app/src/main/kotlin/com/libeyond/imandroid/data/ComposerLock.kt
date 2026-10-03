@@ -9,7 +9,7 @@ import com.libeyond.imandroid.R
  * 服务端仍是权威（发上来照样拒 300208/300206，那条走 [SendRejection] 的气泡下说明行）。
  *
  * 优先级：成员级禁言 > 全员禁言。**全员禁言只锁普通成员**（群主/管理员不受限）；
- * 成员级禁言**不分角色**——管理员被单独禁言同样发不出去（旧 `GroupPermissions.amMuted` 在这里判错）。
+ * 成员级禁言**不分角色**——管理员被单独禁言同样发不出去（旧的 `GroupPermissions.amMuted` 在这里判错，已删）。
  */
 object ComposerLock {
     @StringRes
