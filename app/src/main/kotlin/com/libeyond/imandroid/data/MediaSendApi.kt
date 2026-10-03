@@ -118,10 +118,10 @@ suspend fun MessageService.resend(clientMsgId: String) {
         p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
         p.fileName, p.fileSize, p.caption, p.forwardFrom, p.groupId,
         p.mediaW, p.mediaH, p.duration, p.poster, p.thumb, p.waveform,
-        // @提及三件套按落库的片段**重新推导**，不另存 mentions/mentionAll：
+        // @提及三件套：mentions 取落库的 uid 列表，mentionAll 按片段**重新推导**（不另存）：
         // 片段里已经含了每个 token 指向谁，空 uid 就是 @所有人——两份状态早晚会不一致
         mentions = Mention.parseMentions(p.mentions),
-        mentionAll = Mention.mentionAllFromSpans(p.mentionSpans),
+        mentionAll = Mention.mentionAllForResend(p.forwardFrom, p.mentionSpans), // 转发行不重放 @所有人（与首发 forward() 一致）
         mentionSpans = Mention.parseSpans(p.mentionSpans),
     )
 }

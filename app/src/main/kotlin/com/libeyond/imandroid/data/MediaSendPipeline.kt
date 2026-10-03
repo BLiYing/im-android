@@ -88,8 +88,8 @@ internal class MediaSendPipeline(
                 jobs.remove(cid); uploaders.remove(cid); uploadProgress.clear(cid)
             }
         }
-        if (jobs.putIfAbsent(cid, job) != null) { job.cancel(); return }
         uploadProgress.queued(cid, file.length())
+        if (jobs.putIfAbsent(cid, job) != null) { job.cancel(); return } // 输家：已有同一条在跑，它的进度态别动
         job.start()
     }
 
@@ -99,6 +99,8 @@ internal class MediaSendPipeline(
         mediaW: Int?, mediaH: Int?, duration: Int?, poster: String?, thumb: String?,
     ) {
         val owner = ownerProvider() ?: return
+        // 入队到开跑之间用户可能点了 ✕（行已删）：行不在了就别传、别发，顺手清副本
+        if (repo.pendingByClientId(owner, cid) == null) { store.remove(file); return }
         repo.markPendingSending(owner, cid) // 重试/补发时它可能是 Failed
         val total = file.length()
         uploadProgress.uploading(cid, 0, total, pausable = true)
@@ -120,9 +122,11 @@ internal class MediaSendPipeline(
             return
         } catch (e: com.libeyond.imandroid.sdk.http.ApiException) {
             // 失败保留副本与 upload_id：点红❗重试会从服务端 offset 续传，不是从头来
+            // 传输层错误的 message 是底层原文（可能是英文 / 内部描述），不上屏：换成本地化的统一文案
+            val shown = if (e.isTransport) Str.s(R.string.chat_media_file_upload_failed) else e.message
             repo.onSendRejected(
                 owner,
-                com.libeyond.imandroid.sdk.protocol.ErrorData(code = e.code, message = e.message, clientMsgId = cid),
+                com.libeyond.imandroid.sdk.protocol.ErrorData(code = e.code, message = shown, clientMsgId = cid),
             )
             log.w("media_file_upload_failed", "cid" to cid, "code" to e.code)
             return
@@ -163,6 +167,8 @@ internal class MediaSendPipeline(
         uploaders.remove(cid)
         repo.pendingByClientId(owner, cid)?.let { p -> store.fileOf(p.content)?.let(store::remove) }
         uploadProgress.clear(cid)
+        // 帧可能已经发出去、ack 还在路上：登记一下，ack 回来时别落一条没正文的骨架气泡（消息本身会经 sync 补齐）
+        cancelledSends += cid
         repo.pending.remove(owner, cid)
         log.i("media_send_cancelled", "cid" to cid)
     }

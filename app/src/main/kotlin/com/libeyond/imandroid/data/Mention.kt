@@ -304,6 +304,10 @@ object Mention {
      * 而被 @ 的 uid 列表**不行**——重名成员只占一段片段，见 [PendingMessageEntity] 的注释。
      */
     fun mentionAllFromSpans(json: String?): Boolean = parseSpans(json).any { it.uid.isEmpty() }
+
+    /** 重发时的 mention_all：**转发行不重放 @所有人**（首发 `forward()` 就不带，重发带了会让目标群管理员收到全员提醒）。 */
+    fun mentionAllForResend(forwardFrom: String?, spansJson: String?): Boolean =
+        forwardFrom == null && mentionAllFromSpans(spansJson)
 }
 
 

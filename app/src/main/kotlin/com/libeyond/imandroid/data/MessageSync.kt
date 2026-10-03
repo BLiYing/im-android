@@ -183,7 +183,7 @@ internal suspend fun MessageService.resendInFlight(owner: String) {
             it.fileName, it.fileSize, it.caption, it.forwardFrom, it.groupId,
             it.mediaW, it.mediaH, it.duration, it.poster, it.thumb, it.waveform,
             mentions = Mention.parseMentions(it.mentions),
-            mentionAll = Mention.mentionAllFromSpans(it.mentionSpans),
+            mentionAll = Mention.mentionAllForResend(it.forwardFrom, it.mentionSpans),
             mentionSpans = Mention.parseSpans(it.mentionSpans),
         )
     }

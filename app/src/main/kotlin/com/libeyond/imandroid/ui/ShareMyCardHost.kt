@@ -36,12 +36,14 @@ fun ShareMyCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
     val conversations by remember(owner) { client.repo.observeConversations(owner) }.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var toast by remember { mutableStateOf<String?>(null) }
+    var sending by remember { mutableStateOf(false) } // 提示露脸的 900ms 里选择页还在：别让二次确认重复发
     Box(Modifier.fillMaxSize()) {
         ForwardPickerScreen(
             conversations = conversations,
             onCancel = onBack,
             onToast = { toast = it },
             onConfirm = { picked ->
+                if (sending) return@ForwardPickerScreen
                 val card = me ?: client.cachedMyProfile()
                 if (card == null || card.userId.isBlank()) {
                     toast = Str.s(R.string.chat_media_contact_card_incomplete)
@@ -50,6 +52,7 @@ fun ShareMyCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
                 val json = CardContent.encodeContact(card.userId, card.username, card.nickname, card.avatarUrl)
                 // 先发完、给「已发送」提示一个露脸的时间，**最后**才 onBack：onBack 会让本宿主离开组合，
                 // 它的作用域随之取消——此前先 onBack，选了几个会话就只有前一两个收到、提示也永远不显示
+                sending = true
                 scope.launch {
                     picked.forEach { c ->
                         client.messages.sendCard(c.convId, if (c.isGroup) c.convId else c.peerUid, ContentType.CONTACT, json)

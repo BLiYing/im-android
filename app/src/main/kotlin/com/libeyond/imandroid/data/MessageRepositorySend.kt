@@ -156,6 +156,9 @@ suspend fun MessageRepository.inFlight(owner: String): List<PendingMessageEntity
 suspend fun MessageRepository.pendingByClientId(owner: String, cid: String): PendingMessageEntity? =
     pending.byClientId(owner, cid)
 
+/** 被用户取消发送的 client_msg_id（进程内；cid 是 UUID，不会误伤别的）。 */
+internal val cancelledSends: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
 /**
  * ack 到达：落真身、清待发、bump 会话。
  *
@@ -165,6 +168,11 @@ suspend fun MessageRepository.pendingByClientId(owner: String, cid: String): Pen
  */
 suspend fun MessageRepository.onAck(owner: String, ack: AckData) {
     val cached = pending.byClientId(owner, ack.clientMsgId)
+    // 用户取消了这条（帧已发出、ack 在路上）：不落骨架行——那会是一个空白文本气泡 + 错的会话预览，等 sync 补真身
+    if (cached == null && cancelledSends.remove(ack.clientMsgId)) {
+        log.i("msg_ack_after_cancel", "cid" to ack.clientMsgId, "seq" to ack.convSeq)
+        return
+    }
     if (cached == null) {
         log.w("msg_ack_without_pending", "cid" to ack.clientMsgId, "seq" to ack.convSeq)
     }
