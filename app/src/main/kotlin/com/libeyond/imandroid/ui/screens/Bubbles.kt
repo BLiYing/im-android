@@ -74,6 +74,8 @@ internal fun Bubble(
     onCallBack: ((Boolean) -> Unit)? = null,
     /** 待发气泡没有 [MessageEntity]，类型要显式传（目前只有通话记录用到）。 */
     pendingType: String? = null,
+    /** 译文（只在内存，对齐 iOS：挂在同一气泡里、原文之后，14sp 次要色）。 */
+    translation: String? = null,
     /** 媒体地址补全用的当前 host。 */
     host: String = "",
     useTls: Boolean = false,
@@ -269,7 +271,10 @@ internal fun Bubble(
                         (msg?.contentType == ContentType.CONTACT || msg?.contentType == ContentType.CHAT_RECORD ||
                             (msg?.contentType ?: pendingType) == ContentType.CALL)
                     val timeMeta: @Composable () -> Unit = {
-                        BubbleTimeMeta(timestamp, mine, sending = sending, delivered = delivered, read = read)
+                        BubbleTimeMeta(
+                            timestamp, mine, sending = sending, delivered = delivered, read = read,
+                            edited = (msg?.editedAt ?: 0L) > 0L,
+                        )
                     }
                     when {
                         recalled -> Text(
@@ -304,7 +309,8 @@ internal fun Bubble(
                         // 通话记录（单聊）：图标 + 一句话 + 时间勾；群记录不走气泡（ChatRowView 里是系统条）
                         (msg?.contentType ?: pendingType) == ContentType.CALL ->
                             CallRecordContent(text, viewerIsSender = mine, footerTrailing = timeMeta)
-                        else -> Text(
+                        else -> Column {
+                        Text(
                             // @提及高亮、链接、搜索命中底色是同一次遍历铺的几层（见 chatBodyText）
                             text = chatBodyText(
                                 text = text,
@@ -324,6 +330,11 @@ internal fun Bubble(
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
                         )
+                        // 译文：同一气泡、原文之后，不加标签与分隔线（iOS 同）
+                        if (!translation.isNullOrBlank() && !recalled) {
+                            Text(translation, color = c.textSecondary, fontSize = 14.sp)
+                        }
+                        }
                     }
                     // 图说画不画、画在哪：**判据在 [BubbleCaption]**。此前挂在 `flushMedia` 上（只有图/视频），
                     // 文件文的图说于是整段不画——同一条消息 iOS/Web 有字、本端只剩文件卡（2026-09-15 用户报）。
@@ -393,11 +404,17 @@ internal fun Bubble(
 
 /** 气泡时间 + 发送态（🕐 / ✓ / ✓✓）。文本类挂气泡右下角，卡片类挂脚注行右端。 */
 @Composable
-private fun BubbleTimeMeta(timestamp: Long, mine: Boolean, sending: Boolean, delivered: Boolean, read: Boolean) {
+private fun BubbleTimeMeta(
+    timestamp: Long, mine: Boolean, sending: Boolean, delivered: Boolean, read: Boolean,
+    /** 被编辑过：时间前加「已编辑 」（iOS `chat.message.edited_prefix`，自己与别人的消息都有）。 */
+    edited: Boolean = false,
+) {
     val c = IMTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = TimeFormat.bubbleTime(timestamp),
+            // 资源里末尾的空格会被 XML 吃掉，前缀与时间之间的空格在这里补
+            text = (if (edited) stringResource(R.string.chat_message_edited_prefix).trimEnd() + " " else "") +
+                TimeFormat.bubbleTime(timestamp),
             color = if (mine) c.metaTime else c.textTertiary,
             fontSize = 10.sp,
         )

@@ -264,6 +264,13 @@ class ConversationsApi(private val http: HttpClient) {
     suspend fun readBy(convId: String, convSeq: Long): ReadBy =
         decode(http.call("GET", "/api/v1/conversations/$convId/messages/$convSeq/read-by"), ReadBy.serializer())
 
+    /** 翻译一段文本（服务端代理 + 进程内缓存；`target_lang` 缺省 zh）。>2000 字回 MsgTooLong。 */
+    suspend fun translate(text: String, targetLang: String = "zh"): String =
+        decode(
+            http.call("POST", "/api/v1/translate", buildJsonObject { put("text", text); put("target_lang", targetLang) }),
+            TranslateResp.serializer(),
+        ).translation
+
     suspend fun pinned(convId: String): List<PinnedMessage> =
         decode(http.call("GET", "/api/v1/conversations/$convId/pinned"), PinnedResp.serializer())
             .items.filter { it.convSeq > 0 }
@@ -393,3 +400,6 @@ data class ReadBy(
     val total: Int = 0,
     val enabled: Boolean = false,
 )
+
+@Serializable
+private data class TranslateResp(val translation: String = "")

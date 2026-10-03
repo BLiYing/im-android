@@ -108,6 +108,10 @@ fun ChatScreen(
     /** 当前引用的目标；null=没在引用。 */
     replyTo: MessageEntity?,
     onCancelReply: () -> Unit,
+    /** 编辑态：回复条标题换成「编辑消息」。 */
+    replyTitleOverride: String? = null,
+    /** 译文（convSeq → 文本），挂在气泡内。 */
+    translations: Map<Long, String> = emptyMap(),
     /** 滚到顶部附近时回调，加载更早的消息。 */
     onLoadOlder: () -> Unit,
     /** 锚点窗滚到底要更新的一页（尾窗宿主传空操作）。 */
@@ -379,6 +383,7 @@ fun ChatScreen(
             host = host,
             useTls = useTls,
             peerReadSeq = peerReadSeq,
+            translations = translations,
             uploadProgress = uploadProgress,
             localNameOf = localNameOf,
             loadLinkPreview = loadLinkPreview,
@@ -528,6 +533,7 @@ fun ChatScreen(
             memberNameOf = memberNameOf,
             onJump = onJumpToSeq,
             onCancel = onCancelReply,
+            titleOverride = replyTitleOverride,
         )
 
         // 多选态：底部换成动作栏，输入栏整个不画（同 iOS：多选期间隐藏输入栏显示工具栏）

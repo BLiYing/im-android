@@ -35,6 +35,8 @@ internal data class ChatRowStyle(
     val useTls: Boolean,
     /** 对端已读位点（单聊双勾）。群聊传 0。 */
     val peerReadSeq: Long,
+    /** 译文（convSeq → 文本，只在内存）：挂在文本气泡里，原文之后。 */
+    val translations: Map<Long, String> = emptyMap(),
     /** 分片上传进度：clientMsgId → 百分比。 */
     val uploadProgress: Map<String, Int> = emptyMap(),
     /** 系统消息里名字段的本地显示名（备注/群昵称）。 */
@@ -269,6 +271,7 @@ internal fun ChatRowView(
                 null
             },
             // 已读双勾：我发的、且对端读位点已越过它
+            translation = style.translations[m.convSeq],
             read = m.sender == myUid && ReadTick.isRead(peerReadSeq, m.convSeq),
             delivered = m.sender == myUid && peerReadSeq != ReadTick.HIDDEN, // 超级群不画任何勾
             reserveAvatarColumn = isGroup && m.sender != myUid,

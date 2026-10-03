@@ -20,6 +20,9 @@ import coil.compose.AsyncImage
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Eye
+import com.composables.icons.lucide.Flag
+import com.composables.icons.lucide.Languages
+import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.CornerUpLeft
 import com.composables.icons.lucide.FileText
 import com.composables.icons.lucide.Forward
@@ -124,6 +127,9 @@ internal fun messageActionIcon(a: MessageAction) = when (a) {
     MessageAction.Favorite -> Lucide.Bookmark
     MessageAction.Transcribe, MessageAction.TranscribeOff -> Lucide.FileText
     MessageAction.MultiSelect -> Lucide.ListChecks
+    MessageAction.Edit -> Lucide.Pencil
+    MessageAction.Translate -> Lucide.Languages
+    MessageAction.Report -> Lucide.Flag
     MessageAction.Pin -> Lucide.Pin
     MessageAction.Unpin -> Lucide.PinOff
     MessageAction.Recall -> Lucide.Undo2
@@ -161,8 +167,8 @@ internal fun ChatMessageMenu(
     iAmManager: Boolean,
     /** 我能不能置顶（[com.libeyond.imandroid.data.PinnedBanner.canPin]）。 */
     canPin: Boolean,
-    /** 点「N 人已读」：交给宿主开已读详情（本层不持有成员表/资料页）。 */
-    onReadReceipts: (com.libeyond.imandroid.sdk.api.ReadBy) -> Unit,
+    /** 已读详情 / 翻译 / 编辑 / 举报的状态与动作（本层不持有成员表/资料页/输入框）。 */
+    ops: ChatMessageOps,
     onReply: (MessageEntity) -> Unit,
     onForward: (MessageEntity) -> Unit,
     /** 进多选态，并默认勾上这一条。 */
@@ -248,7 +254,7 @@ internal fun ChatMessageMenu(
                 }
             }
         },
-        items = readReceiptsItem(readBy, onReadReceipts) + buildMessageMenu(actions) { a ->
+        items = readReceiptsItem(readBy) { ops.readReceipts = it } + buildMessageMenu(actions) { a ->
             when (a) {
                 // 复制什么由矩阵定（`copyKindOf`，对齐 iOS `copyMessageToPasteboard:`）：
                 // **caption 压过一切**——带图说的图片复制的是那段文字，不是图。
@@ -300,6 +306,9 @@ internal fun ChatMessageMenu(
                 MessageAction.Recall ->
                     client.messages.sendMsgOp(conv.convId, MsgOp.RECALL, target.convSeq)
                 // 置顶 / 取消置顶：**不做本地乐观更新**，等服务端广播回来再变（横幅与 pinnedAt 同一条帧收敛，见 sendMsgOp 注释）
+                MessageAction.Edit -> ops.beginEdit(target)
+                MessageAction.Translate -> ops.translate(target)
+                MessageAction.Report -> ops.reporting = target
                 MessageAction.Pin -> client.messages.sendMsgOp(conv.convId, MsgOp.PIN, target.convSeq, pinned = true)
                 MessageAction.Unpin -> client.messages.sendMsgOp(conv.convId, MsgOp.PIN, target.convSeq, pinned = false)
                 MessageAction.DeleteForEveryone, MessageAction.HideForMe ->

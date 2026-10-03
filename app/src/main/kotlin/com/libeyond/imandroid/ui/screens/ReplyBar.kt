@@ -70,6 +70,8 @@ internal fun ReplyBar(
     memberNameOf: (String) -> String?,
     onJump: (Long) -> Unit,
     onCancel: () -> Unit,
+    /** 编辑态借用这条栏：标题换成「编辑消息」（回复态为 null，标题照旧按被引用者算）。 */
+    titleOverride: String? = null,
 ) {
     // 退场动画期间 replyTo 已经是 null，内容得用最后一次的值画完，不然条子先变空再收起
     var held by remember { mutableStateOf(replyTo) }
@@ -82,7 +84,7 @@ internal fun ReplyBar(
         val m = replyTo ?: held ?: return@AnimatedVisibility
         ReplyBarContent(
             m = m,
-            title = ReplyNames.replyBarTitle(
+            title = titleOverride ?: ReplyNames.replyBarTitle(
                 sender = m.sender,
                 myUid = myUid,
                 isGroup = isGroup,

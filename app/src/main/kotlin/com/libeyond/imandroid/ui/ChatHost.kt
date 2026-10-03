@@ -107,7 +107,6 @@ fun ChatHost(
     var viewing by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
     // 点系统消息里的名字进的资料页
     var openUser by remember(conv.convId) { mutableStateOf<String?>(null) }
-    var readReceipts by remember(conv.convId) { mutableStateOf<com.libeyond.imandroid.sdk.api.ReadBy?>(null) }
     /** 聊天记录详情页栈 + 页内查看器。嵌套记录往里点就压一层，返回弹一层。 */
     val recordNav = rememberChatRecordNav(conv.convId)
     var friendsByUid by remember(conv.convId) { mutableStateOf<Map<String, FriendEntry>>(emptyMap()) }
@@ -239,6 +238,11 @@ fun ChatHost(
 
     var lastTypingSent by remember(conv.convId) { mutableStateOf(0L) }
     var replyTo by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
+    // 已读详情 / 翻译 / 编辑 / 举报（状态与动作在 ChatMessageOps.kt）
+    val ops = remember(conv.convId) { ChatMessageOps(client, conv, scope) }.also {
+        it.toast = { m -> toast = m }
+        it.prefill = { t -> replyTo = null; input = TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length)) }
+    }
 
     // 点被拒收行的「发送好友申请」→ 验证消息弹窗（FriendRequestPrompt）
     var askFriend by remember(conv.convId) { mutableStateOf<FriendRequestTarget?>(null) }
@@ -283,6 +287,7 @@ fun ChatHost(
     // 长按预览用的渲染参数：**必须与传给 ChatScreen 的那份一致**
     // （ChatScreen 自己也用 ChatRowStyle 组一份，字段来源相同）。
     val rowStyle = ChatRowStyle(
+        translations = ops.translations,
         myUid = owner,
         isGroup = conv.isGroup,
         host = client.host,
@@ -314,6 +319,7 @@ fun ChatHost(
         subtitle = subtitle,
         isGroup = conv.isGroup,
         peerReadSeq = ReadTick.seqFor(conv.isGroup, conv.isSuper, conv.peerReadSeq),
+        translations = ops.translations,
         input = input,
         onInputChange = {
             // 系统把 URI 型剪贴项 coerce 成文本插进来：把图摘走，剩下的字回填
@@ -350,34 +356,10 @@ fun ChatHost(
             }
         },
         onSend = {
-            // 粘贴条上挂着的图**随这一次发送一起走**（iOS pasteBar 同）。
-            // 先发图再发文字：两者是两条消息，顺序按用户看到的先后来
-            if (!paste.isEmpty) {
-                val pastedImages = paste.items
-                paste.clear()
-                scope.launch { mediaSend.send(pastedImages, sendOriginal = false) { toast = it } }
-            }
-            val text = input.text.trim()
-            if (text.isNotEmpty()) {
-                val quoted = replyTo
-                // 按**文本现状**复核 @ 收件人：点过但又把 token 删掉的人不该收到强提醒
-                val at = mention.resolve(text)
-                input = TextFieldValue("")
-                mention.clear()
-                replyTo = null
-                // 回到最新不在这里做，收口在 onOutgoingEcho（发图/文件/名片/转发也要回来）
-                scope.launch {
-                    client.messages.sendText(
-                        convId = conv.convId,
-                        to = if (conv.isGroup) conv.convId else conv.peerUid,
-                        text = text,
-                        replyToConvSeq = quoted?.convSeq,
-                        mentions = at.mentions,
-                        mentionAll = at.mentionAll,
-                        mentionSpans = at.spans,
-                    )
-                }
-            }
+            sendComposerInput(
+                client, conv, scope, ops, mediaSend, paste, mention, input, replyTo,
+                onToast = { toast = it }, clearInput = { input = TextFieldValue("") }, clearReply = { replyTo = null },
+            )
         },
         onSendVoice = { file, durationMs, waveform ->
             scope.launch { mediaSend.sendVoice(file, durationMs, waveform) }
@@ -412,8 +394,10 @@ fun ChatHost(
         showsJumpToLatest = { away -> tail.awayFromBottom = away; ChatWindows.showsJumpToLatest(window, away) },
         onLongPress = { m, rect -> menuFor = m; menuAnchor = rect },
         onOpenMedia = { viewing = it },
-        replyTo = replyTo,
-        onCancelReply = { replyTo = null },
+        // 编辑态借用回复条：标题「编辑消息」；✕ = 取消编辑（输入框一并清空，iOS cancelEdit）
+        replyTo = replyTo ?: ops.editing,
+        replyTitleOverride = if (ops.editing != null) Str.s(R.string.chat_edit_title) else null,
+        onCancelReply = { if (ops.editing != null) ops.cancelEdit() else replyTo = null },
         loadLinkPreview = { url -> client.conversationsApi.linkPreview(url) },
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
@@ -552,16 +536,12 @@ fun ChatHost(
     }
 
     banners.Dialogs(canPin)
-    readReceipts?.let { rb ->
-        ReadReceiptsSheet(
-            rb,
-            nameOf = { uid -> friendsByUid[uid]?.displayName ?: memberNames[uid] ?: uid },
-            avatarOf = { uid -> memberAvatars[uid].orEmpty() },
-            roleOf = { uid -> memberRoles[uid] },
-            onOpenUser = { openUser = it },
-            onDismissed = { readReceipts = null },
-        )
-    }
+    ops.Layers(
+        nameOf = { uid -> friendsByUid[uid]?.displayName ?: memberNames[uid] ?: uid },
+        avatarOf = { uid -> memberAvatars[uid].orEmpty() },
+        roleOf = { uid -> memberRoles[uid] },
+        onOpenUser = { openUser = it },
+    )
 
     // —— 消息长按菜单 ——（拼装与原位重绘都在 MessageMenuItems.kt）
     menuFor?.let { target ->
@@ -576,7 +556,7 @@ fun ChatHost(
             iAmManager = iAmManager,
             // 群聊在群资料拉回之前先不给（服务端本就会拒，免得先显示后消失）；单聊双方都能置顶
             canPin = canPin,
-            onReadReceipts = { readReceipts = it },
+            ops = ops,
             // 复制图片 / 仅删除自己都是 launch 出去的活，**不能挂在菜单自己身上**
             // （菜单点完就关，作用域随之取消）——见 ChatMessageMenu 的 scope 注释
             scope = scope,

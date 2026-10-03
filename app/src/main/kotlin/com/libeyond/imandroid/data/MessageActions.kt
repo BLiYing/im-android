@@ -19,6 +19,12 @@ enum class MessageAction(@StringRes private val labelRes: Int, val destructive: 
     TranscribeOff(R.string.chat_msg_menu_transcribe_cancel),
     /** 进入多选态（判据在 [ChatSelection]）。 */
     MultiSelect(R.string.chat_msg_menu_multi_select),
+    /** 编辑（本人文本消息）：进编辑态，发 msg_op edit。 */
+    Edit(R.string.common_edit),
+    /** 翻译（文本消息）：译文挂在气泡内、只在内存。 */
+    Translate(R.string.chat_msg_menu_translate),
+    /** 举报这条消息（别人的消息）。 */
+    Report(R.string.common_report),
     /** 置顶 / 取消置顶（判据 [PinnedBanner.pinAction]）：不做本地乐观更新，等服务端广播回来再变。 */
     Pin(R.string.chat_msg_menu_pin),
     Unpin(R.string.chat_msg_menu_unpin),
@@ -107,11 +113,21 @@ object MessageActions {
         // 撤回：仅本人，且在时间窗内。服务端超窗回 300008
         if (mine && now - msg.timestamp <= RECALL_WINDOW_MS) out += MessageAction.Recall
 
-        // 置顶 / 取消置顶：排在撤回之后（对齐 iOS 菜单顺序）
+        // 置顶 / 取消置顶：排在撤回之后（对齐 iOS 菜单顺序：… 撤回 · 置顶 · 编辑 · 多选 · 翻译 · 举报 · 删除）
         pin?.let { out += it }
+        // 编辑：仅本人文本消息，无时间窗（服务端同判：非本人 300006、非文本/已撤回 300007）。
+        // convSeq>0 必须——待确认行走编辑会落到「发新消息」分支（iOS 注释）
+        if (mine && msg.contentType == ContentType.TEXT && msg.content.isNotBlank()) out += MessageAction.Edit
 
         // 为所有人删除：发送者本人恒可；群聊中群主/管理员亦可删他人。**无时间窗**
         if (mine || (isGroup && iAmManager)) out += MessageAction.DeleteForEveryone
+
+        // 翻译：文本消息（含纯链接）；目标语言恒 zh
+        if (msg.contentType == ContentType.TEXT && msg.content.isNotBlank()) out += MessageAction.Translate
+        // 举报：别人的消息（系统消息/系统账号不可举报）。用户级举报留在资料页，不并进来
+        if (SelectionActions.reportableSender(listOf(msg), myUid) != null && msg.contentType != ContentType.SYSTEM &&
+            !DetailActions.isSystemPeer(msg.sender)
+        ) out += MessageAction.Report
 
         // 仅删除自己：任何消息都可以
         out += MessageAction.HideForMe
