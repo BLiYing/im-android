@@ -33,7 +33,13 @@ fun GroupEventsEffect(client: IMClient, openConvId: String?, onGone: () -> Unit)
                     if (e.result == GroupEventData.APPROVED) R.string.conv_qr_join_approved else R.string.conv_qr_join_rejected,
                 )
                 e.goneForMe(client.uid) && e.convId == open -> {
-                    toast = Str.s(if (e.dissolved) R.string.group_event_dissolved else R.string.group_event_removed)
+                    toast = Str.s(
+                        when {
+                            e.dissolved -> R.string.group_event_dissolved
+                            e.leftMe(client.uid) -> R.string.group_event_left
+                            else -> R.string.group_event_removed
+                        },
+                    )
                     gone()
                 }
             }

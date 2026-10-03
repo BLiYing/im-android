@@ -467,8 +467,9 @@ class MessageService(
     suspend fun refreshConversations() {
         val owner = ownerProvider() ?: return
         try {
+            val groupsBefore = repo.localGroupIds(owner)
             val list = conversationsApi.list()
-            repo.applyConversationList(owner, list, presence)
+            repo.applyConversationList(owner, list, presence, groupsBefore)
             _pendingCounts.value = list.filter { it.isGroup && it.pendingCount > 0 }.associate { it.convId to it.pendingCount }
             catchUpHidden(owner) // 扩展函数，见 HiddenCatchUp.kt（本文件贴 600 行硬闸）
             _listedConversations.value = ListedConversations(owner, list.size)

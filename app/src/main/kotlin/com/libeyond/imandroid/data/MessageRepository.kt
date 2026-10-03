@@ -311,6 +311,7 @@ class MessageRepository(
         owner: String,
         list: List<ConversationSummary>,
         presence: PresenceStore? = null,
+        groupIdsBeforeRequest: Set<String>? = null,
     ) {
         list.forEach { s ->
             if (!s.isGroup && s.peer.isNotEmpty()) {
@@ -364,8 +365,17 @@ class MessageRepository(
             ).keepNewerLocalTail(existing)
         }
         conversations.upsert(rows)
+        // 快照是全量权威：本地有、快照没有的群行 = 别端退群 / 离线时被移出 / 群已解散，直接删（见 StaleGroupRows）
+        if (groupIdsBeforeRequest != null) {
+            StaleGroupRows.of(conversations.all(owner), list.mapTo(HashSet()) { it.convId }, groupIdsBeforeRequest)
+                .forEach { removeConversation(owner, it) }
+        }
         log.i("conversations_applied", "count" to rows.size)
     }
+
+    /** 本机已有的群行 id（发会话列表请求**之前**取，供 [applyConversationList] 判陈旧用）。 */
+    suspend fun localGroupIds(owner: String): Set<String> =
+        conversations.all(owner).filter { it.isGroup }.mapTo(HashSet()) { it.convId }
 
     suspend fun markRead(owner: String, convId: String, upTo: Long) {
         conversations.markRead(owner, convId, upTo)

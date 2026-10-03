@@ -20,13 +20,17 @@ data class GroupEventData(
     /** 自己被移出（remove 且 target=我）。 */
     fun removedMe(myUid: String?): Boolean = event == REMOVE && myUid != null && target == myUid
 
+    /** 自己退群（`leave` 且 target=我）：服务端连退群者本人也推，用来让**其它设备**移除该群。 */
+    fun leftMe(myUid: String?): Boolean = event == LEAVE && myUid != null && target == myUid
+
     /** 群被解散（管理端处置，对全体生效）。 */
     val dissolved: Boolean get() = event == DISSOLVE
 
-    /** 本群对我已不可用：被移出或解散——页面该退出、会话该消失。 */
-    fun goneForMe(myUid: String?): Boolean = dissolved || removedMe(myUid)
+    /** 本群对我已不可用：被移出、自己退群或解散——页面该退出、会话该消失。 */
+    fun goneForMe(myUid: String?): Boolean = dissolved || removedMe(myUid) || leftMe(myUid)
 
     companion object {
+        const val LEAVE = "leave"
         const val REMOVE = "remove"
         const val DISSOLVE = "dissolve"
         const val JOIN_REQUEST = "join_request"

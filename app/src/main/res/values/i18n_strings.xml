@@ -931,6 +931,7 @@
     <string name="group_error_not_admin">你已不是群主或管理员</string>
     <string name="group_event_dissolved">该群已被解散</string>
     <string name="group_event_join_request_new">有新的入群申请</string>
+    <string name="group_event_left">你已退出群聊</string>
     <string name="group_event_removed">你已被移出群聊</string>
     <string name="group_info_edit_intro_label">修改群简介</string>
     <string name="group_info_invite_all_in">所选的人都已在群里</string>

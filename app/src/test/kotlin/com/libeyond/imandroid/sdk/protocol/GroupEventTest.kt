@@ -19,6 +19,14 @@ class GroupEventTest {
     }
 
     @Test
+    fun `自己退群也推给退群者，其它设备据此移除该群`() {
+        val e = parse("""{"event":"leave","conv_id":"g_1","from":"1002","target":"1002"}""")
+        assertTrue(e.goneForMe("1002"))
+        assertTrue(e.leftMe("1002"))
+        assertFalse(e.goneForMe("1003")) // 别人退群：只是成员表变了
+    }
+
+    @Test
     fun `解散对全体生效`() {
         val e = parse("""{"event":"dissolve","conv_id":"g_1"}""")
         assertTrue(e.dissolved)
