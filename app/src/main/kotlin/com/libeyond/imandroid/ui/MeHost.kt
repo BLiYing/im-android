@@ -76,6 +76,7 @@ fun MeHost(
             MePage.DataStorage -> DataStorageHost(client = client, onBack = { page = MePage.List })
             MePage.Privacy -> PrivacySecurityHost(client = client, onBack = { page = MePage.List })
             MePage.Qr -> QrCardHost(client = client, me = me, onBack = { page = MePage.List })
+            MePage.ShareCard -> ShareMyCardHost(client = client, me = me, onBack = { page = MePage.List })
             MePage.Language -> LanguageHost(onBack = { page = MePage.List })
             MePage.Appearance -> AppearanceHost(onBack = { page = MePage.List })
             MePage.Profile -> MyProfileHost(
@@ -102,6 +103,7 @@ fun MeHost(
                         onOpenNotifications = { page = MePage.Notifications },
                         onOpenLanguage = { page = MePage.Language },
                         onOpenAppearance = { page = MePage.Appearance },
+                        onShareCard = { page = MePage.ShareCard },
                         onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                         onLogout = { confirmLogout = true },
                     )

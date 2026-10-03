@@ -11,17 +11,19 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
  * **归档做成页签而不是"点进去一页"**，是 iOS 的形态：详情页本身就是归档索引，
  * 切 tab 不离开页面。本端 2026-09-08 之前是一行「聊天媒体」跳出去，与 iOS 差得最远的一处。
  */
-enum class DetailTab { Members, Media, Files, Voice, Links }
+enum class DetailTab { Members, Media, Files, Voice, Links, Contacts }
 
 object DetailTabs {
 
     /** 单聊没有「成员」。顺序即 iOS 的页签顺序。 */
-    fun visible(isGroup: Boolean): List<DetailTab> = buildList {
+    fun visible(isGroup: Boolean, hasContacts: Boolean = false): List<DetailTab> = buildList {
         if (isGroup) add(DetailTab.Members)
         add(DetailTab.Media)
         add(DetailTab.Files)
         add(DetailTab.Voice)
         add(DetailTab.Links)
+        // 「名片」排最后，且**只在本会话至少有一条合格名片时才出现**（iOS 同；其余页签恒在）
+        if (hasContacts) add(DetailTab.Contacts)
     }
 
     fun title(tab: DetailTab): String = when (tab) {
@@ -30,6 +32,7 @@ object DetailTabs {
         DetailTab.Files -> Str.s(R.string.common_file)
         DetailTab.Voice -> Str.s(R.string.favorites_category_voice)
         DetailTab.Links -> Str.s(R.string.favorites_category_links)
+        DetailTab.Contacts -> Str.s(R.string.favorites_category_contact)
     }
 
     /**
@@ -44,6 +47,7 @@ object DetailTabs {
         DetailTab.Files -> MediaKind.FILE
         DetailTab.Voice -> MediaKind.VOICE
         DetailTab.Links -> null
+        DetailTab.Contacts -> null // 名片也没有服务端索引，本地扫
         DetailTab.Members -> null
     }
 
@@ -58,6 +62,7 @@ object DetailTabs {
         DetailTab.Files -> Str.s(R.string.detail_tab_empty_files)
         DetailTab.Voice -> Str.s(R.string.detail_tab_empty_voice)
         DetailTab.Links -> Str.s(R.string.detail_tab_empty_links)
+        DetailTab.Contacts -> Str.s(R.string.detail_tab_empty_contacts)
     }
 }
 

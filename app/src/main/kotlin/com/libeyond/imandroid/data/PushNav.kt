@@ -59,4 +59,5 @@ enum class MePage(val depth: Int) {
     CallHistory(1),
     Appearance(1),
     Notifications(1),
+    ShareCard(1),
 }

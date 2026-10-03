@@ -14,6 +14,8 @@ import com.libeyond.imandroid.data.DetailTabs
 import com.libeyond.imandroid.data.clearedUpTo
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.protocol.ContentType
+import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.ui.screens.linkUrlOf
@@ -173,6 +175,15 @@ internal fun rememberLinkMessages(
 ): List<Pair<MessageEntity, String>>? =
     rememberLocalScan(client, convId, active) { local ->
         local.mapNotNull { m -> linkUrlOf(m.contentType, m.content, m.convSeq)?.let { m to it } }
+            .sortedByDescending { it.first.convSeq }
+    }
+
+/** 本会话里的合格名片（`contact` 且解析出 uid）。**常驻**订阅（页签是否出现取决于它），但只是按类型过滤、不跑正则。 */
+@Composable
+internal fun rememberContactMessages(client: IMClient, convId: String): List<Pair<MessageEntity, CardContent.Contact>>? =
+    rememberLocalScan(client, convId, true) { local ->
+        local.filter { it.contentType == ContentType.CONTACT && (it.recalledAt ?: 0L) == 0L }
+            .mapNotNull { m -> CardContent.parseContact(m.content)?.let { m to it } }
             .sortedByDescending { it.first.convSeq }
     }
 

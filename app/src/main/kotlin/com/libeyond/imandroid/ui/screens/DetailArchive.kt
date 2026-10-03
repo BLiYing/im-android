@@ -182,8 +182,11 @@ internal fun LazyListScope.archiveTab(
      * 下面把它一并写进 [ArchiveTarget]。
      */
     waveformOf: (Long) -> String? = { null },
+    /** 「名片」页签的数据与点击（没有名片时页签不出现，此参数不会被用到）。 */
+    contacts: ContactTabData? = null,
 ) {
     when (tab) {
+        DetailTab.Contacts -> contactTab(contacts)
         DetailTab.Members -> Unit // 不是消息，见 KDoc
         DetailTab.Links -> {
             item { Footnote(LINK_TAB_NOTE) }

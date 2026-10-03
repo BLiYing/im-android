@@ -95,6 +95,8 @@ fun ChatDetailHost(
     var viewingOpen by remember(conv.convId) { mutableStateOf(false) }
     var viewingData by remember(conv.convId) { mutableStateOf<ConvMediaItem?>(null) }
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
+    // 点「名片」页签里的一行 → 该用户的资料页（盖在详情页之上；自己则进个人资料，由 MemberProfileHost 收口）
+    var contactCard by remember(conv.convId) { mutableStateOf<com.libeyond.imandroid.data.CardContent.Contact?>(null) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val headerSubtitle = if (conv.isGroup) "" else rememberChatSubtitle(client, conv)
     var askFriend by remember(conv.convId) { mutableStateOf<FriendRequestTarget?>(null) }
@@ -238,6 +240,11 @@ fun ChatDetailHost(
                     title = title,
                     handle = knownFriends[conv.peerUid]?.handle.orEmpty(),
                     subtitle = headerSubtitle,
+                    contacts = com.libeyond.imandroid.ui.screens.rememberContactTab(
+                        client, conv.convId, isGroup = false,
+                        remarkOf = { uid -> knownFriends[uid]?.remark }, groupNameOf = { null },
+                        onOpen = { contactCard = it },
+                    ),
                     onCopyUsername = {
                         val bare = knownFriends[conv.peerUid]?.handle.orEmpty().removePrefix("@")
                         if (bare.isEmpty()) toast = Str.s(R.string.chat_detail_no_username)
@@ -492,6 +499,12 @@ fun ChatDetailHost(
     }
 
     FriendRequestPrompt(client, askFriend, onDismiss = { askFriend = null }, onToast = { toast = it })
+    contactCard?.let { cc ->
+        MemberProfileHost(
+            client = client, userId = cc.uid, knownFriends = knownFriends, name = cc.nickname, avatarUrl = cc.avatarUrl,
+            onOpenChat = { chat -> contactCard = null; onOpenChat(chat) }, onBack = { contactCard = null },
+        )
+    }
     // toast 放最后：它是一层 fillMaxSize 的浮层，画在页面之前会被页面盖住
     toast?.let { t -> IMToast(t) { toast = null } }
 }

@@ -82,6 +82,8 @@ internal fun Bubble(
     textExpanded: Boolean = false,
     /** 点气泡先问长文本处理（展开/收起/开阅读页）；返回 true = 已处理。 */
     onTapLongText: ((MessageEntity) -> Boolean)? = null,
+    /** 点名片气泡 → 该用户资料页（自己则进个人资料，由宿主的 MemberProfileHost 收口）。 */
+    onOpenContact: ((String) -> Unit)? = null,
     /** 媒体地址补全用的当前 host。 */
     host: String = "",
     useTls: Boolean = false,
@@ -229,7 +231,14 @@ internal fun Bubble(
                                 // 合并转发卡点开详情页；其余类型点击**不做事**——文本气泡点一下就跳走是很怪的交互。
                                 // 图/视频由媒体块自己接（得先看下没下下来，见 MediaContent 的 onOpenMedia）
                                 onClick = {
-                                    msg?.let { if (onTapLongText?.invoke(it) != true) onTapBubble(it, onOpenRecord, onCallBack) }
+                                    msg?.let {
+                                        when {
+                                            onTapLongText?.invoke(it) == true -> Unit
+                                            it.contentType == ContentType.CONTACT ->
+                                                CardContent.parseContact(it.content)?.let { c -> onOpenContact?.invoke(c.uid) }
+                                            else -> onTapBubble(it, onOpenRecord, onCallBack)
+                                        }
+                                    }
                                 },
                                 onLongClick = { onLongPress(bubbleRect) },
                             )

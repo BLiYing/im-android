@@ -76,6 +76,8 @@ internal fun ChatDetailScreen(
     archive: List<ConvMediaItem>,
     /** 链接页签：本地已加载的消息，由调用方扫出 URL。 */
     linkMessages: List<Pair<MessageEntity, String>>?,
+    /** 「名片」页签（null = 没有）。 */
+    contacts: ContactTabData? = null,
     loading: Boolean,
     hasMore: Boolean,
     onLoadMore: () -> Unit,
@@ -122,7 +124,7 @@ internal fun ChatDetailScreen(
     val c = IMTheme.colors
     com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave() // 离开本页暂停语音（保留位点）
     val d = IMTheme.dimens
-    val tabs = DetailTabs.visible(isGroup = false)
+    val tabs = DetailTabs.visible(isGroup = false, hasContacts = !contacts?.messages.isNullOrEmpty())
     val showBody = !galleryOnly && !isSystemPeer
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
@@ -222,6 +224,7 @@ internal fun ChatDetailScreen(
                 convId = conv.convId,
                 archive = archive,
                 linkMessages = linkMessages,
+                contacts = contacts,
                 loading = loading,
                 hasMore = hasMore,
                 onLoadMore = onLoadMore,

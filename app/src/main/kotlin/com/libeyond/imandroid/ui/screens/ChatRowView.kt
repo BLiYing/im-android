@@ -278,6 +278,7 @@ internal fun ChatRowView(
             translation = style.translations[m.convSeq],
             textExpanded = m.convSeq in style.expandedTexts,
             onTapLongText = onTapLongText,
+            onOpenContact = onOpenUser,
             read = m.sender == myUid && ReadTick.isRead(peerReadSeq, m.convSeq),
             delivered = m.sender == myUid && peerReadSeq != ReadTick.HIDDEN, // 超级群不画任何勾
             reserveAvatarColumn = isGroup && m.sender != myUid,

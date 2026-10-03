@@ -87,6 +87,8 @@ fun MeScreen(
     /** 语言行右值，如「跟随系统（简体中文）」——由调用方算好传入（[com.libeyond.imandroid.data.LanguageStore]）。 */
     languageLabel: String,
     onComingSoon: (String) -> Unit,
+    /** 「分享我的名片」：开会话选择页发名片（不再是占位）。 */
+    onShareCard: () -> Unit = {},
     onLogout: () -> Unit,
 ) {
     val c = IMTheme.colors
@@ -113,7 +115,7 @@ fun MeScreen(
             MeRow(devices, Lucide.Laptop, ic.orange, onClick = onOpenDevices),
             MeRow(folders, Lucide.Folder, ic.blue) { onComingSoon(folders) },
             // 与左上角「我的二维码」并列：二维码给**面对面**，名片消息给**线上**。
-            MeRow(shareCard, Lucide.IdCard, ic.teal) { onComingSoon(shareCard) },
+            MeRow(shareCard, Lucide.IdCard, ic.teal) { onShareCard() },
         ),
         listOf(
             MeRow(notifications, Lucide.Bell, ic.red, onClick = onOpenNotifications),

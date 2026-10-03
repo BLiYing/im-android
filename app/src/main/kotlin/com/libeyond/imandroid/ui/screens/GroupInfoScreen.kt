@@ -115,6 +115,8 @@ fun GroupInfoScreen(
     archive: List<ConvMediaItem>,
     /** 链接页签：本地已加载的消息，由调用方扫出 URL。 */
     linkMessages: List<Pair<MessageEntity, String>>?,
+    /** 「名片」页签（null = 没有）。 */
+    contacts: ContactTabData? = null,
     archiveLoading: Boolean,
     archiveHasMore: Boolean,
     onLoadMoreArchive: () -> Unit,
@@ -339,7 +341,7 @@ fun GroupInfoScreen(
             }
             if (!galleryOnly) item(key = "tabs") {
                 Spacer(Modifier.height(d.cardGap))
-                DetailTabBar(DetailTabs.visible(isGroup = true), tab) { onTabChange(it) }
+                DetailTabBar(DetailTabs.visible(isGroup = true, hasContacts = !contacts?.messages.isNullOrEmpty()), tab) { onTabChange(it) }
             }
 
             // —— 页签内容 ——
@@ -368,6 +370,7 @@ fun GroupInfoScreen(
                     convId = info.convId,
                     archive = archive,
                     linkMessages = linkMessages,
+                    contacts = contacts,
                     loading = archiveLoading,
                     hasMore = archiveHasMore,
                     onLoadMore = onLoadMoreArchive,

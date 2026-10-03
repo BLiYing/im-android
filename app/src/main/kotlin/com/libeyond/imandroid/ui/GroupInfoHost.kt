@@ -404,6 +404,12 @@ fun GroupInfoHost(
         // 详情页的滚动位置与成员分页游标原样留着（那些 remember 都在上面，没被跳过）。
         GroupInfoScreen(
         info = g,
+        contacts = com.libeyond.imandroid.ui.screens.rememberContactTab(
+            client, convId, isGroup = true,
+            remarkOf = { uid -> knownFriends[uid]?.remark },
+            groupNameOf = { uid -> membersState.members.firstOrNull { it.userId == uid }?.displayName },
+            onOpen = { memberProfile = GroupMember(userId = it.uid, nickname = it.nickname, avatarUrl = it.avatarUrl) },
+        ),
         upgradeHint = rememberGroupUpgradeHint(client, g, convId) { toast = it },
         members = membersState.members,
         // 语音行发送者名（判据在 data/SenderNames.kt 的 groupVoiceSenderNameOf）
