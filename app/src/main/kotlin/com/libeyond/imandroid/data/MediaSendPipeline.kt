@@ -388,6 +388,7 @@ internal class MediaSendPipeline(
         if (totalBytes >= ChunkedUploader.DEFAULT_CHUNK) {
             val f = store.newFile(cid, fileName)
             // 复制可能几秒到几分钟：这段也算「在传」（重连补发据此跳过，不误标红❗），并且用户随时可能点 ✕
+            uploadProgress.queued(cid, totalBytes) // 复制期就有「准备中…」+ ✕（createPendingRow 之外落的行此前没有）
             uploading += cid
             val copied = try { store.copyFrom(openStream, f) } finally { uploading -= cid }
             if (cancelled.remove(cid)) { store.remove(f); return } // 复制期间被取消：行已删，副本也扔
