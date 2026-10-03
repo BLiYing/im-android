@@ -30,6 +30,9 @@ import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.DownloadPhase
 import com.libeyond.imandroid.data.FavoriteAction
 import com.libeyond.imandroid.data.FavoriteCategory
+import com.libeyond.imandroid.data.FavoriteSources
+import com.libeyond.imandroid.ui.screens.FavoriteSourcesScreen
+import com.libeyond.imandroid.ui.screens.FavoritesModeMenu
 import com.libeyond.imandroid.data.FavoritePick
 import com.libeyond.imandroid.data.Favorites
 import com.libeyond.imandroid.data.SelectionActions
@@ -124,6 +127,10 @@ internal fun FavoritesHost(
     com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave() // 离开收藏页暂停语音（保留位点）
     val list = remember { FavoriteList() }
     var tab by remember { mutableStateOf<FavoriteCategory?>(null) }
+    // 「以聊天模式查看」：模式持久化（iOS `im.favorites.viewMode`，选择模式/下钻页恒为消息模式）；sourceKey = 下钻的来源
+    val modePrefs = remember { context.getSharedPreferences("im_favorites", android.content.Context.MODE_PRIVATE) }
+    var chatMode by remember { mutableStateOf(FavoriteSources.isChatMode(modePrefs.getInt("viewMode", 0))) }
+    var sourceKey by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
     var toast by remember { mutableStateOf<String?>(null) }
     var viewing by remember { mutableStateOf<Favorite?>(null) }
@@ -166,10 +173,14 @@ internal fun FavoritesHost(
             }
     }
 
-    val categories = remember(list.items) { Favorites.categoriesOf(list.items) }
+    // 下钻某来源：只看该来源的收藏（分类签 / 搜索 / 加载更多沿用同一套）
+    val base = remember(list.items, sourceKey) {
+        sourceKey?.let { k -> list.items.filter { FavoriteSources.keyOf(it, owner) == k } } ?: list.items
+    }
+    val categories = remember(base) { Favorites.categoriesOf(base) }
     val current = Favorites.settle(categories, tab)
-    val shown = remember(list.items, current, query) {
-        current?.let { Favorites.filter(list.items, it, query) }.orEmpty()
+    val shown = remember(base, current, query) {
+        current?.let { Favorites.filter(base, it, query) }.orEmpty()
     }
 
     /**
@@ -231,6 +242,7 @@ internal fun FavoritesHost(
     BackHandler {
         when {
             menuFor != null -> menuFor = null
+            sourceKey != null -> { sourceKey = null; tab = null; query = "" }
             viewing != null -> viewing = null
             profileUid != null -> profileUid = null
             recordNav.media != null -> recordNav.closeViewer()
@@ -240,14 +252,32 @@ internal fun FavoritesHost(
         }
     }
 
-    FavoritesScreen(
+    fun setMode(chat: Boolean) {
+        chatMode = chat; query = ""; sourceKey = null; tab = null
+        modePrefs.edit().putInt("viewMode", if (chat) 1 else 0).apply()
+    }
+    val srcGroups = remember(list.items) { FavoriteSources.group(list.items, owner) }
+    fun srcName(k: String) = FavoriteSources.nameOf(k, convById[k])
+    if (onPicked == null && chatMode && sourceKey == null) {
+        FavoriteSourcesScreen(
+            groups = remember(srcGroups, query, convById) { FavoriteSources.filter(srcGroups, query, ::srcName) },
+            nameOf = ::srcName,
+            avatarUrlOf = { k -> convById[k]?.avatarUrl.orEmpty() },
+            previewOf = { g -> Favorites.categoriesOf(listOf(g.latest)).firstOrNull()?.let { cat ->
+                if (cat == FavoriteCategory.Text) g.latest.content else "[${cat.title}]" }.orEmpty() },
+            query = query, onQueryChange = { query = it }, onOpen = { sourceKey = it; tab = null; query = "" },
+            chatMode = true, onMode = ::setMode, onBack = onBack,
+        )
+    } else FavoritesScreen(
+        title = sourceKey?.let { Str.p(R.plurals.fav_source_title, base.size, srcName(it), base.size) },
+        topRight = if (onPicked == null && sourceKey == null) ({ FavoritesModeMenu(chatMode, ::setMode) }) else null,
         categories = categories,
         current = current,
         onSelect = { tab = it },
         query = query,
         onQueryChange = { query = it },
         shown = shown,
-        noneAtAll = list.items.isEmpty(),
+        noneAtAll = base.isEmpty(),
         loadedCount = list.items.size,
         loading = list.loading,
         failed = list.failed,
@@ -259,7 +289,7 @@ internal fun FavoritesHost(
         sourceNameOf = ::sourceOf,
         onOpen = ::open,
         onLongPress = { f, r -> menuFor = f; menuAnchor = r },
-        onBack = onBack,
+        onBack = { if (sourceKey != null) { sourceKey = null; tab = null; query = "" } else onBack() },
         pick = pickUi,
     )
 

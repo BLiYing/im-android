@@ -64,9 +64,7 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  * 同一页、同一套行，只多三样：行尾 / 格右上角的勾选框、底部「发送 (N)」栏、左上角「取消」；
  * 长按菜单不出（iOS pick 模式同样禁掉上下文菜单与左滑删除）。**点行 / 点格仍是打开**，
  * 选中只走勾选框——判据在 [com.libeyond.imandroid.data.FavoritePick]。
- *
- * 与 iOS 的差异（未做，见 im-android `current_task.md`）：「以聊天模式查看」（按来源会话分组）。
- */
+ * */
 @Composable
 internal fun FavoritesScreen(
     categories: List<FavoriteCategory>,
@@ -95,6 +93,9 @@ internal fun FavoritesScreen(
     onBack: () -> Unit,
     /** 选择模式（「从收藏发送」）；null = 浏览（「我 ▸ 收藏消息」）。 */
     pick: FavoritePickUi? = null,
+    /** 下钻某来源会话时的标题（null = 「收藏消息」）与右上角槽（⋯ 模式菜单）。 */
+    title: String? = null,
+    topRight: (@Composable () -> Unit)? = null,
 ) {
     val c = IMTheme.colors
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
@@ -105,7 +106,7 @@ internal fun FavoritesScreen(
                 onLeft = onBack,
             )
         } else {
-            IMTopBar(title = stringResource(R.string.common_saved_messages), onLeft = onBack)
+            IMTopBar(title = title ?: stringResource(R.string.common_saved_messages), onLeft = onBack, right = topRight)
         }
         LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
             if (current != null) {
