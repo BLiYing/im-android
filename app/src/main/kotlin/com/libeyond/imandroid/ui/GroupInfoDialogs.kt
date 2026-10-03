@@ -4,6 +4,7 @@ import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
+import com.libeyond.imandroid.ui.components.GroupTextSheet
 import com.libeyond.imandroid.ui.components.IMTextPrompt
 
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -92,31 +98,9 @@ internal fun GroupTransferConfirmDialog(
     )
 }
 
-/**
- * 群公告 / 群简介只读全文（对齐 iOS `IMGroupTextViewController`：独立只读页，
- * 本端用弹窗而不是整页——两处内容都不长到需要单独一层导航状态，`GroupInfoScreen`
- * 的卡片只摘 3 行，点开这个弹窗看全部）。
- */
-@Composable
-internal fun GroupTextViewDialog(title: String, content: String, onDismiss: () -> Unit, subtitle: String = "") {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
-                // 公告全文视图的副标题（「M月d日 HH:mm 发布」，对齐 iOS `IMGroupTextViewController`）；简介没有
-                if (subtitle.isNotBlank()) {
-                    Text(subtitle, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(8.dp))
-                }
-                Box(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-                    Text(content)
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) } },
-    )
-}
+/** 与服务端 `group.MaxMemberNicknameLen`（20）/ `conversation.MaxConvRemarkLen`（30）对齐——此前昵称这里写成 30，超 20 的会被服务端拒。 */
+private const val MY_NICKNAME_MAX_LEN = 20
+private const val GROUP_REMARK_MAX_LEN = 30
 
 /**
  * 群资料页设置区的两个编辑弹窗（我在本群的昵称 / 群备注）+ 群公告·群简介只读全文。
@@ -127,11 +111,14 @@ internal fun GroupTextViewDialog(title: String, content: String, onDismiss: () -
 internal fun GroupInfoSettingsDialogs(
     settings: GroupInfoSettingsState,
     myNickname: String,
+    /** 群备注输入框的占位＝群名（对齐 iOS 的 placeholder）。 */
+    groupName: String,
     onConfirmMyNickname: (String) -> Unit,
 ) {
     if (settings.editingMyNickname) {
         IMTextPrompt(
-            title = stringResource(R.string.chat_detail_my_group_nickname), initial = myNickname, maxLen = 30,
+            title = stringResource(R.string.chat_detail_my_group_nickname), initial = myNickname,
+            maxLen = MY_NICKNAME_MAX_LEN,
             hint = stringResource(R.string.group_info_my_nickname_hint),
             onDismiss = settings::dismissMyNicknameEditor,
             onConfirm = { v -> settings.dismissMyNicknameEditor(); onConfirmMyNickname(v) },
@@ -139,13 +126,14 @@ internal fun GroupInfoSettingsDialogs(
     }
     if (settings.editingRemark) {
         IMTextPrompt(
-            title = stringResource(R.string.chat_detail_group_remark), initial = settings.remark, maxLen = 30,
+            title = stringResource(R.string.chat_detail_group_remark), initial = settings.remark, maxLen = GROUP_REMARK_MAX_LEN,
+            label = groupName,
             hint = stringResource(R.string.group_info_remark_hint),
             onDismiss = settings::dismissRemarkEditor,
             onConfirm = { v -> settings.setRemark(v); settings.dismissRemarkEditor() },
         )
     }
-    settings.notice?.let { (t, txt) -> GroupTextViewDialog(t, txt, onDismiss = settings::dismissNotice) }
+    settings.notice?.let { n -> GroupTextSheet(n.title, n.body, onDismiss = settings::dismissNotice, subtitle = n.subtitle) }
 }
 
 /**
@@ -222,5 +210,22 @@ internal fun GroupManagePrompts(
             )
         }
         null -> Unit
+    }
+}
+
+/**
+ * 「我不再是群主/管理员」的**当场响应**（对齐 iOS：群管理页 / 管理员页重拉后发现 `!canManage` 就 pop 并吐
+ * 「你已不是群主或管理员」；详情页的「群管理」入口随身份重算消失）。
+ *
+ * 此前 Android 只有详情页入口会消失，管理页 / 管理员页 / 编辑框开着时仍留在原地，还能点进去被服务端拒。
+ * `wasManager` 记「上一份群资料里我是不是管理层」：**只在 true→false 那一刻触发**，
+ * 普通成员进页、或首次加载出结果时不会误弹。[onLost] 里关页面、关弹层、吐司。
+ */
+@Composable
+internal fun OnManagerRoleLost(isManager: Boolean, convKey: String, onLost: () -> Unit) {
+    var wasManager by remember(convKey) { mutableStateOf(isManager) }
+    LaunchedEffect(isManager) {
+        if (wasManager && !isManager) onLost()
+        wasManager = isManager
     }
 }

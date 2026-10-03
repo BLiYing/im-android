@@ -110,7 +110,8 @@ fun IMTextField(
     TextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label, color = c.textSecondary) },
+        // 空标签＝不画标签（弹窗里标题已经说清了字段，再来一个同名浮标签只是重复）
+        label = if (label.isBlank()) null else ({ Text(label, color = c.textSecondary) }),
         singleLine = singleLine,
         minLines = if (singleLine) 1 else 3,
         maxLines = if (singleLine) 1 else 8,

@@ -261,9 +261,9 @@ class ChatBannersHolder(
         )
         val info = gs.info
         if (st.annOpen && info != null && info.announcement.isNotBlank()) {
-            GroupTextViewDialog(
+            com.libeyond.imandroid.ui.components.GroupTextSheet(
                 title = stringResource(R.string.group_text_announcement),
-                content = info.announcement,
+                body = info.announcement,
                 subtitle = announceSubtitle(info.announcementAt),
                 onDismiss = { st.annOpen = false },
             )
@@ -271,7 +271,7 @@ class ChatBannersHolder(
     }
 }
 
-private fun announceSubtitle(at: Long): String {
+internal fun announceSubtitle(at: Long): String {
     if (at <= 0) return ""
     val loc = java.util.Locale.getDefault()
     val f = java.text.SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(loc, "MMMd HHmm"), loc)

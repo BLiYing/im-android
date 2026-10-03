@@ -73,8 +73,11 @@ fun IMTextPrompt(
      * 非空且当前已有内容时才显示，点击直接以空值确认——不必先手动清空文本框再点确定。
      */
     clearActionText: String? = null,
-    /** 输入框标签/占位；默认同标题。标题是「添加好友」这类动作名时，占位该写提示语（如「说一句，让对方知道你是谁」）。 */
-    label: String = title,
+    /**
+     * 输入框标签/占位；**默认不画**——标题就在正上方，再来一个同名浮标签只是把「群备注」写了两遍。
+     * 标题是「添加好友」这类动作名时，或字段有天然占位（群备注的占位是群名）时才传（如「说一句，让对方知道你是谁」）。
+     */
+    label: String = "",
 ) {
     val c = IMTheme.colors
     var value by remember { mutableStateOf(initial) }

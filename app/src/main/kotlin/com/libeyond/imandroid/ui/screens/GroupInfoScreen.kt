@@ -33,7 +33,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Info
+import com.composables.icons.lucide.Megaphone
 import com.composables.icons.lucide.Search
+import com.libeyond.imandroid.ui.announceSubtitle
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
@@ -99,8 +102,8 @@ fun GroupInfoScreen(
     /** 群备注（G1，仅本人可见，与单聊「备注名」同一套接口、多端同步）。 */
     remark: String,
     onEditRemark: () -> Unit,
-    /** 点开「群公告」/「群简介」看全文（各自独立、可展开，对齐 iOS 两个独立行各自 push 只读页）。 */
-    onOpenNotice: (title: String, content: String) -> Unit,
+    /** 点开「群公告」/「群简介」看全文底部弹窗（对齐 iOS `IMGroupTextViewController`；公告带发布时间副标题）。 */
+    onOpenNotice: (title: String, content: String, subtitle: String) -> Unit,
     /**
      * 群二维码 / 群邀请链接。行本身按 [GroupPermissions.canInvite] 门控——与「邀请好友入群」
      * 卡片同一份判据（`perm_invite=1` 时对非管理员隐藏，对齐 iOS `inviteEntriesVisible`：
@@ -174,7 +177,7 @@ fun GroupInfoScreen(
                     Spacer(Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            pluralStringResource(R.plurals.common_people_count, info.memberCount, info.memberCount),
+                            pluralStringResource(R.plurals.chat_header_member_count, info.memberCount, info.memberCount),
                             color = c.textSecondary,
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -209,19 +212,29 @@ fun GroupInfoScreen(
                 }
             }
 
-            // **两个独立行**，不再合成一张卡（2026-09-22 对齐 iOS：群公告/群简介各自
-            // 独立展示、各自可点开看全文）。公告最长 500 字，卡片里只露 3 行摘要，
-            // 点开走 [onOpenNotice] 弹只读全文（`GroupTextViewDialog`，对齐 iOS
-            // `IMGroupTextViewController` 的只读全屏页，本端用弹窗而非整页）。
-            if (!galleryOnly && info.announcement.isNotBlank()) item(key = "announcement") {
+            // 群公告 / 群简介**同一张卡、两行**（对齐 iOS `IMChatDetailViewController+About`）：
+            // 图标 + 标题 + 单行摘要 + 右箭头，点开走 [onOpenNotice] 弹底部全文弹窗（`GroupTextSheet`，
+            // 聊天页的公告横幅用的是同一个）。非空才显，两行都空则整张卡不出现。
+            if (!galleryOnly && (info.announcement.isNotBlank() || info.intro.isNotBlank())) item(key = "about") {
                 Spacer(Modifier.height(d.cardGap))
-                val label = stringResource(R.string.group_text_announcement)
-                NoticeCard(label, info.announcement) { onOpenNotice(label, info.announcement) }
-            }
-            if (!galleryOnly && info.intro.isNotBlank()) item(key = "intro") {
-                Spacer(Modifier.height(d.cardGap))
-                val label = stringResource(R.string.group_text_intro)
-                NoticeCard(label, info.intro) { onOpenNotice(label, info.intro) }
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
+                ) {
+                    val annLabel = stringResource(R.string.group_text_announcement)
+                    val introLabel = stringResource(R.string.group_text_intro)
+                    if (info.announcement.isNotBlank()) {
+                        SettingsChevronRow(annLabel, singleLinePreview(info.announcement), icon = Lucide.Megaphone) {
+                            onOpenNotice(annLabel, info.announcement, announceSubtitle(info.announcementAt))
+                        }
+                    }
+                    if (info.announcement.isNotBlank() && info.intro.isNotBlank()) SettingsDivider()
+                    if (info.intro.isNotBlank()) {
+                        SettingsChevronRow(introLabel, singleLinePreview(info.intro), icon = Lucide.Info) {
+                            onOpenNotice(introLabel, info.intro, "")
+                        }
+                    }
+                }
             }
 
             // —— 设置区（对齐 iOS Settings 分区）——
@@ -234,20 +247,35 @@ fun GroupInfoScreen(
                     val notSet = stringResource(R.string.settings_info_not_set)
                     SettingsSwitchRow(stringResource(R.string.chat_detail_pinned), pinned, onTogglePinned)
                     SettingsDivider()
-                    SettingsChevronRow(stringResource(R.string.chat_detail_muted), muteValueText, onOpenMute)
+                    SettingsChevronRow(stringResource(R.string.chat_detail_muted), muteValueText, onClick = onOpenMute)
                     SettingsDivider()
                     SettingsChevronRow(
                         stringResource(R.string.chat_detail_my_group_nickname),
                         info.myNickname.ifBlank { notSet },
-                        onEditMyNickname,
+                        onClick = onEditMyNickname,
                     )
                     SettingsDivider()
-                    SettingsChevronRow(stringResource(R.string.chat_detail_group_remark), remark.ifBlank { notSet }, onEditRemark)
+                    SettingsChevronRow(stringResource(R.string.chat_detail_group_remark), remark.ifBlank { notSet }, onClick = onEditRemark)
                     if (GroupPermissions.canInvite(info)) {
                         SettingsDivider()
-                        SettingsChevronRow(stringResource(R.string.qr_card_group_title_code), "", onOpenGroupQR)
+                        SettingsChevronRow(stringResource(R.string.qr_card_group_title_code), "", onClick = onOpenGroupQR)
                         SettingsDivider()
-                        SettingsChevronRow(stringResource(R.string.qr_card_group_title_link), "", onOpenGroupInviteLink)
+                        SettingsChevronRow(stringResource(R.string.qr_card_group_title_link), "", onClick = onOpenGroupInviteLink)
+                    }
+                    // 群管理入口（仅群主/管理员）：**排在群邀请链接下面**，对齐 iOS `IMDetailSettingsRowManage`
+                    // 的行序（置顶 / 免打扰 / 我的昵称 / 群备注 / 二维码 / 邀请链接 / 群管理）。
+                    // 详情页是"看"的、管理页是"改"的；入口行本身随身份显隐，身份被撤销时
+                    // `GroupInfoHost` 会重拉群资料，这一行当场消失。
+                    if (GroupPermissions.canEditSettings(info)) {
+                        SettingsDivider()
+                        // 有人在等审批就把数字摆到入口上，无待审时右侧给权限提示（iOS `chat.detail.manage_hint`）
+                        SettingsChevronRow(
+                            stringResource(R.string.group_manage_title),
+                            if (info.pendingCount > 0) stringResource(R.string.chat_detail_manage_pending_badge, info.pendingCount)
+                            else stringResource(R.string.chat_detail_manage_hint),
+                            valueColor = if (info.pendingCount > 0) c.danger else c.textSecondary,
+                            onClick = onOpenManage,
+                        )
                     }
                 }
             }
@@ -301,44 +329,6 @@ fun GroupInfoScreen(
                 }
             }
 
-            if (!galleryOnly && GroupPermissions.canEditSettings(info)) item(key = "manage") {
-                // —— 群管理入口（仅群主/管理员）——
-                // **管理项不再摊在这一页上**：详情页是"看"的（群资料、公告、成员），
-                // 管理页是"改"的。摊在一起时这一页有 12 个可点的东西，
-                // 而其中一半是普通成员根本看不到的——对齐 iOS：
-                // `IMChatDetailViewController` 的「群管理」行 push 出
-                // `IMGroupManageViewController`，im-web 的 `GroupManagePanel` 亦为二级视图。
-                Spacer(Modifier.height(d.cardGap))
-                Column(
-                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { onOpenManage() }
-                            .padding(horizontal = d.space4, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(stringResource(R.string.group_manage_title), color = c.textPrimary,
-                            style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                        // 有人在等审批就把数字摆到入口上——否则要点进两层才知道
-                        if (info.pendingCount > 0) {
-                            Text(
-                                stringResource(R.string.chat_detail_manage_pending_badge, info.pendingCount),
-                                color = c.danger,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        } else {
-                            // 无待审时右侧给权限提示（对齐 iOS `chat.detail.manage_hint`）
-                            Text(
-                                stringResource(R.string.chat_detail_manage_hint),
-                                color = c.textSecondary,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                        Text("  ›", color = c.textTertiary)
-                    }
-                }
-            }
             if (!galleryOnly) item(key = "tabs") {
                 Spacer(Modifier.height(d.cardGap))
                 DetailTabBar(DetailTabs.visible(isGroup = true, hasContacts = !contacts?.messages.isNullOrEmpty()), tab) { onTabChange(it) }
@@ -451,23 +441,8 @@ private fun MemberSearchEntryRow(onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
 }
 
-/** 群公告 / 群简介卡片：摘要最多 3 行，点开看全文（见 `onOpenNotice`）。 */
-@Composable
-private fun NoticeCard(label: String, content: String, onClick: () -> Unit) {
-    val c = IMTheme.colors
-    val d = IMTheme.dimens
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = d.space4)
-            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
-            .clickable(onClick = onClick).padding(d.space4),
-    ) {
-        Text(label, color = c.textTertiary, fontSize = 11.sp)
-        Text(
-            content, color = c.textPrimary, style = MaterialTheme.typography.bodyLarge,
-            maxLines = 3, overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
+/** 折行/连续空白压成单行预览（详情页卡与 iOS `aboutSingleLinePreview:` 一致）。 */
+private fun singleLinePreview(text: String): String = text.split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
 
 /** 设置区的开关行（置顶聊天 / 消息免打扰）。 */
 @Composable
@@ -483,17 +458,38 @@ private fun SettingsSwitchRow(label: String, on: Boolean, onToggle: (Boolean) ->
     }
 }
 
-/** 设置区的可点行（我在本群的昵称 / 群备注），右侧带当前值预览。 */
+/**
+ * 设置区的可点行，右侧带当前值预览（单行省略，标题优先不被挤）。
+ * [icon] 非空时标题前画图标（公告 / 简介行用）。
+ */
 @Composable
-private fun SettingsChevronRow(label: String, value: String, onClick: () -> Unit) {
+private fun SettingsChevronRow(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    valueColor: androidx.compose.ui.graphics.Color = IMTheme.colors.textSecondary,
+    onClick: () -> Unit,
+) {
     val c = IMTheme.colors
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick)
             .padding(horizontal = IMTheme.dimens.space4, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = c.textPrimary, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        Text(value, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
+        if (icon != null) {
+            Image(
+                imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp),
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.textSecondary),
+            )
+            Spacer(Modifier.width(IMTheme.dimens.space3))
+        }
+        Text(label, color = c.textPrimary, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            value, color = valueColor, style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
+        )
         Text("  ›", color = c.textTertiary)
     }
 }

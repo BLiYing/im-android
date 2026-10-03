@@ -63,10 +63,21 @@ class GroupPickTest {
     }
 
     @Test
-    fun only_invite_is_multi_select() {
+    fun transfer_is_the_only_single_select_besides_nothing() {
         assertTrue(GroupPick.isMultiSelect(PickPurpose.Invite))
-        assertFalse(GroupPick.isMultiSelect(PickPurpose.AddAdmin))
+        assertTrue(GroupPick.isMultiSelect(PickPurpose.AddAdmin))
+        // 转让不可逆：选中即进二次确认，不能攒
         assertFalse(GroupPick.isMultiSelect(PickPurpose.Transfer))
+    }
+
+    /** 添加管理员一次最多 5 位（对齐 iOS `IMGroupAdminMaxBatch`），满了不再加、已选的仍可取消。 */
+    @Test
+    fun add_admin_caps_at_five() {
+        var picked = emptySet<String>()
+        for (i in 1..GroupPick.MAX_ADMIN_BATCH) picked = GroupPick.toggle(PickPurpose.AddAdmin, picked, "u$i")
+        assertEquals(5, picked.size)
+        assertEquals(picked, GroupPick.toggle(PickPurpose.AddAdmin, picked, "u6"))
+        assertFalse("u1" in GroupPick.toggle(PickPurpose.AddAdmin, picked, "u1"))
     }
 
     @Test

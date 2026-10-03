@@ -63,20 +63,34 @@ object GroupPick {
         PickPurpose.Call -> Str.s(R.string.group_pick_no_other_members)
     }
 
-    /** 邀请与群通话是多选（攒够了按右上角确认）；另两件事都是**选中即执行**。 */
-    fun isMultiSelect(purpose: PickPurpose): Boolean = purpose == PickPurpose.Invite || purpose == PickPurpose.Call
+    /** 邀请、群通话、添加管理员是多选（攒够了按右上角确认）；转让群主不可逆，仍是**选中即确认**。 */
+    fun isMultiSelect(purpose: PickPurpose): Boolean =
+        purpose == PickPurpose.Invite || purpose == PickPurpose.Call || purpose == PickPurpose.AddAdmin
 
     /** 群通话房内含主叫最多 9 人（im-rtc 协议上限），所以被叫最多选 8 个。 */
     const val MAX_CALL_PICK = 8
 
+    /** 一次最多添加几位管理员（对齐 iOS `IMGroupAdminMaxBatch`；服务端没有批量接口，端上串行逐个 PUT）。 */
+    const val MAX_ADMIN_BATCH = 5
+
+    /** 多选上限；`null` = 不限。 */
+    fun maxPick(purpose: PickPurpose): Int? = when (purpose) {
+        PickPurpose.Call -> MAX_CALL_PICK
+        PickPurpose.AddAdmin -> MAX_ADMIN_BATCH
+        else -> null
+    }
+
     /**
-     * 勾选 / 取消勾选一个人。已选的永远能取消；群通话满 [MAX_CALL_PICK] 个后**不再加**（返回原集合，
+     * 勾选 / 取消勾选一个人。已选的永远能取消；有上限的用途（[maxPick]）满了之后**不再加**（返回原集合，
      * 调用方比较前后是否相等来决定要不要提示）。其余用途不设上限。
      */
-    fun toggle(purpose: PickPurpose, picked: Set<String>, id: String): Set<String> = when {
-        id in picked -> picked - id
-        purpose == PickPurpose.Call && picked.size >= MAX_CALL_PICK -> picked
-        else -> picked + id
+    fun toggle(purpose: PickPurpose, picked: Set<String>, id: String): Set<String> {
+        val cap = maxPick(purpose)
+        return when {
+            id in picked -> picked - id
+            cap != null && picked.size >= cap -> picked
+            else -> picked + id
+        }
     }
 }
 

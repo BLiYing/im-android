@@ -1,6 +1,8 @@
 package com.libeyond.imandroid.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.GroupPick
 import com.libeyond.imandroid.data.PickPurpose
 import com.libeyond.imandroid.sdk.api.FriendEntry
@@ -26,8 +28,8 @@ internal fun GroupPickPage(
     picked: Set<String>,
     myUid: String,
     onToggle: (String) -> Unit,
-    /** 设管理员**可撤销**，选中即执行。 */
-    onAddAdmin: (String) -> Unit,
+    /** 设管理员**可撤销**，攒够（≤5 位）按确认后执行，宿主串行逐个下发。 */
+    onAddAdmins: (List<String>) -> Unit,
     /** 转让**不可逆**，宿主收到后先弹二次确认。 */
     onTransferTo: (String) -> Unit,
     onConfirmInvite: (List<String>) -> Unit,
@@ -44,12 +46,18 @@ internal fun GroupPickPage(
         onToggle = onToggle,
         onPick = { row ->
             when (purpose) {
-                PickPurpose.AddAdmin -> onAddAdmin(row.id)
                 PickPurpose.Transfer -> onTransferTo(row.id)
-                PickPurpose.Invite, PickPurpose.Call -> Unit
+                PickPurpose.AddAdmin, PickPurpose.Invite, PickPurpose.Call -> Unit
             }
         },
-        onConfirm = { onConfirmInvite(picked.toList()) },
+        limit = GroupPick.maxPick(purpose) ?: 0,
+        // iOS 的确认钮写「添加（n/5）」，别只写「确定」——一次最多几位得让人看见
+        confirmText = if (purpose == PickPurpose.AddAdmin) {
+            stringResource(R.string.group_admin_picker_add_count, picked.size, GroupPick.MAX_ADMIN_BATCH)
+        } else {
+            stringResource(R.string.common_confirm)
+        },
+        onConfirm = { if (purpose == PickPurpose.AddAdmin) onAddAdmins(picked.toList()) else onConfirmInvite(picked.toList()) },
         onBack = onBack,
     )
 }

@@ -63,6 +63,8 @@ internal fun PickListScreen(
     /** 多选上限；`0` = 不限。超限时不再让勾。 */
     limit: Int = 0,
     emptyText: String = stringResource(R.string.common_no_selectable_people),
+    /** 多选确认钮文案（默认「确定」；添加管理员写「添加（n/5）」）。 */
+    confirmText: String = stringResource(R.string.common_confirm),
     onToggle: (String) -> Unit = {},
     onPick: (PickRow) -> Unit = {},
     onConfirm: () -> Unit = {},
@@ -89,7 +91,7 @@ internal fun PickListScreen(
                 ""
             },
             onLeft = onBack,
-            actionText = if (multi) stringResource(R.string.common_confirm) else "",
+            actionText = if (multi) confirmText else "",
             actionEnabled = selected.isNotEmpty(),
             onAction = if (multi) onConfirm else null,
         )

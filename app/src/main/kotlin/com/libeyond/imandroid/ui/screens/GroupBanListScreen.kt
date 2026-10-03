@@ -25,7 +25,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.GroupBan
-import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.components.TimeFormat
@@ -90,64 +89,6 @@ internal fun GroupBanListScreen(
                 }
             }
         }
-    }
-}
-
-/**
- * 管理员列表（对齐 iOS `IMGroupAdminListViewController`）。
- * **群主可增删、管理员只读**——判据走 [com.libeyond.imandroid.data.GroupPermissions.canSetRole]，
- * 由 Host 传进来，本组件不自己判。
- */
-@Composable
-internal fun GroupAdminListScreen(
-    admins: List<GroupMember>,
-    canEdit: Boolean,
-    busyUid: String,
-    onRevoke: (GroupMember) -> Unit,
-    onAdd: () -> Unit,
-    onBack: () -> Unit,
-) {
-    val c = IMTheme.colors
-    val d = IMTheme.dimens
-    Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
-        IMTopBar(
-            title = stringResource(R.string.group_role_admin),
-            onLeft = onBack,
-            actionText = if (canEdit) stringResource(R.string.common_add) else "",
-            onAction = if (canEdit) onAdd else null,
-        )
-        if (admins.isEmpty()) {
-            Empty(stringResource(R.string.group_admin_list_empty))
-        } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(admins, key = { it.userId }) { m ->
-                    Column {
-                        Row(
-                            Modifier.fillMaxWidth().background(c.surface)
-                                .padding(horizontal = d.space4, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            IMAvatar(m.displayName, seed = m.userId, avatarUrl = m.avatarUrl, size = 40.dp)
-                            Spacer(Modifier.width(d.space3))
-                            Text(m.displayName, color = c.textPrimary,
-                                style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                            if (canEdit) {
-                                Box(
-                                    Modifier.clip(RoundedCornerShape(14.dp)).background(c.subtleFill)
-                                        .clickable(enabled = busyUid != m.userId) { onRevoke(m) }
-                                        .padding(horizontal = 14.dp, vertical = 6.dp),
-                                ) {
-                                    Text(stringResource(R.string.group_admin_list_revoke_btn), color = c.danger, style = MaterialTheme.typography.bodyMedium)
-                                }
-                            }
-                        }
-                        Box(Modifier.fillMaxWidth().padding(start = 68.dp)
-                            .height(0.5.dp).background(c.separator))
-                    }
-                }
-            }
-        }
-        Footnote(stringResource(R.string.group_manage_permission_note))
     }
 }
 

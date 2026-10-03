@@ -158,6 +158,21 @@ fun GroupInfoHost(
     val saveMedia = rememberMediaSaver { toast = it }
     val myUid = client.uid.orEmpty()
 
+    // 管理员身份被撤销：当场收起所有只对群主/管理员开放的页面与弹层（判据与理由见 OnManagerRoleLost）
+    OnManagerRoleLost(g.iAmManager, convId) {
+        managing = false
+        adminsOpen = false
+        bans = null
+        joinReqs = null
+        manage = null
+        memberMenu = null
+        confirmTransfer = null
+        if (pick == PickPurpose.AddAdmin || pick == PickPurpose.Transfer) { pick = null; picked = emptySet() }
+        confirmMore = null
+        // 主动转让群主成功时 runManage 已先写了「成功」吐司，别拿「你已不是群主」盖掉它
+        if (toast == null) toast = Str.s(R.string.group_error_not_admin)
+    }
+
     /**
      * 调完写接口统一刷一次群资料 + 成员首页——服务端是权威，别本地猜新状态。对齐 iOS
      * 每个动作后都调 `loadGroupInfo`（含 `resetSuperMemberPaging`，同样重置到第一页，
@@ -227,13 +242,25 @@ fun GroupInfoHost(
             myUid = myUid,
             onToggle = { id ->
                 val next = GroupPick.toggle(pk, picked, id)
-                if (next == picked && id !in picked) toast = Str.s(R.string.chat_detail_group_call_pick_max, GroupPick.MAX_CALL_PICK)
+                if (next == picked && id !in picked) {
+                    toast = if (pk == PickPurpose.AddAdmin) Str.s(R.string.group_admin_picker_limit_toast, GroupPick.MAX_ADMIN_BATCH)
+                    else Str.s(R.string.chat_detail_group_call_pick_max, GroupPick.MAX_CALL_PICK)
+                }
                 picked = next
             },
-            // 设管理员是可撤销的，直接做；转让不可逆，先二次确认
-            onAddAdmin = { id ->
-                pick = null
-                runManage(Str.s(R.string.group_member_action_make_admin)) { client.groups.setRole(convId, id, GroupMember.ROLE_ADMIN) }
+            // 设管理员可撤销，攒够（≤5）确认后串行下发；全失败停在选人页，其余回管理员页。转让不可逆，先二次确认
+            onAddAdmins = { ids ->
+                if (ids.isNotEmpty()) scope.launch {
+                    picked = emptySet() // 串行下发期间清掉勾选：确认钮随之失效，连点不会重复下发
+                    val (ok, msg) = addAdminsResult(client, convId, ids)
+                    toast = msg
+                    if (ok == 0) picked = ids.toSet() // 全失败：停在选人页，保留勾选让用户换人/重试
+                    else {
+                        pick = null
+                        runCatching { client.groups.info(convId) }.onSuccess { info = it }
+                        membersState.refresh()
+                    }
+                }
             },
             onTransferTo = { id -> confirmTransfer = membersState.members.firstOrNull { it.userId == id } },
             onConfirmInvite = { ids ->
@@ -262,21 +289,13 @@ fun GroupInfoHost(
             onBack = { bans = null },
         )
     } else if (adminsOpen) {
-        GroupAdminListScreen(
-            admins = membersState.members.filter { it.role == GroupMember.ROLE_ADMIN },
-            // 群主可增删、管理员只读（同 im-web）
-            canEdit = g.myRole == GroupMember.ROLE_OWNER,
-            busyUid = deciding,
-            onRevoke = { m ->
-                deciding = m.userId
-                scope.launch {
-                    toast = revokeAdminText(client, convId, m.userId)
-                    // 撤销后重拉首页成员——角色变了，管理员列表要跟着变
-                    membersState.refresh()
-                    deciding = ""
-                }
-            },
-            onAdd = { pick = PickPurpose.AddAdmin },
+        GroupAdminListHost(
+            client = client, convId = convId, info = g, members = membersState.members, myUid = myUid,
+            onOpenMember = { memberProfile = it },
+            onAdd = { pick = PickPurpose.AddAdmin; picked = emptySet() },
+            onToast = { toast = it },
+            onInfo = { info = it },
+            refreshMembers = { membersState.refresh() },
             onBack = { adminsOpen = false },
         )
     } else if (reqs != null) {
@@ -535,6 +554,7 @@ fun GroupInfoHost(
     GroupInfoSettingsDialogs(
         settings = settings,
         myNickname = g.myNickname,
+        groupName = g.name,
         onConfirmMyNickname = { v -> runManage(Str.s(R.string.group_manage_edit_my_nickname)) { client.groups.setMyNickname(convId, v) } },
     )
 

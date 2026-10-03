@@ -43,7 +43,7 @@ class GroupInfoSettingsState internal constructor(
     private val remarkState = mutableStateOf("")
     private val editingMyNicknameState = mutableStateOf(false)
     private val editingRemarkState = mutableStateOf(false)
-    private val noticeState = mutableStateOf<Pair<String, String>?>(null)
+    private val noticeState = mutableStateOf<GroupTextNotice?>(null)
 
     val pinned: Boolean get() = pinnedState.value
     val muted: Boolean get() = MuteState.isMutedNow(mutedState.value, muteUntilState.value)
@@ -51,7 +51,7 @@ class GroupInfoSettingsState internal constructor(
     val remark: String get() = remarkState.value
     val editingMyNickname: Boolean get() = editingMyNicknameState.value
     val editingRemark: Boolean get() = editingRemarkState.value
-    val notice: Pair<String, String>? get() = noticeState.value
+    val notice: GroupTextNotice? get() = noticeState.value
 
     /** 调用方在进页的 `LaunchedEffect` 里调一次。 */
     suspend fun load() {
@@ -125,9 +125,12 @@ class GroupInfoSettingsState internal constructor(
     fun dismissMyNicknameEditor() { editingMyNicknameState.value = false }
     fun openRemarkEditor() { editingRemarkState.value = true }
     fun dismissRemarkEditor() { editingRemarkState.value = false }
-    fun openNotice(title: String, content: String) { noticeState.value = title to content }
+    fun openNotice(title: String, content: String, subtitle: String = "") { noticeState.value = GroupTextNotice(title, content, subtitle) }
     fun dismissNotice() { noticeState.value = null }
 }
+
+/** 群公告 / 群简介全文弹窗的内容（副标题＝公告发布时间，简介为空）。 */
+data class GroupTextNotice(val title: String, val body: String, val subtitle: String = "")
 
 /** 群资料页「消息免打扰」行右值：到期定时器驱动，到点自动从「至…」变回「关」。 */
 @Composable
