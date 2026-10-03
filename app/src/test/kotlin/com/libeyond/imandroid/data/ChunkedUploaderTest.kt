@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -134,6 +135,19 @@ class ChunkedUploaderTest {
         advanceUntilIdle()
         job.join()
         assertTrue("恢复路径要先 status 对齐", s.calls.contains("status"))
+        assertTrue(f.readBytes().contentEquals(s.received.toByteArray()))
+    }
+
+    @Test fun `暂停后立刻恢复（掐片的取消还没被处理）上传不会静默消失`() = runTest {
+        val s = FakeServer(); val f = file(12)
+        val gate = CompletableDeferred<Unit>(); s.blockNextChunk = gate
+        val up = TestScopeUploader(s, f)
+        val job = launch { up.run() }
+        runCurrent()
+        up.pause(); up.resume() // 中间不让协程跑：catch 里看到的 paused 已是 false
+        advanceUntilIdle()
+        job.join()
+        assertFalse("不能被当成外层取消", job.isCancelled)
         assertTrue(f.readBytes().contentEquals(s.received.toByteArray()))
     }
 

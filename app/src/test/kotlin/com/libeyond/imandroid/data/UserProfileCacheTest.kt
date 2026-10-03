@@ -86,6 +86,29 @@ class UserProfileCacheTest {
         assertNotNull(h.cache.peek("a"))
     }
 
+    @Test fun `失败退避后同一个 uid 再被问要重新排上，不会永远卡在 pending`() = runTest {
+        val h = Harness(this, failing = true)
+        h.cache.request("a"); settle()
+        assertEquals(1, h.calls.size)
+        h.failing = false
+        h.clock += UserProfileCache.FAILURE_BACKOFF_MS
+        h.cache.request("a"); settle() // a 还留在 pending 里
+        assertEquals(2, h.calls.size)
+        assertNotNull(h.cache.peek("a"))
+    }
+
+    @Test fun `clear 之后才回来的在途结果被丢弃，不串号`() = runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val cache = UserProfileCache(
+            scope = backgroundScope,
+            fetch = { ids -> gate.await(); ProfileBatch(ids.map { UserCard(userId = it, nickname = "A账号") }, emptyList()) },
+        )
+        cache.request("x"); advanceTimeBy(100); runCurrent() // 请求在途
+        cache.clear()
+        gate.complete(Unit); settle()
+        assertNull(cache.peek("x"))
+    }
+
     @Test fun `超过 2000 条先进先出淘汰`() = runTest {
         val h = Harness(this)
         h.cache.ingest((1..2001).map { card("u$it") })

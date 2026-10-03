@@ -242,12 +242,12 @@ internal fun FavoritesHost(
     BackHandler {
         when {
             menuFor != null -> menuFor = null
-            sourceKey != null -> { sourceKey = null; tab = null; query = "" }
             viewing != null -> viewing = null
             profileUid != null -> profileUid = null
             recordNav.media != null -> recordNav.closeViewer()
             recordNav.isOpen -> recordNav.pop()
             reading != null -> reading = null
+            sourceKey != null -> { sourceKey = null; tab = null; query = "" } // 在所有覆盖层之后：先关盖在上面的
             else -> onBack()
         }
     }
@@ -256,6 +256,8 @@ internal fun FavoritesHost(
         chatMode = chat; query = ""; sourceKey = null; tab = null
         modePrefs.edit().putInt("viewMode", if (chat) 1 else 0).apply()
     }
+    // 聊天模式要按全量分组：翻页数据不全会少来源、条数也不准——把剩余页拉完
+    LaunchedEffect(chatMode, list.items.size, list.hasMore, list.loading) { if (chatMode && onPicked == null) list.loadMore(client, scope) }
     val srcGroups = remember(list.items) { FavoriteSources.group(list.items, owner) }
     fun srcName(k: String) = FavoriteSources.nameOf(k, convById[k])
     if (onPicked == null && chatMode && sourceKey == null) {

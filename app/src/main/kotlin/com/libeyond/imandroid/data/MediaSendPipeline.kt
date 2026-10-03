@@ -78,9 +78,8 @@ internal class MediaSendPipeline(
         contentType: String, caption: String?, groupId: String?,
         mediaW: Int?, mediaH: Int?, duration: Int?, poster: String?, thumb: String?,
     ) {
-        if (jobs.containsKey(cid)) return
-        uploadProgress.queued(cid, file.length())
-        jobs[cid] = scope.launch {
+        // 汇聚点互斥：补发 / 点重试 / 冷启动补发可能同时到，只许一个赢（putIfAbsent + 懒启动，赢家才 start）
+        val job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             try {
                 serial.withLock {
                     runFileUpload(cid, convId, to, file, fileName, mime, contentType, caption, groupId, mediaW, mediaH, duration, poster, thumb)
@@ -89,6 +88,9 @@ internal class MediaSendPipeline(
                 jobs.remove(cid); uploaders.remove(cid); uploadProgress.clear(cid)
             }
         }
+        if (jobs.putIfAbsent(cid, job) != null) { job.cancel(); return }
+        uploadProgress.queued(cid, file.length())
+        job.start()
     }
 
     private suspend fun runFileUpload(
@@ -127,8 +129,9 @@ internal class MediaSendPipeline(
         } finally {
             watch.cancel()
         }
-        store.remove(file)
+        // 先把行换成服务端地址、再删副本：反过来的话中间被杀，行还指着已删的 file://，补发会报「本地文件已丢失」而服务端其实已收齐
         repo.updatePendingContent(owner, cid, r.url, r.size)
+        store.remove(file)
         val at = repo.pendingByClientId(owner, cid)
         transmit(
             cid, convId, to, contentType, r.url, null,
@@ -250,6 +253,7 @@ internal class MediaSendPipeline(
      */
     suspend fun markFailed(clientMsgId: String, code: Int = 0, message: String = Str.s(R.string.net_error_file_read_failed)) {
         val owner = ownerProvider() ?: return
+        uploadProgress.clear(clientMsgId) // 失败行不再是「排队/传输中」，别留着让 cancel 把它记进 cancelled
         repo.onSendRejected(
             owner,
             com.libeyond.imandroid.sdk.protocol.ErrorData(
@@ -377,7 +381,11 @@ internal class MediaSendPipeline(
         // 对齐 iOS：≥ 分片阈值才走「私有副本 + 可暂停续传」；更小的一次性直传（不可暂停，失败重试从头）
         if (totalBytes >= ChunkedUploader.DEFAULT_CHUNK) {
             val f = store.newFile(cid, fileName)
-            if (!store.copyFrom(openStream, f)) {
+            // 复制可能几秒到几分钟：这段也算「在传」（重连补发据此跳过，不误标红❗），并且用户随时可能点 ✕
+            uploading += cid
+            val copied = try { store.copyFrom(openStream, f) } finally { uploading -= cid }
+            if (cancelled.remove(cid)) { store.remove(f); return } // 复制期间被取消：行已删，副本也扔
+            if (!copied) {
                 markFailed(cid, message = Str.s(R.string.chat_media_stage_failed))
                 return
             }
@@ -392,6 +400,8 @@ internal class MediaSendPipeline(
             withContext(Dispatchers.IO) { openStream()?.use { it.readBytes() } }
         } catch (e: java.io.IOException) {
             null
+        } catch (e: SecurityException) {
+            null // content uri 的读权限被撤
         }
         if (small == null) {
             markFailed(cid, message = Str.s(R.string.net_error_file_read_failed))

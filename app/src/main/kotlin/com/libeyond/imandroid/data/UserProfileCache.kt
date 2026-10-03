@@ -38,6 +38,7 @@ class UserProfileCache(
     private val inFlight = HashSet<String>()
     private var backoffUntil = 0L
     private var flushJob: Job? = null
+    private var generation = 0
     private val lock = Any()
 
     private val _revision = MutableStateFlow(0)
@@ -51,19 +52,14 @@ class UserProfileCache(
     /** 要这个人的资料：缓存命中没事；没命中就排队去补（合批、去重、退避，见类注释）。 */
     fun request(uid: String) {
         if (uid.isEmpty()) return
-        val schedule = synchronized(lock) {
-            if (uid in cards || uid in pending || uid in inFlight) return
+        // 已在 pending 也不提前返回：失败退避后 pending 里还留着人，没人重新起 flush 就永远卡在首字母色块
+        synchronized(lock) {
+            if (uid in cards || uid in inFlight) return
             val t = now()
             if ((missingUntil[uid] ?: 0L) > t) return
             if (t < backoffUntil) return // 退避期不排：下次渲染还会再问
             pending.add(uid)
-            flushJob == null
-        }
-        if (schedule) {
-            flushJob = scope.launch {
-                delay(COALESCE_MS)
-                flush()
-            }
+            if (flushJob == null) flushJob = scope.launch { delay(COALESCE_MS); flush() }
         }
     }
 
@@ -77,6 +73,8 @@ class UserProfileCache(
     /** 账号切换。 */
     fun clear() {
         synchronized(lock) {
+            generation++ // 在途那批回来时作废，别把 A 账号的资料写进 B 账号的缓存
+            flushJob?.cancel(); flushJob = null
             cards.clear(); missingUntil.clear(); pending.clear(); inFlight.clear(); backoffUntil = 0L
         }
         _revision.value++
@@ -84,7 +82,9 @@ class UserProfileCache(
 
     private suspend fun flush() {
         val batch: List<String>
+        val gen: Int
         synchronized(lock) {
+            gen = generation
             flushJob = null
             batch = pending.take(MAX_BATCH)
             pending.removeAll(batch.toSet())
@@ -93,6 +93,7 @@ class UserProfileCache(
         if (batch.isEmpty()) return
         val result = runCatching { fetch(batch) }
         synchronized(lock) {
+            if (gen != generation) return // clear() 之后回来的：丢弃
             inFlight.removeAll(batch.toSet())
             val r = result.getOrNull()
             if (r == null) {
@@ -107,7 +108,7 @@ class UserProfileCache(
         // 一批 100 个装不下时，剩下的接着发（同样合批窗口）
         val more = synchronized(lock) { pending.isNotEmpty() && flushJob == null && now() >= backoffUntil }
         if (more) {
-            flushJob = scope.launch { delay(COALESCE_MS); flush() }
+            synchronized(lock) { if (flushJob == null) flushJob = scope.launch { delay(COALESCE_MS); flush() } }
         }
     }
 

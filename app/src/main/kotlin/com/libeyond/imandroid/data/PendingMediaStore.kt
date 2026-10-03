@@ -51,14 +51,21 @@ class PendingMediaStore(private val dir: File) {
 
     /** [copyIn] 的流版本（调用方只有 openStream 时用）。 */
     suspend fun copyFrom(open: () -> java.io.InputStream?, target: File): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val input = open() ?: return@withContext false
-            input.use { i -> target.outputStream().use { o -> i.copyTo(o, COPY_BUFFER) } }
-            target.length() > 0
+        val ok = try {
+            val input = open()
+            if (input == null) {
+                false
+            } else {
+                input.use { i -> target.outputStream().use { o -> i.copyTo(o, COPY_BUFFER) } }
+                target.length() > 0
+            }
         } catch (e: java.io.IOException) {
-            remove(target)
             false
+        } catch (e: SecurityException) {
+            false // content uri 的读权限被撤
         }
+        if (!ok) remove(target) // 读不到 / 0 字节 / 中途失败：别留半截副本
+        ok
     }
 
     fun uploadIdOf(f: File): String? = sidecar(f).takeIf { it.exists() }?.readText()?.trim()?.ifEmpty { null }
@@ -66,7 +73,11 @@ class PendingMediaStore(private val dir: File) {
     /** 空串 = 清掉（会话失效 / 传完）。 */
     fun setUploadId(f: File, id: String) {
         val s = sidecar(f)
-        if (id.isEmpty()) s.delete() else s.writeText(id)
+        try {
+            if (id.isEmpty()) s.delete() else s.writeText(id)
+        } catch (e: java.io.IOException) {
+            // 磁盘满：只是失去「杀进程后续传」，不该让上传本身失败
+        }
     }
 
     /** 取消 / 发送成功：副本与旁路文件一起删。 */

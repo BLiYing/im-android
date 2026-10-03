@@ -123,8 +123,9 @@ class ChunkedUploader(
                     try { d.await() } finally { inFlight = null }
                 }
             } catch (e: CancellationException) {
-                // 外层真被取消 → 照抛；只是暂停掐掉了这一片 → 等恢复，再问服务端 offset 对齐
-                if (!currentCoroutineContext().isActive || !_paused.value) throw e
+                // 外层真被取消 → 照抛；只是暂停掐掉了这一片 → 等恢复，再问服务端 offset 对齐。
+                // **不看 paused 当前值**：暂停后立刻恢复时它已回 false，按它判会把「掐片」当成外层取消、整个上传静默消失
+                if (!currentCoroutineContext().isActive) throw e
                 awaitResumed()
                 offset = transport.sessionStatus(id)
                 onProgress(offset, total)

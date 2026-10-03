@@ -205,7 +205,7 @@ class ChatBannersHolder(
         val approval = PinnedBanner.approvalCount(info)
         // 待审清零后收起记忆也清掉：否则之后新来的同样件数的申请被旧记忆吃掉、横幅永远不再出现
         LaunchedEffect(approval) {
-            if (approval == 0 && st.dismissedApproval != null) {
+            if (info != null && approval == 0 && st.dismissedApproval != null) {
                 st.dismissedApproval = null
                 prefs.edit().remove(PinnedBanner.dismissKey("approval", uid, conv.convId)).apply()
             }
@@ -273,7 +273,8 @@ class ChatBannersHolder(
 
 private fun announceSubtitle(at: Long): String {
     if (at <= 0) return ""
-    val f = java.text.SimpleDateFormat("M月d日 HH:mm", java.util.Locale.getDefault())
+    val loc = java.util.Locale.getDefault()
+    val f = java.text.SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(loc, "MMMd HHmm"), loc)
     return Str.s(R.string.group_announcement_published_at, f.format(java.util.Date(at)))
 }
 

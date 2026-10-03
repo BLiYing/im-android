@@ -48,13 +48,16 @@ fun ShareMyCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
                     return@ForwardPickerScreen
                 }
                 val json = CardContent.encodeContact(card.userId, card.username, card.nickname, card.avatarUrl)
+                // 先发完、给「已发送」提示一个露脸的时间，**最后**才 onBack：onBack 会让本宿主离开组合，
+                // 它的作用域随之取消——此前先 onBack，选了几个会话就只有前一两个收到、提示也永远不显示
                 scope.launch {
                     picked.forEach { c ->
                         client.messages.sendCard(c.convId, if (c.isGroup) c.convId else c.peerUid, ContentType.CONTACT, json)
                     }
                     toast = if (picked.size == 1) Str.s(R.string.common_sent) else Str.p(R.plurals.common_sent_to_chats, picked.size, picked.size)
+                    kotlinx.coroutines.delay(900)
+                    onBack()
                 }
-                onBack()
             },
         )
         toast?.let { IMToast(it) { toast = null } }

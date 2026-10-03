@@ -27,6 +27,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -92,7 +94,8 @@ fun TextReader(msg: MessageEntity, chatFontSize: Float, onToast: (String) -> Uni
 private fun StepButton(glyph: String, desc: String, enabled: Boolean, onClick: () -> Unit) {
     val c = IMTheme.colors
     Box(
-        Modifier.height(48.dp).then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 10.dp),
+        Modifier.height(48.dp).then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .semantics { contentDescription = desc }.padding(horizontal = 10.dp),
         Alignment.Center,
     ) {
         Text(glyph, color = if (enabled) c.textPrimary else c.textTertiary, fontSize = 15.sp, fontWeight = FontWeight.Medium)

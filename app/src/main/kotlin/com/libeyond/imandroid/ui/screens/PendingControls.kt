@@ -134,7 +134,12 @@ internal fun PendingActions(
 ) {
     var open by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
-    Box(Modifier.combinedClickable(onClick = {}, onLongClick = { open = true })) {
+    Box(
+        Modifier.combinedClickable(
+            onClick = {}, onLongClick = { open = true },
+            indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+        ),
+    ) {
         content()
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             if (!copyText.isNullOrEmpty()) {
