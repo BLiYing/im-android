@@ -4,6 +4,7 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.data.GroupPick
 import com.libeyond.imandroid.data.GroupSettings
+import com.libeyond.imandroid.data.InviteOutcome
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.sdk.http.ApiException
@@ -74,4 +75,19 @@ internal suspend fun putSettingsOrRollback(client: IMClient, convId: String, v: 
         rollback()
         throw e
     }
+}
+
+/** `runManage` 的块返回它时，成功提示用 [text]（null=走通用「已…」）。 */
+internal class ManageToast(val text: String?)
+
+/** 发邀请并给出提示文案；失败抛 [ApiException] 由 runManage 统一提示。 */
+internal suspend fun inviteText(client: IMClient, convId: String, ids: List<String>): String? =
+    inviteOutcomeText(InviteOutcome.of(ids.size, client.groups.invite(convId, ids)))
+
+/** 邀请结果的提示；[InviteOutcome.Plain] 返回 null，由 runManage 走通用成功文案。 */
+internal fun inviteOutcomeText(o: InviteOutcome): String? = when (o) {
+    InviteOutcome.Pending -> Str.s(R.string.group_invite_pending_toast)
+    InviteOutcome.AllIn -> Str.s(R.string.group_info_invite_all_in)
+    is InviteOutcome.Partial -> Str.s(R.string.group_info_invite_partial, o.invited, o.skipped)
+    InviteOutcome.Plain -> null
 }

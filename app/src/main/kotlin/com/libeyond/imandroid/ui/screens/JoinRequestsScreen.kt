@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.JoinRequest
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMTopBar
@@ -113,7 +114,10 @@ private fun RequestRow(r: JoinRequest, busy: Boolean, onDecide: (String, Boolean
             Column(Modifier.weight(1f)) {
                 Text(r.displayName, color = c.textPrimary, style = MaterialTheme.typography.bodyLarge)
                 // 验证消息为空时**整行不显**，不写「未填写」——那是噪音
-                if (r.hello.isNotBlank()) {
+                val by = r.invitedByName
+                if (by != null) {
+                    Text(Str.s(R.string.group_join_request_invited_by, by), color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
+                } else if (r.hello.isNotBlank()) {
                     Text(r.hello, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
             }

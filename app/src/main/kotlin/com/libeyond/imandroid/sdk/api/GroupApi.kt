@@ -118,8 +118,13 @@ data class JoinRequest(
     val hello: String = "",
     val status: String = "",
     @SerialName("created_at") val createdAt: Long = 0,
+    /** 成员邀请转待审的申请才有（凭码申请无）；服务端不下发邀请人 uid。 */
+    @SerialName("inviter_nickname") val inviterNickname: String? = null,
 ) {
     val isPending: Boolean get() = status == "pending"
+
+    /** 该行是否显「由 X 邀请」（替代附言行）。 */
+    val invitedByName: String? get() = inviterNickname?.takeIf { it.isNotBlank() }
 
     /** 列表显示名。**末级绝不是 user_id**（那是 10 位内部 ID）。 */
     val displayName: String get() = nickname.ifBlank { Str.s(R.string.common_unnamed_user) }
@@ -222,10 +227,11 @@ class GroupApi(private val http: HttpClient) {
     }
 
     /** 邀请入群（任意成员可邀，除非群开了「仅管理员可邀请」）。 */
-    suspend fun invite(convId: String, memberIds: List<String>) {
-        http.call("POST", "/api/v1/groups/$convId/members", buildJsonObject {
+    suspend fun invite(convId: String, memberIds: List<String>): InviteResult {
+        val data = http.call("POST", "/api/v1/groups/$convId/members", buildJsonObject {
             putJsonArray("member_ids") { memberIds.forEach { add(it) } }
         })
+        return InviteResult.parse(data)
     }
 
     /** 我在本群的昵称。空=清除，回退全局昵称。 */

@@ -985,6 +985,8 @@
     <string name="group_info_super_note">Large group · 3 features are off: typing indicators, read receipts, and member online status. At 20,000 members they would flood everyone with useless updates.</string>
     <string name="group_info_title">Group info</string>
     <string name="group_info_transfer_confirm_message">After transferring to %1$s, you\'ll immediately become a regular member. This can\'t be undone.</string>
+    <string name="group_invite_pending_toast">Request sent. Waiting for an admin to approve.</string>
+    <string name="group_join_request_invited_by">Invited by %1$s</string>
     <string name="group_list_empty">You haven\'t joined any groups yet</string>
     <string name="group_list_empty_hint">You haven’t joined any groups. Tap + in the top right to create one.</string>
     <string name="group_list_i_am_owner">You\'re the owner</string>
@@ -1011,7 +1013,7 @@
     <string name="group_manage_intro_placeholder">Describe this group</string>
     <string name="group_manage_invite_members">Invite to group</string>
     <string name="group_manage_join_approval">Approve new members</string>
-    <string name="group_manage_join_speak_footer">Approve new members: joining by QR code requires admin approval. Mute everyone: only the owner and admins can post.</string>
+    <string name="group_manage_join_speak_footer">Approve new members: people joining by QR code or invited by regular members need admin approval. Mute everyone: only the owner and admins can post.</string>
     <string name="group_manage_mute_all">Mute everyone</string>
     <string name="group_manage_mute_all_off_confirm">Unmute</string>
     <string name="group_manage_mute_all_off_confirm_message">All members will be able to post again.</string>

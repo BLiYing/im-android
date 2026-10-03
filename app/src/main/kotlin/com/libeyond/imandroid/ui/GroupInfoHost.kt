@@ -180,7 +180,7 @@ fun GroupInfoHost(
      * `loading` 标志**：避免深分页时"触底加载更多"与"长按管理动作"并发写
      * `members`/`cursor`/`hasMore`，旧游标数据拼接出成员区间空洞（`/code-review` 抓出）。
      */
-    fun runManage(label: String, block: suspend () -> Unit) {
+    fun runManage(label: String, block: suspend () -> Any?) {
         scope.launch {
             val r = runCatching { block() }
             r.onFailure { e ->
@@ -190,7 +190,7 @@ fun GroupInfoHost(
                     else Str.s(R.string.group_manage_op_failed, label)
                 IMLog.tag("IM.Group").w("group_manage_failed", "op" to label, "code" to (code ?: -1))
             }
-            if (r.isSuccess) toast = Str.s(R.string.group_manage_op_succeeded, label)
+            if (r.isSuccess) toast = (r.getOrNull() as? ManageToast)?.text ?: Str.s(R.string.group_manage_op_succeeded, label)
             runCatching { client.groups.info(convId) }.onSuccess { info = it }
             membersState.refresh()
         }
@@ -269,7 +269,7 @@ fun GroupInfoHost(
                 if (pk == PickPurpose.Call) {
                     // 通话界面由 im-rtc 的 Kit 接管；拨不出去才回一句原因
                     if (ids.isNotEmpty()) RtcCall.placeGroup(convId, ids)?.let { toast = it }
-                } else if (ids.isNotEmpty()) runManage(Str.s(R.string.group_manage_invite_members)) { client.groups.invite(convId, ids) }
+                } else if (ids.isNotEmpty()) runManage(Str.s(R.string.group_manage_invite_members)) { ManageToast(inviteText(client, convId, ids)) }
             },
             onBack = { pick = null; picked = emptySet() },
         )
