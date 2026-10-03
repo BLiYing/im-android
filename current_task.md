@@ -14,8 +14,9 @@
 - **2026-10-03 UI 对齐 iOS**：详情页 / 群资料 / 收藏页的页签条改为居中且贴合内容（`SegTabBar`，此前拉满、页签靠左、右侧一大片空底）；**点到自己进「我的资料」（可编辑）而非「用户信息」页**（`UserProfileHost` 一处收口，六处入口都经它）。
 - **2026-10-03 群相关五项（用户报）**：① 群系统消息里自己显示「我」（`SysSegments.displayName(selfUid)`，聊天行 + 会话列表预览）；② 群资料「群管理」行右侧补「仅群主/管理员」（有待审时改红字角标，同 iOS）；③ 进群确认等开关改**乐观更新**（`GroupSettings.applied`；服务端读写本身没问题）；④ 入群申请页签换成共用 `SegTabBar`，**iOS 同步补了页签**（`IMJoinRequestsViewController`，此前 iOS 只拉 pending、同意后整条消失）；⑤ **点人统一走 `MemberProfileHost`**（= 聊天头像那条路），群成员 / 通讯录 / 收藏 / 扫码 / 聊天头像五处收口。
 - **2026-10-03 第二批（用户报，Pixel 2 XL 真机 + iOS 模拟器验过）**：① **清空聊天记录**：会话行不再沉到列表最底（`clearConversation` 误把 `lastTimestamp` 置 0，现保留位置只清预览）；详情页「媒体/文件/语音」页签清空后立即重载（此前仍显示旧图）。清空**不动**未读数与已读位点——**产品确认保留**（2026-10-03：清空后未读还在、来新消息仍能看到是有意的好功能；三端一致，别当 bug 改）。② **进会话定位**：`ChatEntry.CONTEXT_BEFORE` 3→0（分割线/首条未读对齐视口顶部，同 iOS `anchorRowToTop:` 与 Web），此前留 3 条上下文把未读竖图挤到屏幕下沿、下半截被切；③ **视频门控态只显磨砂 thumb**（`VideoContent`：未下载不再画清晰 `poster`，同 iOS `IMImageCell` gated 分支）；宫格本就是磨砂；④ **选人页**（设管理员/转让群主/邀请/群通话共用 `PickListScreen`，iOS 同样共用 `IMFriendPickerViewController`）补顶部搜索 + A–Z 分组 + 右侧索引尺；⑤ **扫一扫页**对齐 iOS：取景框上移 40、提示在框下 22（原先压进框里）、相册钮在提示下 26，补底部「扫码 / 我的二维码」页签。
-- **2026-10-03 补缺口第一批（`group` 帧消费）**：`MessageService` 新增 `groupEvents` 流 + 群待审数（`pendingCounts`，不落库）；群资料页收本群帧重拉；被移出/解散 → 提示 + 关聊天/群资料页 + 本机删会话行（`MessageRepository.removeConversation`；此前退群/解散后本机行会残留）；入群审批结果提示（`GroupEventsEffect`，必须画在 `MainScreen` 内容之后否则被盖住）；会话列表红字「[N 待审]」。Pixel 真机四条链路验过。**`GroupInfoHost.kt` 598 行，动它之前必须先拆。**
+- **2026-10-03 补缺口第一批（`group` 帧消费）**：`MessageService` 新增 `groupEvents` 流 + 群待审数（`pendingCounts`，不落库）；群资料页收本群帧重拉；被移出/解散 → 提示 + 关聊天/群资料页 + 本机删会话行（`MessageRepository.removeConversation`；此前退群/解散后本机行会残留）；入群审批结果提示（`GroupEventsEffect`，必须画在 `MainScreen` 内容之后否则被盖住）；会话列表红字「[N 待审]」。Pixel 真机四条链路验过。**`GroupInfoHost.kt` 600 行（顶格），`ChatScreen`/`ChatHost`/`MessageService` 均 ≥594：动它们之前必须先拆。**
 - **2026-10-03 补缺口第二、三批**：拒收说明行（`SendRejection`，单条与相册都有；200103 带「发送好友申请」）+ 输入栏禁言锁（`ComposerLock`，到期自动解锁）+ 加好友验证消息弹窗（`FriendRequestPrompt`，四处入口共用）+ 业务错误码本地化（`ErrorText`）；**置顶横幅整块**（`ChatBanners.kt` 状态 / `screens/ChatBannerStack.kt` 画 / `data/PinnedBanner.kt` 纯判据；置顶集合不落库，靠 `msgOps` 信号对齐）。`ChatHost` 的群资料状态拆到 `ChatGroupState.kt`。Pixel 真机验过。
+- **2026-10-03 补缺口第四~七批（对照 iOS，CLIENT_PARITY 对应行已改）**：群已读 ✓✓ + 「N 人已读」（`ReadTick`/`ReadReceiptsSheet`）· 编辑/翻译/单条举报（`ChatMessageOps`）· 长文本三档（`LongText`/`TextReader`）· 禁言时长档/移出确认（`GroupMemberMenu`）· 返回键未读徽标 · 登录补拉 hidden · 通讯录名片页签 + 分享名片 · 建群两步流 · `UserProfileCache`（`/users/batch`）· `RosterCache`（好友/群离线快照，Room v17）· 审批横幅直达入群申请列表 · 收藏「以聊天模式查看」。**上传整块**：`ChunkedUploader`（暂停/续传/取消，服务端 offset 为准）+ `PendingMediaStore`（≥8MB 私有副本 `filesDir/pending_media` + `.uploadid` 旁路）+ 常驻串行队列 + 气泡/宫格钮盘 + 待发行长按菜单；单张粘贴图+文字合并 caption。**未真机验**：暂停/续传/杀进程续传、待发行长按菜单、caption 粘贴路径、收藏邀请链接原生入群。
 - 拆分：`ChatScreen` → `ChatJumpButton`、`MessageService` → `MessageSendSimple`；`ChatHost` 早先拆出 `ChatLookups` / `ChatTailSync`。
 
 ## 下一步
@@ -25,13 +26,13 @@
    - 设置 ▸ 最近通话剩余项：滚动分页时序、「未接」tab 连续翻页观感、`callEnded` 重拉首页、群聊行跳转、空/401/网络错误三态——需攒几通真实通话（含群通话）。
    - 归档查看器「更多」五项、合并转发记录页内翻页、长按预览里点图/点链接只关菜单；转发带 @ 图片到群后「别人视角」点被 @ 的名字与强提醒；「对方撤回」两种文案（单设备单账号测不出）。
    - **离线积压**：查看器**向更新方向**续拉只有单测 + 变异 + 服务端 curl，**没做真机端到端**（要停在缺口会话的历史段里点图，造数据成本高）；离线时的「只能翻已加载的部分」提示没在真机上看过。
-2. **离线积压剩余**：「@我的消息列表」入口（服务端接口已有，三端 UI 都缺，产品暂不要）；置顶消息横幅（G0）Android 没有，做时再接置顶判定。
+2. **离线积压剩余**：「@我的消息列表」入口（服务端接口已有，三端 UI 都缺，产品暂不要）。
 3. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：`ChatDetailHost` 已全部接完，`GroupInfoHost` 仅 `Media` 一支已接。
    - 根因：`ui/components/PushTransition.kt` 要退场页按冻结的 `state` 渲染，而这些 host 是「关闭即把数据变量置空」，退场时数据已没，半路变白。改法 = 「是否打开」与「显示什么数据」拆两个变量，关闭只翻布尔（参照 `ChatDetailHost` 的 `viewingOpen`/`viewingData`）。
    - 余 8 支未动（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/Manage/Qr），逐支来；**全部改完才把 9 支统一进一个 `PushTransition(page, depthOf)`**。`GroupInfoHost.kt` 已贴 600 行硬闸，**动它之前先拆文件**。
    - `ChatHost` 覆盖层栈（`ChatOverlays.kt`，`ChatRecord` 可嵌套压栈）范围最大且是产品判断，**动手前先问用户**。
 4. 卡片弹层推广：@提及、选文件、已读详情、日期跳转、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`。
-5. 收藏剩余：「以聊天模式查看」、来源名到群昵称级；长按菜单缺举报、翻译。
+5. 收藏剩余：来源名到群昵称级；长按菜单缺举报、翻译。
 6. 宫格按 `IMAlbumRowPattern` 重写布局 + 五道防跳版闸。
 7. `docs/UI_PARITY_IOS.md` 剩余 🔴：水滴头部形变、「名片」页签、隐私页无障碍。
 8. 群成员头像图：首字母色块对但无头像缓存，要先做 `POST /users/batch` 解析器。
