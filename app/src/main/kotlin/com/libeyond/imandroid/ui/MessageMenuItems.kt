@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,6 +19,7 @@ import androidx.compose.ui.text.AnnotatedString
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Copy
+import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.CornerUpLeft
 import com.composables.icons.lucide.FileText
 import com.composables.icons.lucide.Forward
@@ -159,6 +161,8 @@ internal fun ChatMessageMenu(
     iAmManager: Boolean,
     /** 我能不能置顶（[com.libeyond.imandroid.data.PinnedBanner.canPin]）。 */
     canPin: Boolean,
+    /** 点「N 人已读」：交给宿主开已读详情（本层不持有成员表/资料页）。 */
+    onReadReceipts: (com.libeyond.imandroid.sdk.api.ReadBy) -> Unit,
     onReply: (MessageEntity) -> Unit,
     onForward: (MessageEntity) -> Unit,
     /** 进多选态，并默认勾上这一条。 */
@@ -187,6 +191,14 @@ internal fun ChatMessageMenu(
         hasTranscript = transcriber?.isExpanded(target.convSeq) == true,
         canPin = canPin,
     )
+    // 我发的群消息：菜单一开就去问已读名单（只有发送者能查，服务端同判）；
+    // 超过 2000 人的群服务端回 enabled=false、出错同理——整行直接不出现（iOS 的 deferred element 同口径）
+    val readBy by androidx.compose.runtime.produceState<com.libeyond.imandroid.sdk.api.ReadBy?>(null, target.convSeq) {
+        if (conv.isGroup && target.sender == owner && target.convSeq > 0) {
+            value = runCatchingCancellable { client.conversationsApi.readBy(conv.convId, target.convSeq) }
+                .getOrNull()?.takeIf { it.enabled }
+        }
+    }
     MessageContextMenu(
         anchor = anchor,
         mine = target.sender == owner,
@@ -236,7 +248,7 @@ internal fun ChatMessageMenu(
                 }
             }
         },
-        items = buildMessageMenu(actions) { a ->
+        items = readReceiptsItem(readBy, onReadReceipts) + buildMessageMenu(actions) { a ->
             when (a) {
                 // 复制什么由矩阵定（`copyKindOf`，对齐 iOS `copyMessageToPasteboard:`）：
                 // **caption 压过一切**——带图说的图片复制的是那段文字，不是图。
@@ -319,4 +331,16 @@ internal fun runMessageDelete(
         }
         else -> Unit
     }
+}
+
+/** 菜单最上面那一行：有人读过 =「N 人已读」可点开名单；没人读过 =「暂无人已读」（灰、点了只关菜单）。 */
+internal fun readReceiptsItem(
+    readBy: com.libeyond.imandroid.sdk.api.ReadBy?,
+    onOpen: (com.libeyond.imandroid.sdk.api.ReadBy) -> Unit,
+): List<SheetItem> {
+    readBy ?: return emptyList()
+    if (readBy.read.isEmpty()) return listOf(SheetItem(Str.s(R.string.chat_menu_no_reads), icon = Lucide.Eye))
+    return listOf(
+        SheetItem(Str.p(R.plurals.chat_menu_read_count, readBy.read.size, readBy.read.size), icon = Lucide.Eye) { onOpen(readBy) },
+    )
 }

@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.data.ReadTick
 import com.libeyond.imandroid.data.ReplyNames
 import com.libeyond.imandroid.data.SendRejection
 import com.libeyond.imandroid.data.SenderNames
@@ -268,8 +269,8 @@ internal fun ChatRowView(
                 null
             },
             // 已读双勾：我发的、且对端读位点已越过它
-            read = m.sender == myUid && peerReadSeq >= m.convSeq,
-            delivered = m.sender == myUid,
+            read = m.sender == myUid && ReadTick.isRead(peerReadSeq, m.convSeq),
+            delivered = m.sender == myUid && peerReadSeq != ReadTick.HIDDEN, // 超级群不画任何勾
             reserveAvatarColumn = isGroup && m.sender != myUid,
             showAvatar = showsSenderAvatar(rows, i, myUid, isGroup),
             avatarSeed = m.sender,

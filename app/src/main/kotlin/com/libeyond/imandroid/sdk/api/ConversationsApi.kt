@@ -261,6 +261,9 @@ class ConversationsApi(private val http: HttpClient) {
      * 单聊群聊都有。**不吃 `history_visible` 入群下界**——后入群的人也看得到入群前的置顶（决策 19），
      * 所以其中的消息常不在本地。`conv_seq <= 0` 的脏项丢掉（跳不过去）。
      */
+    suspend fun readBy(convId: String, convSeq: Long): ReadBy =
+        decode(http.call("GET", "/api/v1/conversations/$convId/messages/$convSeq/read-by"), ReadBy.serializer())
+
     suspend fun pinned(convId: String): List<PinnedMessage> =
         decode(http.call("GET", "/api/v1/conversations/$convId/pinned"), PinnedResp.serializer())
             .items.filter { it.convSeq > 0 }
@@ -376,3 +379,17 @@ data class PinnedMessage(
 
 @Serializable
 private data class PinnedResp(val items: List<PinnedMessage> = emptyList(), val total: Int = 0)
+
+/**
+ * 一条我发的群消息的已读名单（`GET /conversations/{id}/messages/{seq}/read-by`，只有消息发送者能查）。
+ * `read`/`unread` 只含 uid（按字典序，发送者本人不计，已退群的不计）、**没有已读时间**。
+ * `enabled=false` = 群过大（>2000）服务端不算：名单为空，入口**静默隐藏**、不弹错。
+ */
+@Serializable
+data class ReadBy(
+    @SerialName("conv_seq") val convSeq: Long = 0,
+    val read: List<String> = emptyList(),
+    val unread: List<String> = emptyList(),
+    val total: Int = 0,
+    val enabled: Boolean = false,
+)

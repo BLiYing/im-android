@@ -2,6 +2,7 @@ package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.data.ComposerLock
 import com.libeyond.imandroid.data.PinnedBanner
+import com.libeyond.imandroid.data.ReadTick
 import com.libeyond.imandroid.data.sendText
 import com.libeyond.imandroid.ui.screens.MentionPanel
 import com.libeyond.imandroid.data.Forward
@@ -106,6 +107,7 @@ fun ChatHost(
     var viewing by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
     // 点系统消息里的名字进的资料页
     var openUser by remember(conv.convId) { mutableStateOf<String?>(null) }
+    var readReceipts by remember(conv.convId) { mutableStateOf<com.libeyond.imandroid.sdk.api.ReadBy?>(null) }
     /** 聊天记录详情页栈 + 页内查看器。嵌套记录往里点就压一层，返回弹一层。 */
     val recordNav = rememberChatRecordNav(conv.convId)
     var friendsByUid by remember(conv.convId) { mutableStateOf<Map<String, FriendEntry>>(emptyMap()) }
@@ -285,7 +287,7 @@ fun ChatHost(
         isGroup = conv.isGroup,
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
-        peerReadSeq = if (conv.isGroup) 0 else conv.peerReadSeq,
+        peerReadSeq = ReadTick.seqFor(conv.isGroup, conv.isSuper, conv.peerReadSeq),
         uploadProgress = uploadProgress,
         localNameOf = { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
         remarkOf = { uid -> friendsByUid[uid]?.remark?.takeIf { it.isNotBlank() } },
@@ -311,7 +313,7 @@ fun ChatHost(
         unread = entry.second,
         subtitle = subtitle,
         isGroup = conv.isGroup,
-        peerReadSeq = if (conv.isGroup) 0 else conv.peerReadSeq,
+        peerReadSeq = ReadTick.seqFor(conv.isGroup, conv.isSuper, conv.peerReadSeq),
         input = input,
         onInputChange = {
             // 系统把 URI 型剪贴项 coerce 成文本插进来：把图摘走，剩下的字回填
@@ -550,6 +552,16 @@ fun ChatHost(
     }
 
     banners.Dialogs(canPin)
+    readReceipts?.let { rb ->
+        ReadReceiptsSheet(
+            rb,
+            nameOf = { uid -> friendsByUid[uid]?.displayName ?: memberNames[uid] ?: uid },
+            avatarOf = { uid -> memberAvatars[uid].orEmpty() },
+            roleOf = { uid -> memberRoles[uid] },
+            onOpenUser = { openUser = it },
+            onDismissed = { readReceipts = null },
+        )
+    }
 
     // —— 消息长按菜单 ——（拼装与原位重绘都在 MessageMenuItems.kt）
     menuFor?.let { target ->
@@ -564,6 +576,7 @@ fun ChatHost(
             iAmManager = iAmManager,
             // 群聊在群资料拉回之前先不给（服务端本就会拒，免得先显示后消失）；单聊双方都能置顶
             canPin = canPin,
+            onReadReceipts = { readReceipts = it },
             // 复制图片 / 仅删除自己都是 launch 出去的活，**不能挂在菜单自己身上**
             // （菜单点完就关，作用域随之取消）——见 ChatMessageMenu 的 scope 注释
             scope = scope,

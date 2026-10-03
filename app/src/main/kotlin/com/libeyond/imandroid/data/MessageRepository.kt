@@ -351,7 +351,7 @@ class MessageRepository(
                 unread = s.unread,
                 mentionUnread = s.mentionUnread,
                 readSeq = s.readSeq,
-                peerReadSeq = s.peerReadSeq,
+                peerReadSeq = ReadTick.seed(s.isGroup, existing?.peerReadSeq ?: 0L, s.peerReadSeq, s.groupReadSeq),
                 syncedConvSeq = existing?.syncedConvSeq ?: 0,
                 pinnedAt = s.pinnedAt,
                 muted = s.muted,
@@ -381,7 +381,8 @@ class MessageRepository(
         if (r.from == owner) {
             // 本人其它端已读 → 本端未读清零（多端已读同步）
             conversations.markRead(owner, r.convId, maxOf(c.readSeq, r.upToConvSeq))
-        } else {
+        } else if (!c.isGroup) {
+            // 群回执服务端不扇出，真来了一帧也不能据此把整群的勾点绿（群的 ✓✓ 只认 group_read_seq）
             conversations.upsert(c.copy(peerReadSeq = maxOf(c.peerReadSeq, r.upToConvSeq)))
         }
     }
