@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -123,6 +127,8 @@ fun IMTopBar(
     right: (@Composable () -> Unit)? = null,
     onTitleClick: (() -> Unit)? = null,
     showDivider: Boolean = true,
+    /** 返回钮右上角的红圈数字（聊天页：**其它会话**的未读总数，对齐 iOS `backBadge`）。≤0 不显；>99 显「99+」。 */
+    leftBadge: Int = 0,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -142,12 +148,28 @@ fun IMTopBar(
                     modifier = Modifier.clickable(onClick = onLeft),
                 )
             } else if (onLeft != null) {
-                Image(
-                    imageVector = leftIcon ?: Lucide.ArrowLeft,
-                    contentDescription = leftDescription,
-                    modifier = Modifier.size(d.topBarIcon).clickable(onClick = onLeft),
-                    colorFilter = ColorFilter.tint(c.accent),
-                )
+                Box {
+                    Image(
+                        imageVector = leftIcon ?: Lucide.ArrowLeft,
+                        contentDescription = leftDescription,
+                        modifier = Modifier.size(d.topBarIcon).clickable(onClick = onLeft),
+                        colorFilter = ColorFilter.tint(c.accent),
+                    )
+                    if (leftBadge > 0) {
+                        // 红圈白字 12sp 半粗、高 18dp；一位数是正圆，多位是药丸（宽 = max(18, 字宽+10)）。不可点
+                        Box(
+                            Modifier.align(Alignment.TopEnd).offset(x = 12.dp, y = (-8).dp)
+                                .heightIn(min = 18.dp).widthIn(min = 18.dp)
+                                .clip(RoundedCornerShape(9.dp)).background(c.danger).padding(horizontal = 5.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                if (leftBadge > 99) "99+" else leftBadge.toString(),
+                                color = androidx.compose.ui.graphics.Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
             }
         }
 

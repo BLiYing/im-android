@@ -163,6 +163,8 @@ fun ChatScreen(
      * 只看正文的话，粘了图却一个字没打时发送键是灰的，那张图发不出去。
      */
     extraSendable: Boolean = false,
+    /** 返回钮上的数字：其它会话的未读总数（不含本会话）。 */
+    backUnread: Int = 0,
     /** 输入栏锁的原因（被禁言/全员禁言/系统会话）；null = 可输入。见 [Composer.lockedReason]。 */
     composerLock: String? = null,
     /** 顶部横幅叠放（置顶/公告/入群申请）；null = 不画。宿主量它的高度，加进消息列表顶部内边距。 */
@@ -337,6 +339,7 @@ fun ChatScreen(
                 // （上游若也改用 R.string.common_online 才成立，见本批报告）
                 subtitleAccent = subtitle == stringResource(R.string.common_online),
                 onLeft = onBack,
+                leftBadge = backUnread,
                 // 标题也保留可点（iOS 就是点标题进详情），但**可见入口是右边那个头像**
                 onTitleClick = onOpenInfo,
                 avatar = TopBarAvatar(

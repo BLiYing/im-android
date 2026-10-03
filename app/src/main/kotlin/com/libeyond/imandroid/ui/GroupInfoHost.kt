@@ -404,6 +404,7 @@ fun GroupInfoHost(
         // 详情页的滚动位置与成员分页游标原样留着（那些 remember 都在上面，没被跳过）。
         GroupInfoScreen(
         info = g,
+        upgradeHint = rememberGroupUpgradeHint(client, g, convId) { toast = it },
         members = membersState.members,
         // 语音行发送者名（判据在 data/SenderNames.kt 的 groupVoiceSenderNameOf）
         senderNameOf = groupVoiceSenderNameOf(

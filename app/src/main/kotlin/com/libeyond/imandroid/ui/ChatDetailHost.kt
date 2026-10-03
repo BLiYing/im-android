@@ -95,6 +95,8 @@ fun ChatDetailHost(
     var viewingOpen by remember(conv.convId) { mutableStateOf(false) }
     var viewingData by remember(conv.convId) { mutableStateOf<ConvMediaItem?>(null) }
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val headerSubtitle = if (conv.isGroup) "" else rememberChatSubtitle(client, conv)
     var askFriend by remember(conv.convId) { mutableStateOf<FriendRequestTarget?>(null) }
     val saveMedia = rememberMediaSaver { toast = it }
 
@@ -235,6 +237,15 @@ fun ChatDetailHost(
                     conv = conv,
                     title = title,
                     handle = knownFriends[conv.peerUid]?.handle.orEmpty(),
+                    subtitle = headerSubtitle,
+                    onCopyUsername = {
+                        val bare = knownFriends[conv.peerUid]?.handle.orEmpty().removePrefix("@")
+                        if (bare.isEmpty()) toast = Str.s(R.string.chat_detail_no_username)
+                        else {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(bare)) // 裸句柄，可直接粘进搜索框
+                            toast = Str.s(R.string.chat_detail_username_copied)
+                        }
+                    },
                     remark = remark,
                     pinned = pinned,
                     muteValueText = if (mutedNow) MuteState.untilText(muteUntil, muteTick) else stringResource(R.string.common_off),

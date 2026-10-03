@@ -1,6 +1,10 @@
 package com.libeyond.imandroid.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.GroupPermissions
@@ -8,6 +12,7 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.ActionSheet
+import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.SheetItem
 
 /**
@@ -32,6 +37,9 @@ internal fun GroupMemberMenu(
     runManage: (String, suspend () -> Unit) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // 二级：禁言时长选择单 / 移出二次确认。菜单本身点完就关，所以这两层必须挂在**本组件**（它不随菜单项点击离开组合）
+    var pickingMute by remember { mutableStateOf(false) }
+    var confirmRemove by remember { mutableStateOf<String?>(null) } // "cooldown" | "forever"
     val actions = buildList {
         if (GroupPermissions.canSetRole(info, member, myUid)) {
             val makeAdmin = !member.isAdmin
@@ -46,13 +54,11 @@ internal fun GroupMemberMenu(
         }
         if (GroupPermissions.canMute(info, member, myUid)) {
             val muted = GroupPermissions.isMuteActive(member.muteUntil)
-            val label = stringResource(
-                if (muted) R.string.group_member_action_unmute else R.string.group_member_action_mute_toggle
-            )
+            // 未禁言：「禁言…」→ 弹时长选择单；已禁言：直接「解除禁言」（until=0，不二次确认，iOS 同）
+            val label = stringResource(if (muted) R.string.group_member_action_unmute else R.string.group_member_action_mute)
             add(SheetItem(label) {
-                runManage(label) {
-                    client.groups.muteMember(convId, member.userId, if (muted) 0L else -1L)
-                }
+                if (muted) runManage(label) { client.groups.muteMember(convId, member.userId, 0L) }
+                else pickingMute = true
             })
         }
         if (GroupPermissions.canTransfer(info, member, myUid)) {
@@ -62,14 +68,10 @@ internal fun GroupMemberMenu(
             })
         }
         if (GroupPermissions.canRemove(info, member, myUid)) {
-            val label = stringResource(R.string.group_member_action_remove)
-            add(SheetItem(label, destructive = true) {
-                // 缺省 cooldown=24h：只移出（none）会让人立刻又进来，
-                // 永久黑名单（forever）对一次误操作又太重（PROTOCOL §11 三档）
-                runManage(label) {
-                    client.groups.removeMember(convId, member.userId, ban = "cooldown")
-                }
-            })
+            // 缺省 cooldown=24h：只移出（none）会让人立刻又进来（UI 不暴露，iOS 同）；
+            // 永久黑名单（forever）单独一项，都要二次确认（破坏性）
+            add(SheetItem(stringResource(R.string.group_member_action_remove), destructive = true) { confirmRemove = "cooldown" })
+            add(SheetItem(stringResource(R.string.group_member_action_remove_and_ban), destructive = true) { confirmRemove = "forever" })
         }
     }
     // 一项都没有就别弹一个空壳（对方是群主、我是普通成员时就是这样）
@@ -77,5 +79,45 @@ internal fun GroupMemberMenu(
         onDismiss()
         return
     }
-    ActionSheet(title = member.displayName, items = actions, onDismiss = onDismiss)
+    if (pickingMute) {
+        // 禁言时长：10 分钟 / 1 小时 / 1 天 / 永久(-1)。**到期时刻在点选那一下算**，不是弹出选择单时
+        val label = stringResource(R.string.group_member_action_mute)
+        @Composable
+        fun item(res: Int, ms: Long?) = SheetItem(stringResource(res)) {
+            runManage(label) { client.groups.muteMember(convId, member.userId, ms?.let { System.currentTimeMillis() + it } ?: -1L) }
+        }
+        ActionSheet(
+            title = stringResource(R.string.mute_title) + " · " + member.displayName,
+            items = listOf(
+                item(R.string.mute_10m, 10 * 60_000L), item(R.string.mute_1h, 60 * 60_000L),
+                item(R.string.mute_1d, 24 * 60 * 60_000L), item(R.string.common_permanent, null),
+            ),
+            onDismiss = { pickingMute = false; onDismiss() },
+        )
+        return
+    }
+    confirmRemove?.let { ban ->
+        val forever = ban == "forever"
+        val label = stringResource(if (forever) R.string.group_member_action_remove_and_ban else R.string.group_member_action_remove)
+        IMConfirmDialog(
+            title = stringResource(
+                if (forever) R.string.chat_detail_remove_member_ban_confirm_title else R.string.chat_detail_remove_member_confirm_title,
+                member.displayName,
+            ),
+            message = stringResource(
+                if (forever) R.string.chat_detail_remove_member_ban_message else R.string.group_member_action_remove_confirm_message,
+                member.displayName,
+            ),
+            confirmText = stringResource(R.string.common_remove),
+            onConfirm = { confirmRemove = null; runManage(label) { client.groups.removeMember(convId, member.userId, ban = ban) }; onDismiss() },
+            onDismiss = { confirmRemove = null; onDismiss() },
+        )
+        return
+    }
+    // 点「禁言…」/「移出…」时菜单项先把二级状态置位、随后 ActionSheet 才调 onDismiss——此时不能把宿主的 memberMenu 清掉，
+    // 否则本组件离开组合、二级层跟着没了
+    ActionSheet(
+        title = member.displayName, items = actions,
+        onDismiss = { if (!pickingMute && confirmRemove == null) onDismiss() },
+    )
 }

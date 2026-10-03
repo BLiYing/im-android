@@ -271,6 +271,10 @@ class ConversationsApi(private val http: HttpClient) {
             TranslateResp.serializer(),
         ).translation
 
+    /** 我「仅为我删除」过的全部消息（服务端全集）。补课用，见 [com.libeyond.imandroid.data.HiddenCatchUp]。 */
+    suspend fun hiddenMessages(): List<HiddenItem> =
+        decode(http.call("GET", "/api/v1/messages/hidden"), HiddenResp.serializer()).items
+
     suspend fun pinned(convId: String): List<PinnedMessage> =
         decode(http.call("GET", "/api/v1/conversations/$convId/pinned"), PinnedResp.serializer())
             .items.filter { it.convSeq > 0 }
@@ -403,3 +407,12 @@ data class ReadBy(
 
 @Serializable
 private data class TranslateResp(val translation: String = "")
+
+@Serializable
+data class HiddenItem(
+    @SerialName("conv_id") val convId: String = "",
+    @SerialName("conv_seq") val convSeq: Long = 0,
+)
+
+@Serializable
+private data class HiddenResp(val items: List<HiddenItem> = emptyList())

@@ -261,6 +261,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                     onArmConsumed = { chatArm = ChatArm() },
                                     covered = covered,
                                     onOpenChat = { stub -> openConv = stub },
+                                    // 返回钮红圈 = 其它会话的未读总数（iOS totalUnreadExcludingConv）；按 convId 排除，不含本会话
+                                    backUnread = conversations.orEmpty().filter { it.convId != conv.convId }.sumOf { it.unread },
                                 )
                             }
                         }

@@ -59,7 +59,7 @@ class MessageService(
      */
     internal val repo: MessageRepository,
     val presence: PresenceStore,
-    private val conversationsApi: ConversationsApi,
+    internal val conversationsApi: ConversationsApi,
     private val upload: UploadApi,
     /** 已下载媒体的落盘。自己发出去的字节直接放进它，免得发完再下回来一遍。 */
     private val mediaCache: MediaCache,
@@ -577,6 +577,7 @@ class MessageService(
             val list = conversationsApi.list()
             repo.applyConversationList(owner, list, presence)
             _pendingCounts.value = list.filter { it.isGroup && it.pendingCount > 0 }.associate { it.convId to it.pendingCount }
+            catchUpHidden(owner) // 扩展函数，见 HiddenCatchUp.kt（本文件贴 600 行硬闸）
             _listedConversations.value = ListedConversations(owner, list.size)
         } catch (e: Exception) {
             log.w("conversations_refresh_failed", "err" to e.javaClass.simpleName)

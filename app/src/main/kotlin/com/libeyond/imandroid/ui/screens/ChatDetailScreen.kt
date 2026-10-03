@@ -2,6 +2,7 @@ package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +61,10 @@ internal fun ChatDetailScreen(
     conv: ConversationEntity,
     title: String,
     handle: String,
+    /** 头部副标题 = 在线态文案（空串不显）。**不能再重复 @句柄**——下面「用户名」行已经有（iOS `displaySubtitle`）。 */
+    subtitle: String = "",
+    /** 长按「用户名」行：复制裸句柄（不带 @）并说一声（宿主做剪贴板与吐司）。 */
+    onCopyUsername: () -> Unit = {},
     remark: String,
     pinned: Boolean,
     /** 「消息免打扰」行的右值：`common_off` / `notif_mute_until_*` / `common_permanent`
@@ -146,9 +151,9 @@ internal fun ChatDetailScreen(
                     IMAvatar(title, seed = conv.peerUid, avatarUrl = conv.avatarUrl, size = 100.dp)
                     Spacer(Modifier.height(12.dp))
                     Text(title, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
-                    // 标识行为空时**整行隐藏**——不显示「用户名：未设置」，更不回退内部 ID
-                    if (handle.isNotEmpty()) {
-                        Text(handle, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+                    // 副标题 = 在线态，空串整行隐藏；句柄在下面「用户名」行，这里不重复
+                    if (subtitle.isNotEmpty()) {
+                        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
                     }
                 }
             }
@@ -182,7 +187,7 @@ internal fun ChatDetailScreen(
                     )
                     if (handle.isNotEmpty()) {
                         Divider()
-                        Row2(stringResource(R.string.settings_info_username), handle)
+                        Row2(stringResource(R.string.settings_info_username), handle, onLongClick = onCopyUsername)
                     }
                 }
             }
@@ -253,11 +258,29 @@ private fun Divider() {
 
 /** 左标题 + 右值（+ 可点时带 `›`）。对齐 iOS `UITableViewCellStyleValue1`。 */
 @Composable
-private fun Row2(label: String, value: String = "", danger: Boolean = false, onClick: (() -> Unit)? = null) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun Row2(
+    label: String, value: String = "", danger: Boolean = false, onClick: (() -> Unit)? = null,
+    /** 长按（「用户名」行复制句柄）。带触觉反馈，与 iOS 轻震一致。 */
+    onLongClick: (() -> Unit)? = null,
+) {
     val c = IMTheme.colors
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     Row(
         Modifier.fillMaxWidth()
-            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .let {
+                when {
+                    onLongClick != null -> it.combinedClickable(
+                        onClick = { onClick?.invoke() },
+                        onLongClick = {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onLongClick()
+                        },
+                    )
+                    onClick != null -> it.clickable(onClick = onClick)
+                    else -> it
+                }
+            }
             .padding(horizontal = IMTheme.dimens.space4, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

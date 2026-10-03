@@ -37,6 +37,7 @@ import com.composables.icons.lucide.Search
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
+import com.libeyond.imandroid.ui.GroupUpgradeHintUi
 import com.libeyond.imandroid.ui.components.IMAvatar
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.ArchiveTarget
@@ -129,6 +130,8 @@ fun GroupInfoScreen(
     /** 邀请好友入群。**入口按 [GroupPermissions.canInvite] 显隐**——
      *  开了「仅管理员可邀请」还给普通成员留入口，点进去只会拿到 300212。 */
     onInvite: () -> Unit,
+    /** 满员时「可升级为大群」说明行（null = 不显）。只告知，点一下复制群 ID。 */
+    upgradeHint: GroupUpgradeHintUi? = null,
     /** 头部操作排（搜索 / 更多）。由 [com.libeyond.imandroid.data.DetailActions] 算可见项。 */
     actions: List<DetailAction>,
     moreItems: List<DetailMoreAction>,
@@ -264,6 +267,35 @@ fun GroupInfoScreen(
                             style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                         Text("›", color = c.textTertiary)
                     }
+                }
+            }
+
+            // 满员提示：紧跟在邀请入口之后（iOS 成员页签里「添加成员」下面那一行），与邀请卡同一份门控的下面
+            if (!galleryOnly && upgradeHint != null) item(key = "upgrade_hint") {
+                Spacer(Modifier.height(d.cardGap))
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
+                        .clickable(onClick = upgradeHint.onTap)
+                        .padding(horizontal = d.space4, vertical = 12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.group_upgrade_hint_title, upgradeHint.maxMembers), color = c.textPrimary,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    // 5 条短句分行（不是一大段），行距放宽——iOS 同
+                    val lines = listOf(
+                        stringResource(R.string.group_upgrade_hint_item_1, upgradeHint.maxSupergroupMembers),
+                        stringResource(R.string.group_upgrade_hint_item_2),
+                        stringResource(R.string.group_upgrade_hint_item_3),
+                        stringResource(R.string.group_upgrade_hint_item_4_short),
+                        stringResource(R.string.group_upgrade_hint_tap_copy_id),
+                    )
+                    Text(
+                        lines.joinToString("\n"), color = c.textSecondary,
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 20.sp),
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                 }
             }
 

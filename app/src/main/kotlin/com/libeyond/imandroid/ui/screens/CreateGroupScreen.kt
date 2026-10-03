@@ -85,8 +85,10 @@ fun CreateGroupScreen(
     var query by remember { mutableStateOf("") }
 
     val filtered = remember(friends, query) {
+        // 走共用的 ListSearch（对齐 iOS `IMListSearchMatches`）：显示名（含备注）+ 用户名 + 内部 id（不显示，调试用，
+        // 10 位随机数不会与名字撞）。此前这里自己手写 contains，少了 uid 一路
         if (query.isBlank()) friends
-        else friends.filter { it.displayName.contains(query, ignoreCase = true) || it.handle.contains(query, ignoreCase = true) }
+        else friends.filter { com.libeyond.imandroid.data.ListSearch.matches(query, listOf(it.displayName, it.username, it.userId)) }
     }
     val groups = remember(filtered) { ContactSection.group(filtered) { it.displayName } }
     val titles = remember(groups) { ContactSection.titlesOf(groups) }

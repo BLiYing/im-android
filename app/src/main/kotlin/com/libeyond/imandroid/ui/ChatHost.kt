@@ -74,6 +74,8 @@ fun ChatHost(
     onOpenMediaGallery: () -> Unit = {},
     /** 群成员资料页点「发消息」→ 换成与该成员的单聊（同 `GroupInfoHost` 的 `onOpenChat`）。 */
     onOpenChat: (ConversationEntity) -> Unit = {},
+    /** 返回钮红圈：其它会话的未读总数（`MainScreen` 按会话列表现算，不含本会话，对齐 iOS `totalUnreadExcludingConv:`）。 */
+    backUnread: Int = 0,
 ) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -333,6 +335,7 @@ fun ChatHost(
         },
         // 粘贴条只负责"挂着、可逐张撤掉"，发送归输入栏那颗发送键（对齐 iOS）
         extraSendable = !paste.isEmpty,
+        backUnread = backUnread,
         banners = { banners.Stack() },
         composerLock = ComposerLock.reasonRes(conv.isGroup, conv.peerUid, myRole, myMuteUntil, groupMuteUntil, lockNow)
             ?.let { Str.s(it) },
