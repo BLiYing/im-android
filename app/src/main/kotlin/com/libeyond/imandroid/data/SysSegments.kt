@@ -1,5 +1,7 @@
 package com.libeyond.imandroid.data
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import com.libeyond.imandroid.sdk.protocol.SysSegment
 import kotlinx.serialization.builtins.ListSerializer
@@ -36,11 +38,14 @@ object SysSegments {
     /**
      * 名字段显示成什么。**回退链：备注 → 群昵称 → 服务端给的公开昵称**。
      *
+     * **自己恒显示「我」**（[selfUid] 命中，对齐 iOS `localNameForUID:selfUID:`），优先于备注/群昵称。
+     *
      * 末级用 `seg.text`（服务端生成时的公开昵称）而**不是 uid**：uid 是 10 位内部 ID，
      * 露在界面上对用户毫无意义（账号重构后的既定纪律）。
      */
-    fun displayName(seg: SysSegment, remark: String?, groupNickname: String?): String =
-        remark?.takeIf { it.isNotBlank() }
+    fun displayName(seg: SysSegment, remark: String?, groupNickname: String?, selfUid: String? = null): String =
+        if (!selfUid.isNullOrBlank() && seg.uid == selfUid) Str.s(R.string.common_me)
+        else remark?.takeIf { it.isNotBlank() }
             ?: groupNickname?.takeIf { it.isNotBlank() }
             ?: seg.text
 

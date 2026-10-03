@@ -15,10 +15,20 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.imePadding
+import com.libeyond.imandroid.data.ContactSection
+import com.libeyond.imandroid.ui.components.IMTextField
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +49,9 @@ data class PickRow(val id: String, val name: String, val avatarUrl: String, val 
  * 群这边有四处要选人——设管理员 / 撤管理员 / 转让群主 / 邀请入群——
  * 每处单写一个选择页，最后必然在「已选计数」「上限截断」「空态文案」上各写各的。
  * iOS 那边同样是 `IMFriendPickerViewController` / `IMGroupMemberSearchViewController` 复用。
+ *
+ * **顶部搜索框 + 按拼音 A–Z 分组 + 右侧索引尺**（对齐 iOS `IMFriendPickerViewController`；
+ * 判据同通讯录 / 建群页，在 `ContactSection`）。搜索中不画索引尺（结果是子集，组随打字剧烈变动）。
  */
 @Composable
 internal fun PickListScreen(
@@ -57,7 +70,17 @@ internal fun PickListScreen(
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
-    Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(rows, query) {
+        if (query.isBlank()) rows
+        else rows.filter { it.name.contains(query, ignoreCase = true) || it.subtitle.contains(query, ignoreCase = true) }
+    }
+    val groups = remember(filtered) { ContactSection.group(filtered) { it.name } }
+    val titles = remember(groups) { ContactSection.titlesOf(groups) }
+    val groupStarts = remember(groups) { ContactSection.groupStartIndices(groups.map { it.items.size }, leadingItems = 0) }
+    val listState = rememberLazyListState()
+    val indexScope = rememberCoroutineScope()
+    Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding().imePadding()) {
         IMTopBar(
             title = title,
             subtitle = if (multi && selected.isNotEmpty()) {
@@ -76,8 +99,28 @@ internal fun PickListScreen(
             }
             return@Column
         }
-        LazyColumn(Modifier.fillMaxSize()) {
-            items(rows, key = { it.id }) { r ->
+        IMTextField(
+            query, { query = it }, stringResource(R.string.friend_picker_search_placeholder),
+            enabled = true, modifier = Modifier.padding(horizontal = d.space4, vertical = d.space2),
+        )
+        Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState) {
+            if (filtered.isEmpty()) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(top = 32.dp), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.friend_picker_no_match), color = c.textTertiary,
+                            style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+            groups.forEach { g ->
+                item(key = "h-" + g.key) {
+                    Text(
+                        g.key, color = c.textTertiary, style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = d.space4, top = 16.dp, bottom = 6.dp),
+                    )
+                }
+            items(g.items, key = { it.id }) { r ->
                 val on = r.id in selected
                 // 到上限后**未选中的行不再可点**——让它可点、点了没反应是最糟的一种
                 val enabled = !multi || on || limit <= 0 || selected.size < limit
@@ -114,6 +157,16 @@ internal fun PickListScreen(
                         .height(0.5.dp).background(c.separator))
                 }
             }
+            }
+        }
+        // 索引尺：搜索中不画
+        if (query.isBlank()) {
+            ContactIndexBar(
+                titles = titles,
+                onPick = { i -> groupStarts.getOrNull(i)?.let { indexScope.launch { listState.scrollToItem(it) } } },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
+        }
         }
     }
 }

@@ -9,8 +9,14 @@ package com.libeyond.imandroid.data
  */
 object ChatEntry {
 
-    /** 未读分割线上方保留的已读上下文条数。 */
-    const val CONTEXT_BEFORE = 3
+    /**
+     * 未读分割线上方保留的已读上下文条数。**必须是 0**：CHAT_UX §3 / iOS `anchorRowToTop:` / Web
+     * `scrollTop += divider.top - box.top` 三端都是「把分割线 / 首条未读对齐到视口**顶部**」。
+     * 此前留 3 条上下文，上面那几行（尤其是竖图）占掉大半屏，未读的那张图被挤到屏幕下沿、下半截切掉
+     * （2026-10-03 真机：已读 40 条文本 + 1 张图 + 新来 1 张竖图，进会话看不到未读图的下半）。
+     * 未读不足一屏时 LazyColumn 的末尾 clamp 自然等价于贴底，与 iOS 同。
+     */
+    const val CONTEXT_BEFORE = 0
 
     /**
      * 是否按「有未读」处理。
@@ -39,7 +45,6 @@ object ChatEntry {
         // 首条未读 = 第一条 conv_seq > readSeq 的消息行
         val firstUnread = rowSeqs.indexOfFirst { it > 0 && it > readSeq }
         if (firstUnread < 0) return rowSeqs.lastIndex
-        // 往上多带一点上下文，让分割线不贴着屏幕顶
         return (firstUnread - CONTEXT_BEFORE).coerceAtLeast(0)
     }
 

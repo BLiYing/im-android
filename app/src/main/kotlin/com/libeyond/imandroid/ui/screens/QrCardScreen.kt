@@ -43,6 +43,8 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  */
 @Composable
 fun QrCardScreen(
+    /** 嵌入扫一扫页时为 false：宿主已有顶栏。 */
+    showTopBar: Boolean = true,
     card: QrCard?,
     title: String,
     displayName: String,
@@ -66,7 +68,7 @@ fun QrCardScreen(
     val ready = matrix != null
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
-        IMTopBar(title = title, onLeft = onBack)
+        if (showTopBar) IMTopBar(title = title, onLeft = onBack)
 
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())

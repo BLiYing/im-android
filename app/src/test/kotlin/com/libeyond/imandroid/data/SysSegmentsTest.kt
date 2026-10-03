@@ -67,4 +67,14 @@ class SysSegmentsTest {
         SysSegments.displayName(segs[0], remark = "老张", groupNickname = null)
         assertEquals("张三", segs[0].text)
     }
+
+    /** 自己恒显示「我」，优先于备注 / 群昵称；别人不受影响（对齐 iOS `localNameForUID:selfUID:`）。 */
+    @Test
+    fun `自己显示为我`() {
+        val seg = SysSegment(uid = "1002", text = "用户1002")
+        val me = com.libeyond.imandroid.i18n.Str.s(com.libeyond.imandroid.R.string.common_me)
+        assertEquals(me, SysSegments.displayName(seg, remark = "老张", groupNickname = "小李", selfUid = "1002"))
+        assertEquals("老张", SysSegments.displayName(seg, remark = "老张", groupNickname = null, selfUid = "9999"))
+        assertEquals("用户1002", SysSegments.displayName(seg, remark = null, groupNickname = null, selfUid = ""))
+    }
 }

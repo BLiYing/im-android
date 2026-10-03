@@ -203,9 +203,7 @@ private fun VideoContent(
     onOpenMedia: ((MessageEntity) -> Unit)?,
 ) {
     val c = IMTheme.colors
-    // 门控作用在**视频本体**上，封面照常加载——封面就几十 KB，
-    // 它是"信封"的一部分；把封面也门控掉的话，未下载的视频只剩一团磨砂，
-    // 用户连要不要下都判断不了。
+    // 门控态只显磨砂 thumb（不拉封面，对齐 iOS）；下完 / 自己发的才画封面。
     val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
     // 自己发的豁免门控，但**失效不豁免**（理由同 [ImageContent] 的 `ungated`）
     val ungated = mine && gate.state.phase != DownloadPhase.Expired
@@ -214,11 +212,19 @@ private fun VideoContent(
             .mediaTap(gate, msg, onOpenMedia, openAnyway = ungated),
         contentAlignment = Alignment.Center,
     ) {
-        // 封面：**解不了 HEVC 的端只能靠这张图**，没有它就是一片黑底加个播放钮。
-        // poster 为空时不画 AsyncImage —— 传空串给 Coil 会触发一次必然失败的加载。
         val poster = msg.poster
         val frosted = rememberFrostedPainter(msg.thumb)
-        if (!poster.isNullOrBlank()) {
+        val gatedNow = !gate.ready && !ungated
+        if (gatedNow) {
+            // **未下载（门控态）一律只显内嵌 thumb 的磨砂图**，不拉封面——与 iOS `IMImageCell`（gated：thumb 优先、
+            // 无 thumb 留中性底、「绝不为占位联网」）和图片气泡同口径。此前有 poster 就直接画清晰封面，
+            // 自动下载关着时视频看着已经「下好了」，磨砂占位成了死代码（2026-10-03 用户报，iOS 早年同一个坑）。
+            if (frosted != null) {
+                Image(painter = frosted, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+        } else if (!poster.isNullOrBlank()) {
+            // 封面：**解不了 HEVC 的端只能靠这张图**，没有它就是一片黑底加个播放钮。
+            // poster 为空时不画 AsyncImage —— 传空串给 Coil 会触发一次必然失败的加载。
             AsyncImage(
                 model = MediaUrl.absolute(poster, host, useTls),
                 contentDescription = stringResource(R.string.chat_media_alt_video_cover),

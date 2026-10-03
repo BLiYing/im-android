@@ -153,23 +153,15 @@ fun ContactsHost(
                 if (f == null) {
                     page = ContactsPage.List
                 } else {
-                    UserProfileHost(
+                    MemberProfileHost(
                         client = client,
                         userId = f.userId,
-                        knownRelation = f.status,
-                        seed = UserCard(
-                            userId = f.userId, username = f.username,
-                            nickname = f.nickname, avatarUrl = f.avatarUrl, remark = f.remark,
-                        ),
-                        onSendMessage = { u ->
-                            onOpenChat(client.conversationStubFor(u.userId, u.displayName, u.avatarUrl))
-                        },
-                        // 改完备注立即回填列表这份状态，否则退回好友列表那一行仍显编辑前的旧值
-                        // （`friends` 只在挂载 / 收到 friend 帧时才重拉，与 ChatDetailHost 同一个坑）
-                        onRemarkChanged = { v ->
-                            friends = friends.map { if (it.userId == f.userId) it.copy(remark = v) else it }
-                        },
-                        onBack = { page = ContactsPage.List },
+                        knownFriends = remember(friends) { friends.associateBy { it.userId } },
+                        name = f.nickname,
+                        avatarUrl = f.avatarUrl,
+                        onOpenChat = onOpenChat,
+                        // 信息页里改的备注不回调：退回时重拉好友表，列表那一行才不显编辑前的旧值
+                        onBack = { page = ContactsPage.List; scope.launch { reload() } },
                     )
                 }
             }

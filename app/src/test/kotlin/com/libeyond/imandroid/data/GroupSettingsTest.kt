@@ -77,6 +77,17 @@ class GroupSettingsTest {
         assertEquals(GroupSettings.Key.entries.toSet(), all.toSet())
         assertEquals("有重复项", all.size, all.toSet().size)
     }
+
+    /** 乐观更新：翻完的值整组套回本地 info，其余字段（名字/角色）不动。 */
+    @Test
+    fun `applied 把翻转结果套回本地 info`() {
+        val base = GroupInfo(convId = "g1", name = "群", myRole = "owner")
+        val next = GroupSettings.applied(base, GroupSettings.toggled(base, GroupSettings.Key.JoinApproval))
+        assertTrue(next.joinApproval)
+        assertFalse(next.permInvite)
+        assertEquals("群", next.name)
+        assertEquals("owner", next.myRole)
+    }
 }
 
 /** 测试要按 key 读 [GroupSettings.Values]，而生产代码里那个是 private。 */
@@ -86,4 +97,5 @@ private fun GroupSettings.readFor(v: GroupSettings.Values, k: GroupSettings.Key)
     GroupSettings.Key.PermEditInfo -> v.permEditInfo
     GroupSettings.Key.PermPin -> v.permPin
     GroupSettings.Key.HistoryVisible -> v.historyVisible
+
 }

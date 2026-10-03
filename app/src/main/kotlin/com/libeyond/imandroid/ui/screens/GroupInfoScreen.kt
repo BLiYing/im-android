@@ -290,7 +290,14 @@ fun GroupInfoScreen(
                         if (info.pendingCount > 0) {
                             Text(
                                 stringResource(R.string.chat_detail_manage_pending_badge, info.pendingCount),
-                                color = c.accent,
+                                color = c.danger,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        } else {
+                            // 无待审时右侧给权限提示（对齐 iOS `chat.detail.manage_hint`）
+                            Text(
+                                stringResource(R.string.chat_detail_manage_hint),
+                                color = c.textSecondary,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }

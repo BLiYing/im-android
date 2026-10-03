@@ -27,7 +27,13 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -91,8 +97,9 @@ import java.util.concurrent.Executors
  * 扫一扫取景页（QRCODE P0 接收方半，对齐 iOS `IMQRScannerViewController` 的取景页）。
  *
  * CameraX 出帧 + zxing-core（`QRCodeReader`/`QRCodeMultiReader`，出示码那半已在用的同一个依赖）
- * 解码——不叠 ML Kit / zxing-android-embedded。**未接**：与「我的二维码」的页签组合（本端「我的
- * 二维码」另有独立入口，不需要在这里重复），见 `docs/UI_PARITY_IOS.md`。
+ * 解码——不叠 ML Kit / zxing-android-embedded。底部「扫码 / 我的二维码」页签（2026-10-03，对齐 iOS）：
+ * 「我的二维码」页由调用方经 [QrScanHost] 的 `myCard` 槽位给（`QrCardHost(embedded = true)`），
+ * 切过去就不再挂相机预览。布局数字（框心上移 40 / 提示 +22 / 相册 +26）逐条对齐 iOS `setupScanPage`。
  *
  * 命中一枚码就回调 [onResult] 一次并停止分析；页面本身何时关闭由调用方决定
  * （[QrRouteHost] 会先关本页再异步 resolve，对齐 iOS `handleRaw:` 先停帧、后解析的顺序）。
@@ -100,7 +107,12 @@ import java.util.concurrent.Executors
  * `pickFromAlbum`/`handleDecodedCodes:`——群公告截图常同时有群码与客服码，不默认取第一个）。
  */
 @Composable
-internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
+internal fun QrScanHost(
+    onResult: (String) -> Unit,
+    onClose: () -> Unit,
+    /** 「我的二维码」页签的内容（对齐 iOS 扫一扫页底部「扫码 / 我的二维码」两个页签）；null = 不出页签。 */
+    myCard: (@Composable () -> Unit)? = null,
+) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -134,6 +146,8 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // 页签：false = 扫码，true = 我的二维码。切到后者就不再挂相机预览（iOS `stopSession`：不取景就别占着摄像头）
+    var showCard by remember { mutableStateOf(false) }
     var torchOn by remember { mutableStateOf(false) }
     var camera by remember { mutableStateOf<Camera?>(null) }
     // 命中一枚就锁死，忽略同一批还没关掉的后续帧——避免同一次扫描回调两次。
@@ -166,46 +180,75 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        when {
-            hasPermission -> {
-                CameraPreview(
+        if (showCard && myCard != null) {
+            // 我的二维码页：顶栏（关闭 / 标题）仍在上面，内容让出它的高度
+            Box(Modifier.fillMaxSize().statusBarsPadding().padding(top = 52.dp, bottom = 56.dp)) { myCard() }
+        } else {
+            when {
+                hasPermission -> CameraPreview(
                     lifecycleOwner = lifecycleOwner,
                     onCameraReady = { camera = it },
                     onDecoded = { raw -> if (handled.compareAndSet(false, true)) onResult(raw) },
                 )
-                ScanReticle(Modifier.align(Alignment.Center))
-                Text(
-                    stringResource(R.string.qr_scan_frame_hint),
-                    color = Color.White.copy(alpha = 0.82f),
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.align(Alignment.Center).padding(top = 168.dp).fillMaxWidth().padding(horizontal = 40.dp),
+                deniedOnce -> ScanPermissionDenied(
+                    onOpenSettings = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.fromParts("package", context.packageName, null),
+                            ),
+                        )
+                    },
                 )
             }
-            deniedOnce -> ScanPermissionDenied(
-                onOpenSettings = {
-                    context.startActivity(
-                        Intent(
-                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.fromParts("package", context.packageName, null),
-                        ),
-                    )
-                },
-            )
+            // 取景框 / 提示 / 相册钮：对齐 iOS `setupScanPage`——框心在屏幕中心上移 40，
+            // 提示在框下 22，「从相册选择」在提示下 26（不是贴屏幕底）。
+            // 此前提示文字用 `Align.Center + padding(top = 168)` 摆，落在框底边以内（框半高 110），压在取景框里。
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val reticleSide = 220.dp
+                val reticleTop = maxHeight / 2 - 40.dp - reticleSide / 2
+                if (hasPermission) {
+                    ScanReticle(Modifier.align(Alignment.TopCenter).offset(y = reticleTop))
+                }
+                Column(
+                    Modifier.fillMaxWidth().padding(top = reticleTop + reticleSide + 22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (hasPermission) {
+                        Text(
+                            stringResource(R.string.qr_scan_frame_hint),
+                            color = Color.White.copy(alpha = 0.82f),
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp),
+                        )
+                        Spacer(Modifier.height(26.dp))
+                    }
+                    // 「从相册选择」不需要相机权限，两种权限态都露出——对齐 iOS 即便相机被拒也留着这条路。
+                    Box(
+                        Modifier.clickable(enabled = !pickerBusy) {
+                            pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
+                    ) {
+                        Text(
+                            if (pickerBusy) stringResource(R.string.chat_voice_transcribing) else stringResource(R.string.qr_scan_pick_album),
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
         }
 
-        // 「从相册选择」不需要相机权限，两种权限态都露出——对齐 iOS 即便相机被拒也留着这条路。
-        Box(
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp)
-                .clickable(enabled = !pickerBusy) {
-                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                },
-        ) {
-            Text(
-                if (pickerBusy) stringResource(R.string.chat_voice_transcribing) else stringResource(R.string.qr_scan_pick_album),
-                color = Color.White,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+        // 底部页签「扫码 / 我的二维码」（iOS：safe bottom -14，间距 26，14pt，选中白、未选中 50% 白）
+        if (myCard != null) {
+            Row(
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(26.dp),
+            ) {
+                ScanTab(stringResource(R.string.qr_scan_tab_scan), selected = !showCard) { showCard = false }
+                ScanTab(stringResource(R.string.qr_scan_my_code), selected = showCard) { showCard = true }
+            }
         }
 
         Box(
@@ -223,7 +266,7 @@ internal fun QrScanHost(onResult: (String) -> Unit, onClose: () -> Unit) {
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.align(Alignment.Center),
             )
-            if (hasPermission) {
+            if (hasPermission && !showCard) {
                 IconButton(onClick = { torchOn = !torchOn }, modifier = Modifier.align(Alignment.CenterEnd)) {
                     Icon(
                         if (torchOn) Lucide.Flashlight else Lucide.FlashlightOff,
@@ -398,6 +441,16 @@ private class QrFrameAnalyzer(private val onDecoded: (String) -> Unit) : ImageAn
  * 扫描线对齐 iOS `startScanLineAnimation`：框内左右各留 8dp，顶部起 10dp，2.2s 循环上下平移
  * `side - 20dp`，ease-in-out——此前本端只有静止取景框，漏了这条动画（用户报的第 4 条真机对比发现）。
  */
+@Composable
+private fun ScanTab(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        color = Color.White.copy(alpha = if (selected) 1f else 0.5f),
+        fontSize = 14.sp,
+        modifier = Modifier.clickable(onClick = onClick).padding(vertical = 8.dp),
+    )
+}
+
 @Composable
 private fun ScanReticle(modifier: Modifier = Modifier) {
     val side = 220.dp

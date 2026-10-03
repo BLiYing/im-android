@@ -376,6 +376,9 @@ fun ChatDetailHost(
                     // **只删本机**（同 iOS `clearMessagesForConv:`）：服务端没有、也不该有
                     // 「替所有人删历史」的接口
                     client.repo.clearConversation(owner, conv.convId)
+                    // 详情页的媒体 / 文件 / 语音页签是服务端归档分页、已加载那份还留着刚清掉的项：重载一次（请求带清空位点，
+                    // 滤掉位点以内；iOS 清空后页签当场清空）
+                    archive.reload()
                     toast = Str.s(R.string.chat_detail_clear_history_done)
                 }
             },

@@ -282,18 +282,13 @@ internal fun FavoritesHost(
             CardContent.parseContact(f.content)?.takeIf { f.contentType == ContentType.CONTACT && it.uid == uid }
         }
         Overlay {
-            UserProfileHost(
+            MemberProfileHost(
                 client = client,
                 userId = uid,
-                knownRelation = fr?.status.orEmpty(),
-                seed = UserCard(
-                    userId = uid,
-                    username = fr?.username ?: card?.username.orEmpty(),
-                    nickname = fr?.nickname ?: card?.nickname.orEmpty(),
-                    avatarUrl = fr?.avatarUrl ?: card?.avatarUrl.orEmpty(),
-                    remark = fr?.remark.orEmpty(),
-                ),
-                onSendMessage = { u -> onOpenChat(client.conversationStubFor(u.userId, u.displayName, u.avatarUrl)) },
+                knownFriends = friends.orEmpty(),
+                name = fr?.nickname ?: card?.nickname.orEmpty(),
+                avatarUrl = fr?.avatarUrl ?: card?.avatarUrl.orEmpty(),
+                onOpenChat = onOpenChat,
                 onBack = { profileUid = null },
             )
         }

@@ -52,6 +52,15 @@ object GroupSettings {
         }
     }
 
+    /** 把 [v] 乐观地套到本地 [info] 上（对齐 iOS `commitSettingsSwitch` 的「先本地改再发」；失败时重拉服务端真值回滚）。 */
+    fun applied(info: GroupInfo, v: Values): GroupInfo = info.copy(
+        joinApproval = v.joinApproval,
+        permInvite = v.permInvite,
+        permEditInfo = v.permEditInfo,
+        permPin = v.permPin,
+        historyVisible = v.historyVisible,
+    )
+
     /** 界面文案。**与 im-web `GroupManagePanel.tsx` 逐字一致**——同一个开关两端叫法不同，
      *  用户在两个端上看到的就是两套规则。 */
     fun label(key: Key): String = when (key) {

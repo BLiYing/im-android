@@ -57,15 +57,12 @@ internal fun ChatPickerLayers(
     // （`showsMessagePill`）——不是简化版的加好友资料卡，对齐 iOS `openMemberProfileForUID:`
     // 的 `IMChatDetailViewController` + `showsMessagePill = YES`。
     openUser?.let { uid ->
-        val f = friendsByUid[uid]
-        val name = f?.nickname?.ifBlank { null } ?: memberNames[uid].orEmpty()
-        val avatar = f?.avatarUrl?.ifBlank { null } ?: memberAvatars[uid].orEmpty()
-        val stubConv = remember(uid, name, avatar) { client.conversationStubFor(uid, name, avatar) }
-        ChatDetailHost(
+        MemberProfileHost(
             client = client,
-            conv = stubConv,
+            userId = uid,
             knownFriends = friendsByUid,
-            showsMessagePill = true,
+            name = memberNames[uid].orEmpty(),
+            avatarUrl = memberAvatars[uid].orEmpty(),
             onOpenChat = { chat -> onCloseUser(); onOpenChat(chat) },
             onBack = onCloseUser,
         )

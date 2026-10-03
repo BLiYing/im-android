@@ -497,7 +497,8 @@ class MessageRepository(
                 it.copy(
                     lastContent = "",
                     lastContentType = "text",
-                    lastTimestamp = 0,
+                    // lastTimestamp **保留**：列表按它排序，置 0 会让这一行沉到整张列表最底（看起来像被删了），
+                    // 而本函数的约定是「会话行留着、只清预览」（iOS 同：位置与时间不动）
                     lastSysEvent = "",
                     lastSysArgs = "",
                     lastSysSegments = "",

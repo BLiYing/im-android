@@ -103,8 +103,10 @@ object SysEvents {
     }
 
     /** [groupSegments] 拼成纯文本（会话列表预览：服务端公开昵称，不挂点击）。 */
-    fun groupText(event: String?, argsJson: String?, segmentsJson: String?): String? =
-        groupSegments(event, argsJson, segmentsJson)?.joinToString("") { it.text }
+    fun groupText(event: String?, argsJson: String?, segmentsJson: String?, selfUid: String? = null): String? =
+        groupSegments(event, argsJson, segmentsJson)?.joinToString("") {
+            if (SysSegments.isName(it)) SysSegments.displayName(it, null, null, selfUid) else it.text
+        }
 
     /**
      * 系统通知单聊（新设备登录 / 改密 / 被踢下线）→ 多行文本，行结构对齐服务端 `buildXxxNoticeText`。

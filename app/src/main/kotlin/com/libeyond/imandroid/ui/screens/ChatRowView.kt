@@ -192,6 +192,7 @@ internal fun ChatRowView(
                 },
                 localName = localNameOf,
                 onTapUid = onOpenUser,
+                myUid = myUid,
             )
         } else {
             val m = r.msg

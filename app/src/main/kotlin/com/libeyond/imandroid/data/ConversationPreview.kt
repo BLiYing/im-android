@@ -38,7 +38,7 @@ object ConversationPreview {
 
         // 结构化事件（P3）按当前语言现算：群系统消息 → 模板 + 服务端公开昵称；系统通知单聊 → 多行正文（列表截断）。
         // 不认识/为空回退烤好的 lastContent（服务端中文整句）
-        val body = sysEventPreview(conv) ?: conv.lastContent
+        val body = sysEventPreview(conv, myUid) ?: conv.lastContent
         if (body.isBlank()) return Str.s(R.string.conv_list_no_message)
 
         // 群聊文本/媒体一律带"昵称: "前缀；系统消息（无真实发送者）与 lastFrom 为空的（老数据/系统通知）
@@ -49,10 +49,10 @@ object ConversationPreview {
         return Str.s(R.string.conv_list_sender_prefix, who, body)
     }
 
-    private fun sysEventPreview(conv: ConversationEntity): String? {
+    private fun sysEventPreview(conv: ConversationEntity, myUid: String): String? {
         if (conv.lastSysEvent.isEmpty()) return null
         return if (conv.lastContentType == ContentType.SYSTEM) {
-            SysEvents.groupText(conv.lastSysEvent, conv.lastSysArgs, conv.lastSysSegments)
+            SysEvents.groupText(conv.lastSysEvent, conv.lastSysArgs, conv.lastSysSegments, myUid)
         } else if (DetailActions.isSystemPeer(conv.lastFrom)) {
             SysEvents.noticeText(conv.lastSysEvent, conv.lastSysArgs)
         } else {

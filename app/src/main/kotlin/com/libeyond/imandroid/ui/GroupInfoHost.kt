@@ -22,7 +22,6 @@ import com.libeyond.imandroid.data.DetailActions
 import com.libeyond.imandroid.data.DetailMoreAction
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.data.GroupSettings
-import com.libeyond.imandroid.data.MemberProfile
 import com.libeyond.imandroid.data.groupVoiceSenderNameOf
 import com.libeyond.imandroid.ui.screens.GroupManageAction
 import com.libeyond.imandroid.ui.components.ActionSheet
@@ -112,8 +111,6 @@ fun GroupInfoHost(
     var pick by remember(convId) { mutableStateOf<PickPurpose?>(null) }
     var picked by remember(convId) { mutableStateOf<Set<String>>(emptySet()) }
     var friends by remember(convId) { mutableStateOf<List<FriendEntry>>(emptyList()) }
-    // 成员资料页改备注的本机覆盖：`knownFriends` 整会话只拉一次，不接会显旧值（同 ChatDetailHost 的坑）
-    var remarkOverrides by remember(convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     var confirmTransfer by remember(convId) { mutableStateOf<GroupMember?>(null) }
     // 头部操作排「更多」里那几件要二次确认的事（清空/退群/解散）
     var confirmMore by remember(convId) { mutableStateOf<DetailMoreAction?>(null) }
@@ -309,18 +306,14 @@ fun GroupInfoHost(
             onBack = { joinReqs = null },
         )
     } else if (mp != null) {
-        val f = knownFriends[mp.userId]?.let { fe -> fe.copy(remark = remarkOverrides[mp.userId] ?: fe.remark) }
-        UserProfileHost(
+        MemberProfileHost(
             client = client,
             userId = mp.userId,
-            // 关系与种子的口径都在 MemberProfile 里（那两条坑写在它的注释上）
-            knownRelation = MemberProfile.relationOf(mp.userId, myUid, f),
-            seed = MemberProfile.seedOf(mp, f),
-            onSendMessage = { card ->
-                memberProfile = null
-                onOpenChat(client.conversationStubFor(card.userId, card.displayName, card.avatarUrl))
-            },
-            onRemarkChanged = { v -> remarkOverrides = remarkOverrides + (mp.userId to v) },
+            knownFriends = knownFriends,
+            // 全局昵称，**不是** mp.displayName（那个会优先取群昵称）
+            name = mp.nickname,
+            avatarUrl = mp.avatarUrl,
+            onOpenChat = { chat -> memberProfile = null; onOpenChat(chat) },
             onBack = { memberProfile = null },
         )
     } else if (memberSearchOpen) {
@@ -338,6 +331,8 @@ fun GroupInfoHost(
             onToggleSetting = { key ->
                 // **整体替换**：五个值一次全传，翻转哪一个由纯函数算（见 GroupSettings）
                 val v = GroupSettings.toggled(g, key)
+                // 乐观更新：开关立刻翻（否则要等 PUT + 重拉两次往返才变，看着像没生效）；失败由 runManage 的重拉回滚
+                info = GroupSettings.applied(g, v)
                 runManage(GroupSettings.label(key)) {
                     client.groups.updateSettings(
                         convId,
@@ -495,6 +490,7 @@ fun GroupInfoHost(
             scope.launch {
                 // **只删本机**（同 iOS）：服务端没有"替所有人删历史"的接口
                 client.repo.clearConversation(client.uid.orEmpty(), convId)
+                archive.reload() // 归档页签是服务端分页，已加载的要按新位点重载（同 ChatDetailHost）
                 toast = Str.s(R.string.chat_detail_clear_history_done)
             }
         },

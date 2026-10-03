@@ -632,7 +632,7 @@ iOS：`Modules/Conversation/IMConversationListViewController.m`（`plusTapped:` 
 | 冷启动 / 登录时的空态 | 首登缓存为空时同样会先闪「还没有会话」，同日一并修：服务端拉成过一次（`serverListed`）才画 | 已修：`data/ConversationListPhase.kt`，本地库初值 null；本地空 + 服务端也说没有才画。多一条「服务端说有、库还没回写」也不画（Room 失效通知异步） | ✅ 待真机 |
 | 空态文案 | 「还没有会话，点右上角 ＋ 新建群聊或添加好友」 | 同（此前「在另一个端给这个账号发条消息试试」） | ✅ |
 | 「消息」Tab 未读蓝点 | 2026-09-15 前**没有**；现 `IMTabUnreadCount`，`badgeValue` 空串画点，离屏靠常驻订阅节流刷新 | 一直有；口径改成三端同一个 `data/TabUnread.kt`（此前 SQL 漏了免打扰里被 @ 的那条） | ✅ |
-| ＋ 菜单「扫一扫」 | 全屏取景 + 相册识别 | 全屏取景 + 相册选图识别（一图多码按面积排序候选）均已接（2026-09-22，`QrScanHost`/`data/QrImageDecode.kt`） | ✅ |
+| ＋ 菜单「扫一扫」 | 全屏取景 + 相册识别 | 全屏取景 + 相册选图识别（一图多码按面积排序候选）均已接（2026-09-22，`QrScanHost`/`data/QrImageDecode.kt`）；**2026-10-03 对齐 iOS `setupScanPage`**：取景框心在屏中心上移 40、提示在框下 22、「从相册选择」在提示下 26（此前提示用 `Align.Center + padding(top=168)` 压进了框里，相册钮贴屏底），并补底部「扫码 / 我的二维码」页签（`myCard` 槽位嵌 `QrCardHost(embedded=true)`；原先「我的二维码另有入口、不重复」的取舍作废）。**Pixel 2 XL 真机验过布局，模拟器无摄像头 iOS 取景界面只读码对照** | ✅ |
 | 从 ＋「新建群聊」建成之后 | 回会话列表并直接进新群（`startNewGroup`） | 同（`ChatsHost` 的 `onCreated`） | ✅ |
 
 ---

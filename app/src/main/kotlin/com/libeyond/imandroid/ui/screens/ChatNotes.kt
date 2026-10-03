@@ -73,6 +73,8 @@ internal fun SystemNote(
     localName: (String) -> String? = { null },
     /** 点名字。不传则名字只染色不可点（与 iOS `onTapUID` 为空时同）。 */
     onTapUid: ((String) -> Unit)? = null,
+    /** 本人 uid：名字段命中时恒显示「我」（对齐 iOS）。 */
+    myUid: String? = null,
 ) {
     val c = IMTheme.colors
     val appearance = IMTheme.appearance
@@ -81,14 +83,14 @@ internal fun SystemNote(
     // 名字段用**琥珀色半粗**，不用 accent：胶囊底是主题绿，把名字染成同样是绿的 accent
     // 两者色相几乎重合，看不出哪几个字是名字（iOS 2026-08-30 用户反馈过）。
     // 也不用白——那与胶囊正文同色，只剩粗细之差。琥珀在绿胶囊与黑胶囊上都跳得出来。
-    val annotated = remember(segs, sysSegments) {
+    val annotated = remember(segs, sysSegments, myUid) {
         buildAnnotatedString {
             segs.forEach { seg ->
                 if (!SysSegments.isName(seg)) {
                     append(seg.text)
                     return@forEach
                 }
-                val shown = SysSegments.displayName(seg, localName(seg.uid), null)
+                val shown = SysSegments.displayName(seg, localName(seg.uid), null, myUid)
                 pushStringAnnotation(SYS_NAME_TAG, seg.uid)
                 withStyle(SpanStyle(color = SYS_NAME_COLOR, fontWeight = FontWeight.SemiBold)) {
                     append(shown)

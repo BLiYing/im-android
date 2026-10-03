@@ -138,6 +138,7 @@ internal fun QrRouteHost(
             QrScanHost(
                 onResult = { raw -> scanning = false; resolveAndRoute(raw) },
                 onClose = { scanning = false },
+                myCard = { QrCardHost(client = client, me = client.cachedMyProfile(), embedded = true, onBack = {}) },
             )
         }
 
@@ -173,15 +174,13 @@ internal fun QrRouteHost(
         }
 
         profile?.let { p ->
-            UserProfileHost(
+            MemberProfileHost(
                 client = client,
                 userId = p.userId,
-                knownRelation = p.relation,
-                seed = p.seed,
-                onSendMessage = { u ->
-                    profile = null
-                    onOpenChat(client.conversationStubFor(u.userId, u.displayName, u.avatarUrl))
-                },
+                knownFriends = emptyMap(), // 信息页进页自己重拉好友表定型关系
+                name = p.seed.nickname,
+                avatarUrl = p.seed.avatarUrl,
+                onOpenChat = { chat -> profile = null; onOpenChat(chat) },
                 onBack = { profile = null },
             )
         }

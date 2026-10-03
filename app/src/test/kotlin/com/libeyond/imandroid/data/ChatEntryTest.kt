@@ -25,10 +25,10 @@ class ChatEntryTest {
     }
 
     @Test
-    fun `有未读则锚到首条未读上方留上下文`() {
+    fun `有未读则锚到首条未读本身（分割线对齐视口顶部）`() {
         val seqs = (1L..50L).toList()   // 下标 i 对应 seq i+1
-        // readSeq=30 → 首条未读是 seq 31，下标 30；上方留 3 条 → 27
-        assertEquals(27, ChatEntry.entryScrollIndex(seqs, readSeq = 30, unread = 20))
+        // readSeq=30 → 首条未读是 seq 31，下标 30；不再往上多带上下文（三端都是分割线贴顶）
+        assertEquals(30, ChatEntry.entryScrollIndex(seqs, readSeq = 30, unread = 20))
     }
 
     @Test

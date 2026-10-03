@@ -41,8 +41,14 @@ import kotlinx.coroutines.withContext
  * 不必在本地缓存它。
  */
 @Composable
-fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
-    BackHandler(onBack = onBack)
+fun QrCardHost(
+    client: IMClient,
+    me: UserCard?,
+    /** true = 嵌在扫一扫页的「我的二维码」页签里：不画自己的顶栏，也不接返回键（由扫一扫页管）。 */
+    embedded: Boolean = false,
+    onBack: () -> Unit,
+) {
+    BackHandler(enabled = !embedded, onBack = onBack)
 
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -100,6 +106,7 @@ fun QrCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
     }
 
     QrCardScreen(
+        showTopBar = !embedded,
         card = card,
         title = stringResource(R.string.settings_info_my_qr),
         displayName = me?.displayName.orEmpty().ifBlank { client.myPublicName() },

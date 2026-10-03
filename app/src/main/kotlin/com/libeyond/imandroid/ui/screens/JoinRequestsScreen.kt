@@ -64,18 +64,19 @@ internal fun JoinRequestsScreen(
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         IMTopBar(title = stringResource(R.string.qr_join_req_title), onLeft = onBack)
 
-        Row(Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = 10.dp)) {
-            SegButton(
+        // 页签条与资料页/收藏页同一份（SegTabBar：居中药丸条），不再各画各的
+        SegTabBar(
+            titles = listOf(
                 if (pending.isNotEmpty()) {
                     stringResource(R.string.qr_join_req_tab_pending_count, pending.size)
                 } else {
                     stringResource(R.string.qr_join_req_tab_pending)
                 },
-                !showDone,
-            ) { showDone = false }
-            Spacer(Modifier.width(d.space3))
-            SegButton(stringResource(R.string.qr_join_req_tab_done), showDone) { showDone = true }
-        }
+                stringResource(R.string.qr_join_req_tab_done),
+            ),
+            selected = if (showDone) 1 else 0,
+            onSelect = { showDone = it == 1 },
+        )
 
         when {
             loading -> Empty(stringResource(R.string.common_loading))
@@ -88,19 +89,6 @@ internal fun JoinRequestsScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SegButton(label: String, on: Boolean, onClick: () -> Unit) {
-    val c = IMTheme.colors
-    Box(
-        Modifier.clip(RoundedCornerShape(16.dp))
-            .background(if (on) c.accentSoft else c.cardBackground)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-    ) {
-        Text(label, color = if (on) c.accent else c.textSecondary, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
