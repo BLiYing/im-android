@@ -334,14 +334,22 @@ fun GroupInfoHost(
                 // 乐观更新：开关立刻翻（否则要等 PUT + 重拉两次往返才变，看着像没生效）；失败由 runManage 的重拉回滚
                 info = GroupSettings.applied(g, v)
                 runManage(GroupSettings.label(key)) {
-                    client.groups.updateSettings(
-                        convId,
-                        joinApproval = v.joinApproval,
-                        permInvite = v.permInvite,
-                        permEditInfo = v.permEditInfo,
-                        permPin = v.permPin,
-                        historyVisible = v.historyVisible,
-                    )
+                    // PUT 失败要**立刻**回滚本地乐观值：runManage 的重拉也失败（断网）时，开关会一直停在服务端没接受的状态
+                    try {
+                        client.groups.updateSettings(
+                            convId,
+                            joinApproval = v.joinApproval,
+                            permInvite = v.permInvite,
+                            permEditInfo = v.permEditInfo,
+                            permPin = v.permPin,
+                            historyVisible = v.historyVisible,
+                        )
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        info = g
+                        throw e
+                    }
                 }
             },
             onOpenJoinRequests = {

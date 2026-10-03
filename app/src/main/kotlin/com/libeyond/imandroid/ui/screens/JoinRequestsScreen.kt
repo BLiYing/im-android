@@ -126,7 +126,12 @@ private fun RequestRow(r: JoinRequest, busy: Boolean, onDecide: (String, Boolean
                 Pill(stringResource(R.string.common_reject), primary = false, enabled = !busy) { onDecide(r.userId, false) }
             } else {
                 Text(
-                    if (r.status == "approved") stringResource(R.string.qr_join_req_approved) else stringResource(R.string.qr_join_req_rejected),
+                    // 只认 approved / rejected；别的终态不冒充「已拒绝」
+                    when (r.status) {
+                        "approved" -> stringResource(R.string.qr_join_req_approved)
+                        "rejected" -> stringResource(R.string.qr_join_req_rejected)
+                        else -> ""
+                    },
                     color = if (r.status == "approved") c.textSecondary else c.textTertiary,
                     style = MaterialTheme.typography.bodyMedium,
                 )

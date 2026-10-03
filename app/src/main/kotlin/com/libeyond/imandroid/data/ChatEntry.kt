@@ -36,11 +36,17 @@ object ChatEntry {
      * @param rowSeqs 各行的 conv_seq，按显示序排列；非消息行（日期胶囊/待发）传 0
      * @param readSeq 本人已读位点
      * @param unread **真实未读数**
+     * @param dividerRow 未读分割线**那一行**的下标（`ChatRow.UnreadDivider`），没有传 -1。
+     *   分割线是**独立的一行**（前面常还有日期胶囊），目标必须是它而不是首条未读消息行——
+     *   锚到消息行时分割线落在视口顶边之上被滚出屏幕（2026-10-03 `/code-review` 抓出：
+     *   短会话被末尾 clamp 碰巧带回来，长未读才暴露）。三端口径：iOS `anchorRowToTop:`、
+     *   Web `scrollTop += divider.top - box.top` 都是把分割线对齐视口顶部。
      * @return 目标行下标；无未读时返回最后一行（贴底）
      */
-    fun entryScrollIndex(rowSeqs: List<Long>, readSeq: Long, unread: Int): Int {
+    fun entryScrollIndex(rowSeqs: List<Long>, readSeq: Long, unread: Int, dividerRow: Int = -1): Int {
         if (rowSeqs.isEmpty()) return 0
         if (!hasUnread(unread)) return rowSeqs.lastIndex
+        if (dividerRow in rowSeqs.indices) return dividerRow
 
         // 首条未读 = 第一条 conv_seq > readSeq 的消息行
         val firstUnread = rowSeqs.indexOfFirst { it > 0 && it > readSeq }

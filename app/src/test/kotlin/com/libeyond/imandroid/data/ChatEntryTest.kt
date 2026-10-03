@@ -31,6 +31,19 @@ class ChatEntryTest {
         assertEquals(30, ChatEntry.entryScrollIndex(seqs, readSeq = 30, unread = 20))
     }
 
+    /**
+     * 分割线是独立的一行：目标必须是它，不是首条未读消息行。
+     * 行序：[3, 日期(0), 分割线(0), 4(首条未读)]——锚到 4 的行（下标 3）分割线会落在视口之上。
+     */
+    @Test
+    fun `有分割线行时锚到分割线本身`() {
+        val seqs = listOf(3L, 0L, 0L, 4L, 5L)
+        assertEquals(3, ChatEntry.entryScrollIndex(seqs, readSeq = 3, unread = 2))              // 不给分割线下标：回退到消息行
+        assertEquals(2, ChatEntry.entryScrollIndex(seqs, readSeq = 3, unread = 2, dividerRow = 2)) // 给了：锚分割线
+        // 无未读时分割线下标不起作用：贴底
+        assertEquals(4, ChatEntry.entryScrollIndex(seqs, readSeq = 5, unread = 0, dividerRow = 2))
+    }
+
     @Test
     fun `首条未读在开头时不越界`() {
         val seqs = (1L..50L).toList()

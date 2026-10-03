@@ -25,6 +25,7 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.QrGroupCard
 import com.libeyond.imandroid.sdk.api.QrLoginScanInfo
 import com.libeyond.imandroid.sdk.api.QrResolved
+import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.protocol.ErrCode
@@ -177,7 +178,19 @@ internal fun QrRouteHost(
             MemberProfileHost(
                 client = client,
                 userId = p.userId,
-                knownFriends = emptyMap(), // 信息页进页自己重拉好友表定型关系
+                // 扫码解析已经给了关系：好友 / 已拉黑当场定型，信息页首帧不闪「陌生人 + 加好友」
+                // （进页另会重拉好友表校正；陌生人不造条目）
+                knownFriends = if (p.relation == FriendEntry.ACCEPTED || p.relation == FriendEntry.BLOCKED) {
+                    mapOf(
+                        p.userId to FriendEntry(
+                            userId = p.userId, username = p.seed.username, nickname = p.seed.nickname,
+                            avatarUrl = p.seed.avatarUrl, status = FriendEntry.ACCEPTED,
+                            blocked = p.relation == FriendEntry.BLOCKED,
+                        ),
+                    )
+                } else {
+                    emptyMap()
+                },
                 name = p.seed.nickname,
                 avatarUrl = p.seed.avatarUrl,
                 onOpenChat = { chat -> profile = null; onOpenChat(chat) },

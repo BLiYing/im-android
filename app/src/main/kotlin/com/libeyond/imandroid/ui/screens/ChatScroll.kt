@@ -225,7 +225,10 @@ internal fun ChatListSync(
     // 只做一次（iOS didInitialPosition），**不能与下面的自动贴底合并**：合并会让「停在首条未读」被贴底当场覆盖掉。
     val entryReady = rowsReady && rows.isNotEmpty()
     if (entryReady && !marks.didEntry) {
-        val idx = ChatEntry.entryScrollIndex(rows.map { it.seqOrZero() }, readSeq, unread)
+        val idx = ChatEntry.entryScrollIndex(
+            rows.map { it.seqOrZero() }, readSeq, unread,
+            dividerRow = rows.indexOfFirst { it is ChatRow.UnreadDivider },
+        )
         marks.didEntry = true
         marks.entryAtBottom = idx == rows.lastIndex
         marks.rowsSize = rows.size
