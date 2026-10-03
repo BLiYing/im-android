@@ -60,15 +60,23 @@ internal fun SegTabBar(titles: List<String>, selected: Int, onSelect: (Int) -> U
     // 起初这里只有一排裸按钮、选中态是 12% 绿底 + 绿字：深色模式下几乎看不出选了哪个
     // （2026-09-08 用户报的「选中态颜色太暗」）。iOS 的做法是**选中与未选中同为主文字色，
     // 只靠字重与药丸底色区分**——照抄这一条，别再用低透明度主色去表达"选中"。
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = IMTheme.dimens.space4, vertical = 10.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(c.subtleFill)
-            .horizontalScroll(rememberScrollState())
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    // **整条居中、底轨贴合内容宽度**（对齐 iOS `IMLiquidSegmentedControl`：药丸条居中、不拉满）。
+    // 此前底轨 fillMaxWidth，页签靠左、最右一个页签（链接）后面是一大片空底。
+    // 放不下（页签多 / 大字号）时底轨顶满可用宽度并横向滚动，不截断。
+    Box(
+        Modifier.fillMaxWidth().padding(horizontal = IMTheme.dimens.space4, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        titles.forEachIndexed { i, t -> MediaSeg(t, i == selected) { onSelect(i) } }
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(18.dp))
+                .background(c.subtleFill)
+                .horizontalScroll(rememberScrollState())
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            titles.forEachIndexed { i, t -> MediaSeg(t, i == selected) { onSelect(i) } }
+        }
     }
 }
 

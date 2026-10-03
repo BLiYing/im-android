@@ -43,6 +43,13 @@ fun UserProfileHost(
     onRemarkChanged: (String) -> Unit = {},
     onBack: () -> Unit,
 ) {
+    // **点到自己 → 个人资料页（可编辑），不是「用户信息页」**（对齐 iOS：聊天头像 / 群成员 / 聊天记录里点自己，
+    // 都进 `IMProfileEditViewController`）。六处入口（通讯录 / 群资料 / 收藏 / 扫码 / 详情页）都经本函数，
+    // 在这里一处收口，别在各调用点各判一遍——漏一处就是一处「点自己看到加好友」。
+    if (userId.isNotEmpty() && userId == client.uid) {
+        SelfProfile(client, onBack)
+        return
+    }
     val scope = rememberCoroutineScope()
     var card by remember(userId) { mutableStateOf(seed) }
     var relation by remember(userId) { mutableStateOf(knownRelation) }
@@ -101,4 +108,20 @@ fun UserProfileHost(
             },
         )
     }
+}
+
+/** 自己的个人资料页：先用本机副本顶上（断网也有真名字），进页再重拉一次；保存后回写副本。 */
+@Composable
+private fun SelfProfile(client: IMClient, onBack: () -> Unit) {
+    var me by remember { mutableStateOf<UserCard?>(client.cachedMyProfile()) }
+    LaunchedEffect(Unit) {
+        runCatchingCancellable { client.contacts.me() }
+            .onSuccess { me = it; client.cacheMyProfile(it) }
+    }
+    MyProfileHost(
+        client = client,
+        card = me,
+        onChanged = { me = it; client.cacheMyProfile(it) },
+        onBack = onBack,
+    )
 }
