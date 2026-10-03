@@ -23,6 +23,8 @@ import com.composables.icons.lucide.FileText
 import com.composables.icons.lucide.Forward
 import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.PinOff
 import com.composables.icons.lucide.MessageSquare
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Undo2
@@ -120,6 +122,8 @@ internal fun messageActionIcon(a: MessageAction) = when (a) {
     MessageAction.Favorite -> Lucide.Bookmark
     MessageAction.Transcribe, MessageAction.TranscribeOff -> Lucide.FileText
     MessageAction.MultiSelect -> Lucide.ListChecks
+    MessageAction.Pin -> Lucide.Pin
+    MessageAction.Unpin -> Lucide.PinOff
     MessageAction.Recall -> Lucide.Undo2
     MessageAction.DeleteForEveryone -> Lucide.Users
     MessageAction.HideForMe -> Lucide.User
@@ -153,6 +157,8 @@ internal fun ChatMessageMenu(
     client: IMClient,
     conv: ConversationEntity,
     iAmManager: Boolean,
+    /** 我能不能置顶（[com.libeyond.imandroid.data.PinnedBanner.canPin]）。 */
+    canPin: Boolean,
     onReply: (MessageEntity) -> Unit,
     onForward: (MessageEntity) -> Unit,
     /** 进多选态，并默认勾上这一条。 */
@@ -179,6 +185,7 @@ internal fun ChatMessageMenu(
     val actions = MessageActions.availableFor(
         target, owner, conv.isGroup, iAmManager,
         hasTranscript = transcriber?.isExpanded(target.convSeq) == true,
+        canPin = canPin,
     )
     MessageContextMenu(
         anchor = anchor,
@@ -280,6 +287,9 @@ internal fun ChatMessageMenu(
                 MessageAction.MultiSelect -> onMultiSelect(target)
                 MessageAction.Recall ->
                     client.messages.sendMsgOp(conv.convId, MsgOp.RECALL, target.convSeq)
+                // 置顶 / 取消置顶：**不做本地乐观更新**，等服务端广播回来再变（横幅与 pinnedAt 同一条帧收敛，见 sendMsgOp 注释）
+                MessageAction.Pin -> client.messages.sendMsgOp(conv.convId, MsgOp.PIN, target.convSeq, pinned = true)
+                MessageAction.Unpin -> client.messages.sendMsgOp(conv.convId, MsgOp.PIN, target.convSeq, pinned = false)
                 MessageAction.DeleteForEveryone, MessageAction.HideForMe ->
                     runMessageDelete(client, conv.convId, a, target.convSeq, scope)
             }

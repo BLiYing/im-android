@@ -96,6 +96,10 @@ class MessageService(
     /** 好友关系有变（收到 friend 帧）。UI 据此重拉 /friends。 */
     val friendEvents: SharedFlow<Unit> = _friendEvents.asSharedFlow()
 
+    private val _msgOps = MutableSharedFlow<MsgOpSignal>(extraBufferCapacity = 32)
+    /** 某会话里的消息被撤回/删除/编辑/置顶（落库之后发）。置顶横幅据此重拉，见 [MsgOpSignal]。 */
+    val msgOps: SharedFlow<MsgOpSignal> = _msgOps.asSharedFlow()
+
     private val _groupEvents = MutableSharedFlow<GroupEventData>(extraBufferCapacity = 16)
     /** 收到 `group` 帧（§6.6）。各页面按自己的 convId 过滤；全局级的（入群结果提示）在 `AppRoot` 订。 */
     val groupEvents: SharedFlow<GroupEventData> = _groupEvents.asSharedFlow()
@@ -220,6 +224,7 @@ class MessageService(
                 val batch = op.batchDeleteSeqs()
                 if (batch != null) repo.removeMessages(owner, op.convId, batch, retract = true)
                 else repo.applyMsgOp(owner, op)
+                _msgOps.tryEmit(MsgOpSignal(op.convId, op.op, batch ?: listOf(op.targetConvSeq)))
             }
 
             FrameType.CONV_UPDATE -> data?.let { el ->
@@ -229,6 +234,7 @@ class MessageService(
             FrameType.MSG_HIDDEN -> data?.let { el ->
                 val d = ProtocolJson.decodeFromJsonElement(MsgHiddenData.serializer(), el)
                 repo.removeMessages(owner, d.convId, d.seqs(), retract = false)
+                _msgOps.tryEmit(MsgOpSignal(d.convId, MsgOpSignal.HIDE, d.seqs()))
             }
 
             FrameType.VOICE_TRANSCRIPT -> data?.let { el ->

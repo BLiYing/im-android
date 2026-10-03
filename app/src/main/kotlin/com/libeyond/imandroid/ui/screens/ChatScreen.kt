@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.draw.alpha
@@ -156,6 +157,8 @@ fun ChatScreen(
     extraSendable: Boolean = false,
     /** 输入栏锁的原因（被禁言/全员禁言/系统会话）；null = 可输入。见 [Composer.lockedReason]。 */
     composerLock: String? = null,
+    /** 顶部横幅叠放（置顶/公告/入群申请）；null = 不画。宿主量它的高度，加进消息列表顶部内边距。 */
+    banners: (@androidx.compose.runtime.Composable () -> Unit)? = null,
     /** 点被拒收行里的「发送好友申请」（200103）。 */
     onAddFriendFromNote: () -> Unit = {},
     onBack: () -> Unit,
@@ -388,6 +391,9 @@ fun ChatScreen(
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         ChatWallpaperBackground(Modifier.matchParentSize())
+        // 横幅浮在壁纸之上；它的高度（三条可同时在）作为列表顶部内边距，免得首屏消息被盖在下面
+        var bannerHeight by remember { mutableStateOf(0.dp) }
+        val bannerDensity = androidx.compose.ui.platform.LocalDensity.current
         LazyColumn(
             state = listState,
             // 横向内边距**就是** UI_SPEC §3 的「头像距 cell 左 12」——不要换成别的数，
@@ -405,7 +411,7 @@ fun ChatScreen(
                 .chatScrollbar(listState, c.textTertiary.copy(alpha = 0.4f))
                 .padding(horizontal = d.chatAvatarLeading),
             // 行距 5、最后一条距输入栏 3：iOS 的间距全长在 cell 里（顶 2 底 3），换成列表的说法就是这三个数
-            contentPadding = PaddingValues(top = d.chatListPaddingTop, bottom = d.chatListPaddingBottom),
+            contentPadding = PaddingValues(top = d.chatListPaddingTop + bannerHeight, bottom = d.chatListPaddingBottom),
             verticalArrangement = Arrangement.spacedBy(d.chatRowGap),
         ) {
             items(rows.size, key = { rows[it].key }) { i ->
@@ -470,6 +476,12 @@ fun ChatScreen(
             listState = listState, marks = marks, rows = rows, pendingReadSeq = pendingReadSeq, myUid = myUid,
             showsJumpToLatest = showsJumpToLatest, unreadBelowOf = unreadBelowOf, onJumpToLatest = onJumpToLatest,
         )
+        banners?.let { b ->
+            Box(
+                Modifier.align(Alignment.TopCenter)
+                    .onSizeChanged { bannerHeight = with(bannerDensity) { it.height.toDp() } },
+            ) { b() }
+        }
         }
 
 

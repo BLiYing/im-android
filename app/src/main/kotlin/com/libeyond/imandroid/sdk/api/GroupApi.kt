@@ -69,6 +69,9 @@ data class GroupInfo(
     val members: List<GroupMember> = emptyList(),
     val intro: String = "",
     val announcement: String = "",
+    /** 公告发布时间（毫秒）与发布者 uid：公告全文视图的副标题、进群自动弹一次的「版本」判据。 */
+    @SerialName("announcement_at") val announcementAt: Long = 0,
+    @SerialName("announcement_by") val announcementBy: String = "",
     @SerialName("member_count") val memberCount: Int = 0,
     @SerialName("my_nickname") val myNickname: String = "",
     @SerialName("mute_until") val muteUntil: Long = 0,

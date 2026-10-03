@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.data.ComposerLock
+import com.libeyond.imandroid.data.PinnedBanner
 import com.libeyond.imandroid.data.sendText
 import com.libeyond.imandroid.ui.screens.MentionPanel
 import com.libeyond.imandroid.data.Forward
@@ -117,9 +118,10 @@ fun ChatHost(
         client.voiceTranscriber.errors.collect { toast = it }
     }
     var menuFor by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
-    /** 成员表（群资料里拉）：名字、角色、头像，uid 为键。超级群只有我自己。 */
-    var memberNames by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var memberAvatars by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    // 本群资料快照（角色/禁言位/成员表/整份 info），见 ChatGroupState.kt
+    val gs = remember(conv.convId) { ChatGroupState() }
+    val memberNames = gs.memberNames
+    val memberAvatars = gs.memberAvatars
     // 多选底栏的转发/举报/收藏（M4-3/M4-4）。要在 BackHandler 之前：返回键先关「逐条/合并」选择单
     val selActions = rememberSelectionActions(
         client, conv, sel, SelectionPeople(friendsByUid, memberNames, memberAvatars),
@@ -236,49 +238,25 @@ fun ChatHost(
     var lastTypingSent by remember(conv.convId) { mutableStateOf(0L) }
     var replyTo by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
 
-    // 群里我是不是管理员——决定「为所有人删除」给不给。
-    //
-    // 只影响**菜单显不显**，服务端仍会独立校验（越权回 300006）。
-    // 即便这里判错也不会越权，最坏是多显/少显一个菜单项——所以不必为它阻塞首屏，
-    // 拉不到就按 false 走。
-    var iAmManager by remember(conv.convId) { mutableStateOf(false) }
-    // 输入栏锁的两个禁言位（成员级 / 全员），见 ComposerLock；群资料每次重拉都刷新
-    var myMuteUntil by remember(conv.convId) { mutableStateOf(0L) }
-    var groupMuteUntil by remember(conv.convId) { mutableStateOf(0L) }
+    // 顶部横幅（置顶/公告/入群申请）：状态与动作在 ChatBanners.kt。点入群申请横幅 → 打开群资料（那里有入群申请入口）
+    val canPin = gs.info?.let { PinnedBanner.canPin(conv.isGroup, it.permPin, it.myRole) } ?: !conv.isGroup
+    val banners = rememberChatBanners(
+        client, conv, gs, connected, covered,
+        jumpTo = { seq -> locator.locate(seq) }, onToast = { toast = it }, onOpenApproval = onOpenInfo,
+    )
     // 点被拒收行的「发送好友申请」→ 验证消息弹窗（FriendRequestPrompt）
     var askFriend by remember(conv.convId) { mutableStateOf<FriendRequestTarget?>(null) }
     var friendAsked by remember(conv.convId) { mutableStateOf(false) }
+    val iAmManager = gs.iAmManager
+    val myRole = gs.myRole
+    val myMuteUntil = gs.myMuteUntil
+    val groupMuteUntil = gs.groupMuteUntil
+    val mentionNames = gs.mentionNames
+    val memberRoles = gs.memberRoles
     val lockNow = rememberLockNow(myMuteUntil, groupMuteUntil)
-    /** 我在本群的角色。**@所有人 只对群主/管理员出入口**（越权服务端回 300204）。 */
-    var myRole by remember(conv.convId) { mutableStateOf<String?>(null) }
-    /** 本群成员表（显示名→uid）——只给没有 mention_spans 的老消息兜底，有 uid 才可点（对齐 iOS）。 */
-    var mentionNames by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
-    /** 成员角色与显示名（uid 为键）：发送者徽标、名字、引用块与回复条的名字用。超级群只有我自己。 */
-    var memberRoles by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
-    // 成员表过期（会话开着时对方改名再发消息）→ 版本号 +1 → 下面重拉群资料（MemberNameRefresh.kt）
+    // 成员表过期（会话开着时对方改名再发消息）→ 版本号 +1 → 重拉群资料（MemberNameRefresh.kt / ChatGroupState.kt）
     val membersRev = rememberMembersRefreshRev(conv.convId, conv.isGroup, rowsReady, messages.lastOrNull(), memberNames)
-    // 本群的 group 帧（禁言/解禁/改设置…）：重拉群资料，输入栏锁随之上下，不必等下一条消息
-    var groupEventRev by remember(conv.convId) { mutableStateOf(0) }
-    LaunchedEffect(conv.convId) {
-        client.groupEvents.collect { if (it.convId == conv.convId && !it.goneForMe(client.uid)) groupEventRev++ }
-    }
-    LaunchedEffect(conv.convId, membersRev, groupEventRev) {
-        if (conv.isGroup) {
-            runCatchingCancellable { client.groups.info(conv.convId) }
-                .onSuccess {
-                    iAmManager = it.iAmManager
-                    myRole = it.myRole
-                    myMuteUntil = it.myMuteUntil
-                    groupMuteUntil = it.muteUntil
-                    // 超级群这里只回我自己（服务端刻意不下发 2 万人的成员表），
-                    // 于是老消息的 @ 在超级群里不高亮——协议里写明的降级，别在这补救
-                    mentionNames = it.members.associate { m -> m.displayName to m.userId }
-                    memberRoles = it.members.associate { m -> m.userId to m.role }
-                    memberNames = it.members.associate { m -> m.userId to m.displayName }
-                    memberAvatars = it.members.associate { m -> m.userId to m.avatarUrl }
-                }
-        }
-    }
+    ChatGroupLoad(client, conv, gs, membersRev)
 
     // 本窗每个发送者最新一条的昵称快照：成员表查不到时（超级群只有自己）压过那条自己的老快照（SenderNames）。
     val latestNicks = remember(messages) { SenderNames.latestNicknames(messages) }
@@ -341,6 +319,7 @@ fun ChatHost(
         },
         // 粘贴条只负责"挂着、可逐张撤掉"，发送归输入栏那颗发送键（对齐 iOS）
         extraSendable = !paste.isEmpty,
+        banners = { banners.Stack() },
         composerLock = ComposerLock.reasonRes(conv.isGroup, conv.peerUid, myRole, myMuteUntil, groupMuteUntil, lockNow)
             ?.let { Str.s(it) },
         // 已发过申请就别再弹（再点只会重复申请）；拒收行本身是瞬态说明，不随关系变化消失
@@ -567,6 +546,8 @@ fun ChatHost(
         IMToast(t) { toast = null }
     }
 
+    banners.Dialogs(canPin)
+
     // —— 消息长按菜单 ——（拼装与原位重绘都在 MessageMenuItems.kt）
     menuFor?.let { target ->
         ChatMessageMenu(
@@ -578,6 +559,8 @@ fun ChatHost(
             client = client,
             conv = conv,
             iAmManager = iAmManager,
+            // 群聊在群资料拉回之前先不给（服务端本就会拒，免得先显示后消失）；单聊双方都能置顶
+            canPin = canPin,
             // 复制图片 / 仅删除自己都是 launch 出去的活，**不能挂在菜单自己身上**
             // （菜单点完就关，作用域随之取消）——见 ChatMessageMenu 的 scope 注释
             scope = scope,

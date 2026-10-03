@@ -7,6 +7,9 @@ import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.IMTextPrompt
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -95,13 +98,20 @@ internal fun GroupTransferConfirmDialog(
  * 的卡片只摘 3 行，点开这个弹窗看全部）。
  */
 @Composable
-internal fun GroupTextViewDialog(title: String, content: String, onDismiss: () -> Unit) {
+internal fun GroupTextViewDialog(title: String, content: String, onDismiss: () -> Unit, subtitle: String = "") {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Box(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-                Text(content)
+            Column {
+                // 公告全文视图的副标题（「M月d日 HH:mm 发布」，对齐 iOS `IMGroupTextViewController`）；简介没有
+                if (subtitle.isNotBlank()) {
+                    Text(subtitle, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                }
+                Box(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    Text(content)
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) } },

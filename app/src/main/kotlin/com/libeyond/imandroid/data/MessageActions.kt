@@ -19,6 +19,9 @@ enum class MessageAction(@StringRes private val labelRes: Int, val destructive: 
     TranscribeOff(R.string.chat_msg_menu_transcribe_cancel),
     /** 进入多选态（判据在 [ChatSelection]）。 */
     MultiSelect(R.string.chat_msg_menu_multi_select),
+    /** 置顶 / 取消置顶（判据 [PinnedBanner.pinAction]）：不做本地乐观更新，等服务端广播回来再变。 */
+    Pin(R.string.chat_msg_menu_pin),
+    Unpin(R.string.chat_msg_menu_unpin),
     Recall(R.string.chat_msg_menu_recall, destructive = true),
     /** 为所有人删除。 */
     DeleteForEveryone(R.string.delete_sheet_everyone, destructive = true),
@@ -58,9 +61,13 @@ object MessageActions {
          * 决定语音消息这一项显「转文字」还是「取消转文字」；非语音消息忽略此参数。
          */
         hasTranscript: Boolean = false,
+        /** 我能不能置顶（[PinnedBanner.canPin]）；放在最后以保持老调用点的位置参数不变。 */
+        canPin: Boolean = false,
     ): List<MessageAction> {
-        // 撤回墓碑上什么都不给——正文已被服务端脱敏，复制/引用都没有意义
-        if (msg.recalledAt != null && msg.recalledAt > 0) return emptyList()
+        val pin = PinnedBanner.pinAction(msg, canPin)
+        // 撤回墓碑上什么都不给——正文已被服务端脱敏，复制/引用都没有意义。
+        // **唯一例外：它若还挂着置顶，要能取消**（否则撤回后的陈旧置顶没法清，横幅永远指着一行墓碑）
+        if (msg.recalledAt != null && msg.recalledAt > 0) return listOfNotNull(pin.takeIf { it == MessageAction.Unpin })
         // 待确认的消息（还没 conv_seq）不能做任何服务端操作
         if (msg.convSeq <= 0) return emptyList()
 
@@ -99,6 +106,9 @@ object MessageActions {
 
         // 撤回：仅本人，且在时间窗内。服务端超窗回 300008
         if (mine && now - msg.timestamp <= RECALL_WINDOW_MS) out += MessageAction.Recall
+
+        // 置顶 / 取消置顶：排在撤回之后（对齐 iOS 菜单顺序）
+        pin?.let { out += it }
 
         // 为所有人删除：发送者本人恒可；群聊中群主/管理员亦可删他人。**无时间窗**
         if (mine || (isGroup && iAmManager)) out += MessageAction.DeleteForEveryone

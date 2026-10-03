@@ -265,6 +265,9 @@ class IMClient(context: Context) {
     /** 群变更帧（PROTOCOL §6.6）：群资料页/聊天页按 convId 过滤，被移出/解散时退出。 */
     val groupEvents: SharedFlow<com.libeyond.imandroid.sdk.protocol.GroupEventData> get() = messages.groupEvents
 
+    /** 消息被撤回/删除/编辑/置顶的信号（置顶横幅对齐服务端用）。 */
+    val msgOps: SharedFlow<com.libeyond.imandroid.data.MsgOpSignal> get() = messages.msgOps
+
     /** 群待审入群申请数（convId → N，仅群主/管理员），会话列表红字前缀用。 */
     val pendingCounts: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> get() = messages.pendingCounts
 

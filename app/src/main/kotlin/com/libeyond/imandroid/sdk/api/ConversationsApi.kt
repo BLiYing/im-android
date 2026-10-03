@@ -255,6 +255,15 @@ class ConversationsApi(private val http: HttpClient) {
             put("conv_seq", convSeq)
         })
     }
+
+    /**
+     * 本会话的置顶消息（**最近置顶在前**，服务端上限 50；已撤回 / 为所有人删除 / 我「仅删除自己」的已滤掉）。
+     * 单聊群聊都有。**不吃 `history_visible` 入群下界**——后入群的人也看得到入群前的置顶（决策 19），
+     * 所以其中的消息常不在本地。`conv_seq <= 0` 的脏项丢掉（跳不过去）。
+     */
+    suspend fun pinned(convId: String): List<PinnedMessage> =
+        decode(http.call("GET", "/api/v1/conversations/$convId/pinned"), PinnedResp.serializer())
+            .items.filter { it.convSeq > 0 }
 }
 
 /** 链接富预览（PROTOCOL §11 `GET /api/v1/link-preview`）。字段都可能缺。 */
@@ -347,4 +356,23 @@ data class LinkPreview(
 ) {
     /** 一张卡都撑不起来时不出卡（与 iOS/Web 同：只有 url 没有标题的卡等于噪音）。 */
     val isRenderable: Boolean get() = title.isNotBlank() || description.isNotBlank() || image.isNotBlank()
+
 }
+
+/** `GET /conversations/{id}/pinned` 的一项（PROTOCOL §11）。`from_nickname` 只有群聊项带。 */
+@Serializable
+data class PinnedMessage(
+    @SerialName("conv_seq") val convSeq: Long = 0,
+    @SerialName("server_msg_id") val serverMsgId: String = "",
+    val sender: String = "",
+    @SerialName("from_nickname") val fromNickname: String = "",
+    @SerialName("content_type") val contentType: String = "text",
+    val content: String = "",
+    /** 图说；协议表里没列但 iOS 读它（带 caption 的图/视频/文件横幅显示那句话）。 */
+    val caption: String = "",
+    val timestamp: Long = 0,
+    @SerialName("pinned_at") val pinnedAt: Long = 0,
+)
+
+@Serializable
+private data class PinnedResp(val items: List<PinnedMessage> = emptyList(), val total: Int = 0)
