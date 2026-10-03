@@ -64,6 +64,8 @@ fun ChatHost(
     conv: ConversationEntity,
     onBack: () -> Unit,
     onOpenInfo: () -> Unit,
+    /** 审批横幅点入：直达「入群申请」列表（默认同进群资料）。 */
+    onOpenApproval: () -> Unit = onOpenInfo,
     /**
      * 从详情页/群资料带回来的待办（开搜索 / 定位到某条）。
      * 做过一次即回调 [onArmConsumed] 复位，否则每次重组都会再做一遍。
@@ -265,7 +267,7 @@ fun ChatHost(
         client, conv, gs, connected,
         covered || menuFor != null || viewing != null || forwarding != null || picking || pickingFriend != null ||
             openUser != null || askFriend != null,
-        jumpTo = { seq -> locator.locate(seq) }, onToast = { toast = it }, onOpenApproval = onOpenInfo,
+        jumpTo = { seq -> locator.locate(seq) }, onToast = { toast = it }, onOpenApproval = onOpenApproval,
     )
     val iAmManager = gs.iAmManager
     val myRole = gs.myRole

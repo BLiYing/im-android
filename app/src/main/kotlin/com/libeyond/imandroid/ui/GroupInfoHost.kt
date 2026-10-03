@@ -68,6 +68,7 @@ fun GroupInfoHost(
     initialTab: DetailTab = DetailTab.Members,
     /** 只当会话媒体库用（查看器右下角「媒体」钮进的那一页）。见 `ChatDetailScreen.galleryOnly`。 */
     galleryOnly: Boolean = false,
+    openJoinRequests: Boolean = false, // 直接落在「入群申请」列表（审批横幅点入，iOS 同）
     onBack: () -> Unit,
     onLeft: () -> Unit,
 ) {
@@ -198,6 +199,9 @@ fun GroupInfoHost(
             .onFailure { IMLog.tag("IM.Group").w("join_requests_failed") }
     }
 
+    LaunchedEffect(convId) {
+        if (openJoinRequests) { joinReqs = emptyList(); joinReqsLoading = true; reloadJoinRequests(); joinReqsLoading = false }
+    }
     val reqs = joinReqs
     val mp = memberProfile
     // **四个页面互斥、且都不 return**：底下的编辑框/确认框/toast 要对每一页都生效。

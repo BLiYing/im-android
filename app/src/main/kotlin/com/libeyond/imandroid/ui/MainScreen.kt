@@ -170,6 +170,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
      * 只是把头部与页签条收起来（`galleryOnly`），归档取数/长按菜单/查看器那整套接线不另写一份。
      */
     var infoGallery by remember { mutableStateOf(false) }
+    var infoApproval by remember { mutableStateOf(false) }
     /**
      * 「关掉详情页，回聊天页顺带做一件事」的待办（开搜索 / 定位到某条）。
      * 为什么要绕这一道、为什么两件事合成一个类型，见 [ChatArm]。
@@ -251,7 +252,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                     client = client,
                                     conv = conv,
                                     onBack = { openConv = null },
-                                    onOpenInfo = { infoTab = null; infoGallery = false; infoForConv = conv },
+                                    onOpenInfo = { infoTab = null; infoGallery = false; infoApproval = false; infoForConv = conv },
+                                    onOpenApproval = { infoTab = null; infoGallery = false; infoApproval = true; infoForConv = conv },
                                     onOpenMediaGallery = {
                                         infoTab = com.libeyond.imandroid.data.DetailTab.Media
                                         infoGallery = true
@@ -274,7 +276,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                         ) { info ->
                             if (info != null) {
                                 Box(Modifier.fillMaxSize().blockPointerInput()) {
-                                    InfoPage(client, info, knownFriends, infoTab, infoGallery,
+                                    InfoPage(client, info, knownFriends, infoTab, infoGallery, infoApproval,
                                         onOpenChat = { stub -> infoForConv = null; openConv = stub },
                                         onArm = { arm -> infoForConv = null; chatArm = arm },
                                         onBack = { infoForConv = null },
@@ -385,6 +387,7 @@ private fun InfoPage(
     initialTab: com.libeyond.imandroid.data.DetailTab?,
     /** 这一趟只当会话媒体库用（收起头部与页签条）。 */
     galleryOnly: Boolean,
+    openJoinRequests: Boolean,
     onOpenChat: (ConversationEntity) -> Unit,
     onArm: (ChatArm) -> Unit,
     onBack: () -> Unit,
@@ -401,6 +404,7 @@ private fun InfoPage(
             onLocateInChat = { seq -> onArm(ChatArm(locateSeq = seq)) },
             initialTab = initialTab ?: com.libeyond.imandroid.data.DetailTab.Members,
             galleryOnly = galleryOnly,
+            openJoinRequests = openJoinRequests,
             onBack = onBack,
             onLeft = onLeft,
         )
