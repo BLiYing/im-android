@@ -112,6 +112,19 @@ suspend fun MessageRepository.searchMessages(
     return LocalSearchPage(rows = rows, truncated = raw.size >= limit)
 }
 
+/** 首页全局搜索的聊天记录命中（跨会话，新在前，最多 [limit] 条）；空词回空集。 */
+suspend fun MessageRepository.searchAllMessages(
+    owner: String,
+    keyword: String,
+    limit: Int = ChatSearch.LOCAL_PAGE_LIMIT,
+): List<MessageEntity> {
+    val needle = keyword.trim()
+    if (needle.isEmpty()) return emptyList()
+    val lowered = needle.lowercase()
+    return messages.searchAll(owner, "%" + ChatSearch.escapeLike(needle) + "%", limit)
+        .filter { ChatSearch.matches(it.contentType, it.content, it.caption, it.fileName, lowered) }
+}
+
 /**
  * 「来自」候选发件人 uid 列表（本会话已发过消息的去重集合，见 [com.libeyond.imandroid.data.db.MessageDao.distinctSenders]）。
  * 只回 uid——名字/头像由调用方按本机显示名口径（备注 > 群昵称 > 昵称）现解析，这里不掺进来。

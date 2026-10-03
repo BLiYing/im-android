@@ -219,6 +219,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                 connected = connState == ConnState.Connected,
                                 knownFriends = knownFriends,
                                 onOpenChat = { openConv = it },
+                                onOpenChatAt = { c, seq -> chatArm = ChatArm(locateSeq = seq); openConv = c },
                                 onLongPress = { c, rect -> menuFor = c; menuAnchor = rect },
                                 bottomBar = bottomBar,
                                 muteNow = muteTick,

@@ -98,3 +98,31 @@ fun IMSearchField(
         }
     }
 }
+
+/**
+ * 会话列表顶部的搜索**入口胶囊**（对齐 iOS `searchEntryTapped`）：长得像 [IMSearchField]，
+ * 但不承载输入——点一下整条进全局搜索页，在那一页里输入。
+ */
+@Composable
+fun IMSearchEntry(placeholder: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    Row(
+        modifier = modifier
+            .heightIn(min = d.inputControl)
+            .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
+            .background(c.subtleFill)
+            .clickable(onClick = onClick)
+            .padding(horizontal = d.space3),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Image(
+            imageVector = Lucide.Search,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            colorFilter = ColorFilter.tint(c.textTertiary),
+        )
+        Spacer(Modifier.width(d.space2))
+        Text(placeholder, color = c.textTertiary, fontSize = 15.sp)
+    }
+}

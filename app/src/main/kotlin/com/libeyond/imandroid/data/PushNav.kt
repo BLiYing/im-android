@@ -34,6 +34,8 @@ enum class ChatsPage(val depth: Int) {
     List(PushNav.ROOT_DEPTH),
     AddFriend(1),
     CreateGroup(1),
+    /** 首页全局搜索；其「搜索用户」下钻 [AddFriend]，比它再深一层不需要——回退直接回列表即可（同 iOS 点取消/返回）。 */
+    Search(1),
 }
 
 /** 「通讯录」Tab 里的页面。建群是从「群聊」列表点进去的，比它深一层。 */

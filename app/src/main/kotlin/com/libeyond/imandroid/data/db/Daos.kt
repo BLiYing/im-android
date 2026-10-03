@@ -142,6 +142,25 @@ interface MessageDao {
     suspend fun search(owner: String, convId: String, like: String, fromUid: String, limit: Int): List<MessageEntity>
 
     /**
+     * 首页全局搜索的「聊天记录」：跨**所有会话**的命中（对齐 iOS `searchMessagesMatching:inConv:nil`）。
+     * 判据与 [search] 同一套（SQL 收窄 + [com.libeyond.imandroid.data.ChatSearch.matches] 复核）；
+     * 不带「来自」过滤，空词不查（调用方保证）。残留会话（已退群/已删）的消息由调用方按会话列表过滤。
+     */
+    @Query("""
+        SELECT * FROM message
+        WHERE ownerUid = :owner
+          AND recalledAt IS NULL AND deletedAt IS NULL AND contentType <> 'system'
+          AND (
+                (contentType = 'text' AND content LIKE :like ESCAPE '\')
+             OR (caption IS NOT NULL AND caption <> '' AND caption LIKE :like ESCAPE '\')
+             OR (fileName IS NOT NULL AND fileName <> '' AND fileName LIKE :like ESCAPE '\')
+          )
+        ORDER BY timestamp DESC, convSeq DESC
+        LIMIT :limit
+    """)
+    suspend fun searchAll(owner: String, like: String, limit: Int): List<MessageEntity>
+
+    /**
      * 「来自」候选：本会话**已发过消息**的去重发件人（对齐 iOS `senderCandidatesForConv:`）。
      * **不是群成员表**——没发过言的成员过滤后必 0 命中，列出无意义；系统消息没有真实发送者，排除。
      * 按最后一次发言时间倒序：最近说过话的人排前面，找起来更快。

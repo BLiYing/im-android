@@ -31,10 +31,12 @@ fun AddFriendHost(
     onOpenChat: (ConversationEntity) -> Unit,
     onBack: () -> Unit,
     onChanged: () -> Unit = {},
+    /** 非空 = 带着关键词进来并立刻查一次（全局搜索的「搜索用户「x」」，同 iOS `initialQuery:`）。 */
+    initialQuery: String = "",
 ) {
     BackHandler(onBack = onBack)
     val scope = rememberCoroutineScope()
-    var query by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf(initialQuery) }
     var results by remember { mutableStateOf<List<UserCard>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var searched by remember { mutableStateOf(false) }
@@ -50,20 +52,23 @@ fun AddFriendHost(
     }
     LaunchedEffect(Unit) { reloadRelations() }
 
+    fun runSearch() {
+        scope.launch {
+            searching = true; error = ""
+            try {
+                results = client.contacts.search(query.trim())
+                searched = true
+            } catch (e: ApiException) {
+                error = if (e.isTransport) Str.s(R.string.net_error_generic) else e.message
+            } finally { searching = false }
+        }
+    }
+    LaunchedEffect(Unit) { if (initialQuery.isNotBlank()) runSearch() }
+
     UserSearchScreen(
         query = query,
         onQueryChange = { query = it },
-        onSearch = {
-            scope.launch {
-                searching = true; error = ""
-                try {
-                    results = client.contacts.search(query.trim())
-                    searched = true
-                } catch (e: ApiException) {
-                    error = if (e.isTransport) Str.s(R.string.net_error_generic) else e.message
-                } finally { searching = false }
-            }
-        },
+        onSearch = { runSearch() },
         results = results,
         relations = relations,
         searching = searching,

@@ -54,6 +54,7 @@ import com.libeyond.imandroid.data.MuteState
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.IMSearchEntry
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.TopBarCircleButton
@@ -84,6 +85,8 @@ fun ConversationListScreen(
     onLongPress: (ConversationEntity, Rect) -> Unit,
     /** 右上角 ＋，带上按钮在窗口坐标系里的矩形——菜单贴着它弹（对齐 iOS `plusTapped:` 的 IMPopoverCard）。 */
     onPlus: (Rect) -> Unit,
+    /** 点顶部搜索胶囊 → 进全局搜索页（入口不承载输入，同 iOS `searchEntryTapped`）。 */
+    onSearch: () -> Unit = {},
     connected: Boolean,
     /** 判「是否免打扰」的当前时刻（定时免打扰到期刷新，NOTIFICATIONS_P1_DESIGN §4.4）：
      *  纯展示不持业务状态（CODING_STYLE §7②），由调用方喂 `ui/components/MuteTick.kt` 的 tick。 */
@@ -113,6 +116,11 @@ fun ConversationListScreen(
                     modifier = Modifier.onGloballyPositioned { plusRect = it.boundsInWindow() },
                 )
             },
+        )
+        IMSearchEntry(
+            placeholder = stringResource(R.string.search_global_placeholder),
+            onClick = onSearch,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = IMTheme.dimens.space4, vertical = IMTheme.dimens.space2),
         )
 
         when (phase) {

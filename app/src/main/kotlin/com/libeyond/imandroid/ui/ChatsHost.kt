@@ -48,6 +48,8 @@ fun ChatsHost(
     connected: Boolean,
     knownFriends: Map<String, FriendEntry>,
     onOpenChat: (ConversationEntity) -> Unit,
+    /** 点聊天记录命中：进会话并定位到那条（[MainScreen] 把 seq 交给聊天页，同详情页「定位」）。 */
+    onOpenChatAt: (ConversationEntity, Long) -> Unit,
     onLongPress: (ConversationEntity, Rect) -> Unit,
     bottomBar: @Composable () -> Unit,
     /** 定时免打扰到期刷新用的当前时刻（NOTIFICATIONS_P1_DESIGN §4.4）——喂给 [ConversationListScreen]
@@ -82,6 +84,8 @@ fun ChatsHost(
         }
     }
     var page by remember { mutableStateOf(ChatsPage.List) }
+    /** 「搜索用户「x」」带进加好友页的初始关键词；从加号进来为空。 */
+    var addFriendQuery by remember { mutableStateOf("") }
     var plusAnchor by remember { mutableStateOf<Rect?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
     val openScan = LocalOpenQrScan.current
@@ -110,6 +114,7 @@ fun ChatsHost(
                     onOpen = onOpenChat,
                     onLongPress = onLongPress,
                     onPlus = { plusAnchor = it },
+                    onSearch = { page = ChatsPage.Search },
                     connected = connected,
                     nowMs = muteNow,
                     listState = listState,
@@ -118,6 +123,16 @@ fun ChatsHost(
             ChatsPage.AddFriend -> AddFriendHost(
                 client = client,
                 onOpenChat = onOpenChat,
+                onBack = { page = if (addFriendQuery.isEmpty()) ChatsPage.List else ChatsPage.Search },
+                initialQuery = addFriendQuery,
+            )
+            ChatsPage.Search -> GlobalSearchHost(
+                client = client,
+                conversations = conversations.orEmpty(),
+                knownFriends = knownFriends,
+                onOpenChat = onOpenChat,
+                onOpenChatAt = onOpenChatAt,
+                onSearchUser = { q -> addFriendQuery = q; page = ChatsPage.AddFriend },
                 onBack = { page = ChatsPage.List },
             )
             ChatsPage.CreateGroup -> CreateGroupHost(
@@ -143,7 +158,7 @@ fun ChatsHost(
                     openScan?.invoke() ?: run { toast = Str.s(R.string.conv_menu_scan_unavailable) }
                 },
                 SheetItem(stringResource(R.string.conv_menu_new_group), icon = Lucide.Users) { page = ChatsPage.CreateGroup },
-                SheetItem(stringResource(R.string.common_add_friend), icon = Lucide.UserPlus) { page = ChatsPage.AddFriend },
+                SheetItem(stringResource(R.string.common_add_friend), icon = Lucide.UserPlus) { addFriendQuery = ""; page = ChatsPage.AddFriend },
             ),
             onDismiss = { plusAnchor = null },
         )
