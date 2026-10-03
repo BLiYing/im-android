@@ -73,6 +73,8 @@ fun IMTextPrompt(
      * 非空且当前已有内容时才显示，点击直接以空值确认——不必先手动清空文本框再点确定。
      */
     clearActionText: String? = null,
+    /** 输入框标签/占位；默认同标题。标题是「添加好友」这类动作名时，占位该写提示语（如「说一句，让对方知道你是谁」）。 */
+    label: String = title,
 ) {
     val c = IMTheme.colors
     var value by remember { mutableStateOf(initial) }
@@ -88,7 +90,7 @@ fun IMTextPrompt(
                 IMTextField(
                     value = value,
                     onValueChange = { if (it.length <= maxLen) value = it },
-                    label = title,
+                    label = label,
                     singleLine = !multiline,
                 )
                 Spacer(Modifier.height(4.dp))

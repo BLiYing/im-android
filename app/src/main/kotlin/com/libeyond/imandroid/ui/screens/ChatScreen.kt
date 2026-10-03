@@ -154,6 +154,10 @@ fun ChatScreen(
      * 只看正文的话，粘了图却一个字没打时发送键是灰的，那张图发不出去。
      */
     extraSendable: Boolean = false,
+    /** 输入栏锁的原因（被禁言/全员禁言/系统会话）；null = 可输入。见 [Composer.lockedReason]。 */
+    composerLock: String? = null,
+    /** 点被拒收行里的「发送好友申请」（200103）。 */
+    onAddFriendFromNote: () -> Unit = {},
     onBack: () -> Unit,
     onRetry: (String) -> Unit,
     /** 分片上传进度：clientMsgId → 百分比。没有条目 = 不在分片上传中。 */
@@ -259,6 +263,8 @@ fun ChatScreen(
     var attachOpen by remember(convId) { mutableStateOf(false) }
     val imeVisible = WindowInsets.isImeVisible
     LaunchedEffect(imeVisible) { if (imeVisible) attachOpen = false }
+    // 输入栏被锁（被禁言等）：附件面板与键盘一并收起，免得锁了还挂着面板
+    LaunchedEffect(composerLock != null) { if (composerLock != null) attachOpen = false }
     // 多选 / 搜索态不画面板，但 attachOpen 若还挂着，chatListTaps 会把每一下都当「只收面板」吃掉——行勾选点了没反应
     LaunchedEffect(selection != null, searchOpen) { if (selection != null || searchOpen) attachOpen = false }
     LaunchedEffect(covered) { if (covered) focusManager.clearFocus() }
@@ -448,6 +454,7 @@ fun ChatScreen(
                     onOpenMedia = onOpenMedia,
                     onOpenUser = onOpenUser,
                     onRetry = onRetry,
+                    onAddFriend = onAddFriendFromNote,
                     onJumpToSeq = onJumpToSeq,
                     onOpenRecord = onOpenRecord,
                     onCallBack = onCallBack,
@@ -532,6 +539,7 @@ fun ChatScreen(
             },
             above = composerAbove,
             extraSendable = extraSendable,
+            lockedReason = composerLock,
             onSend = onSend,
             onPlus = {
                 attachOpen = !attachOpen

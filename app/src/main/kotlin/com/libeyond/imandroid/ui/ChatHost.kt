@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import com.libeyond.imandroid.data.ComposerLock
 import com.libeyond.imandroid.data.sendText
 import com.libeyond.imandroid.ui.screens.MentionPanel
 import com.libeyond.imandroid.data.Forward
@@ -241,6 +242,11 @@ fun ChatHost(
     // 即便这里判错也不会越权，最坏是多显/少显一个菜单项——所以不必为它阻塞首屏，
     // 拉不到就按 false 走。
     var iAmManager by remember(conv.convId) { mutableStateOf(false) }
+    // 输入栏锁的两个禁言位（成员级 / 全员），见 ComposerLock；群资料每次重拉都刷新
+    var myMuteUntil by remember(conv.convId) { mutableStateOf(0L) }
+    var groupMuteUntil by remember(conv.convId) { mutableStateOf(0L) }
+    // 点被拒收行的「发送好友申请」→ 验证消息弹窗（FriendRequestPrompt）
+    var askFriend by remember(conv.convId) { mutableStateOf<FriendRequestTarget?>(null) }
     /** 我在本群的角色。**@所有人 只对群主/管理员出入口**（越权服务端回 300204）。 */
     var myRole by remember(conv.convId) { mutableStateOf<String?>(null) }
     /** 本群成员表（显示名→uid）——只给没有 mention_spans 的老消息兜底，有 uid 才可点（对齐 iOS）。 */
@@ -249,12 +255,19 @@ fun ChatHost(
     var memberRoles by remember(conv.convId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     // 成员表过期（会话开着时对方改名再发消息）→ 版本号 +1 → 下面重拉群资料（MemberNameRefresh.kt）
     val membersRev = rememberMembersRefreshRev(conv.convId, conv.isGroup, rowsReady, messages.lastOrNull(), memberNames)
-    LaunchedEffect(conv.convId, membersRev) {
+    // 本群的 group 帧（禁言/解禁/改设置…）：重拉群资料，输入栏锁随之上下，不必等下一条消息
+    var groupEventRev by remember(conv.convId) { mutableStateOf(0) }
+    LaunchedEffect(conv.convId) {
+        client.groupEvents.collect { if (it.convId == conv.convId && !it.goneForMe(client.uid)) groupEventRev++ }
+    }
+    LaunchedEffect(conv.convId, membersRev, groupEventRev) {
         if (conv.isGroup) {
             runCatchingCancellable { client.groups.info(conv.convId) }
                 .onSuccess {
                     iAmManager = it.iAmManager
                     myRole = it.myRole
+                    myMuteUntil = it.myMuteUntil
+                    groupMuteUntil = it.muteUntil
                     // 超级群这里只回我自己（服务端刻意不下发 2 万人的成员表），
                     // 于是老消息的 @ 在超级群里不高亮——协议里写明的降级，别在这补救
                     mentionNames = it.members.associate { m -> m.displayName to m.userId }
@@ -326,6 +339,9 @@ fun ChatHost(
         },
         // 粘贴条只负责"挂着、可逐张撤掉"，发送归输入栏那颗发送键（对齐 iOS）
         extraSendable = !paste.isEmpty,
+        composerLock = ComposerLock.reasonRes(conv.isGroup, conv.peerUid, myRole, myMuteUntil, groupMuteUntil)
+            ?.let { Str.s(it) },
+        onAddFriendFromNote = { askFriend = FriendRequestTarget(conv.peerUid, conv.title) },
         composerAbove = {
             if (!paste.isEmpty) PasteImageBar(paste)
             if (mention.panelOpen) {
@@ -466,6 +482,7 @@ fun ChatHost(
     }
 
     BatchDeleteConfirm(sel, client, conv.convId, conv.isGroup, iAmManager) { toast = it }
+    FriendRequestPrompt(client, askFriend, onDismiss = { askFriend = null }, onToast = { toast = it })
 
     // —— 聊天记录详情（点合并转发卡进来）。画在查看器与资料页之前：从记录里点名片进的资料页要盖在它上面 ——
     ChatRecordLayer(

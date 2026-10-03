@@ -873,6 +873,7 @@
     <string name="friend_request_became_friends">Added as a friend</string>
     <string name="friend_request_hello_label">Message (optional, visible to them)</string>
     <string name="friend_request_hello_placeholder">Say something so they know who you are</string>
+    <string name="friend_request_hello_prefill">I\'m %1$s</string>
     <string name="friend_request_no_user_found">Couldn\'t find this user</string>
     <string name="friend_request_peer_fallback">this person</string>
     <string name="friend_request_placeholder">Say something so they know who you are</string>

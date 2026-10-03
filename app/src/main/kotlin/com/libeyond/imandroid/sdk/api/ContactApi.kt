@@ -98,12 +98,17 @@ class ContactApi(private val http: HttpClient) {
     suspend fun me(): UserCard =
         decode(http.call("GET", "/api/v1/users/me"), UserCard.serializer())
 
-    /** @param hello 验证消息，≤50 rune；服务端压单行 + 超长截断而非报错。 */
-    suspend fun request(userId: String, hello: String = "") {
-        http.call("POST", "/api/v1/friends/request", buildJsonObject {
+    /** @param hello 验证消息，≤50 rune；服务端压单行 + 超长截断而非报错。
+     * @return 是否已直接成为好友（outcome=accepted）。 */
+    suspend fun request(userId: String, hello: String = ""): Boolean {
+        val data = http.call("POST", "/api/v1/friends/request", buildJsonObject {
             put("user_id", userId)
             if (hello.isNotBlank()) put("hello", hello)
         })
+        // outcome=accepted：直接成为好友（对方先申请过我 / 我曾单向删除而对方仍视我为好友）——
+        // 调用方此时**不得**提示「已发送好友申请」（PROTOCOL §6.5）。老服务端不回该字段 = requested
+        return ((data as? kotlinx.serialization.json.JsonObject)?.get("outcome") as? kotlinx.serialization.json.JsonPrimitive)
+            ?.content == "accepted"
     }
 
     suspend fun accept(userId: String) = act("accept", userId)

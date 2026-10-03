@@ -54,6 +54,8 @@ fun UserProfileHost(
     var card by remember(userId) { mutableStateOf(seed) }
     var relation by remember(userId) { mutableStateOf(knownRelation) }
     var editingRemark by remember(userId) { mutableStateOf(false) }
+    var askFriend by remember(userId) { mutableStateOf<FriendRequestTarget?>(null) }
+    var toast by remember(userId) { mutableStateOf<String?>(null) }
 
     BackHandler(onBack = onBack)
 
@@ -72,12 +74,14 @@ fun UserProfileHost(
             relation = relation,
             onSendMessage = { onSendMessage(card) },
             onAddFriend = {
-                scope.launch {
-                    runCatching {
-                        if (relation == FriendEntry.PENDING) client.contacts.accept(userId)
-                        else client.contacts.request(userId)
+                if (relation == FriendEntry.PENDING) {
+                    // 对方先申请过我：直接同意，不必再填验证消息
+                    scope.launch {
+                        runCatching { client.contacts.accept(userId) }
+                        relation = FriendEntry.ACCEPTED
                     }
-                    relation = if (relation == FriendEntry.PENDING) FriendEntry.ACCEPTED else FriendEntry.REQUESTED
+                } else {
+                    askFriend = FriendRequestTarget(userId, card.remark.ifBlank { card.nickname })
                 }
             },
             onSetRemark = { editingRemark = true },
@@ -107,6 +111,10 @@ fun UserProfileHost(
                 }
             },
         )
+        FriendRequestPrompt(client, askFriend, onDismiss = { askFriend = null }, onToast = { toast = it }) { became ->
+            relation = if (became) FriendEntry.ACCEPTED else FriendEntry.REQUESTED
+        }
+        toast?.let { t -> com.libeyond.imandroid.ui.components.IMToast(t) { toast = null } }
     }
 }
 

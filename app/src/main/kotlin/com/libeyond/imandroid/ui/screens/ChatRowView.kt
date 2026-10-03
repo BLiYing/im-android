@@ -1,18 +1,21 @@
 package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.ReplyNames
+import com.libeyond.imandroid.data.SendRejection
 import com.libeyond.imandroid.data.SenderNames
 import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.data.SysEvents
 import com.libeyond.imandroid.data.ChatSelection
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.SendState
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.LinkPreview
 import com.libeyond.imandroid.sdk.protocol.ContentType
 
@@ -87,6 +90,8 @@ internal fun ChatRowView(
     onOpenMedia: (MessageEntity) -> Unit = {},
     onOpenUser: (String) -> Unit = {},
     onRetry: (String) -> Unit = {},
+    /** 点拒收行里的「发送好友申请」（200103 的恢复入口）。 */
+    onAddFriend: () -> Unit = {},
     /** 点引用块跳到原消息（按 conv_seq）。 */
     onJumpToSeq: (Long) -> Unit = {},
     /** 点合并转发卡 → 聊天记录详情页（参数是那条的 content）。 */
@@ -270,6 +275,10 @@ internal fun ChatRowView(
             val isFile = r.msg.contentType == ContentType.FILE
             val isVoice = r.msg.contentType == ContentType.VOICE
             val pct = uploadProgress[r.msg.clientMsgId]
+            // 被服务端明确拒收（非好友/禁言…）：不给红 ❗（重发必再被拒），改在气泡下方给一行说明（SendRejection）
+            val rejectRes = if (r.msg.state == SendState.Failed.name) SendRejection.noteRes(r.msg.errorCode) else null
+            val shownFailed = r.msg.state == SendState.Failed.name && rejectRes == null
+            Column {
             if (r.msg.contentType == ContentType.CALL && CallRecord.parse(r.msg.content)?.isGroup == true) {
                 SystemNote(text = CallRecord.renderRaw(r.msg.content, viewerIsSender = true).text)
             } else if (isImage || isVideo) {
@@ -278,7 +287,7 @@ internal fun ChatRowView(
                     isVideo = isVideo,
                     timestamp = r.msg.createdAt,
                     sending = r.msg.state == SendState.Sending.name,
-                    failed = r.msg.state == SendState.Failed.name,
+                    failed = shownFailed,
                     progress = pct,
                     onRetry = { onRetry(r.msg.clientMsgId) },
                 )
@@ -291,7 +300,7 @@ internal fun ChatRowView(
                     waveform = r.msg.waveform,
                     timestamp = r.msg.createdAt,
                     sending = r.msg.state == SendState.Sending.name,
-                    failed = r.msg.state == SendState.Failed.name,
+                    failed = shownFailed,
                     progress = pct,
                     onRetry = { onRetry(r.msg.clientMsgId) },
                 )
@@ -303,7 +312,7 @@ internal fun ChatRowView(
                     fileSize = r.msg.fileSize,
                     timestamp = r.msg.createdAt,
                     sending = r.msg.state == SendState.Sending.name,
-                    failed = r.msg.state == SendState.Failed.name,
+                    failed = shownFailed,
                     progress = pct,
                     onRetry = { onRetry(r.msg.clientMsgId) },
                 )
@@ -319,9 +328,17 @@ internal fun ChatRowView(
                     timestamp = r.msg.createdAt,
                     senderName = null,
                     sending = r.msg.state == SendState.Sending.name,
-                    failed = r.msg.state == SendState.Failed.name,
+                    failed = shownFailed,
                     onRetry = { onRetry(r.msg.clientMsgId) },
                 )
+            }
+            if (rejectRes != null) {
+                RejectNote(
+                    text = Str.s(rejectRes),
+                    actionable = SendRejection.isActionable(r.msg.errorCode),
+                    onAction = onAddFriend,
+                )
+            }
             }
         }
     }

@@ -95,6 +95,7 @@ fun ChatDetailHost(
     var viewingOpen by remember(conv.convId) { mutableStateOf(false) }
     var viewingData by remember(conv.convId) { mutableStateOf<ConvMediaItem?>(null) }
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
+    var askFriend by remember(conv.convId) { mutableStateOf<FriendRequestTarget?>(null) }
     val saveMedia = rememberMediaSaver { toast = it }
 
     // 好友关系是**异步校正**的：外层传进来那份可能是几分钟前的，而操作排的显隐全靠它
@@ -277,11 +278,7 @@ fun ChatDetailHost(
                             DetailAction.Call -> RtcCall.placeSingle(conv.peerUid, video = false)?.let { toast = it }
                             DetailAction.Video -> RtcCall.placeSingle(conv.peerUid, video = true)?.let { toast = it }
                             DetailAction.GroupCall -> Unit // 单聊不会出这个 pill
-                            DetailAction.AddFriend -> scope.launch {
-                                runCatching { client.contacts.request(conv.peerUid) }
-                                    .onSuccess { toast = Str.s(R.string.friend_request_sent) }
-                                    .onFailure { toast = it.userMessage(Str.s(R.string.chat_detail_add_friend_failed)) }
-                            }
+                            DetailAction.AddFriend -> askFriend = FriendRequestTarget(conv.peerUid, remark.ifBlank { conv.title })
                             // showsMessagePill=false（从聊天页自己点头像进来）时这条 pill 根本不会出现
                             DetailAction.Message -> onOpenChat(conv)
                             // 「更多」走下面单独的 onMore 回调，这里不会出现
@@ -483,6 +480,7 @@ fun ChatDetailHost(
         )
     }
 
+    FriendRequestPrompt(client, askFriend, onDismiss = { askFriend = null }, onToast = { toast = it })
     // toast 放最后：它是一层 fillMaxSize 的浮层，画在页面之前会被页面盖住
     toast?.let { t -> IMToast(t) { toast = null } }
 }

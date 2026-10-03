@@ -1,7 +1,9 @@
 package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -172,5 +174,30 @@ internal fun UnreadDividerRow() {
             modifier = Modifier.padding(horizontal = 8.dp),
         )
         Box(Modifier.weight(1f).height(0.5.dp).background(c.separator))
+    }
+}
+
+/**
+ * 被服务端明确拒收后，气泡下方的说明行（对齐 iOS `IMRejectNoteView`）：12sp 次要色居中；
+ * [actionable]（目前只有 200103 非好友）时整行可点，并追加一行强调色「发送好友申请」。
+ * 整行热区而非精确命中动作文字——12sp 逐字命中太难点，且这行没有别的可点元素。
+ */
+@Composable
+internal fun RejectNote(text: String, actionable: Boolean, onAction: () -> Unit) {
+    val c = IMTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 2.dp)
+            .then(if (actionable) Modifier.clickable(onClick = onAction) else Modifier),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(text, color = c.textSecondary, fontSize = 12.sp, textAlign = TextAlign.Center)
+        if (actionable) {
+            Text(
+                stringResource(R.string.chat_system_send_friend_request),
+                color = c.accent, fontSize = 12.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center,
+            )
+        }
     }
 }

@@ -39,6 +39,8 @@ fun AddFriendHost(
     var searching by remember { mutableStateOf(false) }
     var searched by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+    var askFriend by remember { mutableStateOf<FriendRequestTarget?>(null) }
+    var toast by remember { mutableStateOf<String?>(null) }
     /** uid → 与我的关系：决定结果行的按钮是「加好友 / 已申请 / 同意 / 发消息」哪一个。 */
     var relations by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
@@ -68,17 +70,22 @@ fun AddFriendHost(
         searched = searched,
         error = error,
         onAdd = { u ->
-            scope.launch {
-                runCatchingCancellable {
-                    // 已是对方的待确认申请 → 同意；否则发起申请
-                    if (relations[u.userId] == FriendEntry.PENDING) client.contacts.accept(u.userId)
-                    else client.contacts.request(u.userId)
+            if (relations[u.userId] == FriendEntry.PENDING) {
+                // 已是对方的待确认申请 → 直接同意
+                scope.launch {
+                    runCatchingCancellable { client.contacts.accept(u.userId) }
+                    reloadRelations()
+                    onChanged()
                 }
-                reloadRelations()
-                onChanged()
+            } else {
+                askFriend = FriendRequestTarget(u.userId, u.displayName)
             }
         },
         onOpenChat = { u -> onOpenChat(client.conversationStubFor(u.userId, u.displayName, u.avatarUrl)) },
         onBack = onBack,
     )
+    FriendRequestPrompt(client, askFriend, onDismiss = { askFriend = null }, onToast = { toast = it }) {
+        scope.launch { reloadRelations(); onChanged() }
+    }
+    toast?.let { t -> com.libeyond.imandroid.ui.components.IMToast(t) { toast = null } }
 }

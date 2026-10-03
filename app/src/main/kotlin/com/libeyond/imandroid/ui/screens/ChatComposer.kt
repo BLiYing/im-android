@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Mic
 import com.composables.icons.lucide.Plus
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -81,7 +83,16 @@ internal fun Composer(
      * 发送键判成灰的，那张图就发不出去（对齐 iOS：粘贴图挂在 pasteBar 上，由输入栏那颗发送键统一发出）。
      */
     extraSendable: Boolean = false,
+    /**
+     * 输入栏锁的原因（被禁言 / 全员禁言 / 系统通知会话，见 [com.libeyond.imandroid.data.ComposerLock]）；
+     * 非空 = 输入框、＋、🎙 全部禁用并以它作占位。**入口即拦**——只锁输入框的话，＋ 仍能点开相册一路走到上传才被拒。
+     */
+    lockedReason: String? = null,
 ) {
+    if (lockedReason != null) {
+        LockedComposerBar(lockedReason)
+        return
+    }
     Column(Modifier.fillMaxWidth()) {
         above?.invoke()
         ComposerBar(convId, input, onInputChange, onSend, onSendVoice, onToast, onPlus, onInputFocus, extraSendable)
@@ -214,3 +225,48 @@ private fun ComposerBar(
         }
     }
 }
+
+/** 锁定态输入栏：与正常栏同高同布局，＋/🎙 压到 40% 且不可点，输入框位置显示原因（iOS `setComposerLocked:reason:`）。 */
+@Composable
+private fun LockedComposerBar(reason: String) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = d.inputBarHeight)
+            .background(c.surface)
+            .padding(horizontal = d.inputBarEdge, vertical = d.space2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(d.inputControl), contentAlignment = Alignment.Center) {
+            Image(
+                imageVector = Lucide.Plus,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp).alpha(LOCKED_ALPHA),
+                colorFilter = ColorFilter.tint(c.textSecondary),
+            )
+        }
+        Spacer(Modifier.width(d.space2))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
+                .background(c.pageBackground)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            Text(reason, color = c.textTertiary, fontSize = 15.sp)
+        }
+        Spacer(Modifier.width(d.space2))
+        Box(Modifier.size(d.inputControl), contentAlignment = Alignment.Center) {
+            Image(
+                imageVector = Lucide.Mic,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp).alpha(LOCKED_ALPHA),
+                colorFilter = ColorFilter.tint(c.textSecondary),
+            )
+        }
+    }
+}
+
+private const val LOCKED_ALPHA = 0.4f
