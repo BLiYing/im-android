@@ -300,7 +300,7 @@ private fun AlbumTileView(
                 },
             ),
     ) {
-        PendingMenuPopup(pendingOpen, pendingActs, null, m.onCancelUpload) { pendingOpen = false }
+        PendingMenuPopup(pendingOpen, tileRect.value, pendingActs, null, m.onCancelUpload) { pendingOpen = false }
         val frosted = rememberFrostedPainter(m.thumb)
         AsyncImage(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，所以选完立刻有图、

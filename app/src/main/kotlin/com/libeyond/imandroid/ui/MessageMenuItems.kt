@@ -264,16 +264,6 @@ internal fun ChatMessageMenu(
                         clipboard.setText(AnnotatedString(target.content))
                         onToast(Str.s(R.string.common_copied))
                     }
-                    com.libeyond.imandroid.data.CopyKind.Link -> {
-                        clipboard.setText(
-                            AnnotatedString(
-                                MediaUrl.absolute(
-                                    target.content, client.host, com.libeyond.imandroid.BuildConfig.USE_TLS,
-                                ),
-                            ),
-                        )
-                        onToast(Str.s(R.string.common_copied_link))
-                    }
                     // 图片走与查看器「更多 → 复制」同一条（本地原件优先），别另搓一份
                     com.libeyond.imandroid.data.CopyKind.Image -> scope.launch {
                         val local = client.downloads.localFile(target.content)

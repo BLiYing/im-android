@@ -54,8 +54,9 @@ class MessageActionsTest {
     fun `复制按矩阵给`() {
         assertTrue(MessageAction.Copy in actions(msg()))
         assertTrue(MessageAction.Copy in actions(msg(type = ContentType.IMAGE, content = "/uploads/x.jpg")))
-        assertTrue(MessageAction.Copy in actions(msg(type = ContentType.VIDEO, content = "/uploads/x.mp4")))
-        assertTrue(MessageAction.Copy in actions(msg(type = ContentType.FILE, content = "/uploads/x.pdf")))
+        // 视频/文件没有图说时不给（iOS：「文件无复制语义」，只放开文本 / 已发出图片 / 有图说的消息）
+        assertFalse(MessageAction.Copy in actions(msg(type = ContentType.VIDEO, content = "/uploads/x.mp4")))
+        assertFalse(MessageAction.Copy in actions(msg(type = ContentType.FILE, content = "/uploads/x.pdf")))
         // 语音刻意不给：iOS 那支走兜底分支复制 `message.content`，也就是一段相对路径，对用户没意义
         assertFalse(MessageAction.Copy in actions(msg(type = ContentType.VOICE, content = "/uploads/x.m4a")))
         assertFalse(MessageAction.Copy in actions(msg(content = "")))

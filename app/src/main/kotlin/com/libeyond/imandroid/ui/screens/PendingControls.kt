@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,19 +20,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ArrowUp
+import com.composables.icons.lucide.Copy
+import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.RotateCw
 import com.composables.icons.lucide.X
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.ui.components.MessageContextMenu
+import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.data.PendingAction
 import com.libeyond.imandroid.data.PendingMenu
 import com.libeyond.imandroid.data.UploadState
@@ -136,49 +143,58 @@ internal fun PendingActions(
     content: @Composable () -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+    var rect by remember { mutableStateOf(Rect.Zero) }
     val acts = PendingMenu.actions(contentType, failed, !copyText.isNullOrEmpty())
     Box(
-        if (acts.isEmpty()) Modifier else Modifier.combinedClickable(
+        Modifier.onGloballyPositioned { rect = it.boundsInWindow() }.then(if (acts.isEmpty()) Modifier else Modifier.combinedClickable(
             onClick = {}, onLongClick = { open = true },
             indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-        ),
+        )),
     ) {
         content()
-        PendingMenuPopup(open, acts, copyText, onCancel) { open = false }
+        PendingMenuPopup(open, rect, acts, copyText, onCancel) { open = false }
     }
 }
 
-/** 待发菜单的弹层本体：单条待发气泡与宫格里的待发格共用（iOS 同一份 `messageActionsForMessage:`）。 */
+/**
+ * 待发菜单的弹层本体：单条待发气泡与宫格里的待发格共用（iOS 同一份 `messageActionsForMessage:`）。
+ * 与已发出消息同一个 [MessageContextMenu]（压暗背景 + 贴着锚点 + 带图标），不再是下拉菜单；
+ * 待发件的气泡/格子本身就在原位，所以不重绘预览（`preview = null`，只压暗背景）。
+ */
 @Composable
 internal fun PendingMenuPopup(
     open: Boolean,
+    anchor: Rect,
     acts: List<PendingAction>,
     copyText: String?,
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    if (!open || acts.isEmpty()) return
     val clipboard = LocalClipboardManager.current
-    DropdownMenu(expanded = open && acts.isNotEmpty(), onDismissRequest = onDismiss) {
-        acts.forEach { a ->
-            val danger = a != PendingAction.Copy
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(
-                            when (a) {
-                                PendingAction.Copy -> R.string.common_copy
-                                PendingAction.CancelSend -> R.string.chat_msg_menu_cancel_send
-                                PendingAction.Delete -> R.string.common_delete
-                            },
-                        ),
-                        color = if (danger) IMTheme.colors.danger else IMTheme.colors.textPrimary,
-                    )
-                },
-                onClick = {
-                    onDismiss()
-                    if (a == PendingAction.Copy) clipboard.setText(AnnotatedString(copyText.orEmpty())) else onCancel()
-                },
-            )
+    val items = acts.map { a ->
+        val label = stringResource(
+            when (a) {
+                PendingAction.Copy -> R.string.common_copy
+                PendingAction.CancelSend -> R.string.chat_msg_menu_cancel_send
+                PendingAction.Delete -> R.string.common_delete
+            },
+        )
+        val icon = when (a) {
+            PendingAction.Copy -> Lucide.Copy
+            PendingAction.CancelSend -> Lucide.X
+            PendingAction.Delete -> Lucide.Trash2
         }
+        SheetItem(label, destructive = a != PendingAction.Copy, icon = icon) {
+            if (a == PendingAction.Copy) clipboard.setText(AnnotatedString(copyText.orEmpty())) else onCancel()
+        }
+    }
+    // MessageContextMenu 是**树内**的全屏覆盖层（聊天页根上才铺得开）；待发气泡/格子里没有那么大的地方，
+    // 直接放会被裁在这一格里。包一层全屏 Dialog 把它抬到窗口级，锚点仍是窗口坐标。
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        MessageContextMenu(anchor = anchor, mine = true, items = items, onDismiss = onDismiss)
     }
 }

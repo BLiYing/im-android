@@ -154,9 +154,6 @@ enum class CopyKind {
     /** 图片字节本身。安卓没有位图剪贴板，实际放的是 FileProvider 的 `content://`，见 `ui/CopyImageAction.kt`。 */
     Image,
 
-    /** 媒体的绝对链接（video / file）。 */
-    Link,
-
     /** 纯文本正文。 */
     Text,
 }
@@ -175,8 +172,8 @@ enum class CopyKind {
 fun copyKindOf(msg: MessageEntity): CopyKind? = when {
     !msg.caption.isNullOrBlank() -> CopyKind.Caption
     msg.contentType == ContentType.IMAGE && msg.content.isNotBlank() -> CopyKind.Image
-    (msg.contentType == ContentType.VIDEO || msg.contentType == ContentType.FILE) &&
-        msg.content.isNotBlank() -> CopyKind.Link
+    // 视频/文件没有图说时**不给复制**：iOS `messageActionsForMessage:` 的 copyable 只放开
+    // 文本 / 已发出的图片 / 有图说的消息（"文件无复制语义"）；此前这里多给了一个「复制链接」。
     msg.contentType == ContentType.TEXT && msg.content.isNotEmpty() -> CopyKind.Text
     else -> null
 }

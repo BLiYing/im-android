@@ -42,9 +42,9 @@ class MessageCopyKindTest {
     }
 
     @Test
-    fun `视频与文件复制链接`() {
-        assertEquals(CopyKind.Link, copyKindOf(msg(ContentType.VIDEO, "/uploads/a.mp4")))
-        assertEquals(CopyKind.Link, copyKindOf(msg(ContentType.FILE, "/uploads/a.pdf")))
+    fun `视频与文件没有图说时不给复制（同 iOS）`() {
+        assertNull(copyKindOf(msg(ContentType.VIDEO, "/uploads/a.mp4")))
+        assertNull(copyKindOf(msg(ContentType.FILE, "/uploads/a.pdf")))
     }
 
     // 刻意不跟 iOS：那边走兜底分支复制 message.content，也就是一段相对路径，对用户没意义
