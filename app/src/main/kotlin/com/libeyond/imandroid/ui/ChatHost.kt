@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import com.libeyond.imandroid.data.resend
 import com.libeyond.imandroid.data.ComposerLock
 import com.libeyond.imandroid.data.PinnedBanner
 import com.libeyond.imandroid.data.ReadTick
@@ -246,12 +247,7 @@ fun ChatHost(
     var lastTypingSent by remember(conv.convId) { mutableStateOf(0L) }
     var replyTo by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
     // 已读详情 / 翻译 / 编辑 / 举报（状态与动作在 ChatMessageOps.kt）
-    // 发送者头像：成员表 > 全局解析器（`POST /users/batch`，合批/负缓存/退避都在缓存里）。读 revision = 解析完重组
-    val profilesRev by client.profiles.revision.collectAsState()
-    val avatarOf: (String) -> String = { uid ->
-        profilesRev.let { memberAvatars[uid]?.takeIf { u -> u.isNotBlank() } ?: client.profiles.peek(uid)?.avatarUrl
-            ?: run { client.profiles.request(uid); "" } }
-    }
+    val avatarOf = rememberSenderAvatarOf(client, memberAvatars)
     val ops = remember(conv.convId) { ChatMessageOps(client, conv, scope) }.also {
         it.toast = { m -> toast = m }
         it.prefill = { t -> replyTo = null; input = TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length)) }
@@ -287,15 +283,7 @@ fun ChatHost(
     // 单聊 isGroup=false，面板恒不出现。
     val mention = rememberMentionComposer(client, conv.convId, conv.isGroup, myRole)
 
-    // 老消息补种缩略：原图已在本地（门控判定 Ready）时自己算一张存起来，
-    // **下次进这个会话就有磨砂占位了**。挂在「消息列表 + 下载状态」上——
-    // 刚下完的那一张正好在这一轮被补上。
-    val downloadStates by client.downloads.states.collectAsState()
-    LaunchedEffect(messages.size, downloadStates.size, owner) {
-        if (owner.isNotEmpty()) {
-            runCatchingCancellable { client.thumbBackfill.run(owner, conv.convId, messages) }
-        }
-    }
+    ThumbBackfillEffect(client, owner, conv.convId, messages)
 
     // 长按预览用的渲染参数：**必须与传给 ChatScreen 的那份一致**
     // （ChatScreen 自己也用 ChatRowStyle 组一份，字段来源相同）。

@@ -363,27 +363,7 @@ fun ChatScreen(
         // 目标不在 rows 里时**什么都不做、继续等**：Host 已经确认过本地有这条并把
         // 渲染窗口撑大了，下一帧 rows 长出来这个 effect 会再跑一次。
         // "跳不了"的判断与提示归 Host——只有它查得到本地库。
-        var highlightSeq by remember(convId) { mutableStateOf(0L) }
-        // key 用 rows 本身而非 rows.size：换到一个**条数相同**的锚点窗时 size 不变，目标进来了也不会再跑
-        LaunchedEffect(locateSeq, rows) {
-            if (locateSeq <= 0) return@LaunchedEffect
-            val idx = rowIndexOfSeq(rows, locateSeq)
-            if (idx < 0) return@LaunchedEffect
-            // 跳转压过「刚点过 ↓」的贴底待办，并让跟底 / 翻页补偿让路一小段
-            marks.stickUntil = 0L
-            marks.locatingUntil = SystemClock.uptimeMillis() + ChatScroll.STICK_BOTTOM_ARM_MS
-            listState.scrollToItem(idx)
-            centerItem(listState, idx)
-            // 先点亮再归零：归零会换掉本 effect 的 key 把它取消，
-            // 高亮的熄灭因此**不能**写在这里（写这儿就会一直亮着）。
-            highlightSeq = locateSeq
-            onLocateConsumed()
-        }
-        LaunchedEffect(highlightSeq) {
-            if (highlightSeq <= 0) return@LaunchedEffect
-            kotlinx.coroutines.delay(1200)
-            highlightSeq = 0
-        }
+        val highlightSeq = rememberLocateHighlight(convId, locateSeq, rows, marks, listState, onLocateConsumed)
 
         // 列表与长按预览共用同一份渲染参数（见 ChatRowStyle 的注释：分两份写栽过两次）
         val rowStyle = ChatRowStyle(
@@ -442,62 +422,15 @@ fun ChatScreen(
             verticalArrangement = Arrangement.spacedBy(d.chatRowGap),
         ) {
             items(rows.size, key = { rows[it].key }) { i ->
-                val r0 = rows[i]
-                // 菜单开着的那一行整行隐形（保留占位，列表不跳）。
-                // **宫格例外**：只隐被长按的那一格（浮起来的也只有那一格），
-                // 整行隐会让旁边几张跟着消失——那不是 iOS 的样子。
-                val hidden = menuForSeq > 0 &&
-                    (r0 as? ChatRow.Confirmed)?.msg?.convSeq == menuForSeq
-                val highlighted = highlightSeq > 0 && when (r0) {
-                    is ChatRow.Confirmed -> r0.msg.convSeq == highlightSeq
-                    is ChatRow.Album -> r0.sent.any { it.convSeq == highlightSeq }
-                    else -> false
-                }
-                // 多选态：可勾的行左侧画圈、整行改成"点一下勾选"。
-                // 不可勾的行（系统提示/撤回墓碑/未确认本地件）**不画圈也不响应**，
-                // 与 iOS `canEditRowAtIndexPath` 对 NO 的行不画圈同口径。
-                val selMsg = (r0 as? ChatRow.Confirmed)?.msg?.takeIf { ChatSelection.selectable(it) }
-                val selecting = selection != null
-                Row(
-                    Modifier
-                        .alpha(if (hidden) 0f else 1f)
-                        .background(if (highlighted) c.accentSoft else androidx.compose.ui.graphics.Color.Transparent)
-                        .then(
-                            if (selecting && selMsg != null) {
-                                Modifier.clickable { onToggleSelect(selMsg) }
-                            } else {
-                                Modifier
-                            },
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                if (selecting) {
-                    if (selMsg != null) {
-                        SelectionCheck(selected = selection.containsKey(selMsg.convSeq))
-                    } else {
-                        Spacer(Modifier.width(22.dp)) // 占位，让可勾与不可勾的行左缘对齐
-                    }
-                    SelectionGutterSpacer()
-                }
-                ChatRowView(
-                    rows = rows,
-                    i = i,
-                    style = rowStyle,
-                    onLongPress = onLongPress,
-                    onOpenMedia = onOpenMedia,
-                    onOpenUser = onOpenUser,
-                    onRetry = onRetry,
-                    onToggleUpload = onToggleUpload, onCancelPending = onCancelPending,
-                    onTapLongText = onTapLongText,
-                    onAddFriend = onAddFriendFromNote,
-                    onJumpToSeq = onJumpToSeq,
-                    onOpenRecord = onOpenRecord,
-                    onCallBack = onCallBack,
-                    // 宫格：长按的那一格自己隐形（整行不隐，其余格仍在原位）
-                    hiddenTile = if (r0 is ChatRow.Album) menuForSeq else 0L,
-                    selection = if (r0 is ChatRow.Album) selection else null, onToggleSelect = onToggleSelect, // 只宫格要逐格圈：别的行不吃 selection，免得每勾一下全体行重组
+                ChatListItem(
+                    rows = rows, i = i, style = rowStyle, selection = selection,
+                    menuForSeq = menuForSeq, highlightSeq = highlightSeq,
+                    onToggleSelect = onToggleSelect, onLongPress = onLongPress, onOpenMedia = onOpenMedia,
+                    onOpenUser = onOpenUser, onRetry = onRetry, onToggleUpload = onToggleUpload,
+                    onCancelPending = onCancelPending, onTapLongText = onTapLongText,
+                    onAddFriend = onAddFriendFromNote, onJumpToSeq = onJumpToSeq,
+                    onOpenRecord = onOpenRecord, onCallBack = onCallBack,
                 )
-                }
             }
         }
 

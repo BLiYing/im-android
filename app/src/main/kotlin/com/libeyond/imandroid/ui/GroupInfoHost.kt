@@ -254,8 +254,7 @@ fun GroupInfoHost(
             onUnban = { uid ->
                 deciding = uid
                 scope.launch {
-                    val r = runCatching { client.groups.unban(convId, uid) }
-                    toast = if (r.isSuccess) Str.s(R.string.group_ops_unban_done) else Str.s(R.string.net_fallback_unmute_failed)
+                    toast = unbanText(client, convId, uid)
                     runCatching { client.groups.bans(convId) }.onSuccess { bans = it }
                     deciding = ""
                 }
@@ -271,8 +270,7 @@ fun GroupInfoHost(
             onRevoke = { m ->
                 deciding = m.userId
                 scope.launch {
-                    val r = runCatching { client.groups.setRole(convId, m.userId, GroupMember.ROLE_MEMBER) }
-                    toast = if (r.isSuccess) Str.s(R.string.group_ops_revoke_admin_done) else Str.s(R.string.group_ops_revoke_admin_failed)
+                    toast = revokeAdminText(client, convId, m.userId)
                     // 撤销后重拉首页成员——角色变了，管理员列表要跟着变
                     membersState.refresh()
                     deciding = ""
@@ -289,12 +287,7 @@ fun GroupInfoHost(
             onDecide = { uid, approve ->
                 deciding = uid
                 scope.launch {
-                    val r = runCatching { client.groups.reviewJoinRequest(convId, uid, approve) }
-                    r.onFailure { e ->
-                        val code = (e as? com.libeyond.imandroid.sdk.http.ApiException)?.code
-                        toast = if (code != null) Str.s(R.string.common_action_failed_code, code) else Str.s(R.string.common_action_failed)
-                    }
-                    if (r.isSuccess) toast = if (approve) Str.s(R.string.qr_join_req_approved_toast) else Str.s(R.string.qr_join_req_rejected)
+                    toast = reviewJoinRequestText(client, convId, uid, approve)
                     // 无论成败都重拉：失败可能是别人已经审过了，本地那条状态已经不对了
                     reloadJoinRequests()
                     // 顺带刷群资料，pending_count 角标要跟着掉
@@ -335,21 +328,7 @@ fun GroupInfoHost(
                 info = GroupSettings.applied(g, v)
                 runManage(GroupSettings.label(key)) {
                     // PUT 失败要**立刻**回滚本地乐观值：runManage 的重拉也失败（断网）时，开关会一直停在服务端没接受的状态
-                    try {
-                        client.groups.updateSettings(
-                            convId,
-                            joinApproval = v.joinApproval,
-                            permInvite = v.permInvite,
-                            permEditInfo = v.permEditInfo,
-                            permPin = v.permPin,
-                            historyVisible = v.historyVisible,
-                        )
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        info = g
-                        throw e
-                    }
+                    putSettingsOrRollback(client, convId, v) { info = g }
                 }
             },
             onOpenJoinRequests = {
