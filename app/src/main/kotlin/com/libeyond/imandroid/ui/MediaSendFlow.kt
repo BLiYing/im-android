@@ -9,6 +9,7 @@ import com.libeyond.imandroid.data.ThumbEncode
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.Mention
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
@@ -37,7 +38,15 @@ internal class MediaSendFlow(
     private val log = IMLog.tag("IM.Media")
     private val to: String get() = if (conv.isGroup) conv.convId else conv.peerUid
 
-    suspend fun send(items: List<PickedMedia>, sendOriginal: Boolean, onToast: (String) -> Unit) {
+    /**
+     * [caption] / [at]：**仅单件**（iOS 同：粘贴单图 + 输入栏文字合并成一条 caption 消息；多件/相册不带）。
+     * 配文 @ 在发送那一刻已按文本复核好（[MentionComposer.resolve]），随待发行落库。
+     */
+    suspend fun send(
+        items: List<PickedMedia>, sendOriginal: Boolean,
+        caption: String? = null, at: MentionComposer.Resolved? = null,
+        onToast: (String) -> Unit,
+    ) {
         if (items.isEmpty()) return
         // ≥2 个共享一个 group_id → 两端聚簇成宫格；1 个不带（普通媒体气泡）。
         // 前缀 `alb-` 与 iOS 一致，便于日志里一眼认出。
@@ -59,6 +68,9 @@ internal class MediaSendFlow(
                 fileName = m.displayName,
                 fileSize = m.sizeBytes,
                 groupId = gid,
+                caption = caption.takeIf { items.size == 1 },
+                mentionSpans = at?.let { Mention.encodeSpans(it.spans) }.takeIf { items.size == 1 },
+                mentions = at?.let { Mention.encodeMentions(it.mentions) }.takeIf { items.size == 1 },
             )
         }
 
@@ -66,7 +78,7 @@ internal class MediaSendFlow(
         for ((idx, m) in items.withIndex()) {
             val uri = Uri.parse(m.uri)
             val cid = cids[idx]
-            if (m.isVideo) sendVideo(m, uri, gid, cid, onToast) else sendImage(m, uri, gid, cid, sendOriginal)
+            if (m.isVideo) sendVideo(m, uri, gid, cid, onToast) else sendImage(m, uri, gid, cid, sendOriginal, caption.takeIf { items.size == 1 })
         }
     }
 
@@ -76,6 +88,7 @@ internal class MediaSendFlow(
         gid: String?,
         pendingId: String?,
         sendOriginal: Boolean,
+        caption: String? = null,
     ) {
         // 压缩失败**回落原图**而不是放弃这一张——压不动的多半是奇怪格式，原样发出去反而能用
         val compressed = if (sendOriginal) {
@@ -112,6 +125,7 @@ internal class MediaSendFlow(
             mediaH = h.takeIf { it > 0 },
             thumb = thumb,
             pendingId = pendingId,
+            caption = caption,
         )
     }
 

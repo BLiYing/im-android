@@ -384,9 +384,11 @@ class MessageService(
         groupId: String? = null,
         duration: Int? = null,
         waveform: String? = null,
+        mentionSpans: String? = null,
+        mentions: String? = null,
     ): String? = media.createPendingRow(
         convId, to, contentType, localPreviewUri, fileName, fileSize, caption, groupId,
-        duration, waveform,
+        duration, waveform, mentionSpans, mentions,
     )
 
     /** 见 [MediaSendPipeline.attachThumb]。 */

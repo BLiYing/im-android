@@ -34,12 +34,21 @@ internal fun sendComposerInput(
         if (ops.commitEdit(input.text.trim())) clearInput()
         return
     }
+    val text = input.text.trim()
+    // 恰好一张粘贴图 + 有文字 + 不是回复态 → **一条 caption 消息**（iOS 同：Telegram 模型，配文 @ 随之生效）。
+    // 回复态不合并：引用与图说在协议里不共存，仍走「先图后字」两条。
+    if (mergesIntoCaption(paste.items.size, text, replyTo != null)) {
+        val img = paste.items
+        val at = mention.resolve(text)
+        paste.clear(); clearInput(); mention.clear()
+        scope.launch { mediaSend.send(img, sendOriginal = false, onToast = { onToast(it) }, caption = text, at = at) }
+        return
+    }
     if (!paste.isEmpty) {
         val pastedImages = paste.items
         paste.clear()
-        scope.launch { mediaSend.send(pastedImages, sendOriginal = false) { onToast(it) } }
+        scope.launch { mediaSend.send(pastedImages, sendOriginal = false, onToast = { onToast(it) }) }
     }
-    val text = input.text.trim()
     if (text.isEmpty()) return
     val at = mention.resolve(text)
     clearInput()
@@ -57,3 +66,7 @@ internal fun sendComposerInput(
         )
     }
 }
+
+/** 一张粘贴图 + 有文字 + 非回复态 才合并成一条 caption 消息（多张是相册、回复态引用与图说不共存）。 */
+internal fun mergesIntoCaption(pastedCount: Int, text: String, replying: Boolean): Boolean =
+    pastedCount == 1 && text.isNotEmpty() && !replying

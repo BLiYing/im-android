@@ -35,6 +35,7 @@ internal class MediaSendPipeline(
         caption: String?, forwardFrom: String?, groupId: String?,
         mediaW: Int?, mediaH: Int?, duration: Int?, poster: String?, thumb: String?,
         waveform: String?,
+        mentions: List<String>, mentionAll: Boolean, mentionSpans: List<com.libeyond.imandroid.sdk.protocol.MentionSpan>,
     ) -> Unit,
     private val log: IMLog.Tagged,
     /** 应用级作用域：上传在这里跑，**离开聊天页不取消**（对齐 iOS 常驻的 `IMMediaSendService`）。 */
@@ -128,10 +129,14 @@ internal class MediaSendPipeline(
         }
         store.remove(file)
         repo.updatePendingContent(owner, cid, r.url, r.size)
+        val at = repo.pendingByClientId(owner, cid)
         transmit(
             cid, convId, to, contentType, r.url, null,
             fileName, r.size, caption, null, groupId,
             mediaW, mediaH, duration, poster, thumb, null,
+            Mention.parseMentions(at?.mentions),
+            Mention.mentionAllFromSpans(at?.mentionSpans),
+            Mention.parseSpans(at?.mentionSpans),
         )
     }
 
@@ -208,13 +213,16 @@ internal class MediaSendPipeline(
          */
         duration: Int? = null,
         waveform: String? = null,
+        /** 配文 @（仅 caption 路径）：已编码的 JSON，随待发行落库，重发据此重新推导。 */
+        mentionSpans: String? = null,
+        mentions: String? = null,
     ): String? {
         val owner = ownerProvider() ?: return null
         return repo.createPending(
             owner = owner, convId = convId, to = to,
             content = localPreviewUri, contentType = contentType,
             groupId = groupId, fileName = fileName, fileSize = fileSize, caption = caption,
-            duration = duration, waveform = waveform,
+            duration = duration, waveform = waveform, mentionSpans = mentionSpans, mentions = mentions,
         ).clientMsgId.also { if (contentType != ContentType.VOICE) uploadProgress.queued(it, fileSize) } // 整批行先落库=先排队，气泡显「等待中」+ ✕
     }
 
@@ -310,10 +318,14 @@ internal class MediaSendPipeline(
         // 只有整包这条路能这么做——分片那条（视频/大文件）字节从没同时在内存里，
         // 为了 adopt 去复制一份几百 MB 的副本不划算，那种自己发的大件仍会显 ↓。
         cache.adopt(r.url, bytes, isVideo = contentType == ContentType.VIDEO)
+        val at = repo.pendingByClientId(owner, cid) // 配文 @ 随待发行落库，这里读出来带上
         transmit(
             cid, convId, to, contentType, r.url, null,
             fileName, r.size, caption, null, groupId,
             mediaW, mediaH, duration, poster, thumb, waveform,
+            Mention.parseMentions(at?.mentions),
+            Mention.mentionAllFromSpans(at?.mentionSpans),
+            Mention.parseSpans(at?.mentionSpans),
         )
     }
 
