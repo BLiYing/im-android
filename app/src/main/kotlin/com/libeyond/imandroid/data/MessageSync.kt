@@ -156,7 +156,11 @@ internal suspend fun MessageService.resendInFlight(owner: String) {
     val rest = list - inProgress.toSet()
     if (inProgress.isNotEmpty()) log.i("resend_skipped_uploading", "count" to inProgress.size)
     val (resendable, localUri) = rest.partition { !isLocalUri(it.content) }
-    val (voiceStale, stale) = localUri.partition { it.contentType == ContentType.VOICE }
+    val (voiceStale, staleAll) = localUri.partition { it.contentType == ContentType.VOICE }
+    // 私有副本（≥8MB 视频/文件）：冷启动后按旁路 upload_id 从服务端 offset 续传，不用用户重选
+    val (ownCopy, stale) = staleAll.partition { media.store.fileOf(it.content) != null }
+    ownCopy.forEach { media.retryUpload(it) }
+    if (ownCopy.isNotEmpty()) log.i("resend_resume_upload", "count" to ownCopy.size)
     voiceStale.forEach { media.reuploadVoice(it) }
     if (voiceStale.isNotEmpty()) log.i("resend_voice_reupload", "count" to voiceStale.size)
     stale.forEach {

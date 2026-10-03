@@ -176,6 +176,8 @@ fun ChatScreen(
     onRetry: (String) -> Unit,
     /** 分片上传进度：clientMsgId → 百分比。没有条目 = 不在分片上传中。 */
     uploadProgress: Map<String, Int>,
+    uploadStates: Map<String, com.libeyond.imandroid.data.UploadState> = emptyMap(),
+    onToggleUpload: (String) -> Unit = {}, onCancelPending: (String) -> Unit = {},
     /**
      * 正被长按（菜单开着）的那条的 `conv_seq`；`0` = 没有。
      *
@@ -394,6 +396,7 @@ fun ChatScreen(
             avatarOf = avatarOf,
             expandedTexts = expandedTexts,
             uploadProgress = uploadProgress,
+            uploadStates = uploadStates,
             localNameOf = localNameOf,
             loadLinkPreview = loadLinkPreview,
             searchHighlight = searchHighlight,
@@ -484,6 +487,7 @@ fun ChatScreen(
                     onOpenMedia = onOpenMedia,
                     onOpenUser = onOpenUser,
                     onRetry = onRetry,
+                    onToggleUpload = onToggleUpload, onCancelPending = onCancelPending,
                     onTapLongText = onTapLongText,
                     onAddFriend = onAddFriendFromNote,
                     onJumpToSeq = onJumpToSeq,

@@ -8,6 +8,8 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -35,6 +37,10 @@ internal class MediaSendPipeline(
         waveform: String?,
     ) -> Unit,
     private val log: IMLog.Tagged,
+    /** 应用级作用域：上传在这里跑，**离开聊天页不取消**（对齐 iOS 常驻的 `IMMediaSendService`）。 */
+    private val scope: kotlinx.coroutines.CoroutineScope,
+    /** 待发媒体的私有副本（续传 / 取消清理）。 */
+    internal val store: PendingMediaStore,
 ) {
 
     /**
@@ -52,7 +58,129 @@ internal class MediaSendPipeline(
     )
 
     /** 这条是不是正在上传（重连补发据此跳过，既不重发也不标失败）。 */
-    fun isUploading(clientMsgId: String): Boolean = uploading.contains(clientMsgId)
+    fun isUploading(clientMsgId: String): Boolean = uploading.contains(clientMsgId) || jobs.containsKey(clientMsgId)
+
+    /** 一次只传一条（对齐 iOS 的串行媒体队列）：同批多个大文件并发会互相抢带宽、谁都传不完。 */
+    private val serial = kotlinx.coroutines.sync.Mutex()
+    private val jobs = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
+    private val uploaders = java.util.concurrent.ConcurrentHashMap<String, ChunkedUploader>()
+
+    /** 被用户取消、但一次性整包上传还在途的：回来时丢弃结果（整包 POST 无法中途掐断，iOS 同）。 */
+    private val cancelled = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
+
+    /**
+     * 开一条**私有副本的分片上传**（应用作用域，常驻；暂停 / 续传 / 取消见 [ChunkedUploader]）。
+     * 副本里已有 `upload_id` 旁路文件时从服务端 offset 续传（冷启动补发、点重试都走这里）。
+     */
+    fun startFileUpload(
+        cid: String, convId: String, to: String, file: java.io.File, fileName: String, mime: String,
+        contentType: String, caption: String?, groupId: String?,
+        mediaW: Int?, mediaH: Int?, duration: Int?, poster: String?, thumb: String?,
+    ) {
+        if (jobs.containsKey(cid)) return
+        uploadProgress.queued(cid, file.length())
+        jobs[cid] = scope.launch {
+            try {
+                serial.withLock {
+                    runFileUpload(cid, convId, to, file, fileName, mime, contentType, caption, groupId, mediaW, mediaH, duration, poster, thumb)
+                }
+            } finally {
+                jobs.remove(cid); uploaders.remove(cid); uploadProgress.clear(cid)
+            }
+        }
+    }
+
+    private suspend fun runFileUpload(
+        cid: String, convId: String, to: String, file: java.io.File, fileName: String, mime: String,
+        contentType: String, caption: String?, groupId: String?,
+        mediaW: Int?, mediaH: Int?, duration: Int?, poster: String?, thumb: String?,
+    ) {
+        val owner = ownerProvider() ?: return
+        repo.markPendingSending(owner, cid) // 重试/补发时它可能是 Failed
+        val total = file.length()
+        uploadProgress.uploading(cid, 0, total, pausable = true)
+        val up = ChunkedUploader(
+            transport = upload, file = file, fileName = fileName, mime = mime,
+            initialUploadId = store.uploadIdOf(file),
+            onUploadId = { store.setUploadId(file, it) },
+            onProgress = { s, t -> uploadProgress.report(cid, s, t) },
+        )
+        uploaders[cid] = up
+        val watch = scope.launch { up.paused.collect { uploadProgress.setPaused(cid, it) } }
+        val r = try {
+            up.run()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // 用户取消 / 退出登录：清理由 cancel() 或 finally 做，绝不标失败
+        } catch (e: ChunkedUploader.LocalReadFailed) {
+            markFailed(cid, message = Str.s(R.string.chat_media_local_file_lost))
+            log.w("media_local_copy_lost", "cid" to cid)
+            return
+        } catch (e: com.libeyond.imandroid.sdk.http.ApiException) {
+            // 失败保留副本与 upload_id：点红❗重试会从服务端 offset 续传，不是从头来
+            repo.onSendRejected(
+                owner,
+                com.libeyond.imandroid.sdk.protocol.ErrorData(code = e.code, message = e.message, clientMsgId = cid),
+            )
+            log.w("media_file_upload_failed", "cid" to cid, "code" to e.code)
+            return
+        } finally {
+            watch.cancel()
+        }
+        store.remove(file)
+        repo.updatePendingContent(owner, cid, r.url, r.size)
+        transmit(
+            cid, convId, to, contentType, r.url, null,
+            fileName, r.size, caption, null, groupId,
+            mediaW, mediaH, duration, poster, thumb, null,
+        )
+    }
+
+    /** 暂停 ⇄ 继续。返回是否有可暂停的任务（整包上传 / 已排队未开始返回 false，点了不处理）。 */
+    fun togglePause(cid: String): Boolean {
+        val u = uploaders[cid] ?: return false
+        if (u.paused.value) u.resume() else u.pause()
+        return true
+    }
+
+    /**
+     * 取消发送 / 删除失败行：停任务、删私有副本与旁路文件、清进度、删待发行（一步到位）。
+     * 一次性整包上传无法中途掐断，记进 [cancelled]，回来时丢弃结果。
+     */
+    suspend fun cancel(cid: String) {
+        val owner = ownerProvider() ?: return
+        if (uploading.contains(cid)) cancelled += cid
+        jobs.remove(cid)?.cancel()
+        uploaders.remove(cid)
+        repo.pendingByClientId(owner, cid)?.let { p -> store.fileOf(p.content)?.let(store::remove) }
+        uploadProgress.clear(cid)
+        repo.pending.remove(owner, cid)
+        log.i("media_send_cancelled", "cid" to cid)
+    }
+
+    /**
+     * 点重试 / 冷启动补发：正文是**本仓私有副本**的待发行 → 重新开分片上传（从服务端 offset 续）。
+     * 副本不在了就如实说「本地文件已丢失」。返回 false = 这条不是私有副本（调用方走别的分支）。
+     */
+    suspend fun retryUpload(p: PendingMessageEntity): Boolean {
+        val f = store.fileOf(p.content) ?: return false
+        val owner = ownerProvider() ?: return true
+        if (!f.exists() || f.length() <= 0L) {
+            repo.onSendRejected(
+                owner,
+                com.libeyond.imandroid.sdk.protocol.ErrorData(code = 0, message = Str.s(R.string.chat_media_local_file_lost), clientMsgId = p.clientMsgId),
+            )
+            return true
+        }
+        startFileUpload(
+            p.clientMsgId, p.convId, p.to, f, p.fileName ?: f.name, mimeOfName(p.fileName ?: f.name), p.contentType,
+            p.caption, p.groupId, p.mediaW, p.mediaH, p.duration, p.poster, p.thumb,
+        )
+        return true
+    }
+
+    private fun mimeOfName(name: String): String =
+        android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
+            ?: "application/octet-stream"
 
     /**
      * **只落一条待发行**，不压缩、不上传、不发帧；返回 `client_msg_id`。
@@ -87,7 +215,7 @@ internal class MediaSendPipeline(
             content = localPreviewUri, contentType = contentType,
             groupId = groupId, fileName = fileName, fileSize = fileSize, caption = caption,
             duration = duration, waveform = waveform,
-        ).clientMsgId
+        ).clientMsgId.also { if (contentType != ContentType.VOICE) uploadProgress.queued(it, fileSize) } // 整批行先落库=先排队，气泡显「等待中」+ ✕
     }
 
     /**
@@ -157,6 +285,8 @@ internal class MediaSendPipeline(
             waveform = waveform,
         ).clientMsgId
         uploading += cid
+        // 整包上传：不可暂停、无字节进度（一次性 POST），只让气泡知道「在传」
+        uploadProgress.uploading(cid, 0, bytes.size.toLong(), pausable = false)
         val r = try {
             upload.upload(bytes, fileName, mimeType, asVoice = contentType == ContentType.VOICE)
         } catch (e: com.libeyond.imandroid.sdk.http.ApiException) {
@@ -170,7 +300,10 @@ internal class MediaSendPipeline(
             return
         } finally {
             uploading -= cid
+            uploadProgress.clear(cid)
         }
+        // 传的途中被用户取消了（整包 POST 掐不断，只能回来丢弃）：行已删，别再发帧
+        if (cancelled.remove(cid)) return
         repo.updatePendingContent(owner, cid, r.url, r.size)
         // **自己发的那份字节直接进缓存**：不然发完自己看自己的文件是「未下载 ↓」，
         // 还要再从服务端下回来一遍（对齐 iOS 的 adopt）。
@@ -226,35 +359,32 @@ internal class MediaSendPipeline(
             fileName = fileName, fileSize = totalBytes, caption = caption,
             mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster, thumb = thumb,
         ).clientMsgId
-        // **开传就先置 0%**：第一片是 8MB，传完才有第一次回调。不置的话这段空窗里
-        // 气泡显示的是播放钮，看着像已经发好了——真机实测一段 404MB 的视频，
-        // 这个空窗有好几秒。0% 至少说明「在传」。
-        uploadProgress.report(cid, 0, totalBytes)
-        uploading += cid
-        val r = try {
-            upload.uploadStream(openStream, fileName, mimeType, totalBytes) { sent, total ->
-                uploadProgress.report(cid, sent, total)
+        // 对齐 iOS：≥ 分片阈值才走「私有副本 + 可暂停续传」；更小的一次性直传（不可暂停，失败重试从头）
+        if (totalBytes >= ChunkedUploader.DEFAULT_CHUNK) {
+            val f = store.newFile(cid, fileName)
+            if (!store.copyFrom(openStream, f)) {
+                markFailed(cid, message = Str.s(R.string.chat_media_stage_failed))
+                return
             }
-        } catch (e: com.libeyond.imandroid.sdk.http.ApiException) {
-            repo.onSendRejected(
-                owner,
-                com.libeyond.imandroid.sdk.protocol.ErrorData(
-                    code = e.code, message = e.message, clientMsgId = cid,
-                ),
+            repo.updatePendingContent(owner, cid, store.refOf(f), f.length())
+            startFileUpload(
+                cid, convId, to, f, fileName, mimeType, contentType, caption, groupId,
+                mediaW, mediaH, duration, poster, thumb,
             )
-            log.w("media_stream_upload_failed", "cid" to cid, "code" to e.code)
             return
-        } finally {
-            // 成功 / 失败 / 协程被取消都要摘掉。写在 happy path 上就会留下
-            // 一条永远停在 43% 的进度环——比没有进度条更让人以为程序卡死了。
-            uploadProgress.clear(cid)
-            uploading -= cid
         }
-        repo.updatePendingContent(owner, cid, r.url, r.size)
-        transmit(
-            cid, convId, to, contentType, r.url, null,
-            fileName, r.size, caption, null, groupId,
-            mediaW, mediaH, duration, poster, thumb, null,
+        val small = try {
+            withContext(Dispatchers.IO) { openStream()?.use { it.readBytes() } }
+        } catch (e: java.io.IOException) {
+            null
+        }
+        if (small == null) {
+            markFailed(cid, message = Str.s(R.string.net_error_file_read_failed))
+            return
+        }
+        sendBytes(
+            convId, to, small, fileName, mimeType, contentType, caption, localPreviewUri,
+            groupId, mediaW, mediaH, duration, poster, thumb, null, cid,
         )
     }
 

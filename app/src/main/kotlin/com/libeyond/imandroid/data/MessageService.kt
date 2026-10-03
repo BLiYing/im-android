@@ -65,6 +65,8 @@ class MessageService(
     private val mediaCache: MediaCache,
     /** 当前账号；未登录为 null。切账号时必须换掉，否则新账号会写进旧账号的行。 */
     internal val ownerProvider: () -> String?,
+    /** 待发媒体的私有副本（续传 / 取消清理），见 [PendingMediaStore]。 */
+    internal val pendingMedia: PendingMediaStore,
 ) {
     /** 「按锚点开窗」的一问一答（MESSAGE_WINDOW_DESIGN §3.2），实现在 [WindowRequester]。 */
     internal val windows = WindowRequester(socket, scope)
@@ -366,6 +368,8 @@ class MessageService(
         ownerProvider = ownerProvider,
         transmit = ::transmit,
         log = log,
+        scope = scope,
+        store = pendingMedia,
     )
 
     /** 见 [MediaSendPipeline.createPendingRow]。 */
@@ -455,6 +459,10 @@ class MessageService(
             // 存进服务端后再也改不回来（同 MessageSync.resendInFlight 里 stale 分支的注释）。
             if (p.contentType == ContentType.VOICE) {
                 media.reuploadVoice(p)
+            } else if (media.isUploading(clientMsgId)) {
+                return // 已在传（红❗点得太快 / 重连补发撞车）：别开第二条
+            } else if (media.retryUpload(p)) {
+                // 正文是本应用的私有副本（≥8MB 的视频/文件）：从服务端 offset 续传，不是从头来
             } else {
                 repo.onSendRejected(
                     owner,

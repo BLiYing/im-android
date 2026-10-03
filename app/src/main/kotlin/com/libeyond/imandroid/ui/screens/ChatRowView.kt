@@ -43,6 +43,8 @@ internal data class ChatRowStyle(
     val expandedTexts: List<Long> = emptyList(),
     /** 分片上传进度：clientMsgId → 百分比。 */
     val uploadProgress: Map<String, Int> = emptyMap(),
+    /** 完整传输状态（阶段/已传/可暂停/已暂停）：待发气泡的 ✕⏸▶ 钮与字节小标读它。 */
+    val uploadStates: Map<String, com.libeyond.imandroid.data.UploadState> = emptyMap(),
     /** 系统消息里名字段的本地显示名（备注/群昵称）。 */
     val localNameOf: (String) -> String? = { null },
     /** 取链接富预览。**预览重绘时也要传**——不传就是"气泡少了半截"。 */
@@ -97,6 +99,10 @@ internal fun ChatRowView(
     onOpenMedia: (MessageEntity) -> Unit = {},
     onOpenUser: (String) -> Unit = {},
     onRetry: (String) -> Unit = {},
+    /** 暂停 ⇄ 继续（分片上传）。 */
+    onToggleUpload: (String) -> Unit = {},
+    /** 取消发送 / 删除失败行（含私有副本清理）。 */
+    onCancelPending: (String) -> Unit = {},
     /** 点拒收行里的「发送好友申请」（200103 的恢复入口）。 */
     onAddFriend: () -> Unit = {},
     /** 点长文本气泡：返回 true = 已处理（展开/收起/开阅读页），不再走别的点击。 */
@@ -301,14 +307,24 @@ internal fun ChatRowView(
             val isFile = r.msg.contentType == ContentType.FILE
             val isVoice = r.msg.contentType == ContentType.VOICE
             val pct = uploadProgress[r.msg.clientMsgId]
+            val ust = style.uploadStates[r.msg.clientMsgId]
+            val cid = r.msg.clientMsgId
             // 被服务端明确拒收（非好友/禁言…）：不给红 ❗（重发必再被拒），改在气泡下方给一行说明（SendRejection）
             val rejectRes = if (r.msg.state == SendState.Failed.name) SendRejection.noteRes(r.msg.errorCode) else null
             val shownFailed = r.msg.state == SendState.Failed.name && rejectRes == null
             Column {
+            PendingActions(
+                failed = r.msg.state == SendState.Failed.name,
+                copyText = if (r.msg.contentType == ContentType.TEXT) r.msg.content else r.msg.caption,
+                onCancel = { onCancelPending(cid) },
+            ) {
             if (r.msg.contentType == ContentType.CALL && CallRecord.parse(r.msg.content)?.isGroup == true) {
                 SystemNote(text = CallRecord.renderRaw(r.msg.content, viewerIsSender = true).text)
             } else if (isImage || isVideo) {
                 PendingMediaBubble(
+                    state = ust,
+                    onToggle = { onToggleUpload(cid) },
+                    onCancel = { onCancelPending(cid) },
                     localUri = r.msg.content,
                     isVideo = isVideo,
                     timestamp = r.msg.createdAt,
@@ -332,6 +348,9 @@ internal fun ChatRowView(
                 )
             } else if (isFile) {
                 PendingFileBubble(
+                    state = ust,
+                    onToggle = { onToggleUpload(cid) },
+                    onCancel = { onCancelPending(cid) },
                     // 待发行还没有服务端地址，名字只能来自本地 meta
                     fileName = r.msg.fileName.orEmpty()
                         .ifBlank { MediaUrl.displayFileName(r.msg.content) },
@@ -357,6 +376,7 @@ internal fun ChatRowView(
                     failed = shownFailed,
                     onRetry = { onRetry(r.msg.clientMsgId) },
                 )
+            }
             }
             if (rejectRes != null) {
                 RejectNote(

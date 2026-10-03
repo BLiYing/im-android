@@ -41,7 +41,7 @@ data class UploadResult(
 class UploadApi(
     private val http: HttpClient,
     private val tokenProvider: () -> String?,
-) {
+) : UploadTransport {
     private val log = IMLog.tag("IM.Upload")
 
     private val ok = OkHttpClient.Builder()
@@ -236,6 +236,79 @@ class UploadApi(
     @Serializable
     private data class InitBody(val name: String, val size: Long)
 
+    // —— 可续传分片原语（[com.libeyond.imandroid.data.ChunkedUploader] 用）——
+    // 与上面 uploadStream 的区别：**协程可取消**（取消即 `Call.cancel()`，暂停/取消要能立刻掐断在途请求，
+    // 一片最大 8MB，只作废回调不掐请求等于白白占带宽）、**可从服务端 offset 续传**、`upload_id` 由调用方持有。
+
+    override suspend fun sessionInit(name: String, size: Long): UploadSession {
+        val d = call(
+            Request.Builder().url(http.baseUrl() + "/api/v1/upload/init")
+                .post(ProtocolJson.encodeToString(InitBody.serializer(), InitBody(name, size)).toRequestBody(JSON_MEDIA)),
+            InitData.serializer(), "upload_init",
+        )
+        return UploadSession(d.uploadId, d.offset, if (d.chunkSize > 0) d.chunkSize.toInt() else DEFAULT_CHUNK)
+    }
+
+    override suspend fun sessionStatus(id: String): Long =
+        call(Request.Builder().url(http.baseUrl() + "/api/v1/upload/$id/status").get(), OffsetData.serializer(), "upload_status").offset
+
+    override suspend fun sessionChunk(id: String, offset: Long, bytes: ByteArray, len: Int, mime: String): Long =
+        call(
+            Request.Builder().url(http.baseUrl() + "/api/v1/upload/$id/chunk?offset=$offset")
+                // 只发这一片：copyOf(len)——最后一片没填满，多发的零字节会被服务端当真实内容追加
+                .put(bytes.copyOf(len).toRequestBody(mime.toMediaTypeOrNull())),
+            OffsetData.serializer(), "upload_chunk",
+        ).offset
+
+    override suspend fun sessionComplete(id: String): UploadResult =
+        call(
+            // 无体 POST 也必须发 `{}`（OkHttp 对 null body 当场抛）
+            Request.Builder().url(http.baseUrl() + "/api/v1/upload/$id/complete").post("{}".toRequestBody(JSON_MEDIA)),
+            UploadResult.serializer(), "upload_complete",
+        )
+
+    /** [envelope] 的协程版：enqueue + 取消时掐掉 Call。失败一律抛 [ApiException]。 */
+    private suspend fun <T> call(
+        builder: Request.Builder,
+        serializer: kotlinx.serialization.KSerializer<T>,
+        event: String,
+    ): T = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+        val requestId = HttpClient.newRequestId()
+        val req = builder
+            .header(HttpClient.HEADER_REQUEST_ID, requestId)
+            .apply { tokenProvider()?.let { header("Authorization", "Bearer $it") } }
+            .build()
+        val c = ok.newCall(req)
+        cont.invokeOnCancellation { c.cancel() }
+        c.enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: IOException) {
+                if (cont.isCancelled) return
+                log.w("${event}_transport_failed", "reqId" to requestId, "err" to e.javaClass.simpleName)
+                cont.resumeWith(Result.failure(ApiException(ApiException.TRANSPORT, e.message ?: "上传失败", requestId, cause = e)))
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                val res = runCatching {
+                    response.use { resp ->
+                        val raw = resp.body?.string().orEmpty()
+                        val env = try {
+                            ProtocolJson.decodeFromString(com.libeyond.imandroid.sdk.http.ApiEnvelope.serializer(), raw)
+                        } catch (e: Exception) {
+                            throw ApiException(ApiException.TRANSPORT, "上传响应不是合法 JSON", requestId, resp.code, e)
+                        }
+                        if (env.code != 0) {
+                            log.w("${event}_biz_error", "code" to env.code, "reqId" to env.requestId)
+                            throw ApiException(env.code, env.message.ifEmpty { Str.s(R.string.net_error_upload_failed) }, env.requestId, resp.code)
+                        }
+                        val data = env.data ?: throw ApiException(ApiException.TRANSPORT, "上传未返回 data", requestId)
+                        ProtocolJson.decodeFromJsonElement(serializer, data)
+                    }
+                }
+                if (!cont.isCancelled) cont.resumeWith(res)
+            }
+        })
+    }
+
     /** 发一个请求并解出信封里的 data，失败一律抛 [ApiException]。 */
     private fun <T> envelope(
         builder: Request.Builder,
@@ -279,4 +352,18 @@ class UploadApi(
         const val DEFAULT_CHUNK = 8 shl 20
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaTypeOrNull()
     }
+}
+
+/** 一次 `POST /upload/init` 的结果：会话 id、已收偏移（新会话为 0）、服务端建议的分片大小。 */
+data class UploadSession(val id: String, val offset: Long, val chunkSize: Int)
+
+/**
+ * 可续传分片上传的传输层原语（真实现是 [UploadApi]；单测里换成内存假实现）。
+ * `offset` 的真相永远在服务端：每次 [sessionChunk] 回的是服务端**当前**已收长度，对不上它自己会对齐而不报错。
+ */
+interface UploadTransport {
+    suspend fun sessionInit(name: String, size: Long): UploadSession
+    suspend fun sessionStatus(id: String): Long
+    suspend fun sessionChunk(id: String, offset: Long, bytes: ByteArray, len: Int, mime: String): Long
+    suspend fun sessionComplete(id: String): UploadResult
 }

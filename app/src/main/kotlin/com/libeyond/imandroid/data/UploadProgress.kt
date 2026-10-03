@@ -22,6 +22,30 @@ class UploadProgress {
     /** clientMsgId → 百分比（0~100）。没有条目 = 不在上传。 */
     val state: StateFlow<Map<String, Int>> = _state
 
+    private val _states = MutableStateFlow<Map<String, UploadState>>(emptyMap())
+
+    /**
+     * clientMsgId → 完整传输状态（阶段 / 已传 / 总大小 / 可暂停 / 已暂停）。
+     * 气泡上的 ✕ ⏸ ↑ 钮、「已传 / 总大小」小标、文件环都读它；百分比那份 [state] 保留给只要数字的老调用方。
+     */
+    val states: StateFlow<Map<String, UploadState>> = _states
+
+    /** 排队中（行已落库、还没轮到上传）：气泡显「等待中」+ ✕。 */
+    fun queued(clientMsgId: String, total: Long = 0) = set(clientMsgId, UploadState(UploadState.Phase.Queued, 0, total))
+
+    /** 开始/继续传输。[pausable]：走分片的才可暂停。 */
+    fun uploading(clientMsgId: String, sent: Long, total: Long, pausable: Boolean, paused: Boolean = false) =
+        set(clientMsgId, UploadState(UploadState.Phase.Uploading, sent, total, pausable, paused))
+
+    /** 只改暂停标志，保留已传字节。 */
+    fun setPaused(clientMsgId: String, paused: Boolean) {
+        _states.update { cur -> cur[clientMsgId]?.let { cur + (clientMsgId to it.copy(paused = paused)) } ?: cur }
+    }
+
+    private fun set(id: String, st: UploadState) {
+        _states.update { it + (id to st) }
+    }
+
     /**
      * 上报进度。同一百分比重复上报**不会触发重组**——`StateFlow` 按 `equals` 合并，
      * 值相等时连订阅者都不通知。
@@ -33,6 +57,12 @@ class UploadProgress {
     fun report(clientMsgId: String, sent: Long, total: Long) {
         val p = percent(sent, total)
         _state.update { cur -> cur + (clientMsgId to p) }
+        // 同步完整状态：保留 pausable / paused，只刷新字节
+        _states.update { cur ->
+            val old = cur[clientMsgId]
+            cur + (clientMsgId to (old?.copy(phase = UploadState.Phase.Uploading, sent = sent, total = total)
+                ?: UploadState(UploadState.Phase.Uploading, sent, total, pausable = true)))
+        }
     }
 
     /**
@@ -41,6 +71,7 @@ class UploadProgress {
      */
     fun clear(clientMsgId: String) {
         _state.update { cur -> cur - clientMsgId }
+        _states.update { cur -> cur - clientMsgId }
     }
 
     companion object {

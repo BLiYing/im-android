@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -41,6 +40,8 @@ import com.composables.icons.lucide.Play
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.AlbumLayout
 import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.data.UploadState
+import com.libeyond.imandroid.data.UploadStateText
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.FileTypeIcon
 import com.libeyond.imandroid.ui.components.IMToast
@@ -70,6 +71,9 @@ internal fun PendingMediaBubble(
     failed: Boolean,
     progress: Int?,
     onRetry: () -> Unit,
+    state: UploadState? = null,
+    onToggle: () -> Unit = {},
+    onCancel: () -> Unit = {},
 ) {
     val c = IMTheme.colors
     Row(
@@ -77,7 +81,6 @@ internal fun PendingMediaBubble(
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (failed) RetryMark(onRetry)
         Box(
             modifier = Modifier
                 .width(AlbumLayout.WIDTH.dp)
@@ -100,17 +103,14 @@ internal fun PendingMediaBubble(
                         .background(c.overlay),
                 )
             }
-            // 上传中显示进度环，**顶掉播放钮**：这条还没发出去，播放钮既没用也误导。
-            if (progress != null && sending) {
-                Box(Modifier.align(Alignment.Center), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(
-                        progress = { progress / 100f },
-                        modifier = Modifier.size(44.dp),
-                        color = c.onMedia,
-                        trackColor = c.overlay,
-                    )
-                    Text("$progress%", color = c.onMedia, fontSize = 11.sp)
-                }
+            // 控制钮盘（✕ 排队 / ⏸ 传输 / ▶ 暂停 / ↻ 失败）**顶掉播放钮**：这条还没发出去，播放钮既没用也误导。
+            if ((sending || failed) && (state != null || failed)) {
+                UploadControlDisc(
+                    state = state, failed = failed,
+                    onRetry = onRetry, onToggle = onToggle, onCancel = onCancel,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                if (state != null && !failed) UploadBadge(state, Modifier.align(Alignment.TopStart).padding(6.dp))
             } else if (isVideo) {
                 Box(
                     modifier = Modifier
@@ -161,6 +161,9 @@ internal fun PendingFileBubble(
     failed: Boolean,
     progress: Int?,
     onRetry: () -> Unit,
+    state: UploadState? = null,
+    onToggle: () -> Unit = {},
+    onCancel: () -> Unit = {},
 ) {
     val c = IMTheme.colors
     Row(
@@ -168,7 +171,6 @@ internal fun PendingFileBubble(
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (failed) RetryMark(onRetry)
         Column(
             modifier = Modifier
                 .widthIn(max = 260.dp)
@@ -177,22 +179,22 @@ internal fun PendingFileBubble(
                 .padding(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                FileTypeIcon(fileName, size = 36.dp)
+                // 图标位换成控制钮盘：环 = 进度，钮 = ✕ / ⏸ / ▶ / ↻（失败）
+                if ((sending && state != null) || failed) {
+                    UploadControlDisc(
+                        state = state, failed = failed,
+                        onRetry = onRetry, onToggle = onToggle, onCancel = onCancel,
+                        size = 36.dp,
+                    )
+                } else {
+                    FileTypeIcon(fileName, size = 36.dp)
+                }
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(fileName, color = c.textPrimary, fontSize = 13.sp, maxLines = 2)
-                    val size = MediaUrl.formatSize(fileSize ?: 0)
-                    if (size.isNotEmpty()) Text(size, color = c.textSecondary, fontSize = 11.sp)
+                    val line = if (sending && state != null) UploadStateText.fileLine(state) else MediaUrl.formatSize(fileSize ?: 0)
+                    if (line.isNotEmpty()) Text(line, color = c.textSecondary, fontSize = 11.sp)
                 }
-            }
-            if (progress != null && sending) {
-                Spacer(Modifier.height(6.dp))
-                LinearProgressIndicator(
-                    progress = { progress / 100f },
-                    modifier = Modifier.fillMaxWidth().height(3.dp),
-                    color = c.accent,
-                    trackColor = c.subtleFill,
-                )
             }
             Spacer(Modifier.height(2.dp))
             Text(

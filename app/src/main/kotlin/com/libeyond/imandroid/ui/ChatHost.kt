@@ -20,6 +20,8 @@ import com.libeyond.imandroid.data.AttachItems
 import com.libeyond.imandroid.data.SenderNames
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.cancelPending
+import com.libeyond.imandroid.data.toggleUploadPause
 import com.libeyond.imandroid.i18n.Str
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -100,6 +102,7 @@ fun ChatHost(
     val saveMedia = rememberMediaSaver { toast = it }
     // 分片上传进度（视频/文件）。内存态，随进程消亡——上传本来也不跨进程续传。
     val uploadProgress by client.messages.uploadProgress.state.collectAsState()
+    val uploadStates by client.messages.uploadProgress.states.collectAsState()
     var picking by remember(conv.convId) { mutableStateOf(false) }
     /** 选联系人发名片中（null = 不在选）。 */
     var pickingFriend by remember(conv.convId) { mutableStateOf<List<FriendEntry>?>(null) }
@@ -304,6 +307,7 @@ fun ChatHost(
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
         peerReadSeq = ReadTick.seqFor(conv.isGroup, conv.isSuper, conv.peerReadSeq),
         uploadProgress = uploadProgress,
+        uploadStates = uploadStates,
         localNameOf = { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
         remarkOf = { uid -> friendsByUid[uid]?.remark?.takeIf { it.isNotBlank() } },
         latestNicknameOf = { uid -> latestNicks[uid] },
@@ -416,6 +420,9 @@ fun ChatHost(
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
         uploadProgress = uploadProgress,
+        uploadStates = uploadStates,
+        onToggleUpload = { cid -> client.messages.toggleUploadPause(cid) },
+        onCancelPending = { cid -> scope.launch { client.messages.cancelPending(cid) } },
         menuForSeq = menuFor?.convSeq ?: 0L,
         // 系统消息里的名字：按本地口径重渲染（备注优先），并可点进资料页。
         // **备注只在这里出现**——分段里的 text 恒为公开昵称，全群共享（IMServer docs/UI.md 隐私红线）。
