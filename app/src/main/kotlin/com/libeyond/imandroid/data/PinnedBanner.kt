@@ -80,6 +80,9 @@ object PinnedBanner {
         info != null && info.announcement.isNotBlank() && info.announcementAt > 0 &&
             info.announcementAt > lastSeenAt && info.announcementBy != myUid
 
+    /** 公告「收起」签名：正文哈希（不把整段公告长存偏好文件）；空公告 = 空串。 */
+    fun announcementSignature(text: String?): String = text?.takeIf { it.isNotBlank() }?.hashCode()?.toString().orEmpty()
+
     /** 公告内容的单行预览。 */
     fun announcementPreview(info: GroupInfo?): String = oneLine(info?.announcement.orEmpty())
 

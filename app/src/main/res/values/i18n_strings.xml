@@ -108,6 +108,7 @@
     <string name="chat_attach_title">附件</string>
     <string name="chat_banner_all_pinned">全部置顶消息</string>
     <string name="chat_banner_collapse_announcement">收起公告</string>
+    <string name="chat_banner_collapse_join_request">收起入群申请</string>
     <string name="chat_banner_collapse_pinned">收起置顶</string>
     <plurals name="chat_banner_join_pending">
         <item quantity="other">%1$d 人申请加入本群 · 点击审批</item>

@@ -6,6 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -392,8 +393,17 @@ fun ChatScreen(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
         ChatWallpaperBackground(Modifier.matchParentSize())
         // 横幅浮在壁纸之上；它的高度（三条可同时在）作为列表顶部内边距，免得首屏消息被盖在下面
-        var bannerHeight by remember { mutableStateOf(0.dp) }
+        var bannerPx by remember { mutableStateOf(0) }
         val bannerDensity = androidx.compose.ui.platform.LocalDensity.current
+        val bannerHeight = with(bannerDensity) { bannerPx.toDp() }
+        // 顶部内边距变了（横幅出现/收起/条数变）：列表内容会整体平移 Δ，这里反向滚 Δ 把视觉位置钉住——
+        // 否则进会话已贴底后横幅才异步到，最新一条就被顶出屏幕（/code-review）
+        var lastBannerPx by remember { mutableStateOf(0) }
+        LaunchedEffect(bannerPx) {
+            val delta = bannerPx - lastBannerPx
+            lastBannerPx = bannerPx
+            if (delta != 0) listState.scrollBy(delta.toFloat())
+        }
         LazyColumn(
             state = listState,
             // 横向内边距**就是** UI_SPEC §3 的「头像距 cell 左 12」——不要换成别的数，
@@ -479,7 +489,7 @@ fun ChatScreen(
         banners?.let { b ->
             Box(
                 Modifier.align(Alignment.TopCenter)
-                    .onSizeChanged { bannerHeight = with(bannerDensity) { it.height.toDp() } },
+                    .onSizeChanged { bannerPx = it.height },
             ) { b() }
         }
         }

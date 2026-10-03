@@ -136,12 +136,6 @@ private fun BannerCard(b: BannerContent, onTap: () -> Unit, onList: () -> Unit, 
 
 private fun Modifier.clip1_5(): Modifier = this.then(Modifier.clip(RoundedCornerShape(1.5.dp)))
 
-/** 三种横幅的强调色：入群申请蓝、公告橙（iOS systemBlue / systemOrange），置顶跟主题色。 */
-object BannerColors {
-    val Join = Color(0xFF0A84FF)
-    val Announcement = Color(0xFFFF9F0A)
-}
-
 /** 图标对齐 iOS 的 SF Symbol（person.badge.plus / megaphone / pin.fill）。 */
 object BannerIcons {
     val Join = Lucide.UserPlus

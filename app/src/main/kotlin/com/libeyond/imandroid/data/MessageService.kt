@@ -96,7 +96,7 @@ class MessageService(
     /** 好友关系有变（收到 friend 帧）。UI 据此重拉 /friends。 */
     val friendEvents: SharedFlow<Unit> = _friendEvents.asSharedFlow()
 
-    private val _msgOps = MutableSharedFlow<MsgOpSignal>(extraBufferCapacity = 32)
+    private val _msgOps = MutableSharedFlow<MsgOpSignal>(extraBufferCapacity = 256)
     /** 某会话里的消息被撤回/删除/编辑/置顶（落库之后发）。置顶横幅据此重拉，见 [MsgOpSignal]。 */
     val msgOps: SharedFlow<MsgOpSignal> = _msgOps.asSharedFlow()
 
@@ -224,7 +224,9 @@ class MessageService(
                 val batch = op.batchDeleteSeqs()
                 if (batch != null) repo.removeMessages(owner, op.convId, batch, retract = true)
                 else repo.applyMsgOp(owner, op)
-                _msgOps.tryEmit(MsgOpSignal(op.convId, op.op, batch ?: listOf(op.targetConvSeq)))
+                if (!_msgOps.tryEmit(MsgOpSignal(op.convId, op.op, batch ?: listOf(op.targetConvSeq)))) {
+                    log.w("msg_op_signal_dropped", "op" to op.op) // 缓冲满（重连后的积压帧）：置顶横幅靠重连/下次信号再对齐
+                }
             }
 
             FrameType.CONV_UPDATE -> data?.let { el ->

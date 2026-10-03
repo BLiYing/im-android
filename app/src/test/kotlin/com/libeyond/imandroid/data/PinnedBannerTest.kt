@@ -105,6 +105,13 @@ class PinnedBannerTest {
         assertFalse("没有发布时间", PinnedBanner.shouldAutoPopAnnouncement(info("member", ann = "a"), "1", 0))
     }
 
+    @Test fun `公告收起签名：同正文同签名，改一个字就变，空公告为空串`() {
+        assertEquals(PinnedBanner.announcementSignature("周五开会"), PinnedBanner.announcementSignature("周五开会"))
+        assertFalse(PinnedBanner.announcementSignature("周五开会") == PinnedBanner.announcementSignature("周六开会"))
+        assertEquals("", PinnedBanner.announcementSignature("  "))
+        assertEquals("", PinnedBanner.announcementSignature(null))
+    }
+
     @Test fun `目标已撤回判定`() {
         assertTrue(PinnedBanner.targetRecalled(msg(recalledAt = 9)))
         assertFalse(PinnedBanner.targetRecalled(msg()))

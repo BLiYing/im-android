@@ -238,15 +238,18 @@ fun ChatHost(
     var lastTypingSent by remember(conv.convId) { mutableStateOf(0L) }
     var replyTo by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
 
-    // 顶部横幅（置顶/公告/入群申请）：状态与动作在 ChatBanners.kt。点入群申请横幅 → 打开群资料（那里有入群申请入口）
-    val canPin = gs.info?.let { PinnedBanner.canPin(conv.isGroup, it.permPin, it.myRole) } ?: !conv.isGroup
-    val banners = rememberChatBanners(
-        client, conv, gs, connected, covered,
-        jumpTo = { seq -> locator.locate(seq) }, onToast = { toast = it }, onOpenApproval = onOpenInfo,
-    )
     // 点被拒收行的「发送好友申请」→ 验证消息弹窗（FriendRequestPrompt）
     var askFriend by remember(conv.convId) { mutableStateOf<FriendRequestTarget?>(null) }
     var friendAsked by remember(conv.convId) { mutableStateOf(false) }
+    // 顶部横幅（置顶/公告/入群申请）：状态与动作在 ChatBanners.kt。点入群申请横幅 → 打开群资料（那里有入群申请入口）
+    val canPin = gs.info?.let { PinnedBanner.canPin(conv.isGroup, it.permPin, it.myRole) } ?: !conv.isGroup
+    val banners = rememberChatBanners(
+        // 公告自动弹要等**真的看得见聊天页**：群资料页盖着、菜单/选人/查看器/加好友弹窗开着都不算
+        client, conv, gs, connected,
+        covered || menuFor != null || viewing != null || forwarding != null || picking || pickingFriend != null ||
+            openUser != null || askFriend != null,
+        jumpTo = { seq -> locator.locate(seq) }, onToast = { toast = it }, onOpenApproval = onOpenInfo,
+    )
     val iAmManager = gs.iAmManager
     val myRole = gs.myRole
     val myMuteUntil = gs.myMuteUntil

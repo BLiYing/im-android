@@ -108,6 +108,7 @@
     <string name="chat_attach_title">Attach</string>
     <string name="chat_banner_all_pinned">All pinned messages</string>
     <string name="chat_banner_collapse_announcement">Hide announcement</string>
+    <string name="chat_banner_collapse_join_request">Hide join requests</string>
     <string name="chat_banner_collapse_pinned">Hide pinned message</string>
     <plurals name="chat_banner_join_pending">
         <item quantity="one">%1$d person requested to join · Tap to review</item>

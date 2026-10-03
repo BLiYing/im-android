@@ -31,7 +31,6 @@ import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.PinnedMessage
 import com.libeyond.imandroid.sdk.protocol.MsgOp
-import com.libeyond.imandroid.ui.screens.BannerColors
 import com.libeyond.imandroid.ui.screens.BannerContent
 import com.libeyond.imandroid.ui.screens.BannerIcons
 import com.libeyond.imandroid.ui.screens.ChatBannerStack
@@ -47,6 +46,8 @@ import kotlinx.coroutines.launch
  * 拉失败就保留旧集合、不打断聊天（尽力而为，iOS 同）。
  */
 class ChatBannersState {
+    /** 置顶拉取的代次：多个触发源会并发拉，**后发的请求才有资格落地**，先发后到的旧响应丢弃。 */
+    var reloadGen = 0
     var pinned by mutableStateOf<List<PinnedMessage>>(emptyList())
     var index by mutableStateOf(0)
     var dismissedPin by mutableStateOf<String?>(null)
@@ -77,15 +78,20 @@ fun rememberChatBanners(
     val st = remember(conv.convId) { ChatBannersState() }
     val prefs = remember { context.getSharedPreferences("chat_banners", Context.MODE_PRIVATE) }
 
-    // 收起记忆：按内容签名，内容一变自动重新出现（决策 20）
+    // 收起记忆：按内容签名，内容一变自动重新出现（决策 20）。首次读 SharedPreferences 要加载文件，放 IO 线程
     LaunchedEffect(conv.convId) {
-        st.dismissedPin = prefs.getString(PinnedBanner.dismissKey("pin", uid, conv.convId), null)
-        st.dismissedAnn = prefs.getString(PinnedBanner.dismissKey("ann", uid, conv.convId), null)
-        st.dismissedApproval = prefs.getInt(PinnedBanner.dismissKey("approval", uid, conv.convId), -1).takeIf { it >= 0 }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val pin = prefs.getString(PinnedBanner.dismissKey("pin", uid, conv.convId), null)
+            val ann = prefs.getString(PinnedBanner.dismissKey("ann", uid, conv.convId), null)
+            val approval = prefs.getInt(PinnedBanner.dismissKey("approval", uid, conv.convId), -1).takeIf { it >= 0 }
+            st.dismissedPin = pin; st.dismissedAnn = ann; st.dismissedApproval = approval
+        }
     }
 
     suspend fun reload() {
+        val my = ++st.reloadGen
         runCatchingCancellable { client.conversationsApi.pinned(conv.convId) }.onSuccess {
+            if (my != st.reloadGen) return@onSuccess // 有更晚发出的请求，这份是旧的
             st.pinned = it
             st.index = PinnedBanner.clampIndex(st.index, it.size)
         }
@@ -112,7 +118,8 @@ fun rememberChatBanners(
         }
     }
 
-    // 进群自动弹一次公告：页面可见时才记「已看版本」，没看到就不记（下次可见再弹）；我自己发布的只记版本不弹
+    // 进群自动弹一次公告：**页面真的可见时**才记「已看版本」（宿主把群资料页、菜单、选人、查看器、弹窗等都折进 covered），
+    // 没看到就不记（下次可见再弹）；我自己发布的只记版本不弹
     val info = gs.info
     LaunchedEffect(info?.announcementAt, info?.announcement, covered) {
         if (!conv.isGroup || covered || info == null) return@LaunchedEffect
@@ -178,8 +185,8 @@ class ChatBannersHolder(
         dismiss("pin", { st.dismissedPin = sig }) { e, k -> e.putString(k, sig) }
     }
     fun closeAnnouncement() {
-        val text = gs.info?.announcement.orEmpty()
-        dismiss("ann", { st.dismissedAnn = text }) { e, k -> e.putString(k, text) }
+        val sig = PinnedBanner.announcementSignature(gs.info?.announcement)
+        dismiss("ann", { st.dismissedAnn = sig }) { e, k -> e.putString(k, sig) }
     }
     fun closeApproval() {
         val n = PinnedBanner.approvalCount(gs.info)
@@ -191,22 +198,30 @@ class ChatBannersHolder(
     fun Stack() {
         val info = gs.info
         val c = IMTheme.colors
+        val ic = IMTheme.settingsIcons // 浅/深色各一套 systemBlue/Orange，不要散落 Color(0xFF…)
         val closePinnedLabel = stringResource(R.string.chat_banner_collapse_pinned)
         val closeAnnLabel = stringResource(R.string.chat_banner_collapse_announcement)
 
         val approval = PinnedBanner.approvalCount(info)
+        // 待审清零后收起记忆也清掉：否则之后新来的同样件数的申请被旧记忆吃掉、横幅永远不再出现
+        LaunchedEffect(approval) {
+            if (approval == 0 && st.dismissedApproval != null) {
+                st.dismissedApproval = null
+                prefs.edit().remove(PinnedBanner.dismissKey("approval", uid, conv.convId)).apply()
+            }
+        }
         val join = if (conv.isGroup && approval > 0 && approval != st.dismissedApproval) {
             BannerContent(
-                BannerIcons.Join, BannerColors.Join, stringResource(R.string.chat_banner_join_request),
+                BannerIcons.Join, ic.blue, stringResource(R.string.chat_banner_join_request),
                 androidx.compose.ui.res.pluralStringResource(R.plurals.chat_banner_join_pending, approval, approval),
-                closeLabel = closeAnnLabel,
+                closeLabel = stringResource(R.string.chat_banner_collapse_join_request),
             )
         } else null
 
         val annText = if (conv.isGroup) PinnedBanner.announcementPreview(info) else ""
-        val ann = if (annText.isNotEmpty() && info?.announcement != st.dismissedAnn) {
+        val ann = if (annText.isNotEmpty() && PinnedBanner.announcementSignature(info?.announcement) != st.dismissedAnn) {
             BannerContent(
-                BannerIcons.Announcement, BannerColors.Announcement, stringResource(R.string.group_text_announcement),
+                BannerIcons.Announcement, ic.orange, stringResource(R.string.group_text_announcement),
                 annText, closeLabel = closeAnnLabel,
             )
         } else null
@@ -272,6 +287,9 @@ private fun PinnedListDialog(
     onJump: (Long) -> Unit, onUnpinCurrent: () -> Unit, onDismiss: () -> Unit,
 ) {
     val c = IMTheme.colors
+    // 别的管理员把最后一条也取消置顶了：弹层别留一个空壳
+    LaunchedEffect(items.isEmpty()) { if (items.isEmpty()) onDismiss() }
+    if (items.isEmpty()) return
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.chat_banner_pinned)) },
