@@ -1398,7 +1398,7 @@
     <string name="power_saving_follow_title">Follow Battery Saver</string>
     <string name="power_saving_follow_title_ios">Follow Low Power Mode</string>
     <string name="power_saving_item_animations">Interface Animations</string>
-    <string name="power_saving_item_animations_sub">Transitions and pop-ups</string>
+    <string name="power_saving_item_animations_sub">Pop-ups and message banners</string>
     <string name="power_saving_item_animations_sub_web">Panel slides and pop-ups</string>
     <string name="power_saving_item_auto_download">Auto-Download Media</string>
     <string name="power_saving_item_auto_download_sub">Follows Data and Storage</string>
