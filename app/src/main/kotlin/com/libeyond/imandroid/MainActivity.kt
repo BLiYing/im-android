@@ -32,6 +32,8 @@ import com.libeyond.imandroid.ui.AppRoot
 import androidx.compose.runtime.CompositionLocalProvider
 import com.libeyond.imandroid.ui.theme.IMAppTheme
 import com.libeyond.imandroid.ui.theme.LocalMediaHost
+import com.libeyond.imandroid.ui.theme.LocalPowerSave
+import com.libeyond.imandroid.data.PowerSavingStore
 import com.libeyond.imandroid.ui.theme.MediaHost
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.drop
@@ -79,6 +81,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 AppActive.current = true
+                PowerSavingStore.onForeground() // 后台触发的自动开启提示，10 分钟内补弹
                 client.socket.reportAppState(true)
                 FcmNotifications.clearAll() // 进了 App 通知栏就不再挂消息通知（iOS sceneDidBecomeActive 同款）
                 try {
@@ -94,8 +97,15 @@ class MainActivity : ComponentActivity() {
         // 不主动转成暂停的话回到前台气泡还显示「播放中」、进度却不动（iOS `handleEnterBackground:` 同理）。
         // 同一时机打断录音（§5.4）：切后台时录音机没有系统 AudioFocus 事件可依赖
         // （麦克风没被别人抢，只是本 App 自己不在前台了），必须在这里主动 interrupt。
+        // §4.4 后台保持连接：计时与停靠由进程级 keeper（IMApp）负责，这里只转发前后台切换
+        val keeper = (application as IMApp).backgroundKeeper
         lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
+            override fun onStart(owner: androidx.lifecycle.LifecycleOwner) {
+                keeper.onStart()
+            }
+
             override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
+                keeper.onStop()
                 client.voice.pause()
                 client.recorder.interrupt()
                 // 外观页选的桌面图标在这里才落地（前台切会被系统当场结束任务，见 AppIconSwitcher）
@@ -105,11 +115,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val prefs by AppearanceStore.state.collectAsState()
+            val powerSave by PowerSavingStore.status.collectAsState()
             // 强制浅/深色时系统栏图标也得跟着翻，不然「App 深色 + 系统浅色」时状态栏是黑字压黑底
             val dark = isDarkFor(prefs.mode)
             LaunchedEffect(dark) { applySystemBars(dark) }
-            IMAppTheme(mode = prefs.mode, appearance = prefs.toAppearance(), chatTheme = prefs.theme) {
+            IMAppTheme(mode = prefs.mode, appearance = prefs.toAppearance(powerSave.active), chatTheme = prefs.theme) {
                 CompositionLocalProvider(
+                    LocalPowerSave provides powerSave,
                     LocalMediaHost provides MediaHost(client.host, BuildConfig.USE_TLS),
                 ) {
                     AppRoot(client)
@@ -162,9 +174,10 @@ class MainActivity : ComponentActivity() {
 }
 
 /** 偏好快照 → 主题层要的用户可调值。 */
-private fun AppearancePrefs.toAppearance() = IMAppearance(
+private fun AppearancePrefs.toAppearance(powerSaveActive: Boolean) = IMAppearance(
     chatFontSize = chatFontSize.sp,
     bubbleRadius = bubbleRadius.dp,
     wallpaper = wallpaper,
-    animationsEnabled = animationsEnabled,
+    // 外观页「动画」与省电页同一个值；省电生效时按关闭处理（POWER_SAVING_DESIGN §4.1）
+    animationsEnabled = animationsEnabled && !powerSaveActive,
 )

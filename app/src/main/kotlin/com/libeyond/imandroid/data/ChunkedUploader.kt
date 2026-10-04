@@ -71,6 +71,15 @@ class ChunkedUploader(
     }
 
     suspend fun run(): UploadResult {
+        ActiveTransfers.uploads.incrementAndGet()
+        try {
+            return runLoop()
+        } finally {
+            ActiveTransfers.uploads.decrementAndGet()
+        }
+    }
+
+    private suspend fun runLoop(): UploadResult {
         val total = file.length()
         if (total <= 0L) throw ApiException(ApiException.TRANSPORT, "文件为空或读不到")
         var restarts = 0
@@ -170,4 +179,9 @@ class ChunkedUploader(
         const val NET_BACKOFF_MS = 2_000L
         const val DEFAULT_CHUNK = 8 shl 20
     }
+}
+
+/** 进程内在途分片上传数（省电模式「后台保持连接」据此推迟断连）。 */
+object ActiveTransfers {
+    val uploads = java.util.concurrent.atomic.AtomicInteger(0)
 }

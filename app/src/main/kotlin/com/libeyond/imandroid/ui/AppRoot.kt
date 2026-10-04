@@ -189,6 +189,11 @@ fun AppRoot(client: IMClient) {
             // 之后「连上即重拉」与 capabilities_update 由 IMClient 负责（DownloadSettingsStore）。
             // **拉不到就按出厂默认走**，不是全关——全关会让所有图片都要手点。
             LaunchedEffect(Unit) { client.refreshDownloadSettings() }
+            // 部署级 fcm_enabled（省电「后台保持连接」前提）：拉不到保持未知 = 不断连
+            LaunchedEffect(Unit) {
+                runCatchingCancellable { client.conversationsApi.serverConfig() }
+                    .onSuccess { com.libeyond.imandroid.data.PowerSavingStore.setFcmEnabled(it.fcmEnabled) }
+            }
             // 账号级通知设置（M5）：同理先拉一次跑迁移判定（exists=false 时把本地现值传上去）；
             // 之后「连上即重拉」与 notify_settings_update 由 IMClient 负责（AccountNotifySettingsStore）。
             LaunchedEffect(Unit) { client.refreshAccountNotifySettings() }
@@ -224,16 +229,20 @@ fun AppRoot(client: IMClient) {
                 com.libeyond.imandroid.ui.voice.LocalVoiceTranscriber provides client.voiceTranscriber,
             ) {
                 // 应用内浏览器盖在整个主界面之上：聊天 / 详情 / 群资料 / 聊天记录里点开的链接都走它
-                WebLinkHost {
-                    MainScreen(
-                        client = client,
-                        onLogout = {
-                            scope.launch {
-                                client.logout()
-                                phase = Phase.Login
-                            }
-                        },
-                    )
+                Box {
+                    WebLinkHost {
+                        MainScreen(
+                            client = client,
+                            onLogout = {
+                                scope.launch {
+                                    client.logout()
+                                    phase = Phase.Login
+                                }
+                            },
+                        )
+                    }
+                    // §5 自动开启提示：盖在主界面之上
+                    PowerSavingAutoToast()
                 }
             }
         }

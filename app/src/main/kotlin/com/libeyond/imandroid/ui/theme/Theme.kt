@@ -24,6 +24,9 @@ data class MediaHost(val host: String = "", val useTls: Boolean = false)
 
 val LocalMediaHost = staticCompositionLocalOf { MediaHost() }
 
+/** 省电模式的耗电项生效值（`MainActivity` 下发；媒体门控 / 视频气泡读它）。未提供时 = 全开。 */
+val LocalPowerSave = androidx.compose.runtime.compositionLocalOf { com.libeyond.imandroid.data.PowerSaveStatus() }
+
 /** 显示模式：跟随系统 / 浅色 / 深色。默认跟随系统（UI_COLOR.md §1.2）。 */
 enum class IMThemeMode { System, Light, Dark }
 

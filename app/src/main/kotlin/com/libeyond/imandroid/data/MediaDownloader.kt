@@ -59,6 +59,9 @@ class MediaDownloader(
      */
     private val jobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
 
+    /** 在途下载数（省电模式「后台保持连接」据此推迟断连）。 */
+    val activeCount: Int get() = jobs.size
+
     /** `start` 的临界区：判"在不在途"与"起任务"必须是一步，否则两次调用会各起一个。 */
     private val startLock = Any()
 

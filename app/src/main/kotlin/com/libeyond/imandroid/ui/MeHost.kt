@@ -79,6 +79,7 @@ fun MeHost(
             MePage.ShareCard -> ShareMyCardHost(client = client, me = me, onBack = { page = MePage.List })
             MePage.Language -> LanguageHost(onBack = { page = MePage.List })
             MePage.Appearance -> AppearanceHost(onBack = { page = MePage.List })
+            MePage.PowerSaving -> PowerSavingHost(client = client, onBack = { page = MePage.List })
             MePage.Profile -> MyProfileHost(
                 client = client,
                 card = me,
@@ -103,6 +104,8 @@ fun MeHost(
                         onOpenNotifications = { page = MePage.Notifications },
                         onOpenLanguage = { page = MePage.Language },
                         onOpenAppearance = { page = MePage.Appearance },
+                        onOpenPowerSaving = { page = MePage.PowerSaving },
+                        powerSavingLabel = powerSavingEntryLabel(),
                         onShareCard = { page = MePage.ShareCard },
                         onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                         onLogout = { confirmLogout = true },

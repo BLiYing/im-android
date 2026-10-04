@@ -66,6 +66,8 @@ data class ServerConfig(
     @SerialName("max_group_members") val maxGroupMembers: Int = 0,
     @SerialName("supergroup_enabled") val supergroupEnabled: Boolean = false,
     @SerialName("max_supergroup_members") val maxSupergroupMembers: Int = 0,
+    /** 部署级：服务端是否配了 FCM 凭据（省电模式「后台保持连接」的前提之一）。老服务端无此字段 = false。 */
+    @SerialName("fcm_enabled") val fcmEnabled: Boolean = false,
 )
 
 @Serializable

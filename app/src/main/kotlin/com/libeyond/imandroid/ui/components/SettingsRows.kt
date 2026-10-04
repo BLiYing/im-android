@@ -107,13 +107,14 @@ fun IMRowDivider(insetStart: androidx.compose.ui.unit.Dp = Dp.Unspecified) {
  * @param icon null 时不占图标位（iOS 的「退出登录」行就是这样），标题直接顶到左边距。
  * @param destructive 红字且不显 chevron —— 危险项不是「进下一页」，画个箭头是误导。
  * @param subtitle 标题下的一行说明（iOS `UITableViewCellStyleSubtitle`，如「视频 15 MB · 文件 3 MB」）。
+ * @param onClick null = 纯展示行：无点击态、不画 chevron。
  * @param muted 灰置的占位行（iOS `IMPSCell` 的 `isPlaceholder`）：标题降一档、右值再降一档；
  *   **图标保留全彩、chevron 保留、照样可点**（点了提示开发中）——整片灰掉像是出错了。
  */
 @Composable
 fun IMSettingsRow(
     title: String,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     iconBackground: Color = Color.Unspecified,
@@ -127,27 +128,14 @@ fun IMSettingsRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            // onClick = null：纯展示行（如省电模式状态行）——无点击态（不画 ripple），也不画 chevron
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .defaultMinSize(minHeight = d.settingsRowHeight)
             .padding(horizontal = d.space4, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            Box(
-                modifier = Modifier
-                    .size(d.settingsIcon)
-                    .clip(RoundedCornerShape(d.radiusSettingsIcon))
-                    .background(if (iconBackground == Color.Unspecified) c.accent else iconBackground),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(d.settingsIconGlyph),
-                    // 图标恒白：底是确定的深色方块（Tokens 顶部允许的白色用法之一）
-                    colorFilter = ColorFilter.tint(Color.White),
-                )
-            }
+            SettingsIconTile(icon, iconBackground)
             Spacer(Modifier.width(d.space3))
         }
         Column(Modifier.weight(1f, fill = true)) {
@@ -180,7 +168,7 @@ fun IMSettingsRow(
             )
             Spacer(Modifier.width(6.dp))
         }
-        if (!destructive) {
+        if (!destructive && onClick != null) {
             Image(
                 imageVector = Lucide.ChevronRight,
                 contentDescription = null,
@@ -191,11 +179,39 @@ fun IMSettingsRow(
     }
 }
 
+/** 设置行左侧的彩色圆角图标方块（[IMSettingsRow] 与带图标的 [IMSwitchRow] 共用）。 */
+@Composable
+private fun SettingsIconTile(icon: ImageVector, iconBackground: Color) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    Box(
+        modifier = Modifier
+            .size(d.settingsIcon)
+            .clip(RoundedCornerShape(d.radiusSettingsIcon))
+            .background(if (iconBackground == Color.Unspecified) c.accent else iconBackground),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(d.settingsIconGlyph),
+            // 图标恒白：底是确定的深色方块（Tokens 顶部允许的白色用法之一）
+            colorFilter = ColorFilter.tint(Color.White),
+        )
+    }
+}
+
 /**
  * 开关行（iOS 设置里 accessoryView 是 `UISwitch` 的那种行）。
  *
  * **整行不响应点击，只有开关本身可拨**（iOS `selectionStyle = None` 同）：整行可点的话，
  * 滑动列表时手指一蹭就改了——而设置里改一下往往是一次整份保存加一次多端推送。
+ *
+ * 带 [icon] / [subtitle] 时版式与 [IMSettingsRow] 对齐（图标 30 圆角 7、标题 15 + 副标题 12 单行、
+ * 内边距 16 / 10、右 12），省电模式页的「跟随系统 / 耗电项」用它。
+ *
+ * @param locked 锁定态（省电生效时耗电项）：开关画成「关 + 禁用」，标题次要色，
+ *   **整行**可点 → [onLockedClick]（弹 Toast，不改值）。[onCheckedChange] 此时不会被调用。
  */
 @Composable
 fun IMSwitchRow(
@@ -204,22 +220,50 @@ fun IMSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    icon: ImageVector? = null,
+    iconBackground: Color = Color.Unspecified,
+    subtitle: String = "",
+    locked: Boolean = false,
+    onLockedClick: () -> Unit = {},
 ) {
+    val c = IMTheme.colors
     val d = IMTheme.dimens
+    val rich = icon != null || subtitle.isNotEmpty()
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .then(if (locked) Modifier.clickable(onClick = onLockedClick) else Modifier)
             .defaultMinSize(minHeight = d.settingsRowHeight)
-            .padding(start = d.space4, end = d.space3),
+            .padding(start = d.space4, end = d.space3, top = if (rich) 10.dp else 0.dp, bottom = if (rich) 10.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            color = IMTheme.colors.textPrimary,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
+        if (icon != null) {
+            SettingsIconTile(icon, iconBackground)
+            Spacer(Modifier.width(d.space3))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = if (locked) c.textSecondary else c.textPrimary,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = if (rich) 1 else Int.MAX_VALUE,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    color = c.textSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Switch(
+            checked = checked && !locked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled && !locked,
         )
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

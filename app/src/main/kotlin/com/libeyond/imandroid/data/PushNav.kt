@@ -62,4 +62,5 @@ enum class MePage(val depth: Int) {
     Appearance(1),
     Notifications(1),
     ShareCard(1),
+    PowerSaving(1),
 }

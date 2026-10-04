@@ -84,6 +84,9 @@ fun MeScreen(
     onOpenNotifications: () -> Unit,
     onOpenLanguage: () -> Unit,
     onOpenAppearance: () -> Unit,
+    onOpenPowerSaving: () -> Unit,
+    /** 省电模式行右值（关闭 / 低于 N% / 已开启），由调用方按状态算好传入。 */
+    powerSavingLabel: String,
     /** 语言行右值，如「跟随系统（简体中文）」——由调用方算好传入（[com.libeyond.imandroid.data.LanguageStore]）。 */
     languageLabel: String,
     onComingSoon: (String) -> Unit,
@@ -105,7 +108,6 @@ fun MeScreen(
     val dataStorage = stringResource(R.string.ios_settings_row_data_storage)
     val appearance = stringResource(R.string.ios_settings_row_appearance)
     val powerSaving = stringResource(R.string.ios_settings_row_power_saving)
-    val off = stringResource(R.string.common_off)
     val logout = stringResource(R.string.settings_logout)
 
     val groups = listOf(
@@ -122,7 +124,7 @@ fun MeScreen(
             MeRow(privacy, Lucide.Lock, ic.gray, onClick = onOpenPrivacy),
             MeRow(dataStorage, Lucide.HardDrive, ic.green, onClick = onOpenDataStorage),
             MeRow(appearance, Lucide.Contrast, ic.blue, onClick = onOpenAppearance),
-            MeRow(powerSaving, Lucide.Zap, ic.yellow, rightValue = off) { onComingSoon(powerSaving) },
+            MeRow(powerSaving, Lucide.Zap, ic.yellow, rightValue = powerSavingLabel, onClick = onOpenPowerSaving),
             MeRow(stringResource(R.string.settings_language_title), Lucide.Globe, ic.purple, rightValue = languageLabel, onClick = onOpenLanguage),
         ),
         listOf(

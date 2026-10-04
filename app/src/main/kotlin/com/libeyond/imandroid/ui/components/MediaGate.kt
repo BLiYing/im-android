@@ -11,6 +11,7 @@ import com.libeyond.imandroid.data.DownloadSettings
 import com.libeyond.imandroid.data.DownloadState
 import com.libeyond.imandroid.data.DownloadTap
 import com.libeyond.imandroid.data.MediaDownloader
+import com.libeyond.imandroid.ui.theme.LocalPowerSave
 
 /**
  * 下载门控要用的东西——放 CompositionLocal 而不是层层传参：媒体渲染点有四处
@@ -85,13 +86,16 @@ fun rememberGate(
     // 策略判一次就记住：宫格滚动时每格每次重组都会走到这里。策略本身也进 key——
     // 进主界面后才拉到的账号策略（或 capabilities_update 推来的新策略）要能改过来
     val settings = env.settings()
-    val auto = androidx.compose.runtime.remember(url, contentType, sizeBytes, isGroup, env.onWifi, settings) {
-        DownloadPolicy.shouldAutoDownload(settings, contentType, sizeBytes, isGroup, env.onWifi)
+    // 省电模式（POWER_SAVING_DESIGN §4.2）：本机「自动下载媒体」关闭或省电生效 → 一律不自动下，
+    // 媒体显示为现有「点按下载」门控态。**不写账号级 download-settings**（那是多端同步的）；手动点下载照常。
+    val powerAuto = LocalPowerSave.current.autoDownload
+    val auto = androidx.compose.runtime.remember(url, contentType, sizeBytes, isGroup, env.onWifi, settings, powerAuto) {
+        powerAuto && DownloadPolicy.shouldAutoDownload(settings, contentType, sizeBytes, isGroup, env.onWifi)
     }
 
     // 策略放行就自动开下。**每条只判一次**（key 用 url）——不然每次重组都会再调一次 start，
     // start 内部虽然幂等，但每帧调一次是纯浪费。
-    LaunchedEffect(url, isGroup, autoPrefetch) {
+    LaunchedEffect(url, isGroup, autoPrefetch, auto) {
         if (url.isBlank() || !autoPrefetch) return@LaunchedEffect
         if (auto) env.downloads.start(url, isVideo, sizeBytes)
     }

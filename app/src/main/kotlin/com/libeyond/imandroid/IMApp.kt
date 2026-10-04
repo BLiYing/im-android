@@ -1,10 +1,17 @@
 package com.libeyond.imandroid
 
 import android.app.Application
+import com.libeyond.imandroid.data.ActiveTransfers
 import com.libeyond.imandroid.data.AppearanceStore
+import com.libeyond.imandroid.data.BackgroundConnectionKeeper
+import com.libeyond.imandroid.data.BackgroundDisconnect
+import com.libeyond.imandroid.rtc.RtcCall
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 import com.libeyond.imandroid.data.FcmPreference
 import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.data.NotificationSettingsStore
+import com.libeyond.imandroid.data.PowerSavingStore
 import com.libeyond.imandroid.fcm.FcmNotifications
 import com.libeyond.imandroid.i18n.ContextStringResolver
 import com.libeyond.imandroid.i18n.Str
@@ -23,10 +30,15 @@ class IMApp : Application(), coil.ImageLoaderFactory {
 
     private lateinit var network: NetworkMonitor
 
+    /** §4.4 后台保持连接的计时 / 停靠：进程级（应用作用域），Activity 重建或返回键退出都不丢。 */
+    lateinit var backgroundKeeper: BackgroundConnectionKeeper
+        private set
+
     override fun onCreate() {
         super.onCreate()
         LanguageStore.init(this)
         AppearanceStore.init(this)
+        PowerSavingStore.init(this)
         Str.install(ContextStringResolver(this))
         NotificationSettingsStore.init(this)
         FcmPreference.init(this)
@@ -45,6 +57,7 @@ class IMApp : Application(), coil.ImageLoaderFactory {
             )
         }
         com.libeyond.imandroid.sdk.logging.PerfMarks.appLaunched()
+        setUpPowerSaving()
         network = NetworkMonitor(this) { client.wake("network_available") }
         network.start()
         IMLog.tag("IM.App").i("app_start", "versionName" to BuildConfig.VERSION_NAME)
@@ -64,4 +77,33 @@ class IMApp : Application(), coil.ImageLoaderFactory {
         coil.ImageLoader.Builder(this)
             .components { add(coil.decode.VideoFrameDecoder.Factory()) }
             .build()
+
+    private fun setUpPowerSaving() {
+        backgroundKeeper = BackgroundConnectionKeeper(
+            scope = client.scope,
+            applies = {
+                client.isLoggedIn && BackgroundDisconnect.applies(
+                    keepConnectionEffective = PowerSavingStore.status.value.backgroundConnection,
+                    pushReachable = PowerSavingStore.pushReachable(),
+                )
+            },
+            busy = {
+                !BackgroundDisconnect.canDisconnectNow(
+                    RtcCall.inCall.value, ActiveTransfers.uploads.get() + client.downloads.activeCount,
+                )
+            },
+            disconnect = { client.socket.park() },
+            reconnect = { client.socket.unpark() },
+        )
+        // 令牌上报状态 → 省电状态（「N 项已暂停」与后台连接可用性）；外观页「动画」变了也要重算
+        client.scope.launch {
+            client.fcmTokenStore.reportedToken.collect { PowerSavingStore.setTokenReported(it != null) }
+        }
+        client.scope.launch { AppearanceStore.state.collect { PowerSavingStore.recompute() } }
+        // 后台期间条件变化（电量穿阈值、令牌上报成功、fcm_enabled 拉到…）：keeper 重判
+        client.scope.launch {
+            combine(PowerSavingStore.status, PowerSavingStore.fcmEnabled, client.fcmTokenStore.reportedToken) { _, _, _ -> }
+                .collect { backgroundKeeper.reevaluate() }
+        }
+    }
 }

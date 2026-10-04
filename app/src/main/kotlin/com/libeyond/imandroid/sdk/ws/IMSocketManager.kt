@@ -44,8 +44,18 @@ class IMSocketManager(
     @Volatile var useTls: Boolean = false,
     /** 取当前 token；返回 null 时不连。 */
     private val tokenProvider: () -> String?,
+    /** 测试缝：造一条 WebSocket。默认走 OkHttp。 */
+    private val socketFactory: ((Request, WebSocketListener) -> WebSocket)? = null,
 ) {
     private val log = IMLog.tag("IM.WS")
+
+    /**
+     * 生命周期互斥锁：[connect] / [disconnect] / [park] / [unpark] / [openSocket] 与重连作业的收尾都在它下面，
+     * 「检查 parked / state → 开连接」是原子的。没有它时，退避作业（别的线程）刚过 delay、
+     * 与主线程的 [park] 交错，会在 park 之后又开出一条连接（OPPO 实测：进程被冻结后恢复，
+     * ws_parked 与 ws_connecting 只差 1ms）。
+     */
+    private val lock = Any()
 
     private val ok = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -73,6 +83,10 @@ class IMSocketManager(
 
     @Volatile private var socket: WebSocket? = null
     @Volatile private var manualClose = false
+    /** 省电模式「后台保持连接」关闭时主动停靠（见 [park]）：不是登出，所以不置 [manualClose]。 */
+    @Volatile private var parked = false
+    /** 连接代数（RECONNECT.md §3）：每开一条新连接 +1，回调带着自己的代数，不等于当前代的一律丢弃。 */
+    @Volatile private var generation = 0L
     @Volatile private var reconnectAttempts = 0
     private var reconnectJob: Job? = null
     private var pingJob: Job? = null
@@ -87,14 +101,17 @@ class IMSocketManager(
 
     // ————————————————— 生命周期 —————————————————
 
-    fun connect() {
+    fun connect() = synchronized(lock) {
         manualClose = false
+        parked = false
         openSocket()
     }
 
     /** 退出登录 / 被踢：置 manualClose，之后任何唤醒信号都不再自动重连。 */
-    fun disconnect() {
+    fun disconnect() = synchronized(lock) {
         manualClose = true
+        parked = false
+        generation++
         cancelTimers()
         socket?.close(1000, "client closed")
         socket = null
@@ -102,8 +119,36 @@ class IMSocketManager(
         log.i("ws_disconnected_by_client")
     }
 
-    private fun openSocket() {
-        if (manualClose) return
+    /**
+     * 后台停靠（POWER_SAVING_DESIGN §4.4）：主动断开并**暂停一切自动重连**，靠 FCM 收提醒。
+     * 与 [disconnect] 的区别：不置 manualClose（那是登出语义），由 [unpark] 立即恢复。
+     */
+    fun park() = synchronized(lock) {
+        if (manualClose || parked) return@synchronized
+        parked = true
+        generation++ // 在途的握手 / 旧连接的迟到回调（含 onOpen）全部作废
+        cancelTimers()
+        // cancel 而非 close：握手中（Connecting）的连接 close 不掉，onOpen 仍会触发
+        socket?.cancel()
+        socket = null
+        _state.value = ConnState.Idle
+        log.i("ws_parked_for_power_saving")
+    }
+
+    /** 回前台：立即重连，**不走退避**（attempts 清零、不经 scheduleReconnect）。 */
+    fun unpark() = synchronized(lock) {
+        if (!parked) return@synchronized
+        parked = false
+        reconnectJob?.cancel()
+        reconnectJob = null
+        reconnectAttempts = 0
+        log.i("ws_unparked_reconnect")
+        openSocket()
+    }
+
+    private fun openSocket() = synchronized(lock) {
+        // 重连作业过完 delay 才来这里：此刻再判一次（park / 登出可能已在 delay 期间发生）
+        if (manualClose || parked) return@synchronized
         // 已连接 / 正在握手都不再开新的。
         //
         // **漏掉 Connected 那一档会孤儿化上一条连接**：`socket` 字段被直接覆盖，
@@ -114,12 +159,12 @@ class IMSocketManager(
         // 2026-09-07 回归实测抓到，日志里 26.349 与 34.261 各连了一次。
         if (_state.value != ConnState.Idle) {
             log.d("ws_open_skipped", "state" to _state.value.name)
-            return
+            return@synchronized
         }
         val token = tokenProvider()
         if (token.isNullOrEmpty()) {
             log.w("ws_no_token_skip_connect")
-            return
+            return@synchronized
         }
         _state.value = ConnState.Connecting
         val scheme = if (useTls) "wss" else "ws"
@@ -129,7 +174,8 @@ class IMSocketManager(
             .header("Authorization", "Bearer $token")
             .build()
         log.i("ws_connecting", "host" to host, "attempt" to reconnectAttempts + 1)
-        socket = ok.newWebSocket(req, Listener())
+        val listener = Listener(++generation)
+        socket = socketFactory?.invoke(req, listener) ?: ok.newWebSocket(req, listener)
     }
 
     // ————————————————— 发送 —————————————————
@@ -215,14 +261,17 @@ class IMSocketManager(
     }
 
     private fun scheduleReconnect() {
-        if (manualClose || reconnectJob != null) return
+        if (manualClose || parked || reconnectJob != null) return
         val delayMs = reconnectDelayMs(reconnectAttempts)
         reconnectAttempts++
         log.i("ws_reconnect_scheduled", "attempt" to reconnectAttempts, "delayMs" to delayMs)
         reconnectJob = scope.launch {
             delay(delayMs)
-            reconnectJob = null
-            openSocket()
+            synchronized(lock) {
+                if (manualClose || parked) { reconnectJob = null; return@launch }
+                reconnectJob = null
+                openSocket()
+            }
         }
     }
 
@@ -237,9 +286,18 @@ class IMSocketManager(
         scope.launch { _sessionEnded.emit(reason) }
     }
 
-    private inner class Listener : WebSocketListener() {
+    private inner class Listener(private val gen: Long) : WebSocketListener() {
+
+        /** 不是当前代的连接（被 park / disconnect / 新连接取代）：回调一律丢弃。 */
+        private fun stale(what: String): Boolean {
+            if (gen == generation) return false
+            log.d("ws_stale_callback_dropped", "cb" to what, "gen" to gen, "cur" to generation)
+            return true
+        }
+
 
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            if (stale("onOpen")) { webSocket.cancel(); return }
             // 必须清掉在途的探活看门狗：它是上一条连接 arm 的，若不清，
             // 8s 后会把这条刚建好的健康连接 cancel 掉（/code-review 2026-09-07 查出）。
             probeJob?.cancel()
@@ -252,6 +310,7 @@ class IMSocketManager(
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            if (stale("onMessage")) return
             val env = try {
                 ProtocolJson.decodeFromString(Envelope.serializer(), text)
             } catch (e: Exception) {
@@ -281,6 +340,8 @@ class IMSocketManager(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            // 已被 park / 换新的旧连接迟到的回调：不许覆盖新连接的状态
+            if (stale("onFailure")) return
             val status = response?.code ?: 0
             _state.value = ConnState.Idle
             socket = null
@@ -321,6 +382,7 @@ class IMSocketManager(
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (stale("onClosed")) return
             _state.value = ConnState.Idle
             socket = null
             cancelTimers()
