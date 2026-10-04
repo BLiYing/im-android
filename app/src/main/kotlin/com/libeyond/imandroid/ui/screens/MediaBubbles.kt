@@ -48,6 +48,7 @@ import com.libeyond.imandroid.ui.components.FileGateSlot
 import com.libeyond.imandroid.ui.components.GateInfo
 import com.libeyond.imandroid.ui.components.MediaGateOverlay
 import com.libeyond.imandroid.ui.components.MiddleEllipsisText
+import com.libeyond.imandroid.ui.components.ReadTickIcon
 import com.libeyond.imandroid.ui.components.passThroughTap
 import com.libeyond.imandroid.ui.components.rememberGate
 import com.libeyond.imandroid.ui.components.TimeFormat
@@ -356,18 +357,14 @@ internal fun MediaMetaChip(
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(TimeFormat.bubbleTime(timestamp), color = c.onMedia, fontSize = 10.sp)
+        Text(TimeFormat.bubbleTime(timestamp), color = c.onMedia, fontSize = 10.sp, modifier = Modifier.alignByBaseline())
         if (!mine) return@Row
         if (sending) {
             Spacer(Modifier.width(3.dp))
             Text("🕐", fontSize = 9.sp)
         } else if (delivered) {
             Spacer(Modifier.width(3.dp))
-            Text(
-                text = if (read) "✓✓" else "✓",
-                color = if (read) c.checkRead else c.onMedia,
-                fontSize = 10.sp,
-            )
+            ReadTickIcon(read, if (read) c.checkReadOnMedia else c.onMedia, 10.sp)
         }
     }
 }

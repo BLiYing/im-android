@@ -54,6 +54,7 @@ import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.ReadTickIcon
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -429,7 +430,7 @@ internal fun Bubble(
     } // BoxWithConstraints（量本行可用宽 → 气泡最大宽按比例）
 }
 
-/** 气泡时间 + 发送态（🕐 / ✓ / ✓✓）。文本类挂气泡右下角，卡片类挂脚注行右端。 */
+/** 气泡时间 + 发送态（🕐 / 单勾图标 / 双勾图标）。文本类挂气泡右下角，卡片类挂脚注行右端。 */
 @Composable
 private fun BubbleTimeMeta(
     timestamp: Long, mine: Boolean, sending: Boolean, delivered: Boolean, read: Boolean,
@@ -444,18 +445,15 @@ private fun BubbleTimeMeta(
                 TimeFormat.bubbleTime(timestamp),
             color = if (mine) c.metaTime else c.textTertiary,
             fontSize = 10.sp,
+            modifier = Modifier.alignByBaseline(),
         )
         if (sending) {
             Spacer(Modifier.width(3.dp))
             Text("🕐", fontSize = 9.sp)
         } else if (delivered) {
             Spacer(Modifier.width(3.dp))
-            // 已读=绿双勾 / 未读=灰单勾，与 iOS/Web 同一表意
-            Text(
-                text = if (read) "✓✓" else "✓",
-                color = if (read) c.checkRead else c.textTertiary,
-                fontSize = 10.sp,
-            )
+            // 已读=蓝双勾 / 未读=灰单勾（矢量图标，与 iOS/Web 同一表意）
+            ReadTickIcon(read, if (read) c.checkRead else c.textTertiary, 10.sp)
         }
     }
 }

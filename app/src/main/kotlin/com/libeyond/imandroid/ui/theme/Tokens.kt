@@ -51,6 +51,7 @@ data class IMColors(
     // --- 聊天 ---
     val bubbleMe: Color,
     val bubbleThem: Color,
+    /** 已读双勾图标色（蓝，复用 link 色系；浅 #2477d4 / 深 #66a9ff）。 */
     val checkRead: Color,
     val metaTime: Color,
     val wallpaperTop: Color,
@@ -64,6 +65,7 @@ data class IMColors(
     // --- 媒体上的元素（底恒为暗遮罩，故不随明暗切换）---
     val onMedia: Color,
     val onMediaMuted: Color,
+    /** 压在图/视频角标上的已读双勾色（蓝 #66a9ff）。 */
     val checkReadOnMedia: Color,
 
     // --- 遮罩 / 阴影 / 中性填充 ---
@@ -127,7 +129,7 @@ val LightIMColors = IMColors(
 
     bubbleMe = Color(0xFFE3FDD0),
     bubbleThem = Color(0xFFFFFFFF),
-    checkRead = Color(0xFF4CA64C),
+    checkRead = Color(0xFF2477D4),
     metaTime = Color(0xFF6B8A5E),
     wallpaperTop = Color(0xFFD6E8C4),
     wallpaperBottom = Color(0xFFB4D89B),
@@ -137,7 +139,7 @@ val LightIMColors = IMColors(
 
     onMedia = Color(0xFFFFFFFF),
     onMediaMuted = Color(0x59FFFFFF),
-    checkReadOnMedia = Color(0xFF7DDC7D),
+    checkReadOnMedia = Color(0xFF66A9FF),
 
     overlay = Color(0x66000000),
     overlayStrong = Color(0xB8000000),
@@ -184,7 +186,7 @@ val DarkIMColors = IMColors(
 
     bubbleMe = Color(0xFF1F4D2E),
     bubbleThem = Color(0xFF262D31),
-    checkRead = Color(0xFF7DDC7D),
+    checkRead = Color(0xFF66A9FF),
     metaTime = Color(0xFF9FB89A),
     wallpaperTop = Color(0xFF0E1A12),
     wallpaperBottom = Color(0xFF16261A),
@@ -194,7 +196,7 @@ val DarkIMColors = IMColors(
 
     onMedia = Color(0xFFFFFFFF),
     onMediaMuted = Color(0x59FFFFFF),
-    checkReadOnMedia = Color(0xFF7DDC7D),
+    checkReadOnMedia = Color(0xFF66A9FF),
 
     overlay = Color(0x66000000),
     overlayStrong = Color(0xB8000000),

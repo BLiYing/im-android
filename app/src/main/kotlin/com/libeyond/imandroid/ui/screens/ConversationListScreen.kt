@@ -56,6 +56,7 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMSearchEntry
 import com.libeyond.imandroid.ui.components.IMTopBar
+import com.libeyond.imandroid.ui.components.ReadTickIcon
 import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.TopBarCircleButton
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -240,15 +241,15 @@ private fun ConversationRow(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
-                // 单聊已读双勾：只有「我发的、对方已读」才画绿双勾，未读灰单勾——与聊天页气泡同一表意
+                // 单聊已读双勾：只有「我发的、对方已读」才画蓝双勾图标，未读灰单勾图标——与聊天页气泡同一表意
                 // （对齐 iOS `showCheck`）。群聊没有对端已读位点这个概念，恒不画。
                 if (!conv.isGroup && conv.lastFrom == myUid && !conv.lastRecalled && conv.lastContent.isNotBlank()) {
                     val read = conv.peerReadSeq >= conv.lastConvSeq
-                    Text(
-                        text = if (read) "✓✓ " else "✓ ",
-                        color = if (read) c.checkRead else c.textTertiary,
-                        style = MaterialTheme.typography.bodyMedium,
+                    ReadTickIcon(
+                        read, if (read) c.checkRead else c.textTertiary,
+                        MaterialTheme.typography.bodyMedium.fontSize,
                     )
+                    Spacer(Modifier.width(3.dp))
                 }
                 Text(
                     text = preview,
