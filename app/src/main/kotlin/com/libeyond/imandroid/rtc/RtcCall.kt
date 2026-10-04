@@ -96,6 +96,9 @@ object RtcCall {
         PendingCallAction.request(callId, accept, System.currentTimeMillis())
     }
 
+    /** SDK 此刻是不是正在响这通来电（离线推送晚到时据此决定横幅弹不弹、响不响，见 CallNotifications）。 */
+    fun isRinging(callId: String): Boolean = ringingCallId == callId
+
     /** 回到前台（MainActivity）：通话提醒全清——正在响的那通由 Kit 的来电界面接手，其余（未接 / 已结束）人已经在 App 里了。 */
     fun onForeground() {
         val ctx = appContext ?: return

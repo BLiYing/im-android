@@ -13,7 +13,9 @@ import android.net.Uri
 import androidx.core.app.NotificationCompat
 import com.libeyond.imandroid.MainActivity
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.AppActive
 import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.rtc.RtcCall
 import com.libeyond.imandroid.sdk.logging.IMLog
 
 /**
@@ -50,7 +52,7 @@ object CallNotifications {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         runCatching {
             when (call.kind) {
-                FcmCallNotice.INCOMING -> nm.notify(tagOf(call.callId), NOTIFICATION_ID, incoming(ctx, nm, content, call, avatar))
+                FcmCallNotice.INCOMING -> postIncoming(ctx, nm, content, call, avatar)
                 FcmCallNotice.MISSED -> nm.notify(tagOf(call.callId), NOTIFICATION_ID, missed(ctx, nm, content, avatar))
                 FcmCallNotice.ENDED -> nm.cancel(tagOf(call.callId), NOTIFICATION_ID)
                 else -> log.w("fcm_call_kind_unknown", "kind" to call.kind)
@@ -96,8 +98,22 @@ object CallNotifications {
         runCatching { nm.cancel(tagOf(callId), NOTIFICATION_ID) }
     }
 
+    /**
+     * 推送常常**晚于** SDK 自己收到的来电（App 在后台时通话连接可能还活着，Pixel 真机实测 FCM 晚到 0.7 秒）：
+     * 这时 Kit 已经在响。前台——来电界面已经接手，不弹；后台——照样弹（它是唯一能点的入口），但不出声。
+     */
+    private fun postIncoming(
+        ctx: Context, nm: NotificationManager, content: FcmNotificationContent, call: FcmCallNotice, avatar: Bitmap?,
+    ) {
+        val sdkRinging = RtcCall.isRinging(call.callId)
+        if (sdkRinging && AppActive.current) return
+        val notification = incoming(ctx, nm, content, call, avatar, silent = sdkRinging)
+        nm.notify(tagOf(call.callId), NOTIFICATION_ID, notification)
+    }
+
     private fun incoming(
         ctx: Context, nm: NotificationManager, content: FcmNotificationContent, call: FcmCallNotice, avatar: Bitmap?,
+        silent: Boolean,
     ): Notification {
         ensureCallChannel(nm)
         val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
@@ -113,6 +129,7 @@ object CallNotifications {
             .addAction(0, Str.s(R.string.common_reject), callIntent(ctx, content, call.callId, ACTION_REJECT))
             .addAction(0, Str.s(R.string.push_call_action_answer), callIntent(ctx, content, call.callId, ACTION_ACCEPT))
         avatar?.let { builder.setLargeIcon(it) }
+        if (silent) return builder.setSilent(true).build()
         // 铃声循环到用户处理 / 超时 / 服务端收回为止，像来电而不是叮一声。
         return builder.build().apply { flags = flags or Notification.FLAG_INSISTENT }
     }
