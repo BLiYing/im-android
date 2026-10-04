@@ -157,7 +157,7 @@ object FcmNotifications {
         ctx: Context, nm: NotificationManager, convId: String, meta: Meta,
         state: ConversationLines, avatar: Bitmap, alert: Boolean,
     ) {
-        ensureChannel(nm)
+        ensureMessageChannel(nm)
         val title = meta.title.ifBlank { Str.s(R.string.app_name) }
         // MessagingStyle 展开后每一行自己的头像来自这一行的 Person——不设 icon 的话系统会按发送人姓名
         // 自己生成一个灰底首字母圆（2026-10-01 真机实测的「用」就是这么来的），与 setLargeIcon 设的
@@ -213,8 +213,8 @@ object FcmNotifications {
         return PendingIntent.getActivity(ctx, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    /** 渠道只需建一次；minSdk 26 渠道 API 恒可用。 */
-    private fun ensureChannel(nm: NotificationManager) {
+    /** 渠道只需建一次；minSdk 26 渠道 API 恒可用。群通话「未接来电」（[CallNotifications]）也走这个渠道。 */
+    internal fun ensureMessageChannel(nm: NotificationManager) {
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, Str.s(R.string.notif_section_message), NotificationManager.IMPORTANCE_HIGH),

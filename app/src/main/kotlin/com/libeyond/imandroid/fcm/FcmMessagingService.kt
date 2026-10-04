@@ -71,6 +71,12 @@ class FcmMessagingService : FirebaseMessagingService() {
             FcmNotifications.clearReadThrough(content.convId, content.convSeq)
             return
         }
+        if (content.call != null) {
+            // 来电要尽快弹：收回横幅（ended）用不着头像，别为它白等一次下载。
+            val avatar = if (content.call.kind == FcmCallNotice.ENDED) null else loadAvatar(content.iconAvatar)
+            CallNotifications.handle(this, content, avatar)
+            return
+        }
         FcmNotifications.showMessage(content, loadAvatar(content.iconAvatar))
     }
 

@@ -1508,6 +1508,13 @@
     <string name="ps_section_data">Data</string>
     <string name="ps_section_who_can_see">Who can see</string>
     <string name="ps_who_can_see_footer">These settings control how much others can see on your profile.</string>
+    <string name="push_call_action_answer">Answer</string>
+    <string name="push_call_channel_name">Incoming calls</string>
+    <string name="push_call_ended">Call ended</string>
+    <string name="push_call_incoming_group_video">Invited you to a group video call</string>
+    <string name="push_call_incoming_group_voice">Invited you to a group voice call</string>
+    <string name="push_call_incoming_video">Incoming video call</string>
+    <string name="push_call_incoming_voice">Incoming voice call</string>
     <string name="push_group_body">%1$s: %2$s</string>
     <string name="push_mention_body">[Mentioned] %1$s</string>
     <string name="push_message_deleted">A message was deleted</string>

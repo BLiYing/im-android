@@ -1469,6 +1469,13 @@
     <string name="ps_section_data">数据</string>
     <string name="ps_section_who_can_see">谁能看到</string>
     <string name="ps_who_can_see_footer">这些设置决定他人在你的资料页看到多少。</string>
+    <string name="push_call_action_answer">接听</string>
+    <string name="push_call_channel_name">来电提醒</string>
+    <string name="push_call_ended">通话已结束</string>
+    <string name="push_call_incoming_group_video">邀请你加入群视频通话</string>
+    <string name="push_call_incoming_group_voice">邀请你加入群语音通话</string>
+    <string name="push_call_incoming_video">邀请你视频通话</string>
+    <string name="push_call_incoming_voice">邀请你语音通话</string>
     <string name="push_group_body">%1$s: %2$s</string>
     <string name="push_mention_body">[有人\@我] %1$s</string>
     <string name="push_message_deleted">一条消息已被删除</string>

@@ -25,6 +25,7 @@ import com.libeyond.imandroid.sdk.api.RtcApi
 import com.libeyond.imandroid.sdk.api.RtcTokenResult
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.fcm.CallNotifications
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +78,28 @@ object RtcCall {
      * 页面自己重新调 [fetchCallHistory] 取权威结果。主线程。
      */
     @Volatile var onCallEnded: (() -> Unit)? = null
+
+    /** 正在响、还没接通 / 结束的那通来电（[applyNotificationAction] 用：点按钮时它可能已经在响了）。 */
+    @Volatile private var ringingCallId: String? = null
+
+    /**
+     * 来电横幅上点了「接听」/「拒绝」（MainActivity 收到 intent 时调）。这通已经在响就当场照做；
+     * 还没到（App 刚被拉起、还没连上）就记下来，等 [HostListener.onCallReceived] 到了再做（[PendingCallAction]）。
+     */
+    fun applyNotificationAction(callId: String, accept: Boolean) {
+        log.i("rtc_notification_action", "callId" to callId, "accept" to accept)
+        if (ringingCallId == callId) {
+            main.post { act(accept) }
+            return
+        }
+        PendingCallAction.request(callId, accept, System.currentTimeMillis())
+    }
+
+    private fun act(accept: Boolean) {
+        val e = engine ?: return
+        if (accept) e.accept { _, err -> if (err != null) log.w("rtc_auto_accept_failed", "code" to err.code) }
+        else e.reject { _, err -> if (err != null) log.w("rtc_auto_reject_failed", "code" to err.code) }
+    }
 
     private val _inCall = MutableStateFlow(false)
 
@@ -312,6 +335,11 @@ object RtcCall {
             if (stale) return
             profileResolver?.groupId = if (isGroup) chatGroupId else ""
             _inCall.value = true
+            ringingCallId = callId
+            // SDK 的来电界面接手了：通知栏里那条离线推送的来电横幅（如果有）就多余了。
+            appContext?.let { CallNotifications.cancel(it, callId) }
+            // 用户是点着横幅上的按钮把 App 拉起来的：来电一到就替他接 / 拒。晚一拍执行，让 Kit 先把来电界面立起来。
+            PendingCallAction.consume(callId, System.currentTimeMillis())?.let { accept -> main.post { act(accept) } }
         }
 
         /** 接通（主被叫都抛）：响铃阶段 [onCallReceived] 已经置过一次，这里覆盖同一个值，兜住主叫自己发起、没经过 onCallReceived 的路径。 */
@@ -321,12 +349,15 @@ object RtcCall {
         ) {
             if (stale) return
             _inCall.value = true
+            ringingCallId = null
         }
 
         /** 每通电话都会到达（不分角色）：只转发信号给 [onCallEnded]，不带数据——那是通话记录专属的落库判定。 */
         override fun onCallEnd(callId: String, reason: IMCallEndReason, durationSec: Long, endedBy: String) {
             if (stale) return
             _inCall.value = false
+            ringingCallId = null
+            appContext?.let { CallNotifications.cancel(it, callId) }
             onCallEnded?.invoke()
         }
 

@@ -12,6 +12,7 @@ package com.libeyond.imandroid.fcm
  *   此时 [title]/[body] 是给不认识该类型的旧版本看的替换文案，本版本不展示。
  * @param clear 这不是新消息，而是「本人在别的设备上把这个会话读到了 [convSeq]」（服务端 `type=clear`，
  *   PUSH_M5_DESIGN §3.5）：取消该会话里 seq ≤ 它的通知，不展示。
+ * @param call 非 null 表示这是一条通话提醒（服务端 `type=call`，PUSH_M5_DESIGN §3.8），交给 [CallNotifications]。
  */
 data class FcmNotificationContent(
     val convId: String,
@@ -26,6 +27,7 @@ data class FcmNotificationContent(
     val groupAvatar: String? = null,
     val senderName: String? = null,
     val bareBody: String? = null,
+    val call: FcmCallNotice? = null,
 ) {
     /**
      * 通知大图标用哪张头像（PUSH_M5_DESIGN §3.6，2026-10-02 改）：**群聊固定用群头像**，不管谁发的消息
@@ -58,12 +60,26 @@ data class FcmNotificationContent(
 }
 
 /**
+ * 通话提醒（PROTOCOL §6.14「通话提醒」）。[kind]：`incoming` 来电横幅 / `missed` 群通话未接 / `ended` 收回横幅。
+ */
+data class FcmCallNotice(val callId: String, val kind: String, val media: String) {
+    val isVideo: Boolean get() = media == "video"
+
+    companion object {
+        const val INCOMING = "incoming"
+        const val MISSED = "missed"
+        const val ENDED = "ended"
+    }
+}
+
+/**
  * 纯函数解析——**不碰 Android/Firebase 类型**，JVM 单测不需要 Robolectric。
  * `RemoteMessage.getData()` 本身就是 `Map<String, String>`，这里直接吃这个形状。
  */
 object FcmPayload {
     private const val TYPE_RETRACT = "retract"
     private const val TYPE_CLEAR = "clear"
+    private const val TYPE_CALL = "call"
 
     /** `conv_id` 缺失/空白视为不可展示（没有会话可跳转），返回 null——调用方据此静默丢弃，不崩、不弹空通知。 */
     fun parse(data: Map<String, String>): FcmNotificationContent? {
@@ -82,7 +98,17 @@ object FcmPayload {
             groupAvatar = data["group_avatar"]?.takeIf { it.isNotBlank() },
             senderName = data["sender_name"]?.takeIf { it.isNotBlank() },
             bareBody = data["bare_body"]?.takeIf { it.isNotBlank() },
+            call = callOf(data),
         )
+    }
+
+    /** `type=call` 且 call_id / call_kind 都在才算通话提醒；缺了哪样都认不出是哪通、要做什么，丢掉。 */
+    private fun callOf(data: Map<String, String>): FcmCallNotice? {
+        if (data["type"] != TYPE_CALL) return null
+        val callId = data["call_id"]?.trim().orEmpty()
+        val kind = data["call_kind"]?.trim().orEmpty()
+        if (callId.isEmpty() || kind.isEmpty()) return null
+        return FcmCallNotice(callId, kind, data["media"].orEmpty())
     }
 
     /** 联网取头像失败后，这么久之内只用本地缓存（见 `FcmMessagingService.loadAvatar`）。 */

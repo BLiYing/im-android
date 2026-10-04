@@ -35,6 +35,8 @@ import com.libeyond.imandroid.ui.theme.LocalMediaHost
 import com.libeyond.imandroid.ui.theme.LocalPowerSave
 import com.libeyond.imandroid.data.PowerSavingStore
 import com.libeyond.imandroid.ui.theme.MediaHost
+import com.libeyond.imandroid.fcm.CallNotifications
+import com.libeyond.imandroid.rtc.RtcCall
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -143,6 +145,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNotificationIntent(intent: Intent?) {
+        // 来电横幅（fcm/CallNotifications.kt）：收掉横幅；点的是「接听」/「拒绝」就交给 RtcCall，
+        // 来电一到（或已经在响）就照做。点横幅本身只是打开 App，照常进会话。
+        val callId = intent?.getStringExtra(CallNotifications.EXTRA_CALL_ID)
+        if (!callId.isNullOrBlank()) {
+            CallNotifications.cancel(this, callId)
+            when (intent.getStringExtra(CallNotifications.EXTRA_CALL_ACTION)) {
+                CallNotifications.ACTION_ACCEPT -> RtcCall.applyNotificationAction(callId, accept = true)
+                CallNotifications.ACTION_REJECT -> RtcCall.applyNotificationAction(callId, accept = false)
+            }
+            // 用过就清掉：Activity 重建时 getIntent() 还是这一个，不能再接一次。
+            intent.removeExtra(CallNotifications.EXTRA_CALL_ACTION)
+        }
         val convId = intent?.getStringExtra(EXTRA_NOTIFICATION_CONV_ID)
         if (convId.isNullOrBlank()) return
         val title = intent.getStringExtra(EXTRA_NOTIFICATION_TITLE).orEmpty()
