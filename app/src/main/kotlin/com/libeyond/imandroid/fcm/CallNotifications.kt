@@ -109,6 +109,10 @@ object CallNotifications {
         if (sdkRinging && AppActive.current) return
         val notification = incoming(ctx, nm, content, call, avatar, silent = sdkRinging)
         nm.notify(tagOf(call.callId), NOTIFICATION_ID, notification)
+        // 判完「SDK 在不在响」到发出横幅之间，SDK 可能刚收到这通（它那边找横幅时还没有）：发完再对一次。
+        if (!sdkRinging && RtcCall.isRinging(call.callId)) {
+            if (AppActive.current) cancel(ctx, call.callId) else silence(ctx, call.callId)
+        }
     }
 
     private fun incoming(

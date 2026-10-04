@@ -27,3 +27,18 @@ class PendingCallActionTest {
         assertNull(PendingCallAction.consume("c1", nowMs = PendingCallAction.TTL_MS + 1))
     }
 }
+
+/** 横幅「接听」只在绕过 Kit 接听流程也不出事时直接接（见 autoAcceptAllowed 注释）。 */
+class AutoAcceptAllowedTest {
+    @Test
+    fun `有麦克风权限的语音与群视频可以直接接`() {
+        assertEquals(true, autoAcceptAllowed(micGranted = true, mediaType = "audio", isGroup = false))
+        assertEquals(true, autoAcceptAllowed(micGranted = true, mediaType = "video", isGroup = true))
+    }
+
+    @Test
+    fun `没麦克风权限或 1v1 视频交给 Kit 来电界面`() {
+        assertEquals(false, autoAcceptAllowed(micGranted = false, mediaType = "audio", isGroup = false))
+        assertEquals(false, autoAcceptAllowed(micGranted = true, mediaType = "video", isGroup = false))
+    }
+}

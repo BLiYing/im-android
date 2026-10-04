@@ -33,3 +33,16 @@ object PendingCallAction {
         return e.accept
     }
 }
+
+/**
+ * 横幅上的「接听」能不能由宿主直接替用户接（[RtcCall] 调 `engine.accept`）。
+ *
+ * Kit 自己的接听入口（`IMCallKit.answer`：先过权限门、按来电页的摄像头开关同步采集、开本地预览）是 `internal` 的，
+ * 宿主调不到；直接 `engine.accept` 会绕过它。所以只在**绕过也不出事**的时候直接接：
+ * - 麦克风已授权——否则接通了对方听不到人，也没人弹授权框；
+ * - 不是 1v1 视频——1v1 视频的摄像头默认开、要本地预览，那一套只有 Kit 会做。群视频 Kit 在来电时就关了摄像头。
+ * 其余情况不接：点按钮已经把 App 拉到前台，Kit 的来电界面就在眼前，用户再点一次「接听」，由 Kit 走完整流程。
+ * TODO：im-rtc Android SDK 公开 `IMCallKit.answer()`（iOS 的 `IMCallController.accept` 已公开）后改调它，去掉这层判定。
+ */
+internal fun autoAcceptAllowed(micGranted: Boolean, mediaType: String, isGroup: Boolean): Boolean =
+    micGranted && (mediaType != "video" || isGroup)

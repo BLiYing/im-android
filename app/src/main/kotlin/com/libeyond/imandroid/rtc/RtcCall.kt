@@ -1,8 +1,11 @@
 package com.libeyond.imandroid.rtc
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import com.imrtc.engine.IMCallEndReason
 import com.imrtc.engine.IMCallEngine
 import com.imrtc.engine.IMCallEngineListener
@@ -18,15 +21,15 @@ import com.imrtc.uikit.IMCallKit
 import com.imrtc.uikit.IMCallKitConfig
 import com.imrtc.uikit.IMLocale
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.AppActive
 import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.data.ResolvedLanguage
+import com.libeyond.imandroid.fcm.CallNotifications
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.RtcApi
 import com.libeyond.imandroid.sdk.api.RtcTokenResult
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.logging.IMLog
-import com.libeyond.imandroid.data.AppActive
-import com.libeyond.imandroid.fcm.CallNotifications
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +86,10 @@ object RtcCall {
     /** 正在响、还没接通 / 结束的那通来电（[applyNotificationAction] 用：点按钮时它可能已经在响了）。 */
     @Volatile private var ringingCallId: String? = null
 
+    /** 那通来电是什么（自动接听前要看，见 [autoAcceptAllowed]）。 */
+    @Volatile private var ringingMedia: String = ""
+    @Volatile private var ringingIsGroup: Boolean = false
+
     /**
      * 来电横幅上点了「接听」/「拒绝」（MainActivity 收到 intent 时调）。这通已经在响就当场照做；
      * 还没到（App 刚被拉起、还没连上）就记下来，等 [HostListener.onCallReceived] 到了再做（[PendingCallAction]）。
@@ -107,8 +114,18 @@ object RtcCall {
 
     private fun act(accept: Boolean) {
         val e = engine ?: return
-        if (accept) e.accept { _, err -> if (err != null) log.w("rtc_auto_accept_failed", "code" to err.code) }
-        else e.reject { _, err -> if (err != null) log.w("rtc_auto_reject_failed", "code" to err.code) }
+        if (!accept) {
+            e.reject { _, err -> if (err != null) log.w("rtc_auto_reject_failed", "code" to err.code) }
+            return
+        }
+        val ctx = appContext ?: return
+        val mic = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (!autoAcceptAllowed(mic, ringingMedia, ringingIsGroup)) {
+            // App 已在前台，Kit 的来电界面就在眼前：让用户在那里接，权限 / 摄像头由 Kit 处理。
+            log.i("rtc_auto_accept_skipped", "mic" to mic, "media" to ringingMedia, "group" to ringingIsGroup)
+            return
+        }
+        e.accept { _, err -> if (err != null) log.w("rtc_auto_accept_failed", "code" to err.code) }
     }
 
     private val _inCall = MutableStateFlow(false)
@@ -219,6 +236,8 @@ object RtcCall {
     /** 离开主界面调用。幂等。 */
     fun stop() {
         generation++
+        // 迟到的 onCallEnd 会被 generation 当成旧的丢掉，这里不清的话 isRinging 会一直以为还在响（推送来了也不出声）。
+        ringingCallId = null
         _inCall.value = false
         profileResolver?.close()
         val old = engine ?: return
@@ -346,6 +365,8 @@ object RtcCall {
             profileResolver?.groupId = if (isGroup) chatGroupId else ""
             _inCall.value = true
             ringingCallId = callId
+            ringingMedia = mediaType
+            ringingIsGroup = isGroup
             // App 在前台：SDK 的来电界面接手了，通知栏里那条离线推送的来电横幅（如果有）就多余了。
             // 在后台：系统不让弹来电界面，横幅是唯一入口，留着、只静音（Kit 已经在响）。
             appContext?.let { if (AppActive.current) CallNotifications.cancel(it, callId) else CallNotifications.silence(it, callId) }
