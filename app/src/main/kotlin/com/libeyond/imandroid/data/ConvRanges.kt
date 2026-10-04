@@ -32,6 +32,12 @@ class ConvRanges(private val dao: ConvRangeDao) {
         dao.insert(ConvRangeEntity(owner, convId, merged.lo, merged.hi))
     }
 
+    /** 位点回退：丢掉越过 [head] 的部分（整段删、跨界段截断）。 */
+    suspend fun truncateAbove(owner: String, convId: String, head: Long) {
+        dao.deleteAbove(owner, convId, head)
+        dao.clampHi(owner, convId, head)
+    }
+
     suspend fun clearConv(owner: String, convId: String) = dao.clearConv(owner, convId)
 
     suspend fun clearAccount(owner: String) = dao.clearAccount(owner)

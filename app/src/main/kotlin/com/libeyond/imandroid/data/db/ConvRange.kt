@@ -36,6 +36,14 @@ interface ConvRangeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(row: ConvRangeEntity)
 
+    /** 位点回退：整段落在新位点之上的区间删掉。 */
+    @Query("DELETE FROM conv_range_local WHERE ownerUid = :owner AND convId = :convId AND lo > :head")
+    suspend fun deleteAbove(owner: String, convId: String, head: Long)
+
+    /** 位点回退：跨过新位点的区间截到新位点。 */
+    @Query("UPDATE conv_range_local SET hi = :head WHERE ownerUid = :owner AND convId = :convId AND hi > :head AND lo <= :head")
+    suspend fun clampHi(owner: String, convId: String, head: Long)
+
     @Query("DELETE FROM conv_range_local WHERE ownerUid = :owner AND convId = :convId")
     suspend fun clearConv(owner: String, convId: String)
 

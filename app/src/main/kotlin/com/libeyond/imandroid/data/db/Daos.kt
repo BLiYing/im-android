@@ -286,6 +286,10 @@ interface MessageDao {
     @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId AND convSeq IN (:seqs)")
     suspend fun deleteSeqs(owner: String, convId: String, seqs: List<Long>)
 
+    /** 服务端位点回退后，移除本地越过新位点的幽灵行（见 `reconcileRegressedHead`）。 */
+    @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId AND convSeq > :seq")
+    suspend fun deleteAbove(owner: String, convId: String, seq: Long)
+
     @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun clearConv(owner: String, convId: String)
 
@@ -363,6 +367,16 @@ interface ConversationDao {
      */
     @Query("UPDATE conversation SET headConvSeq = :head WHERE ownerUid = :owner AND convId = :convId AND headConvSeq < :head")
     suspend fun raiseHead(owner: String, convId: String, head: Long)
+
+    /**
+     * 服务端位点**回退**（库被还原 / 压测数据被清）：把本地记的 head / 最新序号 / 同步游标压回新位点。
+     * 唯一允许 head 变小的入口，调用方必须先确认 `sync_resp` 的权威 head 确实小于本地值。
+     */
+    @Query(
+        "UPDATE conversation SET headConvSeq = :head, lastConvSeq = MIN(lastConvSeq, :head), " +
+            "syncedConvSeq = MIN(syncedConvSeq, :head) WHERE ownerUid = :owner AND convId = :convId AND headConvSeq > :head",
+    )
+    suspend fun lowerHead(owner: String, convId: String, head: Long)
 
     /** 服务端最新位点的变化流（C4b：bump 到了且用户贴底就补最新一页）。会话行不存在时无发射。 */
     @Query("SELECT headConvSeq FROM conversation WHERE ownerUid = :owner AND convId = :convId")

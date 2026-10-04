@@ -74,10 +74,13 @@ internal suspend fun MessageService.requestSync(owner: String, only: String? = n
 internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData) {
     var needMore = false
     val nextCursors = mutableListOf<SyncCursorItem>()
+    val regressed = mutableMapOf<String, Long>()
     // 游标一次读全：重连时一帧 sync_resp 带几十个会话，逐页各读一次库在真机上是可测的开销
     val sinceBy = repo.syncCursors(owner).associate { it.convId to it.sinceConvSeq }
     for (c in resp.conversations) {
         syncInFlight.remove(c.convId)
+        // 服务端库被还原时本地有幽灵位点：必须在落库 / bump 之前压回，否则 bump 会拿幽灵行当最新一条
+        if (repo.reconcileRegressedHead(owner, c.convId, c.headConvSeq)) regressed[c.convId] = c.headConvSeq
         val applyStart = android.os.SystemClock.elapsedRealtime()
         val firstFailed = repo.onSyncPage(owner, c.convId, c.messages, c.coveredConvSeq, sinceHint = sinceBy[c.convId] ?: 0L)
         val applyMs = android.os.SystemClock.elapsedRealtime() - applyStart
@@ -115,6 +118,8 @@ internal suspend fun MessageService.applySync(owner: String, resp: SyncRespData)
     }
     // 同步完刷一次会话列表，未读数以服务端为准
     refreshConversations()
+    // 在途的列表刷新可能在对账前就读了旧行、对账后又整行写回幽灵位点（真机复现过）：刷新完再对一次（幂等）
+    regressed.forEach { (convId, head) -> repo.reconcileRegressedHead(owner, convId, head) }
 }
 
 /**
