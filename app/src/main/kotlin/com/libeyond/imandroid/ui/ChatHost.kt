@@ -147,6 +147,10 @@ fun ChatHost(
 
     // —— 定位与会话内搜索（接线在 ChatLookups.kt：顺序有讲究，locator 先建，两者都要在 BackHandler 之前）——
     val connected = client.socket.state.collectAsState().value == ConnState.Connected
+    // 对端读位点要**订阅**，不能读 `conv.peerReadSeq`：`conv` 是进页时的快照，聊天中 receipt 写进库的新位点到不了界面
+    // （2026-10-05 OPPO↔Web 联调：库里已是已读、气泡仍是单勾，重进才变）
+    val peerReadSeq by remember(owner, conv.convId) { client.repo.observePeerReadSeq(owner, conv.convId) }
+        .collectAsState(initial = conv.peerReadSeq)
     val lookups = rememberChatLookups(
         client, conv.convId, owner, connected, onOpenWindow = { window = it }, onToast = { toast = it },
         friendsByUid, memberNames, memberAvatars,
@@ -295,7 +299,7 @@ fun ChatHost(
         isGroup = conv.isGroup,
         host = client.host,
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
-        peerReadSeq = ReadTick.seqFor(conv.isGroup, conv.isSuper, conv.peerReadSeq),
+        peerReadSeq = ReadTick.seqFor(conv.isGroup, conv.isSuper, peerReadSeq),
         uploadProgress = uploadProgress,
         uploadStates = uploadStates,
         localNameOf = { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
@@ -322,7 +326,7 @@ fun ChatHost(
         unread = entry.second,
         subtitle = subtitle,
         isGroup = conv.isGroup,
-        peerReadSeq = ReadTick.seqFor(conv.isGroup, conv.isSuper, conv.peerReadSeq),
+        peerReadSeq = ReadTick.seqFor(conv.isGroup, conv.isSuper, peerReadSeq),
         translations = ops.translations,
         avatarOf = avatarOf,
         expandedTexts = ops.expanded,

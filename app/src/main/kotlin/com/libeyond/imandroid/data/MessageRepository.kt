@@ -114,6 +114,8 @@ class MessageRepository(
 
     fun observeHead(owner: String, convId: String): Flow<Long> = conversations.observeHead(owner, convId)
 
+    fun observePeerReadSeq(owner: String, convId: String): Flow<Long> = conversations.observePeerReadSeq(owner, convId)
+
     suspend fun messageCount(owner: String, convId: String): Int = messages.countIn(owner, convId)
 
     /**

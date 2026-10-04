@@ -382,6 +382,13 @@ interface ConversationDao {
     @Query("SELECT headConvSeq FROM conversation WHERE ownerUid = :owner AND convId = :convId")
     fun observeHead(owner: String, convId: String): kotlinx.coroutines.flow.Flow<Long>
 
+    /**
+     * 对端读位点的变化流（「我发的消息」已读勾）。聊天页拿到的 `ConversationEntity` 是进页那一刻的快照，
+     * 之后 `receipt` 帧写进库的 `peerReadSeq` 只能靠这条流进界面。会话行不存在时无发射。
+     */
+    @Query("SELECT peerReadSeq FROM conversation WHERE ownerUid = :owner AND convId = :convId")
+    fun observePeerReadSeq(owner: String, convId: String): kotlinx.coroutines.flow.Flow<Long>
+
     /** 本机清空位点**只增不减**（[ConversationEntity.clearedUpTo]）。 */
     @Query("UPDATE conversation SET clearedUpTo = :seq WHERE ownerUid = :owner AND convId = :convId AND clearedUpTo < :seq")
     suspend fun raiseClearedUpTo(owner: String, convId: String, seq: Long)

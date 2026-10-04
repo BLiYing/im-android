@@ -15,6 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import androidx.compose.runtime.withFrameNanos
 import com.libeyond.imandroid.data.ChatEntry
 import androidx.compose.ui.Modifier
@@ -355,12 +357,16 @@ internal fun ChatListSync(
     // （十万条未读进一次会话清零就是这么来的，CHAT_UX §3）。
     // 故只在**首屏定位完成后**才上报，且只报真正可见的行。
     // 被详情页盖住期间也不报（用户看的不是这一页）；露出来时 covered 一变，这里补报一次。
-    LaunchedEffect(rows.size, listState.layoutInfo.visibleItemsInfo.size, covered) {
+    // **订阅布局，不能在 effect 体里读 `layoutInfo`**：effect 在新行进入组合后、测量布局**之前**就跑，
+    // 读到的还是上一帧的可见行——新到的那条永远报不上去（2026-10-05 OPPO↔Web 联调：对端明明开着会话，
+    // 我这边消息一直停在单勾，因为对方这条的已读回执没发）。snapshotFlow 在布局落定后重新求值。
+    LaunchedEffect(rows.size, covered) {
         if (!marks.didEntry || covered) return@LaunchedEffect
-        val maxSeq = listState.layoutInfo.visibleItemsInfo
-            .mapNotNull { (rows.getOrNull(it.index) as? ChatRow.Confirmed)?.msg?.convSeq }
-            .maxOrNull() ?: return@LaunchedEffect
-        onVisibleSeq(maxSeq)
+        snapshotFlow {
+            listState.layoutInfo.visibleItemsInfo
+                .mapNotNull { (rows.getOrNull(it.index) as? ChatRow.Confirmed)?.msg?.convSeq }
+                .maxOrNull()
+        }.filterNotNull().distinctUntilChanged().collect { onVisibleSeq(it) }
     }
 }
 
