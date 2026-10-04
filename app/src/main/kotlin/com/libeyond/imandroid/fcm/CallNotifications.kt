@@ -59,7 +59,37 @@ object CallNotifications {
         }.onFailure { log.w("fcm_call_notify_failed", "err" to it.javaClass.simpleName) }
     }
 
-    /** SDK 已经接手这通电话（来电界面弹出 / 通话结束），或用户点了横幅：收掉来电横幅。 */
+    /**
+     * SDK 在 App **后台**收到了这通来电：Kit 已经在响铃，但系统不让后台弹来电界面
+     * （真机日志 `Background activity launch blocked!`）。横幅得留着——它是用户唯一能点的入口——
+     * 只把它的铃声停掉，免得 Kit 的铃声和通知铃声两路一起响。没有这条横幅就什么都不做。
+     */
+    fun silence(ctx: Context, callId: String) {
+        if (callId.isBlank()) return
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        runCatching {
+            val shown = nm.activeNotifications.firstOrNull { it.tag == tagOf(callId) && it.id == NOTIFICATION_ID } ?: return
+            val quiet = Notification.Builder.recoverBuilder(ctx, shown.notification).setOnlyAlertOnce(true).build()
+            quiet.flags = quiet.flags and Notification.FLAG_INSISTENT.inv()
+            nm.notify(tagOf(callId), NOTIFICATION_ID, quiet)
+        }.onFailure { log.w("fcm_call_silence_failed", "err" to it.javaClass.simpleName) }
+    }
+
+    /**
+     * App 回到前台：清掉通话提醒（未接来电、早已结束的来电横幅），同 [FcmNotifications.clearAll] 与 iOS
+     * `sceneDidBecomeActive`。[ringingCallId] 是此刻还在响的那通，由调用方决定要不要留（SDK 的来电界面会接手它）。
+     */
+    fun clearAll(ctx: Context, except: String? = null) {
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        val keep = except?.let { tagOf(it) }
+        runCatching {
+            nm.activeNotifications
+                .filter { it.id == NOTIFICATION_ID && it.tag?.startsWith("call:") == true && it.tag != keep }
+                .forEach { nm.cancel(it.tag, NOTIFICATION_ID) }
+        }
+    }
+
+    /** SDK 已经接手这通电话（App 在前台、来电界面弹出 / 通话结束），或用户点了横幅：收掉来电横幅。 */
     fun cancel(ctx: Context, callId: String) {
         if (callId.isBlank()) return
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return

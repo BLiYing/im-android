@@ -25,6 +25,7 @@ import com.libeyond.imandroid.sdk.api.RtcApi
 import com.libeyond.imandroid.sdk.api.RtcTokenResult
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.data.AppActive
 import com.libeyond.imandroid.fcm.CallNotifications
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -93,6 +94,12 @@ object RtcCall {
             return
         }
         PendingCallAction.request(callId, accept, System.currentTimeMillis())
+    }
+
+    /** 回到前台（MainActivity）：通话提醒全清——正在响的那通由 Kit 的来电界面接手，其余（未接 / 已结束）人已经在 App 里了。 */
+    fun onForeground() {
+        val ctx = appContext ?: return
+        CallNotifications.clearAll(ctx)
     }
 
     private fun act(accept: Boolean) {
@@ -336,8 +343,9 @@ object RtcCall {
             profileResolver?.groupId = if (isGroup) chatGroupId else ""
             _inCall.value = true
             ringingCallId = callId
-            // SDK 的来电界面接手了：通知栏里那条离线推送的来电横幅（如果有）就多余了。
-            appContext?.let { CallNotifications.cancel(it, callId) }
+            // App 在前台：SDK 的来电界面接手了，通知栏里那条离线推送的来电横幅（如果有）就多余了。
+            // 在后台：系统不让弹来电界面，横幅是唯一入口，留着、只静音（Kit 已经在响）。
+            appContext?.let { if (AppActive.current) CallNotifications.cancel(it, callId) else CallNotifications.silence(it, callId) }
             // 用户是点着横幅上的按钮把 App 拉起来的：来电一到就替他接 / 拒。晚一拍执行，让 Kit 先把来电界面立起来。
             PendingCallAction.consume(callId, System.currentTimeMillis())?.let { accept -> main.post { act(accept) } }
         }

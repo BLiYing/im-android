@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
                 PowerSavingStore.onForeground() // 后台触发的自动开启提示，10 分钟内补弹
                 client.socket.reportAppState(true)
                 FcmNotifications.clearAll() // 进了 App 通知栏就不再挂消息通知（iOS sceneDidBecomeActive 同款）
+                RtcCall.onForeground() // 正在响的来电由 Kit 的来电界面接手，收掉它的离线推送横幅
                 try {
                     awaitCancellation()
                 } finally {
