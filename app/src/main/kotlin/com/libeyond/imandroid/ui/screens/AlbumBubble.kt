@@ -187,13 +187,14 @@ internal fun AlbumBubble(
                 pattern.forEachIndexed { rowIdx, cols ->
                     if (rowIdx > 0) Spacer(Modifier.height(AlbumLayout.GAP.dp))
                     val tile = AlbumLayout.tileSize(cols).dp
+                    val tileW = AlbumLayout.tileWidth(cols).dp
                     Row {
                         repeat(cols) { col ->
                             if (col > 0) Spacer(Modifier.width(AlbumLayout.GAP.dp))
                             val m = tiles.getOrNull(idx++)
                             if (m == null) {
                                 // 格数比消息多（理论上不会，pattern 由 size 推出）——留空不崩
-                                Spacer(Modifier.size(tile))
+                                Spacer(Modifier.size(tileW, tile))
                             } else {
                                 val at = idx - 1 // idx 已在上面自增过
                                 // **长按必须挂在每一格上**：格子自己的 clickable 会吃掉 down 事件，
@@ -205,6 +206,7 @@ internal fun AlbumBubble(
                                     onLongPress = { r -> onLongPressTile(at, r) },
                                     hidden = at == hiddenIndex,
                                     selecting = selecting,
+                                    width = tileW,
                                 )
                             }
                         }
@@ -262,6 +264,8 @@ private fun AlbumTileView(
     onLongPress: (Rect) -> Unit = {},
     hidden: Boolean = false,
     selecting: Boolean = false,
+    /** 格宽；单列那行是整行宽（iOS `cols == 1 ? kIMAlbumWidth : tileW`），其余与 [size] 相同。 */
+    width: androidx.compose.ui.unit.Dp = size,
 ) {
     val c = IMTheme.colors
     // 每一格记住**自己**的矩形：长按浮起的是这一格，不是整个宫格。
@@ -288,7 +292,7 @@ private fun AlbumTileView(
     val ungated = gate == null ||
         (mine && gate.state.phase != com.libeyond.imandroid.data.DownloadPhase.Expired)
     Box(
-        modifier = Modifier.size(size).background(c.subtleFill)
+        modifier = Modifier.size(width, size).background(c.subtleFill)
             .onGloballyPositioned { tileRect.value = it.boundsInWindow() }
             .alpha(if (hidden) 0f else 1f)
             .combinedClickable(
@@ -320,7 +324,7 @@ private fun AlbumTileView(
             placeholder = frosted,
             error = frosted,
             fallback = frosted,
-            modifier = Modifier.size(size),
+            modifier = Modifier.size(width, size),
         )
         // 门控层：压暗 + 裸字形 + 36dp 环 + 左上角一项角标（iOS `IMAlbumTileView`），就绪不画。
         // 豁免门控的那几格不画——**失效的除外**（`ungated` 已把失效排除在豁免之外）
@@ -339,12 +343,12 @@ private fun AlbumTileView(
         }
         if (m.sending || m.failed) {
             // 还在发 / 发失败：压一层暗底，让人看出这一格没完成
-            Box(Modifier.size(size).background(c.overlay))
+            Box(Modifier.size(width, size).background(c.overlay))
             // 进度：分片上传有百分比就画环 + 数字；整包上传（图片）没有回调，
             // 给一个转圈的——**"在传但不知道传到哪"也是信息**，比只有一层暗底强。
             // 环的尺寸跟着格子走：3 列宫格里格子只有 79dp，44dp 的环会顶满整格。
             val ring = AlbumLayout.ringSize(size.value).dp
-            Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(width, size), contentAlignment = Alignment.Center) {
                 if (m.failed) {
                     // 失败：红❗（点击重发挂在格子上，与单条待发气泡同一套语义）
                     Text("！", color = c.danger, fontSize = 22.sp)

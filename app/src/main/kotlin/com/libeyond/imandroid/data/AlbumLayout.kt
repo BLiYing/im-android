@@ -47,6 +47,9 @@ object AlbumLayout {
     fun tileSize(cols: Int): Float =
         if (cols == 1) SINGLE_ROW_HEIGHT else (WIDTH - (cols - 1) * GAP) / cols
 
+    /** 某一行每格的宽：单列那行占满整行（iOS：`cols == 1 ? kIMAlbumWidth : tileW`），其余等于 [tileSize]。 */
+    fun tileWidth(cols: Int): Float = if (cols == 1) WIDTH else tileSize(cols)
+
     /**
      * 上传进度环在某个格子里该多大。
      *

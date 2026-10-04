@@ -11,6 +11,12 @@ import org.junit.Test
  * 同一组图在三端裁剪出的构图都不一样，用户会以为发出去的东西被改了。
  */
 class AlbumLayoutTest {
+    @Test fun `单列那行占满整行宽 其余等于方格边长`() {
+        assertEquals(AlbumLayout.WIDTH, AlbumLayout.tileWidth(1))
+        assertEquals(AlbumLayout.tileSize(2), AlbumLayout.tileWidth(2))
+        assertEquals(AlbumLayout.tileSize(3), AlbumLayout.tileWidth(3))
+    }
+
 
     @Test
     fun `行模式逐条对齐 iOS`() {
