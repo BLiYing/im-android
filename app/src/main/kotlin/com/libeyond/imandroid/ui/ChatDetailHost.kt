@@ -298,8 +298,8 @@ fun ChatDetailHost(
                             // 与 iOS 同：pill 点了回聊天页进搜索态（SEARCH_DESIGN §4）
                             DetailAction.Search -> onSearchInChat()
                             // 通话界面整套由 im-rtc 的 Kit 接管；拨不出去（没配置 / 没上线）才回一句原因。
-                            DetailAction.Call -> RtcCall.placeSingle(conv.peerUid, video = false)?.let { toast = it }
-                            DetailAction.Video -> RtcCall.placeSingle(conv.peerUid, video = true)?.let { toast = it }
+                            DetailAction.Call -> RtcCall.placeSingle(conv.peerUid, video = false, onError = { toast = it })?.let { toast = it }
+                            DetailAction.Video -> RtcCall.placeSingle(conv.peerUid, video = true, onError = { toast = it })?.let { toast = it }
                             DetailAction.GroupCall -> Unit // 单聊不会出这个 pill
                             DetailAction.AddFriend -> askFriend = FriendRequestTarget(conv.peerUid, remark.ifBlank { conv.title })
                             // showsMessagePill=false（从聊天页自己点头像进来）时这条 pill 根本不会出现

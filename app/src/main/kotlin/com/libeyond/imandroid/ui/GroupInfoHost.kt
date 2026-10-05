@@ -268,7 +268,7 @@ fun GroupInfoHost(
                 picked = emptySet()
                 if (pk == PickPurpose.Call) {
                     // 通话界面由 im-rtc 的 Kit 接管；拨不出去才回一句原因
-                    if (ids.isNotEmpty()) RtcCall.placeGroup(convId, ids)?.let { toast = it }
+                    if (ids.isNotEmpty()) RtcCall.placeGroup(convId, ids, onError = { toast = it })?.let { toast = it }
                 } else if (ids.isNotEmpty()) runManage(Str.s(R.string.group_manage_invite_members)) { ManageToast(inviteText(client, convId, ids)) }
             },
             onBack = { pick = null; picked = emptySet() },

@@ -71,6 +71,18 @@ object RtcCall {
     @Volatile private var tokenFetchFailed = false
 
     /**
+     * 引擎被拆（换票失败 / 被踢）后能不能自愈重启：[start] 置 true，宿主 [stop]（登出 / 回登录页）与
+     * 「别处登录 / 配置被拒」置 false——登出后不能偷偷把引擎拉起来，被顶号也不能互相踢。对应 iOS `IMRtcCall.m`
+     * 的 `_uid.length > 0` 判断（iOS stop 不清 uid，这里显式记一个开关更直白）。
+     */
+    private var recoverable = false
+    private var hostRtcApi: RtcApi? = null
+    private var recovering = false
+    /** 每次 [recoverEngine] 开一轮加一；[stop] 也加一，让迟到的旧一轮回调认出自己已作废。 */
+    private var recoveryId = 0
+    private val recoveryWaiters = mutableListOf<(Boolean) -> Unit>()
+
+    /**
      * 通话结束后该落一条通话记录时的回调（只对**主叫**触发，见 [RtcCallRecords]）。
      * 由拿得到 IM 客户端的地方（AppRoot）接线；没接线 = 不发，只写日志。主线程。
      */
@@ -158,15 +170,19 @@ object RtcCall {
         profiles: RtcProfileResolver? = null,
         invites: com.imrtc.uikit.IMInviteMemberProvider? = null,
         config: RtcConfig = RtcConfig.fromBuild(),
+        onLoginResult: ((Boolean) -> Unit)? = null,
     ) {
-        if (engine != null && this.uid == uid && this.deviceId == deviceId) return
-        stop()
+        if (engine != null && this.uid == uid && this.deviceId == deviceId) { onLoginResult?.invoke(true); return }
+        teardown()
+        recoverable = true
+        hostRtcApi = rtcApi
         if (!config.isUsable) {
             log.w("rtc_disabled", "missing" to config.missing.joinToString(","))
+            onLoginResult?.invoke(false)
             return
         }
-        RtcIds.problem("uid", uid)?.let { log.w("rtc_disabled", "reason" to it); return }
-        RtcIds.problem("device_id", deviceId)?.let { log.w("rtc_disabled", "reason" to it); return }
+        RtcIds.problem("uid", uid)?.let { log.w("rtc_disabled", "reason" to it); onLoginResult?.invoke(false); return }
+        RtcIds.problem("device_id", deviceId)?.let { log.w("rtc_disabled", "reason" to it); onLoginResult?.invoke(false); return }
 
         installSdkLog()
         tokenFetchFailed = false
@@ -198,17 +214,19 @@ object RtcCall {
             val token = signToken(rtcApi)
             // 换票是异步网络请求：这段时间里可能又 stop 了（登出/切账号），generation 变了就不该
             // 再对一个已经被销毁的 engine 发 login（同 HostListener 的 stale 判定同一个思路）。
-            if (gen != generation) return@launch
+            if (gen != generation) { onLoginResult?.invoke(false); return@launch }
             if (token == null) {
                 // 换票失败：引擎已经建好但从未登录过，必须回收——否则 isStarted 会一直是 true，
                 // 且 start() 顶部「同账号同设备重复调用是空操作」的幂等判断会挡住下次重试，
                 // 通话功能会卡死到下次账号切换 / 重启 App 为止。
                 tokenFetchFailed = true
-                stop()
+                teardown()
+                onLoginResult?.invoke(false)
                 return@launch
             }
             instance.login(token) { _, error ->
                 if (error != null) log.w("rtc_login_failed", "code" to error.code, "name" to error.name)
+                onLoginResult?.invoke(error == null && gen == generation)
             }
         }
     }
@@ -233,8 +251,49 @@ object RtcCall {
         })
     }
 
-    /** 离开主界面调用。幂等。 */
+    /** 离开主界面调用（登出 / 回登录页）。幂等。之后 [recoverEngine] 不会再把引擎拉起来。 */
     fun stop() {
+        recoverable = false
+        hostRtcApi = null
+        teardown()
+        // 补救进行中登出：旧引擎已毁，登录回调可能永远不来——不在这里放行，recovering 会卡死、等待者永远悬着。
+        recoveryId++
+        finishRecovery(false)
+    }
+
+    private fun finishRecovery(ok: Boolean) {
+        val waiters = recoveryWaiters.toList()
+        recoveryWaiters.clear()
+        recovering = false
+        waiters.forEach { it(ok) }
+    }
+
+    /**
+     * 引擎被拆后的补救：整台引擎重启（teardown → 换票 → start → login），对应 iOS `recoverEngineThen`。
+     * 不能只重发 login：连接对象还在时（1101/2003）login 会被 SDK 拒，重启是对所有断链形态都成立的做法。
+     * 通话中 / 来电响铃中不动（重启会挂断）；并发的多次调用共用一次重启；回调恒在主线程。
+     */
+    fun recoverEngine(done: (Boolean) -> Unit) {
+        val ctx = appContext
+        val api = hostRtcApi
+        if (!recoverable || inCall.value || ringingCallId != null || ctx == null || api == null || uid.isEmpty()) { done(false); return }
+        recoveryWaiters.add(done)
+        if (recovering) return
+        recovering = true
+        val id = ++recoveryId
+        log.i("rtc_restart_for_recover")
+        // 必须先拆：引擎还在时 start() 对同账号同设备是空操作，「重启」会原地报成功而什么都没做（1101/2003 正是这种形态）。
+        teardown()
+        start(ctx, uid, deviceId, api, profileResolver, inviteProvider) { ok ->
+            main.post {
+                if (id != recoveryId) return@post
+                if (!ok) log.w("rtc_restart_failed")
+                finishRecovery(ok)
+            }
+        }
+    }
+
+    private fun teardown() {
         generation++
         // 迟到的 onCallEnd 会被 generation 当成旧的丢掉，这里不清的话 isRinging 会一直以为还在响（推送来了也不出声）。
         ringingCallId = null
@@ -247,8 +306,28 @@ object RtcCall {
         log.i("rtc_stop", "uid" to uid)
     }
 
-    /** 单聊一对一通话。返回 null 表示已交给 Kit；否则是给用户看的原因。 */
-    fun placeSingle(peerUid: String, video: Boolean): String? {
+    /**
+     * 引擎没起来（换票失败 / 被拆）但还能自愈时，先 [recoverEngine] 再拨；此时同步返回「正在连接」提示（用户随后看到拨出界面或 [onError]）。补救失败才走 [onError] 给出 [unavailableReason]。
+     */
+    private fun placeAfterRecover(onError: (String) -> Unit, place: () -> String?): String? {
+        if (recoverable && (recovering || engine == null)) {
+            // 重启中（引擎已新建但登录未回，engine 非空）再点：忽略（不排第二个 waiter，否则 place() 会执行两次），只回「正在连接」的提示
+            if (recovering) return Str.s(R.string.rtc_connecting)
+            recoverEngine { ok ->
+                val err = if (ok) place() else notAvailableText()
+                err?.let(onError)
+            }
+            // recoverEngine 同步拒绝（通话中等）时已回调完、recovering 仍为 false：不再提示「正在连接」
+            return if (recovering) Str.s(R.string.rtc_connecting) else null
+        }
+        return place()
+    }
+
+    /** 单聊一对一通话。返回 null 表示已交给 Kit（或正在补救后异步拨出，失败走 [onError]）；否则是给用户看的原因。 */
+    fun placeSingle(peerUid: String, video: Boolean, onError: (String) -> Unit = {}): String? =
+        placeAfterRecover(onError) { placeSingleNow(peerUid, video) }
+
+    private fun placeSingleNow(peerUid: String, video: Boolean): String? {
         unavailableReason()?.let { return it }
         RtcIds.problem(Str.s(R.string.rtc_kind_peer_id), peerUid)?.let { return it }
         profileResolver?.groupId = ""
@@ -263,7 +342,10 @@ object RtcCall {
      * 群通话：`chatGroupId` 是 IM 的群号，`calleeUids` 是选中的成员（不含自己）。
      * **以视频通话发起**：群通话里摄像头默认关（Kit 的 `defaultCameraOn`），且只有视频通话才有摄像头按钮。
      */
-    fun placeGroup(chatGroupId: String, calleeUids: List<String>): String? {
+    fun placeGroup(chatGroupId: String, calleeUids: List<String>, onError: (String) -> Unit = {}): String? =
+        placeAfterRecover(onError) { placeGroupNow(chatGroupId, calleeUids) }
+
+    private fun placeGroupNow(chatGroupId: String, calleeUids: List<String>): String? {
         unavailableReason()?.let { return it }
         RtcIds.problem(Str.s(R.string.rtc_kind_group_id), chatGroupId)?.let { return it }
         if (calleeUids.isEmpty()) return Str.s(R.string.rtc_error_no_callees)
@@ -283,14 +365,33 @@ object RtcCall {
      * 引擎没起来时直接回退失败，原因走 [unavailableReason]（与 [placeSingle]/[placeGroup] 同一套文案）。
      * 主线程回调。
      */
-    fun fetchCallHistory(limit: Int, cursor: Long?, onResult: (IMCallHistoryPage?, IMRTCError?) -> Unit) {
+    fun fetchCallHistory(limit: Int, cursor: Long?, onResult: (IMCallHistoryPage?, IMRTCError?) -> Unit) =
+        fetchCallHistory(limit, cursor, allowRecover = true, onResult)
+
+    /** allowRecover：引擎没起来 / SDK 报断链类错误时 [recoverEngine] 后重拉一次；只重试一次，防死循环（同 iOS `allowRelogin`）。 */
+    private fun fetchCallHistory(
+        limit: Int, cursor: Long?, allowRecover: Boolean,
+        onResult: (IMCallHistoryPage?, IMRTCError?) -> Unit,
+    ) {
         val e = engine
         if (e == null) {
-            onResult(null, IMRTCError(0, "rtc_not_started", unavailableReason().orEmpty(), ""))
+            if (allowRecover) {
+                recoverEngine { ok ->
+                    if (ok) fetchCallHistory(limit, cursor, false, onResult) else onResult(null, notStartedError())
+                }
+            } else onResult(null, notStartedError())
             return
         }
-        e.fetchCallHistory(limit, cursor) { page, error -> onResult(page, error) }
+        e.fetchCallHistory(limit, cursor) { page, error ->
+            if (allowRecover && error != null && rtcShouldRecover(true, error.code)) {
+                recoverEngine { ok ->
+                    if (ok) fetchCallHistory(limit, cursor, false, onResult) else onResult(page, error)
+                }
+            } else onResult(page, error)
+        }
     }
+
+    private fun notStartedError() = IMRTCError(0, "rtc_not_started", notAvailableText(), "")
 
     /**
      * SDK 自己的日志默认没有出口（一条都不输出）。转给宿主的 [IMLog]：logcat 能看到，Debug 构建还会回传到
@@ -308,6 +409,9 @@ object RtcCall {
             }
         }
     }
+
+    /** 补救失败后给用户的话：登录失败时引擎仍在（[unavailableReason] 为 null），必须有兜底文案，否则点了拨打毫无反应。 */
+    private fun notAvailableText(): String = unavailableReason() ?: Str.s(R.string.rtc_error_not_started)
 
     private fun mediaType(video: Boolean) = if (video) "video" else "audio"
 
@@ -418,7 +522,8 @@ object RtcCall {
                 // 设备重复调用是空操作」的幂等判断只看 engine 是否非空，这里 engine 还在（没人调过
                 // stop），不先清掉的话下面这次 start() 会被当成空操作直接跳过，换票重登永远不会发生。
                 IMKickedOutReason.AUTH_EXPIRED -> main.post {
-                    stop()
+                    if (stale) return@post // 排队期间登出 / 切号了：别把引擎又拉起来
+                    teardown()
                     start(ctx, uid, deviceId, rtcApi, profileResolver, inviteProvider, config)
                 }
                 // 别处登录 / 被吊销 / 参数被拒：换票救不了，也不自动重连，停下来等人看日志。
@@ -453,3 +558,13 @@ object RtcCall {
  */
 internal fun rtcTokenFrom(result: Result<RtcTokenResult>): String? =
     result.getOrNull()?.token?.takeIf { it.isNotEmpty() }
+
+/** 断链类错误码：2007 notLoggedIn / 1101 tokenInvalid / 2003 networkUnreachable（同 iOS `IMRtcHistoryErrorNeedsRelogin`）。 */
+private val RTC_RECOVERABLE_CODES = setOf(2007, 1101, 2003)
+
+/**
+ * 要不要整台引擎重启：引擎没起来（被拆）一律要；起着的只在断链类错误码时要。
+ * 纯函数、包级——理由同 [rtcTokenFrom]（`RtcCall` 单测里碰不得）。
+ */
+internal fun rtcShouldRecover(engineStarted: Boolean, errorCode: Int?): Boolean =
+    !engineStarted || (errorCode != null && errorCode in RTC_RECOVERABLE_CODES)

@@ -191,7 +191,7 @@ internal fun CallHistoryHost(
         val peer = CallHistory.peerUid(record, owner)
         if (peer.isBlank()) return
         // 按原类型直接回拨，不弹确认——与聊天气泡回拨同一个入口（CALL_RECORD_DESIGN.md §5）
-        RtcCall.placeSingle(peer, video = record.mediaType == "video")?.let { toast = it }
+        RtcCall.placeSingle(peer, video = record.mediaType == "video", onError = { toast = it })?.let { toast = it }
     }
 
     val shown = if (tab == CallHistoryTab.Missed) CallHistory.missedOnly(list.items, owner) else list.items

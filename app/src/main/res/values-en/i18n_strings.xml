@@ -1713,6 +1713,7 @@
     <string name="rtc_error_id_too_long">%1$s exceeds %2$d bytes</string>
     <string name="rtc_error_no_callees">Select members to call</string>
     <string name="rtc_error_not_started">The call service isn’t running. Please log in again.</string>
+    <string name="rtc_connecting">Connecting to the call service…</string>
     <string name="rtc_error_token_fetch_failed">Failed to fetch the call credential</string>
     <string name="rtc_invite_in_call">In a call</string>
     <string name="rtc_kind_group_id">Group ID</string>

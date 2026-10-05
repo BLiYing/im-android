@@ -68,7 +68,7 @@ fun GroupTextSheet(
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val clipboard = LocalClipboardManager.current
-    // 吐司画在弹窗窗口里：Dialog 是独立窗口，宿主页的吐司会被它盖住
+    // 「已复制」吐司画在本浮层内（盖在遮罩之上，宿主页的吐司会被浮层挡住）
     var copied by remember { mutableStateOf(false) }
     // **不用 Dialog 窗口**：Android 15 的 Dialog 窗口内容区被状态栏高度下推、Compose 却按整屏量，
     // 底部「复制全文」被挤出屏幕（2026-10-05 PKD130 / Android 15 复现，Pixel 2 XL 无此问题）。

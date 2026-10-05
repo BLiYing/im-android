@@ -117,6 +117,24 @@ fun ContactsScreen(
             placeholder = stringResource(R.string.search_contacts_placeholder),
             modifier = Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = d.space2),
         )
+        // 按拼音首字母分组（判据在 ContactSection，与 iOS IMContactSectionIndex 同一套规则）
+        val sections = remember(friends) { ContactSection.group(friends) { it.displayName } }
+        val titles = remember(sections) { ContactSection.titlesOf(sections) }
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+
+        // 每个字母组的**首项在列表中的下标**（索引尺跳组要用）。判据抽在 ContactSection 里有单测：
+        // 顶部入口占 1 项，所以字母组从 1 开始——iOS 那侧同样是 `+1` 偏移绕过入口区。
+        val groupStarts = remember(sections) {
+            ContactSection.groupStartIndices(sections.map { it.items.size }, leadingItems = ENTRY_ITEMS)
+        }
+        // 当前敞着的那一行（null = 没有）。**上提到这里**是因为 iOS 的两条行为都要全局视角：
+        // 滑开第二行时第一行自动收起、敞着的行点内容只收起不进详情。
+        var openedId by remember { mutableStateOf<String?>(null) }
+
+        val officialLabel = stringResource(R.string.contacts_entry_official_account)
+        val serviceLabel = stringResource(R.string.contacts_entry_service_account)
+        // 不提前 return：搜索 / 清空搜索都在同一组 remember 之后分支渲染，listState 等主列表状态不会因搜索而重建
         if (query.isNotBlank()) {
             ContactsSearchResults(
                 keyword = query.trim(),
@@ -126,27 +144,7 @@ fun ContactsScreen(
                 onOpenGroup = onOpenGroup,
                 onSearchUser = { onSearchUser(query.trim()) },
             )
-            return@Column
-        }
-
-        // 按拼音首字母分组（判据在 ContactSection，与 iOS IMContactSectionIndex 同一套规则）
-        val groups = remember(friends) { ContactSection.group(friends) { it.displayName } }
-        val titles = remember(groups) { ContactSection.titlesOf(groups) }
-        val listState = rememberLazyListState()
-        val scope = rememberCoroutineScope()
-
-        // 每个字母组的**首项在列表中的下标**（索引尺跳组要用）。判据抽在 ContactSection 里有单测：
-        // 顶部入口占 1 项，所以字母组从 1 开始——iOS 那侧同样是 `+1` 偏移绕过入口区。
-        val groupStarts = remember(groups) {
-            ContactSection.groupStartIndices(groups.map { it.items.size }, leadingItems = ENTRY_ITEMS)
-        }
-        // 当前敞着的那一行（null = 没有）。**上提到这里**是因为 iOS 的两条行为都要全局视角：
-        // 滑开第二行时第一行自动收起、敞着的行点内容只收起不进详情。
-        var openedId by remember { mutableStateOf<String?>(null) }
-
-        val officialLabel = stringResource(R.string.contacts_entry_official_account)
-        val serviceLabel = stringResource(R.string.contacts_entry_service_account)
-        Box(Modifier.fillMaxSize()) {
+        } else Box(Modifier.fillMaxSize()) {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 // 四个入口**共占一个 LazyColumn item**——ENTRY_ITEMS 记的就是这个 1，
                 // 索引尺的偏移全靠它。以后在字母组之前再插 item，这里和 groupStartIndices 一起改
@@ -168,7 +166,7 @@ fun ContactsScreen(
                         }
                     }
                 }
-                groups.forEach { g ->
+                sections.forEach { g ->
                     // 组头 key 用**拼接**：模板串里的 $ 一旦被转义写成字面量，所有组头就共用同一个 key，
                     // 第二个组头当场崩（2026-09-09 真机实测：`Key ... was already used`）。
                     // 单测测不到——它是 LazyColumn 测量期才抛的，只有真机跑到第二组才炸

@@ -459,7 +459,7 @@ fun ChatHost(
         latestNicknameOf = { uid -> latestNicks[uid] },
         onOpenRecord = { recordNav.push(it) },
         // 点通话记录回拨：与详情页「语音 / 视频」pill 同一入口（RtcCall.placeSingle），忙线 / 权限全由 Kit 守门，宿主不判
-        onCallBack = { video -> RtcCall.placeSingle(conv.peerUid, video)?.let { toast = it } },
+        onCallBack = { video -> RtcCall.placeSingle(conv.peerUid, video, onError = { toast = it })?.let { toast = it } },
         searchHighlight = search.needle,
         rowsReady = rowsReady,
         // **自己发消息必须回到最新**：停在历史时发出去的那条在锚点窗里看不见，用户会以为没发出去。
