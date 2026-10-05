@@ -219,7 +219,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                             Tab.Chats -> ChatsHost(
                                 client = client,
                                 conversations = conversations,
-                                connected = connState == ConnState.Connected,
+                                conn = connState,
                                 knownFriends = knownFriends,
                                 onOpenChat = { openConv = it },
                                 onOpenChatAt = { c, seq -> chatArm = ChatArm(locateSeq = seq); openConv = c },

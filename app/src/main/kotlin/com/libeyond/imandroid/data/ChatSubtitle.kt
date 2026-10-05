@@ -36,11 +36,7 @@ object ChatSubtitle {
         isSuper: Boolean,
     ): ChatSubtitleSpec {
         if (typingUid != null) return if (isGroup) ChatSubtitleSpec.TypingNamed(typingUid) else ChatSubtitleSpec.Typing
-        when (conn) {
-            ConnState.Connecting -> return ChatSubtitleSpec.Connecting
-            ConnState.Idle -> return ChatSubtitleSpec.Disconnected
-            ConnState.Connected -> Unit
-        }
+        connection(conn).let { if (it != ChatSubtitleSpec.None) return it }
         if (!isGroup) return if (peerPresence.isEmpty()) ChatSubtitleSpec.None else ChatSubtitleSpec.PeerPresence(peerPresence)
         // 人数优先取 memberCount：超级群的成员表只含我自己，用 loadedMembers 会把「2 万位成员」显示成「1 位成员」
         val count = if (memberCount > 0) memberCount else loadedMembers
@@ -49,6 +45,16 @@ object ChatSubtitle {
             isSuper -> ChatSubtitleSpec.SuperOnly
             else -> ChatSubtitleSpec.None
         }
+    }
+
+    /**
+     * 连接态副标题：连接中 / 未连接，已连接为 [ChatSubtitleSpec.None]。聊天页与会话列表页**共用这一份映射**
+     * （同 iOS `IMSocketStateSubtitle`——两处各写一份 switch 就会文案漂移，此前列表页把「未连接」也显示成「连接中…」）。
+     */
+    fun connection(conn: ConnState): ChatSubtitleSpec = when (conn) {
+        ConnState.Connecting -> ChatSubtitleSpec.Connecting
+        ConnState.Idle -> ChatSubtitleSpec.Disconnected
+        ConnState.Connected -> ChatSubtitleSpec.None
     }
 
     /**

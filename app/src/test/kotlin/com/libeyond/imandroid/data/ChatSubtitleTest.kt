@@ -2,6 +2,7 @@ package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.sdk.ws.ConnState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /** 聊天页副标题 / 标题的选择规则，逐条对齐 iOS `im_navigationSubtitle` / `updateTitle`。 */
@@ -61,6 +62,17 @@ class ChatSubtitleTest {
 
     @Test fun `单聊在线态为空不显示副标题`() =
         assertEquals(ChatSubtitleSpec.None, single(presence = ""))
+
+    // —— 连接态（聊天页与会话列表页共用；对齐 iOS IMSocketStateSubtitle）——
+
+    @Test fun `连接态映射三种状态各一种文案`() {
+        assertEquals(ChatSubtitleSpec.Connecting, ChatSubtitle.connection(ConnState.Connecting))
+        assertEquals(ChatSubtitleSpec.Disconnected, ChatSubtitle.connection(ConnState.Idle))
+        assertEquals(ChatSubtitleSpec.None, ChatSubtitle.connection(ConnState.Connected))
+    }
+
+    @Test fun `未连接不能被显示成连接中`() =
+        assertNotEquals(ChatSubtitle.connection(ConnState.Connecting), ChatSubtitle.connection(ConnState.Idle))
 
     // —— 标题（对齐 iOS updateTitle；快照标题已含进页时的备注，页面开着时不会跟着变）——
 

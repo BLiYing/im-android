@@ -18,6 +18,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.ScanQrCode
 import com.composables.icons.lucide.UserPlus
 import com.composables.icons.lucide.Users
+import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.ChatsPage
 import com.libeyond.imandroid.data.ConversationListPhase
 import com.libeyond.imandroid.data.Presence
@@ -46,7 +47,7 @@ import com.libeyond.imandroid.ui.screens.ConversationListScreen
 fun ChatsHost(
     client: IMClient,
     conversations: List<ConversationEntity>?,
-    connected: Boolean,
+    conn: ConnState,
     knownFriends: Map<String, FriendEntry>,
     onOpenChat: (ConversationEntity) -> Unit,
     /** 点聊天记录命中：进会话并定位到那条（[MainScreen] 把 seq 交给聊天页，同详情页「定位」）。 */
@@ -118,7 +119,7 @@ fun ChatsHost(
                     onLongPress = onLongPress,
                     onPlus = { plusAnchor = it },
                     onSearch = { page = ChatsPage.Search },
-                    connected = connected,
+                    conn = conn,
                     nowMs = muteNow,
                     listState = listState,
                 )

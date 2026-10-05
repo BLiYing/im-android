@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.ChatSubtitle
+import com.libeyond.imandroid.data.ChatSubtitleSpec
+import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.ConversationListPhase
@@ -88,7 +91,8 @@ fun ConversationListScreen(
     onPlus: (Rect) -> Unit,
     /** 点顶部搜索胶囊 → 进全局搜索页（入口不承载输入，同 iOS `searchEntryTapped`）。 */
     onSearch: () -> Unit = {},
-    connected: Boolean,
+    /** 连接态：标题栏副标题显示「连接中…」/「未连接」，已连接不显示（对齐 iOS `im_navigationSubtitle`）。 */
+    conn: ConnState,
     /** 判「是否免打扰」的当前时刻（定时免打扰到期刷新，NOTIFICATIONS_P1_DESIGN §4.4）：
      *  纯展示不持业务状态（CODING_STYLE §7②），由调用方喂 `ui/components/MuteTick.kt` 的 tick。 */
     nowMs: Long = System.currentTimeMillis(),
@@ -108,7 +112,11 @@ fun ConversationListScreen(
         // 此前是左对齐的大标题 + 右上角一个文字「我」——底栏已有「我」，那个入口是多余的（2026-09-15 用户报）
         IMTopBar(
             title = stringResource(R.string.ios_tab_messages),
-            subtitle = if (connected) "" else stringResource(R.string.conn_state_connecting),
+            subtitle = when (ChatSubtitle.connection(conn)) {
+                ChatSubtitleSpec.Connecting -> stringResource(R.string.conn_state_connecting)
+                ChatSubtitleSpec.Disconnected -> stringResource(R.string.conn_state_disconnected)
+                else -> ""
+            },
             right = {
                 TopBarCircleButton(
                     icon = Lucide.Plus,
