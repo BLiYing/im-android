@@ -49,23 +49,23 @@ import kotlinx.coroutines.launch
  * 票从哪来只在 [signToken] 一处（调 IMServer `POST /api/v1/rtc/token` 代为向 im-rtc-server
  * 换票，本端不知道任何签名密钥）。对端：iOS `IMRtcCall.m`、im-web `src/rtc/rtcEngine.ts`。
  */
-object RtcCall {
+object RtcCall : RtcHostBridge {
 
     private val log = IMLog.tag("IM.Rtc")
-    internal val main = Handler(Looper.getMainLooper())
+    private val main = Handler(Looper.getMainLooper())
 
     /** 只用于换票这类"回调触发、需要挂起"的场景（续票 / 被踢后重签）；本身长期存活，跟随进程。 */
-    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    internal var appContext: Context? = null
-    internal var engine: IMCallEngine? = null
-    internal var uid: String = ""
-    internal var deviceId: String = ""
-    internal var profileResolver: RtcProfileResolver? = null
-    internal var inviteProvider: com.imrtc.uikit.IMInviteMemberProvider? = null
+    private var appContext: Context? = null
+    private var engine: IMCallEngine? = null
+    private var uid: String = ""
+    private var deviceId: String = ""
+    private var profileResolver: RtcProfileResolver? = null
+    private var inviteProvider: com.imrtc.uikit.IMInviteMemberProvider? = null
 
     /** 每次 start/stop 加一：旧引擎迟到的回调（stale）一律不算数，别改动新一代的状态。 */
-    internal var generation = 0L
+    private var generation = 0L
 
     /** 上一次 [start] 是否因换票失败而没能登录（引擎已回收）；[unavailableReason] 据此给出更准的提示。 */
     @Volatile private var tokenFetchFailed = false
@@ -96,11 +96,11 @@ object RtcCall {
     @Volatile var onCallEnded: (() -> Unit)? = null
 
     /** 正在响、还没接通 / 结束的那通来电（[applyNotificationAction] 用：点按钮时它可能已经在响了）。 */
-    @Volatile internal var ringingCallId: String? = null
+    @Volatile private var ringingCallId: String? = null
 
     /** 那通来电是什么（自动接听前要看，见 [autoAcceptAllowed]）。 */
-    @Volatile internal var ringingMedia: String = ""
-    @Volatile internal var ringingIsGroup: Boolean = false
+    @Volatile private var ringingMedia: String = ""
+    @Volatile private var ringingIsGroup: Boolean = false
 
     /**
      * 来电横幅上点了「接听」/「拒绝」（MainActivity 收到 intent 时调）。这通已经在响就当场照做；
@@ -124,7 +124,7 @@ object RtcCall {
         CallNotifications.clearAll(ctx)
     }
 
-    internal fun act(accept: Boolean) {
+    private fun act(accept: Boolean) {
         val e = engine ?: return
         if (!accept) {
             e.reject { _, err -> if (err != null) log.w("rtc_auto_reject_failed", "code" to err.code) }
@@ -140,7 +140,7 @@ object RtcCall {
         e.accept { _, err -> if (err != null) log.w("rtc_auto_accept_failed", "code" to err.code) }
     }
 
-    internal val _inCall = MutableStateFlow(false)
+    private val _inCall = MutableStateFlow(false)
 
     /**
      * 正在音视频通话中（来电响铃 / 拨出中 到 挂断之间）。**通知判定 `alertDecision` 的 `inCall`
@@ -194,7 +194,7 @@ object RtcCall {
         val instance = IMCallEngine(
             IMCallEngine.Config(url = config.wsUrl, deviceId = deviceId),
             // Kit 包一层：宿主的 listener 照常收到全部回调，Kit 只是搭个便车。
-            IMCallKit.wrap(RtcHostListener(gen, rtcApi, config)),
+            IMCallKit.wrap(RtcHostListener(this, gen, rtcApi, config)),
             // 采集画质 1080p：换档位要换适配器实例（即重登），不能通话中改。
             IMWebRTCAdapter(ctx, IMVideoProfile.P1080),
         )
@@ -293,7 +293,7 @@ object RtcCall {
         }
     }
 
-    internal fun teardown() {
+    private fun teardown() {
         generation++
         // 迟到的 onCallEnd 会被 generation 当成旧的丢掉，这里不清的话 isRinging 会一直以为还在响（推送来了也不出声）。
         ringingCallId = null
@@ -424,13 +424,67 @@ object RtcCall {
         else -> Str.s(R.string.rtc_error_not_started)
     }
 
+    // —— RtcHostListener 的回调落点（RtcHostBridge）：状态全在本对象内，监听只翻译事件 ——
+
+    override fun isStale(gen: Long): Boolean = gen != generation
+
+    override fun onIncoming(callId: String, mediaType: String, isGroup: Boolean, chatGroupId: String) {
+        profileResolver?.groupId = if (isGroup) chatGroupId else ""
+        _inCall.value = true
+        ringingCallId = callId
+        ringingMedia = mediaType
+        ringingIsGroup = isGroup
+        // App 在前台：SDK 的来电界面接手了，通知栏里那条离线推送的来电横幅（如果有）就多余了。
+        // 在后台：系统不让弹来电界面，横幅是唯一入口，留着、只静音（Kit 已经在响）。
+        appContext?.let { if (AppActive.current) CallNotifications.cancel(it, callId) else CallNotifications.silence(it, callId) }
+        // 用户是点着横幅上的按钮把 App 拉起来的：来电一到就替他接 / 拒。晚一拍执行，让 Kit 先把来电界面立起来。
+        PendingCallAction.consume(callId, System.currentTimeMillis())?.let { accept -> main.post { act(accept) } }
+    }
+
+    override fun onBegin() {
+        _inCall.value = true
+        ringingCallId = null
+    }
+
+    override fun onEnd(callId: String) {
+        _inCall.value = false
+        ringingCallId = null
+        appContext?.let { CallNotifications.cancel(it, callId) }
+        onCallEnded?.invoke()
+    }
+
+    override fun onRecord(plan: CallRecordPlan) { onCallRecord?.invoke(plan) }
+
+    /** 票不好使：本机再换一张重来，用户无感。**必须先 teardown()**：start() 的幂等判断只看 engine 是否非空，不先清掉会被当空操作跳过。 */
+    override fun onAuthExpired(gen: Long, rtcApi: RtcApi, config: RtcConfig) {
+        val ctx = appContext ?: return
+        main.post {
+            if (isStale(gen)) return@post // 排队期间登出 / 切号了：别把引擎又拉起来
+            teardown()
+            start(ctx, uid, deviceId, rtcApi, profileResolver, inviteProvider, config)
+        }
+    }
+
+    /** 别处登录 / 被吊销 / 参数被拒：换票救不了，也不自动重连，停下来等人看日志。 */
+    override fun onFatalKickedOut() { main.post { stop() } }
+
+    /** 续票：下一次重连生效，不打断当前通话；换票回来时可能已 stop 过，故回来再判 stale。 */
+    override fun onTokenWillExpire(gen: Long, rtcApi: RtcApi) {
+        scope.launch {
+            val token = signToken(rtcApi) ?: return@launch
+            if (isStale(gen)) return@launch
+            engine?.updateToken(token, 0L)
+            log.i("rtc_token_renewed")
+        }
+    }
+
     /**
      * 票的唯一来源：调 IMServer 代为向 im-rtc-server 换票，本端不需要也不该知道任何签名密钥。
      * `rtcApi` 内部的 `HttpClient` 已经带着当前 IM 会话的 Bearer token（跟项目里其它业务接口
      * 同一套鉴权），换票失败（未登录 / 未配置 / 网络异常）只记日志、返回 null——调用方据此把
      * 通话入口当"不可用"静默处理，不打扰主流程。
      */
-    internal suspend fun signToken(rtcApi: RtcApi): String? {
+    private suspend fun signToken(rtcApi: RtcApi): String? {
         val result = try {
             Result.success(rtcApi.fetchToken())
         } catch (e: CancellationException) {
