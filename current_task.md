@@ -9,7 +9,7 @@
 
 **2026-10-06 标题栏统一 + 群聊标题（分支 `feat/topbar-unify`，worktree `../im-android-wt-topbar`，自测 + code review 完成，待用户通知合入）**：设计 `../IMServer/docs/design/TOPBAR_UNIFY_DESIGN.md`（IMServer 分支 `docs/topbar-unify`，worktree `../IMServer-wt-topbar`）。
 ① 栏高固定 56（`IMDimens.topBarHeight` = iOS `kIMLiquidBarHeight`，`heightIn(min)` 防大字号裁切），外框抽成 `Modifier.topBarChrome`，`IMTopBar` / 搜索态顶栏 / FriendPicker 共用；② 栏色跟随页面底色（默认 `groupedBackground`，`pageBackground` 页——收藏阅读器、聊天记录、WebView、转发卡片弹层、TextReader——传 `containerColor`），页面 inset 不迁移；
-③ 群聊副标题 `ChatSubtitle.resolve`（输入带名 → 连接态 → 成员数/大群，对齐 iOS）、群备注标题（进页拉 settings + `conv_update.remark` 全值，`ConvRemarkSignal`；缺键不触发）；头像首字母不跟备注。未做：Web 不动（左对齐是刻意差异）。
+③ 群聊副标题 `ChatSubtitle.resolve`（输入带名 → 连接态 → 成员数/大群，对齐 iOS）、群备注标题（进页拉 settings + `conv_update.remark` 全值，`ConvRemarkSignal`；缺键不触发）；头像首字母跟标题（与会话列表一致）。未做：Web 不动（左对齐是刻意差异）。
 
 **2026-10-05 搜索入口收敛（main，SEARCH_DESIGN §3.1）**：「我」页内搜索框已删（通讯录页内搜索保留）；首页全局搜索新增「设置」分组（会话→联系人→聊天记录→设置→搜索用户）。登记表 `data/SettingsSearchIndex.kt`（显式登记；一级行 + 通知私聊/群聊/提示音 + 已屏蔽/修改密码 + 自动下载网络/分类；退出登录、文件夹不进）；点命中 → `MainScreen.settingsRoute` 切「我」tab → `MeHost(initialRoute)` → 各 Host `initialSub` 作初始页，返回键沿原链退到「我」页。OPPO 真机验过（深链 3 层与返回、中英文、深色）。zh 文案里没有「声音」二字（是「提示音」），搜「声音」无命中。
 

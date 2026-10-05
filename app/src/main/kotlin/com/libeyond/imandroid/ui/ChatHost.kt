@@ -321,7 +321,6 @@ fun ChatHost(
     ChatScreen(
         convId = conv.convId,
         title = ChatSubtitle.title(realTitle, conv.isGroup, groupRemark),
-        avatarLabel = realTitle,
         avatarUrl = conv.avatarUrl,
         avatarSeed = if (conv.isGroup) conv.convId else conv.peerUid.ifBlank { conv.convId },
         myUid = owner,
