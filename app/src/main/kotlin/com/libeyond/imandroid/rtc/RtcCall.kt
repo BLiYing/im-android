@@ -52,20 +52,20 @@ import kotlinx.coroutines.launch
 object RtcCall {
 
     private val log = IMLog.tag("IM.Rtc")
-    private val main = Handler(Looper.getMainLooper())
+    internal val main = Handler(Looper.getMainLooper())
 
     /** 只用于换票这类"回调触发、需要挂起"的场景（续票 / 被踢后重签）；本身长期存活，跟随进程。 */
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    private var appContext: Context? = null
-    private var engine: IMCallEngine? = null
-    private var uid: String = ""
-    private var deviceId: String = ""
-    private var profileResolver: RtcProfileResolver? = null
-    private var inviteProvider: com.imrtc.uikit.IMInviteMemberProvider? = null
+    internal var appContext: Context? = null
+    internal var engine: IMCallEngine? = null
+    internal var uid: String = ""
+    internal var deviceId: String = ""
+    internal var profileResolver: RtcProfileResolver? = null
+    internal var inviteProvider: com.imrtc.uikit.IMInviteMemberProvider? = null
 
     /** 每次 start/stop 加一：旧引擎迟到的回调（stale）一律不算数，别改动新一代的状态。 */
-    private var generation = 0L
+    internal var generation = 0L
 
     /** 上一次 [start] 是否因换票失败而没能登录（引擎已回收）；[unavailableReason] 据此给出更准的提示。 */
     @Volatile private var tokenFetchFailed = false
@@ -96,15 +96,15 @@ object RtcCall {
     @Volatile var onCallEnded: (() -> Unit)? = null
 
     /** 正在响、还没接通 / 结束的那通来电（[applyNotificationAction] 用：点按钮时它可能已经在响了）。 */
-    @Volatile private var ringingCallId: String? = null
+    @Volatile internal var ringingCallId: String? = null
 
     /** 那通来电是什么（自动接听前要看，见 [autoAcceptAllowed]）。 */
-    @Volatile private var ringingMedia: String = ""
-    @Volatile private var ringingIsGroup: Boolean = false
+    @Volatile internal var ringingMedia: String = ""
+    @Volatile internal var ringingIsGroup: Boolean = false
 
     /**
      * 来电横幅上点了「接听」/「拒绝」（MainActivity 收到 intent 时调）。这通已经在响就当场照做；
-     * 还没到（App 刚被拉起、还没连上）就记下来，等 [HostListener.onCallReceived] 到了再做（[PendingCallAction]）。
+     * 还没到（App 刚被拉起、还没连上）就记下来，等 [RtcHostListener.onCallReceived] 到了再做（[PendingCallAction]）。
      */
     fun applyNotificationAction(callId: String, accept: Boolean) {
         log.i("rtc_notification_action", "callId" to callId, "accept" to accept)
@@ -124,7 +124,7 @@ object RtcCall {
         CallNotifications.clearAll(ctx)
     }
 
-    private fun act(accept: Boolean) {
+    internal fun act(accept: Boolean) {
         val e = engine ?: return
         if (!accept) {
             e.reject { _, err -> if (err != null) log.w("rtc_auto_reject_failed", "code" to err.code) }
@@ -140,7 +140,7 @@ object RtcCall {
         e.accept { _, err -> if (err != null) log.w("rtc_auto_accept_failed", "code" to err.code) }
     }
 
-    private val _inCall = MutableStateFlow(false)
+    internal val _inCall = MutableStateFlow(false)
 
     /**
      * 正在音视频通话中（来电响铃 / 拨出中 到 挂断之间）。**通知判定 `alertDecision` 的 `inCall`
@@ -194,7 +194,7 @@ object RtcCall {
         val instance = IMCallEngine(
             IMCallEngine.Config(url = config.wsUrl, deviceId = deviceId),
             // Kit 包一层：宿主的 listener 照常收到全部回调，Kit 只是搭个便车。
-            IMCallKit.wrap(HostListener(gen, rtcApi, config)),
+            IMCallKit.wrap(RtcHostListener(gen, rtcApi, config)),
             // 采集画质 1080p：换档位要换适配器实例（即重登），不能通话中改。
             IMWebRTCAdapter(ctx, IMVideoProfile.P1080),
         )
@@ -213,7 +213,7 @@ object RtcCall {
         scope.launch {
             val token = signToken(rtcApi)
             // 换票是异步网络请求：这段时间里可能又 stop 了（登出/切账号），generation 变了就不该
-            // 再对一个已经被销毁的 engine 发 login（同 HostListener 的 stale 判定同一个思路）。
+            // 再对一个已经被销毁的 engine 发 login（同 RtcHostListener 的 stale 判定同一个思路）。
             if (gen != generation) { onLoginResult?.invoke(false); return@launch }
             if (token == null) {
                 // 换票失败：引擎已经建好但从未登录过，必须回收——否则 isStarted 会一直是 true，
@@ -293,7 +293,7 @@ object RtcCall {
         }
     }
 
-    private fun teardown() {
+    internal fun teardown() {
         generation++
         // 迟到的 onCallEnd 会被 generation 当成旧的丢掉，这里不清的话 isRinging 会一直以为还在响（推送来了也不出声）。
         ringingCallId = null
@@ -430,7 +430,7 @@ object RtcCall {
      * 同一套鉴权），换票失败（未登录 / 未配置 / 网络异常）只记日志、返回 null——调用方据此把
      * 通话入口当"不可用"静默处理，不打扰主流程。
      */
-    private suspend fun signToken(rtcApi: RtcApi): String? {
+    internal suspend fun signToken(rtcApi: RtcApi): String? {
         val result = try {
             Result.success(rtcApi.fetchToken())
         } catch (e: CancellationException) {
@@ -447,105 +447,6 @@ object RtcCall {
             }
         }
         return token
-    }
-
-    private class HostListener(
-        private val gen: Long,
-        private val rtcApi: RtcApi,
-        private val config: RtcConfig,
-    ) : IMCallEngineListener {
-        private val stale: Boolean get() = gen != generation
-
-        override fun onConnected(sessionId: String, resumed: Boolean) {
-            if (!stale) log.i("rtc_connected", "session" to sessionId, "resumed" to resumed)
-        }
-
-        /** 来电：只记下这通是不是群通话、哪个群，好让解析器读对的成员表（不发任何请求）。 */
-        override fun onCallReceived(
-            callId: String, caller: String, inviter: String, calleeIds: List<String>, joinedIds: List<String>,
-            mediaType: String, isGroup: Boolean, chatGroupId: String, userData: String,
-        ) {
-            if (stale) return
-            profileResolver?.groupId = if (isGroup) chatGroupId else ""
-            _inCall.value = true
-            ringingCallId = callId
-            ringingMedia = mediaType
-            ringingIsGroup = isGroup
-            // App 在前台：SDK 的来电界面接手了，通知栏里那条离线推送的来电横幅（如果有）就多余了。
-            // 在后台：系统不让弹来电界面，横幅是唯一入口，留着、只静音（Kit 已经在响）。
-            appContext?.let { if (AppActive.current) CallNotifications.cancel(it, callId) else CallNotifications.silence(it, callId) }
-            // 用户是点着横幅上的按钮把 App 拉起来的：来电一到就替他接 / 拒。晚一拍执行，让 Kit 先把来电界面立起来。
-            PendingCallAction.consume(callId, System.currentTimeMillis())?.let { accept -> main.post { act(accept) } }
-        }
-
-        /** 接通（主被叫都抛）：响铃阶段 [onCallReceived] 已经置过一次，这里覆盖同一个值，兜住主叫自己发起、没经过 onCallReceived 的路径。 */
-        override fun onCallBegin(
-            callId: String, roomId: String, mediaType: String, isGroup: Boolean,
-            role: String, caller: String, chatGroupId: String, userData: String,
-        ) {
-            if (stale) return
-            _inCall.value = true
-            ringingCallId = null
-        }
-
-        /** 每通电话都会到达（不分角色）：只转发信号给 [onCallEnded]，不带数据——那是通话记录专属的落库判定。 */
-        override fun onCallEnd(callId: String, reason: IMCallEndReason, durationSec: Long, endedBy: String) {
-            if (stale) return
-            _inCall.value = false
-            ringingCallId = null
-            appContext?.let { CallNotifications.cancel(it, callId) }
-            onCallEnded?.invoke()
-        }
-
-        /** 每通电话恰好一次、晚于 onCallEnd。宿主只在 role==caller 时发记录，别的都不用管。 */
-        override fun onCallSummary(summary: IMCallSummary) {
-            if (stale) return
-            val plan = RtcCallRecords.planFor(summary)
-            log.i(
-                "rtc_call_summary",
-                "cid" to summary.callId, "role" to summary.role, "reason" to summary.reason.wire,
-                "d" to summary.durationSec, "record" to (plan != null),
-            )
-            if (plan != null) onCallRecord?.invoke(plan)
-        }
-
-        override fun onDisconnected(code: Int, willReconnect: Boolean) {
-            if (!stale) log.w("rtc_disconnected", "code" to code, "reconnect" to willReconnect)
-        }
-
-        override fun onKickedOut(reason: IMKickedOutReason) {
-            if (stale) return
-            log.w("rtc_kicked_out", "reason" to reason.name)
-            val ctx = appContext ?: return
-            when (reason) {
-                // 票不好使：本机再换一张重来，用户无感。**必须先 stop()**：start() 顶部「同账号同
-                // 设备重复调用是空操作」的幂等判断只看 engine 是否非空，这里 engine 还在（没人调过
-                // stop），不先清掉的话下面这次 start() 会被当成空操作直接跳过，换票重登永远不会发生。
-                IMKickedOutReason.AUTH_EXPIRED -> main.post {
-                    if (stale) return@post // 排队期间登出 / 切号了：别把引擎又拉起来
-                    teardown()
-                    start(ctx, uid, deviceId, rtcApi, profileResolver, inviteProvider, config)
-                }
-                // 别处登录 / 被吊销 / 参数被拒：换票救不了，也不自动重连，停下来等人看日志。
-                IMKickedOutReason.TAKEN_OVER, IMKickedOutReason.CONFIG_REJECTED -> main.post { stop() }
-            }
-        }
-
-        override fun onTokenWillExpire(expiresAtMs: Long) {
-            if (stale) return
-            // 下一次重连生效，不打断当前通话。换票是异步的，回来时可能已经 stop 过（同上方
-            // start 的 generation 判定）。
-            scope.launch {
-                val token = signToken(rtcApi) ?: return@launch
-                if (stale) return@launch
-                engine?.updateToken(token, 0L)
-                log.i("rtc_token_renewed")
-            }
-        }
-
-        override fun onError(code: Int, name: String, message: String, forType: String) {
-            if (!stale) log.w("rtc_error", "code" to code, "name" to name, "for" to forType, "msg" to message)
-        }
     }
 }
 
