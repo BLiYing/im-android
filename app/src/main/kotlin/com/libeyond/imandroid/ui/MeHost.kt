@@ -56,6 +56,8 @@ fun MeHost(
     var sub by remember { mutableStateOf(initialRoute?.sub ?: SettingsSub.None) }
     LaunchedEffect(page) { if (page == MePage.List) sub = SettingsSub.None }
     // 先用本机副本顶上：断网拉不到 /users/me 时头部仍是真名字，不掉成「未命名用户」
+    // 「我」列表的滚动位置：放在 Host（不随二级页进出而销毁），返回时停在进去前的位置
+    val listScroll = androidx.compose.foundation.rememberScrollState()
     var me by remember { mutableStateOf<UserCard?>(client.cachedMyProfile()) }
     var confirmLogout by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
@@ -112,6 +114,7 @@ fun MeHost(
                         fallbackName = client.myPublicName(),
                         seed = client.uid.orEmpty(),
                         languageLabel = languageCurrentLabel(languagePref, LanguageStore.resolved),
+                        scrollState = listScroll,
                         onOpenProfile = { page = MePage.Profile },
                         onOpenQr = { page = MePage.Qr },
                         onOpenDevices = { page = MePage.Devices },

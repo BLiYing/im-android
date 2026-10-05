@@ -56,6 +56,8 @@ fun ContactsHost(
     var addFriendQuery by remember { mutableStateOf("") }
     /** 通讯录搜索词：放 Host 层，进二级页（资料 / 加好友）再返回不丢。 */
     var searchQuery by remember { mutableStateOf("") }
+    /** 通讯录列表滚动位置：放 Host 层，进二级页再返回不回顶。 */
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     /**
      * 左滑「删除」待确认的那位好友（null = 没有）。
      *
@@ -121,6 +123,7 @@ fun ContactsHost(
         when (p) {
             ContactsPage.List -> TabRoot(bottomBar) {
                 ContactsScreen(
+                    listState = listState,
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
                     friends = accepted,

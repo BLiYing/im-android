@@ -37,6 +37,10 @@ class SettingsSearchIndexTest {
         assertEquals(listOf("notif_private_sound", "notif_group_sound"), hits("声音"))
     }
 
+    @Test fun autoDownloadAliasFindsNetworkPagesOnly() {
+        assertEquals(setOf("storage_cellular", "storage_wifi"), hits("自动下载").toSet())
+    }
+
     @Test fun soundEntriesDisambiguatedByPath() {
         val sound = SettingsSearchIndex.hits(all, "提示音").filter { it.title == "提示音" }
         assertEquals(listOf("notif_private_sound", "notif_group_sound"), sound.map { it.id })

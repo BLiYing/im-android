@@ -91,6 +91,8 @@ fun ContactsScreen(
     /** 搜索词由 Host 持有：点结果进二级页再返回，本页会离开组合，词留在这里才不丢（iOS 搜索栏随 VC 常驻）。 */
     query: String = "",
     onQueryChange: (String) -> Unit = {},
+    /** 列表滚动位置由 Host 持有：进好友资料 / 二级页再返回，本页会离开组合，状态放这里才不回到顶部。 */
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -122,7 +124,6 @@ fun ContactsScreen(
         // 按拼音首字母分组（判据在 ContactSection，与 iOS IMContactSectionIndex 同一套规则）
         val sections = remember(friends) { ContactSection.group(friends) { it.displayName } }
         val titles = remember(sections) { ContactSection.titlesOf(sections) }
-        val listState = rememberLazyListState()
         val scope = rememberCoroutineScope()
 
         // 每个字母组的**首项在列表中的下标**（索引尺跳组要用）。判据抽在 ContactSection 里有单测：

@@ -65,6 +65,9 @@ object SettingsSearchIndex {
      */
     private val SOUND_ALIASES = listOf("声音")
 
+    /** 两个网络页就是「自动下载」设置，页面标题里没有这几个字（同 iOS，仅补中文口径）。 */
+    private val AUTO_DOWNLOAD_ALIASES = listOf("自动下载")
+
     fun entries(): List<SettingsSearchEntry> = buildList {
         val notif = Str.s(R.string.ios_settings_row_notifications)
         val privacy = Str.s(R.string.settings_row_privacy)
@@ -107,7 +110,7 @@ object SettingsSearchIndex {
         for (net in DownloadNetwork.entries) {
             val netGlyph = if (net == DownloadNetwork.Wifi) SettingsGlyph.Wifi else SettingsGlyph.Smartphone
             add(SettingsSearchEntry("storage_${net.name.lowercase()}", net.title, listOf(storage, net.title), netGlyph, SettingsTint.Green,
-                SettingsRoute(MePage.DataStorage, SettingsSub.Storage(net, null))))
+                SettingsRoute(MePage.DataStorage, SettingsSub.Storage(net, null)), aliases = AUTO_DOWNLOAD_ALIASES))
             for (cat in DownloadCategory.entries) {
                 val glyph = when (cat) { DownloadCategory.Image -> SettingsGlyph.Image; DownloadCategory.Video -> SettingsGlyph.Video; DownloadCategory.File -> SettingsGlyph.File }
                 add(SettingsSearchEntry("storage_${net.name.lowercase()}_${cat.name.lowercase()}", cat.title, listOf(storage, net.title, cat.title),

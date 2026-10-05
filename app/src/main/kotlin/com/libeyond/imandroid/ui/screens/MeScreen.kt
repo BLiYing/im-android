@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -89,6 +90,8 @@ fun MeScreen(
     powerSavingLabel: String,
     /** 语言行右值，如「跟随系统（简体中文）」——由调用方算好传入（[com.libeyond.imandroid.data.LanguageStore]）。 */
     languageLabel: String,
+    /** 滚动位置由 Host 持有：进二级页再返回时本页会离开组合，状态放这里才不回到顶部（iOS UITableView 返回保留偏移）。 */
+    scrollState: ScrollState = rememberScrollState(),
     onComingSoon: (String) -> Unit,
     /** 「分享我的名片」：开会话选择页发名片（不再是占位）。 */
     onShareCard: () -> Unit = {},
@@ -142,7 +145,7 @@ fun MeScreen(
             onAction = onOpenProfile,
         )
 
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
             ProfileHeader(me, fallbackName, seed, onOpenProfile)
 
             groups.forEachIndexed { gi, group ->
