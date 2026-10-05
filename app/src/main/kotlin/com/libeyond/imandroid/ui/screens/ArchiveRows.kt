@@ -144,7 +144,7 @@ internal fun VoiceRow(
     val d = IMTheme.dimens
     Column {
         Row(
-            Modifier.fillMaxWidth().background(c.surface)
+            Modifier.fillMaxWidth().background(LocalArchiveRowBg.current ?: c.surface)
                 .archiveItemGestures(onClick = {}, onLongPress = onLongPress)
                 .padding(horizontal = d.space4, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -192,7 +192,7 @@ internal fun LinkRow(
     val d = IMTheme.dimens
     Column {
         Row(
-            Modifier.fillMaxWidth().background(c.surface)
+            Modifier.fillMaxWidth().background(LocalArchiveRowBg.current ?: c.surface)
                 .archiveItemGestures(onClick = onClick, onLongPress = onLongPress)
                 .padding(horizontal = d.space4, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -383,7 +383,7 @@ internal fun FileRow(
     Column {
         Row(
             // 就绪 → 点开文件；没就绪 → 点一下等于点 ↓（对齐 iOS：整行在门控态下等价于点下载）
-            Modifier.fillMaxWidth().background(c.surface)
+            Modifier.fillMaxWidth().background(LocalArchiveRowBg.current ?: c.surface)
                 .archiveItemGestures(
                     onClick = { if (gate.ready) onOpen(item) else gate.onTap() },
                     onLongPress = onLongPress,

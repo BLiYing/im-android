@@ -488,4 +488,19 @@ class MessageService(
             log.w("conversations_refresh_failed", "err" to e.javaClass.simpleName)
         }
     }
+
+    /**
+     * 删除会话（仅本人视角）：服务端记 cleared_at 并隐藏，**本机也要把会话行移走**。
+     *
+     * 此前只调了 `DELETE` 再 [refreshConversations]，而 `applyConversationList` 只 upsert、
+     * 且「本地有、快照没有」的陈旧行只删群——单聊行永远留在本机，点「删除」看上去没反应。
+     * 对齐 iOS `deleteConversation:`（成功后 `deleteCachedConversation:`）；对方再发消息时
+     * 会话行由列表刷新 / 推送重新建出来。失败（网络 / 服务端拒）抛出，由调用方提示。
+     */
+    suspend fun deleteConversation(convId: String) {
+        val owner = ownerProvider() ?: return
+        conversationsApi.delete(convId)
+        repo.removeConversation(owner, convId)
+        refreshConversations()
+    }
 }

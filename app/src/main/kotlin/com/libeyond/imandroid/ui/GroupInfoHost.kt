@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailAction
 import com.libeyond.imandroid.data.DetailTab
+import com.libeyond.imandroid.data.DetailTabs
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import com.libeyond.imandroid.data.DetailActions
 import com.libeyond.imandroid.data.DetailMoreAction
@@ -93,10 +94,20 @@ fun GroupInfoHost(
     var qrCardAsLink by remember(convId) { mutableStateOf<Boolean?>(null) }
     // 会话媒体归档（详情页的「聊天媒体」，与单聊那侧同一个组件）
     // 归档已并进内联页签（2026-09-09），只剩「点开一张图/视频」还是独立的一层
-    var tab by remember(convId) { mutableStateOf(initialTab) }
-    val archive = rememberConvArchive(client, convId, tab)
-    // 只在「链接」页签上订阅本地消息表（理由见 rememberLocalScan）
-    val linkMessages = rememberLinkMessages(client, convId, active = tab == DetailTab.Links)
+    var pickedTab by remember(convId) { mutableStateOf(initialTab) }
+    val archives = rememberConvArchiveSet(client, convId)
+    val contacts = com.libeyond.imandroid.ui.screens.rememberContactTab(
+        client, convId, isGroup = true,
+        remarkOf = { uid -> knownFriends[uid]?.remark },
+        groupNameOf = { uid -> membersState.members.firstOrNull { it.userId == uid }?.displayName },
+        onOpen = { memberProfile = GroupMember(userId = it.uid, nickname = it.nickname, avatarUrl = it.avatarUrl) },
+    )
+    // 链接 / 名片要先扫出结果才知道页签出不出现，所以常驻订阅（扫描在后台线程，见 rememberLocalScan）
+    val linkMessages = rememberLinkMessages(client, convId, active = true)
+    // 只显示有内容的页签（成员恒在，对齐 iOS）；选中项落在集合外时退到第一个可见的
+    val tabs = DetailTabs.visible(isGroup = true, nonEmpty = archives.nonEmpty + contentTabs(linkMessages, contacts))
+    val tab = if (galleryOnly) pickedTab else DetailTabs.resolve(tabs, pickedTab)
+    val archive = archives.of(tab)
     // 媒体查看器：开不开与看哪项拆成两个变量（同 ChatDetailHost 这轮的写法）——关闭只翻
     // viewingOpen，viewingData 留着不清，退场动画那 300ms 里 PushTransition 还要读它。
     var viewingOpen by remember(convId) { mutableStateOf(false) }
@@ -232,46 +243,14 @@ fun GroupInfoHost(
     val pk = pick
     stateHolder.SaveableStateProvider(page) {
     if (pk != null) {
-        // 三种用途共用一个选择页；名单/标题/空态的判据在 data/GroupPick.kt（有单测），
-        // 画法在 GroupPickPage.kt。这里只留"点下去之后做什么"。
-        GroupPickPage(
-            purpose = pk,
-            members = membersState.members,
-            friends = friends,
-            picked = picked,
-            myUid = myUid,
-            onToggle = { id ->
-                val next = GroupPick.toggle(pk, picked, id)
-                if (next == picked && id !in picked) {
-                    toast = if (pk == PickPurpose.AddAdmin) Str.s(R.string.group_admin_picker_limit_toast, GroupPick.MAX_ADMIN_BATCH)
-                    else Str.s(R.string.chat_detail_group_call_pick_max, GroupPick.MAX_CALL_PICK)
-                }
-                picked = next
-            },
-            // 设管理员可撤销，攒够（≤5）确认后串行下发；全失败停在选人页，其余回管理员页。转让不可逆，先二次确认
-            onAddAdmins = { ids ->
-                if (ids.isNotEmpty()) scope.launch {
-                    picked = emptySet() // 串行下发期间清掉勾选：确认钮随之失效，连点不会重复下发
-                    val (ok, msg) = addAdminsResult(client, convId, ids)
-                    toast = msg
-                    if (ok == 0) picked = ids.toSet() // 全失败：停在选人页，保留勾选让用户换人/重试
-                    else {
-                        pick = null
-                        runCatching { client.groups.info(convId) }.onSuccess { info = it }
-                        membersState.refresh()
-                    }
-                }
-            },
-            onTransferTo = { id -> confirmTransfer = membersState.members.firstOrNull { it.userId == id } },
-            onConfirmInvite = { ids ->
-                pick = null
-                picked = emptySet()
-                if (pk == PickPurpose.Call) {
-                    // 通话界面由 im-rtc 的 Kit 接管；拨不出去才回一句原因
-                    if (ids.isNotEmpty()) RtcCall.placeGroup(convId, ids, onError = { toast = it })?.let { toast = it }
-                } else if (ids.isNotEmpty()) runManage(Str.s(R.string.group_manage_invite_members)) { ManageToast(inviteText(client, convId, ids)) }
-            },
-            onBack = { pick = null; picked = emptySet() },
+        // 三种用途共用一个选择页；接线（点下去之后做什么）在 GroupPickHost（GroupPickPage.kt）
+        GroupPickHost(
+            client = client, convId = convId, purpose = pk, members = membersState.members, friends = friends,
+            picked = picked, myUid = myUid, scope = scope, runManage = ::runManage,
+            onPicked = { picked = it }, onToast = { toast = it }, onInfo = { info = it },
+            refreshMembers = { membersState.refresh() },
+            onClose = { pick = null; picked = emptySet() },
+            onRequestTransfer = { id -> confirmTransfer = membersState.members.firstOrNull { it.userId == id } },
         )
     } else if (bans != null) {
         GroupBanListScreen(
@@ -406,12 +385,7 @@ fun GroupInfoHost(
         // 详情页的滚动位置与成员分页游标原样留着（那些 remember 都在上面，没被跳过）。
         GroupInfoScreen(
         info = g,
-        contacts = com.libeyond.imandroid.ui.screens.rememberContactTab(
-            client, convId, isGroup = true,
-            remarkOf = { uid -> knownFriends[uid]?.remark },
-            groupNameOf = { uid -> membersState.members.firstOrNull { it.userId == uid }?.displayName },
-            onOpen = { memberProfile = GroupMember(userId = it.uid, nickname = it.nickname, avatarUrl = it.avatarUrl) },
-        ),
+        contacts = contacts,
         upgradeHint = rememberGroupUpgradeHint(client, g, convId) { toast = it },
         members = membersState.members,
         // 语音行发送者名（判据在 data/SenderNames.kt 的 groupVoiceSenderNameOf）
@@ -469,8 +443,9 @@ fun GroupInfoHost(
         },
         onMore = { m -> confirmMore = m },
         onMemberLongPress = { m -> memberMenu = m },
+            tabs = tabs,
             tab = tab,
-            onTabChange = { tab = it },
+            onTabChange = { pickedTab = it },
             archive = archive.items,
             linkMessages = linkMessages,
             archiveLoading = archive.loading,

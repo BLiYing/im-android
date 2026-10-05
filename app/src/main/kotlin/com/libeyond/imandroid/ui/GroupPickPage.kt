@@ -1,6 +1,12 @@
 package com.libeyond.imandroid.ui
 
 import androidx.compose.runtime.Composable
+import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.rtc.RtcCall
+import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.api.GroupInfo
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.GroupPick
@@ -59,5 +65,69 @@ internal fun GroupPickPage(
         },
         onConfirm = { if (purpose == PickPurpose.AddAdmin) onAddAdmins(picked.toList()) else onConfirmInvite(picked.toList()) },
         onBack = onBack,
+    )
+}
+
+/**
+ * [GroupPickPage] 的接线：从 `GroupInfoHost` 拆出（那个文件贴 600 行硬闸），
+ * 只管"点下去之后做什么"——勾选限额吐司、设管理员串行下发、转让先二次确认、邀请 / 拨群通话。
+ */
+@Composable
+internal fun GroupPickHost(
+    client: IMClient,
+    convId: String,
+    purpose: PickPurpose,
+    members: List<GroupMember>,
+    friends: List<FriendEntry>,
+    picked: Set<String>,
+    myUid: String,
+    scope: CoroutineScope,
+    runManage: (String, suspend () -> Any?) -> Unit,
+    onPicked: (Set<String>) -> Unit,
+    onToast: (String?) -> Unit,
+    onInfo: (GroupInfo) -> Unit,
+    refreshMembers: suspend () -> Unit,
+    onClose: () -> Unit,
+    onRequestTransfer: (String) -> Unit,
+) {
+    GroupPickPage(
+        purpose = purpose,
+        members = members,
+        friends = friends,
+        picked = picked,
+        myUid = myUid,
+        onToggle = { id ->
+            val next = GroupPick.toggle(purpose, picked, id)
+            if (next == picked && id !in picked) {
+                onToast(
+                    if (purpose == PickPurpose.AddAdmin) Str.s(R.string.group_admin_picker_limit_toast, GroupPick.MAX_ADMIN_BATCH)
+                    else Str.s(R.string.chat_detail_group_call_pick_max, GroupPick.MAX_CALL_PICK),
+                )
+            }
+            onPicked(next)
+        },
+        // 设管理员可撤销，攒够（≤5）确认后串行下发；全失败停在选人页，其余回管理员页。转让不可逆，先二次确认
+        onAddAdmins = { ids ->
+            if (ids.isNotEmpty()) scope.launch {
+                onPicked(emptySet()) // 串行下发期间清掉勾选：确认钮随之失效，连点不会重复下发
+                val (ok, msg) = addAdminsResult(client, convId, ids)
+                onToast(msg)
+                if (ok == 0) onPicked(ids.toSet()) // 全失败：停在选人页，保留勾选让用户换人/重试
+                else {
+                    onClose()
+                    runCatching { client.groups.info(convId) }.onSuccess(onInfo)
+                    refreshMembers()
+                }
+            }
+        },
+        onTransferTo = onRequestTransfer,
+        onConfirmInvite = { ids ->
+            onClose()
+            if (purpose == PickPurpose.Call) {
+                // 通话界面由 im-rtc 的 Kit 接管；拨不出去才回一句原因
+                if (ids.isNotEmpty()) RtcCall.placeGroup(convId, ids, onError = { onToast(it) })?.let { onToast(it) }
+            } else if (ids.isNotEmpty()) runManage(Str.s(R.string.group_manage_invite_members)) { ManageToast(inviteText(client, convId, ids)) }
+        },
+        onBack = onClose,
     )
 }

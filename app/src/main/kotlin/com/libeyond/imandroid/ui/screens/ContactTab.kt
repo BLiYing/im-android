@@ -2,7 +2,7 @@ package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,8 +45,10 @@ internal fun LazyListScope.contactTab(data: ContactTabData?) {
     when {
         list == null -> item { Hint(stringResource(R.string.common_loading)) }
         list.isEmpty() -> item { Hint(DetailTabs.emptyText(DetailTab.Contacts)) }
-        else -> items(list, key = { it.first.convSeq }) { (m, card) ->
-            ContactRow(card, data.nameOf(card), m.timestamp, data.sharedByOf(m)) { data.onOpen(card) }
+        else -> itemsIndexed(list, key = { _, it -> it.first.convSeq }) { i, (m, card) ->
+            ArchiveCardRow(i, list.size) {
+                ContactRow(card, data.nameOf(card), m.timestamp, data.sharedByOf(m)) { data.onOpen(card) }
+            }
         }
     }
 }

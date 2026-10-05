@@ -65,54 +65,98 @@ class ConvArchive internal constructor() {
 }
 
 /**
- * 取归档数据。换 [tab] 或换会话即从头拉；「链接 / 成员」这两格不走这个接口
- * （`DetailTabs.apiKind` 回 null），此时恒为空集。
+ * 三个归档类别（媒体 / 文件 / 语音）各一份 [ConvArchive]，**进页就并行拉各自的首页**（对齐 iOS
+ * `IMDetailServerArchive loadFirstPages:`）。两个目的：
+ * 1. 页签是否出现取决于该类别有没有内容（[DetailTabs.visible]），得先知道；
+ * 2. 切页签时数据已经在手，不再先闪「加载中」。
+ *
+ * 「链接 / 名片 / 成员」不走这个接口（[DetailTabs.apiKind] 回 null），由别处决定。
+ */
+@Stable
+class ConvArchiveSet internal constructor(
+    private val media: ConvArchive,
+    private val files: ConvArchive,
+    private val voice: ConvArchive,
+) {
+    /** [tab] 对应的归档；非归档类页签回一份恒空的（不会被用到）。 */
+    fun of(tab: DetailTab): ConvArchive = when (tab) {
+        DetailTab.Media -> media
+        DetailTab.Files -> files
+        DetailTab.Voice -> voice
+        else -> EMPTY
+    }
+
+    /** 已拉到内容的归档类别。首页还没回来的类别不在里面——页签先不展示，而不是先占位再变空。 */
+    val nonEmpty: Set<DetailTab>
+        get() = buildSet {
+            if (media.items.isNotEmpty()) add(DetailTab.Media)
+            if (files.items.isNotEmpty()) add(DetailTab.Files)
+            if (voice.items.isNotEmpty()) add(DetailTab.Voice)
+        }
+
+    private companion object { val EMPTY = ConvArchive() }
+}
+
+/**
+ * 取归档数据：进页 / 换会话即并行从头拉三类首页，之后各类自己分页（[ConvArchive.loadMore]）。
  *
  * **过滤全在服务端**（撤回 / 为所有人删除 / 「仅为我删除」 / `history_visible` 下界都已滤掉），
  * 端上不再判一遍——判据分叉的话，归档里会出现聊天页看不到的消息。
  */
 @Composable
-internal fun rememberConvArchive(client: IMClient, convId: String, tab: DetailTab): ConvArchive {
+internal fun rememberConvArchiveSet(client: IMClient, convId: String): ConvArchiveSet {
     val scope = rememberCoroutineScope()
-    val archive = remember(convId) { ConvArchive() }
-    val kind = DetailTabs.apiKind(tab)
+    val set = remember(convId) { ConvArchiveSet(ConvArchive(), ConvArchive(), ConvArchive()) }
+    listOf(DetailTab.Media, DetailTab.Files, DetailTab.Voice).forEach { tab ->
+        val archive = set.of(tab)
+        val kind = DetailTabs.apiKind(tab)
+        archive.run = { reset -> runArchivePage(client, scope, convId, kind, archive, reset) }
+        LaunchedEffect(convId) { archive.run(true) }
+    }
+    return set
+}
 
-    archive.run = { reset ->
-        if (kind != null && !archive.loading) { // 在途守卫：滚到底会连续触发，不守就把同一页追加两次
-            archive.loading = true
-            scope.launch {
-                // 同 ChatMediaTimelineState：裸 runCatching 连 CancellationException 一起吞，
-                // 页面被关掉时 onFailure 还会去写 failed 标志
-                runCatchingCancellable { client.conversationsApi.media(convId, kind, if (reset) 0L else archive.cursor, clearedUpTo = client.repo.clearedUpTo(client.uid.orEmpty(), convId)) }
-                    .onSuccess { p ->
-                        archive.items = if (reset) {
-                            p.items
-                        } else {
-                            // 按 conv_seq 去重再追加——即便守卫被绕过也不会出现重复行
-                            val seen = archive.items.mapTo(HashSet()) { it.convSeq }
-                            archive.items + p.items.filter { it.convSeq !in seen }
-                        }
-                        archive.cursor = p.nextCursor
-                        archive.hasMore = p.hasMore
-                        archive.failed = false
-                    }
-                    .onFailure {
-                        archive.failed = true
-                        IMLog.tag("IM.Detail").w("conv_media_failed", "kind" to kind)
-                    }
-                archive.loading = false
-            }
+private fun runArchivePage(
+    client: IMClient, scope: kotlinx.coroutines.CoroutineScope, convId: String,
+    kind: String?, archive: ConvArchive, reset: Boolean,
+) {
+    if (kind == null || archive.loading) return // 在途守卫：滚到底会连续触发，不守就把同一页追加两次
+    archive.loading = true
+    scope.launch {
+        // 同 ChatMediaTimelineState：裸 runCatching 连 CancellationException 一起吞，
+        // 页面被关掉时 onFailure 还会去写 failed 标志
+        runCatchingCancellable {
+            client.conversationsApi.media(
+                convId, kind, if (reset) 0L else archive.cursor,
+                clearedUpTo = client.repo.clearedUpTo(client.uid.orEmpty(), convId),
+            )
         }
+            .onSuccess { p ->
+                archive.items = if (reset) {
+                    p.items
+                } else {
+                    // 按 conv_seq 去重再追加——即便守卫被绕过也不会出现重复行
+                    val seen = archive.items.mapTo(HashSet()) { it.convSeq }
+                    archive.items + p.items.filter { it.convSeq !in seen }
+                }
+                archive.cursor = p.nextCursor
+                archive.hasMore = p.hasMore
+                archive.failed = false
+            }
+            .onFailure {
+                archive.failed = true
+                IMLog.tag("IM.Detail").w("conv_media_failed", "kind" to kind)
+            }
+        archive.loading = false
     }
+}
 
-    LaunchedEffect(convId, tab) {
-        archive.items = emptyList()
-        archive.cursor = 0L
-        archive.hasMore = false
-        archive.failed = false
-        archive.run(true)
-    }
-    return archive
+/** 链接 / 名片两类（本地扫描）里已有内容的页签；`null` = 还没扫完，不算有。 */
+internal fun contentTabs(
+    links: List<*>?, contacts: com.libeyond.imandroid.ui.screens.ContactTabData?,
+): Set<DetailTab> = buildSet {
+    if (!links.isNullOrEmpty()) add(DetailTab.Links)
+    if (!contacts?.messages.isNullOrEmpty()) add(DetailTab.Contacts)
 }
 
 /**

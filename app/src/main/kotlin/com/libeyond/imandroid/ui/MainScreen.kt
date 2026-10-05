@@ -365,7 +365,7 @@ private fun ConversationMenu(
                                     ConversationAction.Unmute -> settings(client, target, muted = false)
                                     ConversationAction.MarkUnread -> settings(client, target, markedUnread = true)
                                     ConversationAction.MarkRead -> settings(client, target, markedUnread = false)
-                                    ConversationAction.Delete -> client.conversationsApi.delete(target.convId)
+                                    ConversationAction.Delete -> client.messages.deleteConversation(target.convId)
                                     ConversationAction.Mute -> Unit // 上面已分流，走不到这里
                                 }
                             }

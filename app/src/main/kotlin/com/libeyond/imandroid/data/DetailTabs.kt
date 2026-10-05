@@ -15,15 +15,32 @@ enum class DetailTab { Members, Media, Files, Voice, Links, Contacts }
 
 object DetailTabs {
 
-    /** 单聊没有「成员」。顺序即 iOS 的页签顺序。 */
-    fun visible(isGroup: Boolean, hasContacts: Boolean = false): List<DetailTab> = buildList {
+    /**
+     * 此刻该显示哪些页签（对齐 iOS `IMChatDetailTabs tabsForMessages:isGroup:`）：
+     * 「成员」群里恒第一；其余**只有该类别有内容才出现**——没有数据的页签先不展示，
+     * 此前四个页签恒在，切过去才看到「加载中」再变成空态。顺序即 iOS 的页签顺序。
+     *
+     * @param nonEmpty 已确认有内容的类别（媒体 / 文件 / 语音来自归档首页，链接 / 名片来自本地扫描）。
+     */
+    fun visible(isGroup: Boolean, nonEmpty: Set<DetailTab>): List<DetailTab> = buildList {
         if (isGroup) add(DetailTab.Members)
-        add(DetailTab.Media)
-        add(DetailTab.Files)
-        add(DetailTab.Voice)
-        add(DetailTab.Links)
-        // 「名片」排最后，且**只在本会话至少有一条合格名片时才出现**（iOS 同；其余页签恒在）
-        if (hasContacts) add(DetailTab.Contacts)
+        listOf(DetailTab.Media, DetailTab.Files, DetailTab.Voice, DetailTab.Links, DetailTab.Contacts)
+            .filterTo(this) { it in nonEmpty }
+    }
+
+    /** 当前选中的页签落在可见集合之外（被清空 / 还没拉到）时退到第一个可见的；一个都没有就原样返回。 */
+    fun resolve(tabs: List<DetailTab>, selected: DetailTab): DetailTab =
+        if (selected in tabs) selected else tabs.firstOrNull() ?: selected
+
+    /**
+     * 横滑 [totalDx]（px，左滑为负）后该切到第几个页签；null = 不切。
+     * 左滑 = 下一签、右滑 = 上一签（iOS `swipeToNextTab:`）；位移不到 [threshold] 不算；
+     * 右滑且起手在左边缘（[startedAtEdge]）让给系统返回手势，不切签（iOS 同）。
+     */
+    fun swipeTarget(index: Int, count: Int, totalDx: Float, threshold: Float, startedAtEdge: Boolean): Int? {
+        if (index < 0 || kotlin.math.abs(totalDx) < threshold) return null
+        return if (totalDx < 0) (index + 1).takeIf { it < count }
+        else if (startedAtEdge) null else (index - 1).takeIf { it >= 0 }
     }
 
     fun title(tab: DetailTab): String = when (tab) {

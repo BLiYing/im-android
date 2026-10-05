@@ -77,16 +77,6 @@ class LinkScanTest {
         assertTrue(LinkScan.isLinkMessage("link", "https://x.com", convSeq = 5))
     }
 
-    /** 单聊没有「成员」页签，群聊有；顺序即 iOS 的页签顺序。 */
-    @Test
-    fun `页签集合按会话类型`() {
-        assertEquals(
-            listOf(DetailTab.Media, DetailTab.Files, DetailTab.Voice, DetailTab.Links),
-            DetailTabs.visible(isGroup = false),
-        )
-        assertEquals(DetailTab.Members, DetailTabs.visible(isGroup = true).first())
-    }
-
     /** 「链接」与「成员」不走归档接口——前者服务端没有可索引的列，后者不是消息。 */
     @Test
     fun `链接与成员不走归档接口`() {

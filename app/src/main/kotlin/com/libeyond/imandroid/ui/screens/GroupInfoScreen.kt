@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -36,6 +37,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Megaphone
 import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.ui.announceSubtitle
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.GroupInfo
@@ -112,6 +114,8 @@ fun GroupInfoScreen(
     onOpenGroupQR: () -> Unit,
     onOpenGroupInviteLink: () -> Unit,
     // —— 内联页签（成员 / 媒体 / 文件 / 语音 / 链接）——
+    /** 此刻可见的页签（成员恒在，其余只含有内容的类别，见 [DetailTabs.visible]）。 */
+    tabs: List<DetailTab>,
     tab: DetailTab,
     onTabChange: (DetailTab) -> Unit,
     /** 当前页签的归档数据（成员/链接页签走各自的来源，这里为空）。 */
@@ -154,7 +158,10 @@ fun GroupInfoScreen(
         IMTopBar(title = if (galleryOnly) GALLERY_TITLE else stringResource(R.string.group_info_title), onLeft = onBack)
 
         // 头部拆成几个独立 item，别再合回一个大 item（理由见 `ChatDetailScreen` 同一处）
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(
+            // 页签内容区左右横滑切页签（对齐 iOS swipeToNextTab:/swipeToPrevTab:）
+            Modifier.fillMaxSize().swipeToSwitchTab(if (galleryOnly) emptyList() else tabs, tab, onTabChange),
+        ) {
             if (!galleryOnly) item(key = "header") {
                 // —— 群头部 ——
                 // 左右留页边距 + 群名单行居中、放不下尾部省略（对齐 iOS `makeNameLabel` 的 center + 单行）：
@@ -194,28 +201,13 @@ fun GroupInfoScreen(
                 DetailActionBar(actions, moreItems, onAction, onMore)
             }
 
-            // —— 大群说明行 ——
-            // **恒显**：既没公告也没简介的大群恰恰最需要这句解释。
-            // 副标题的「· 大群」只让人察觉，这一行才解释。
-            if (!galleryOnly && info.isSuper) item(key = "super-note") {
-                Spacer(Modifier.height(d.cardGap))
-                Box(
-                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
-                        .padding(d.space4),
-                ) {
-                    Text(
-                        stringResource(R.string.group_info_super_note),
-                        color = c.textSecondary,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-
             // 群公告 / 群简介**同一张卡、两行**（对齐 iOS `IMChatDetailViewController+About`）：
             // 图标 + 标题 + 单行摘要 + 右箭头，点开走 [onOpenNotice] 弹底部全文弹窗（`GroupTextSheet`，
             // 聊天页的公告横幅用的是同一个）。非空才显，两行都空则整张卡不出现。
-            if (!galleryOnly && (info.announcement.isNotBlank() || info.intro.isNotBlank())) item(key = "about") {
+            // 第三行「大群说明」：**is_super 恒显**（既没公告也没简介的大群恰恰最需要解释），
+            // 右值「已关闭 4 项能力」，点开同一个底部弹窗展开全文（对齐 iOS `IMDetailAboutRowSuper`；
+            // 全文四条与 SUPERGROUP_DESIGN §4.1 同源，都在文案表 `group.text.super_notice_*`）。
+            if (!galleryOnly && (info.announcement.isNotBlank() || info.intro.isNotBlank() || info.isSuper)) item(key = "about") {
                 Spacer(Modifier.height(d.cardGap))
                 Column(
                     Modifier.fillMaxWidth().padding(horizontal = d.space4)
@@ -233,6 +225,20 @@ fun GroupInfoScreen(
                         SettingsChevronRow(introLabel, singleLinePreview(info.intro), icon = Lucide.Info) {
                             onOpenNotice(introLabel, info.intro, "")
                         }
+                    }
+                    if (info.isSuper) {
+                        if (info.announcement.isNotBlank() || info.intro.isNotBlank()) SettingsDivider()
+                        val superLabel = stringResource(R.string.group_text_super)
+                        val superBody = listOf(
+                            stringResource(R.string.group_text_super_notice_1),
+                            stringResource(R.string.group_text_super_notice_2),
+                            stringResource(R.string.group_text_super_notice_3),
+                            stringResource(R.string.group_text_super_notice_4),
+                        ).joinToString("\n")
+                        val superMeta = stringResource(R.string.group_text_super_meta)
+                        SettingsChevronRow(
+                            superLabel, stringResource(R.string.chat_detail_super_group_perks_off), icon = Lucide.Users,
+                        ) { onOpenNotice(superLabel, superBody, superMeta) }
                     }
                 }
             }
@@ -331,7 +337,7 @@ fun GroupInfoScreen(
 
             if (!galleryOnly) item(key = "tabs") {
                 Spacer(Modifier.height(d.cardGap))
-                DetailTabBar(DetailTabs.visible(isGroup = true, hasContacts = !contacts?.messages.isNullOrEmpty()), tab) { onTabChange(it) }
+                DetailTabBar(tabs, tab) { onTabChange(it) }
             }
 
             // —— 页签内容 ——
@@ -340,8 +346,13 @@ fun GroupInfoScreen(
                     if (GroupMemberSearch.shouldOffer(info.memberCount, members.size)) {
                         item(key = "member_search_entry") { MemberSearchEntryRow(onClick = onOpenMemberSearch) }
                     }
-                    items(members, key = { it.userId }) { m ->
-                        MemberRow(m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) })
+                    itemsIndexed(members, key = { _, m -> m.userId }) { i, m ->
+                        ArchiveCardRow(i, members.size) {
+                            MemberRow(
+                                m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) },
+                                background = c.cardBackground,
+                            )
+                        }
                     }
                     if (hasMoreMembers) {
                         item {

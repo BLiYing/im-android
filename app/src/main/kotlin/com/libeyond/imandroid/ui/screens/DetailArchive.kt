@@ -34,6 +34,11 @@ import com.libeyond.imandroid.data.LinkScan
 import com.libeyond.imandroid.data.MediaGrid
 import com.libeyond.imandroid.sdk.api.ConvMediaItem
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -125,6 +130,58 @@ internal fun MediaSeg(label: String, on: Boolean, onClick: () -> Unit) {
     }
 }
 
+/**
+ * 页签内容的「卡片」外壳：对齐 iOS `UITableViewStyleInsetGrouped` 的分区——左右各 [space4]（16dp）边距、
+ * 圆角 [radiusCard]、**只有首尾行带圆角**。此前归档行（文件 / 语音 / 链接 / 名片 / 媒体宫格）与成员行都是整屏宽，
+ * 左右间距为 0，与上面的设置卡对不齐。
+ *
+ * 行自己的底色走 [LocalArchiveRowBg]：卡里用 cardBackground（iOS cell 底色），收藏页等没包卡的地方仍是 surface。
+ */
+@Composable
+internal fun ArchiveCardRow(index: Int, count: Int, content: @Composable () -> Unit) {
+    val d = IMTheme.dimens
+    val r = d.radiusCard
+    val shape = RoundedCornerShape(
+        topStart = if (index == 0) r else 0.dp, topEnd = if (index == 0) r else 0.dp,
+        bottomStart = if (index == count - 1) r else 0.dp, bottomEnd = if (index == count - 1) r else 0.dp,
+    )
+    CompositionLocalProvider(LocalArchiveRowBg provides IMTheme.colors.cardBackground) {
+        Box(Modifier.fillMaxWidth().padding(horizontal = d.space4).clip(shape).background(IMTheme.colors.cardBackground)) {
+            content()
+        }
+    }
+}
+
+/** 归档行的底色；null = 沿用各行自己的默认（surface）。见 [ArchiveCardRow]。 */
+internal val LocalArchiveRowBg = compositionLocalOf<Color?> { null }
+
+/**
+ * 页签内容区的**左右横滑切页签**（对齐 iOS `swipeToNextTab:` / `swipeToPrevTab:`：左滑 = 下一签、右滑 = 上一签）。
+ * 只吃横向拖动，竖向滚动不受影响；起手在左边缘 24dp 内让给系统返回手势（iOS 同口径）。
+ */
+@Composable
+internal fun Modifier.swipeToSwitchTab(tabs: List<DetailTab>, current: DetailTab, onSelect: (DetailTab) -> Unit): Modifier {
+    if (tabs.size < 2) return this
+    val density = LocalDensity.current
+    val threshold = with(density) { SWIPE_THRESHOLD_DP.dp.toPx() }
+    val edge = with(density) { 24.dp.toPx() }
+    val idx = tabs.indexOf(current)
+    return this.pointerInput(tabs, current) {
+        var total = 0f
+        var startX = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { total = 0f; startX = it.x },
+            onDragEnd = {
+                val next = DetailTabs.swipeTarget(idx, tabs.size, total, threshold, startX <= edge)
+                if (next != null) onSelect(tabs[next])
+            },
+            onDragCancel = { total = 0f },
+        ) { _, dx -> total += dx }
+    }
+}
+
+private const val SWIPE_THRESHOLD_DP = 72
+
 @Composable
 internal fun Hint(text: String) {
     Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
@@ -195,11 +252,13 @@ internal fun LazyListScope.archiveTab(
             } else if (linkMessages.isEmpty()) {
                 item { Hint(DetailTabs.emptyText(tab)) }
             } else {
-                items(linkMessages, key = { it.first.convSeq }) { (m, url) ->
-                    LinkRow(
-                        m.content, m.timestamp, url,
-                        onLongPress = { r -> onLongPressArchive(m.toArchiveTarget(), r) },
-                    ) { onOpenLink(url) }
+                itemsIndexed(linkMessages, key = { _, it -> it.first.convSeq }) { i, (m, url) ->
+                    ArchiveCardRow(i, linkMessages.size) {
+                        LinkRow(
+                            m.content, m.timestamp, url,
+                            onLongPress = { r -> onLongPressArchive(m.toArchiveTarget(), r) },
+                        ) { onOpenLink(url) }
+                    }
                 }
             }
         }
@@ -227,7 +286,7 @@ internal fun LazyListScope.archiveTab(
                 item { Hint(DetailTabs.emptyText(tab)) }
             } else {
                 mediaGrid(
-                    archive, host, useTls, isGroupOf = { isGroup }, onOpenArchive = onOpenArchive,
+                    archive, host, useTls, isGroupOf = { isGroup }, onOpenArchive = onOpenArchive, inset = true,
                     onLongPressItem = { item, r -> onLongPressArchive(item.toArchiveTarget(), r) },
                 )
                 if (hasMore) item { LoadMore(onLoadMore) }
@@ -265,11 +324,14 @@ internal fun LazyListScope.mediaGrid(
     /** 「从收藏发送」：这一格勾没勾；null = 不在选择模式（详情页、媒体库、收藏浏览），不画勾选框。 */
     pickedOf: ((ConvMediaItem) -> Boolean)? = null,
     onTogglePick: (ConvMediaItem) -> Unit = {},
+    /** 详情页 / 群资料的页签内容：套 [ArchiveCardRow] 的左右边距与首尾圆角（对齐 iOS InsetGrouped）；收藏页 / 媒体库不套。 */
+    inset: Boolean = false,
 ) {
     val rows = MediaGrid.rows(archive)
     itemsIndexed(rows, key = { _, row -> row.first().convSeq }) { idx, row ->
+        val gridRow: @Composable () -> Unit = {
         Row(
-            Modifier.fillMaxWidth().padding(top = 2.dp),
+            Modifier.fillMaxWidth().padding(top = if (inset && idx == 0) 0.dp else 2.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             row.forEach { item ->
@@ -288,6 +350,8 @@ internal fun LazyListScope.mediaGrid(
                 repeat(MediaGrid.blanksInLastRow(archive.size)) { Spacer(Modifier.weight(1f)) }
             }
         }
+        }
+        if (inset) ArchiveCardRow(idx, rows.size, gridRow) else gridRow()
     }
 }
 
@@ -308,6 +372,6 @@ private fun LazyListScope.archiveList(
         item { Hint(DetailTabs.emptyText(tab)) }
         return
     }
-    items(items, key = { it.convSeq }) { row(it) }
+    itemsIndexed(items, key = { _, it -> it.convSeq }) { i, it -> ArchiveCardRow(i, items.size) { row(it) } }
     if (hasMore) item { LoadMore(onLoadMore) }
 }

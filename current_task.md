@@ -7,6 +7,8 @@
 
 ## 当前焦点
 
+**2026-10-06 详情页/会话列表对齐 iOS 一批（已合入 main，未 push）**：① 单聊/群资料页签只显示有内容的类别（`DetailTabs.visible(isGroup, nonEmpty)`，进页并行预拉媒体/文件/语音首页 `ConvArchiveSet`，链接/名片本地扫），内容区左右横滑切签，页签内容套卡片边距（`ArchiveCardRow`，左右 16、首尾圆角）；② 大群说明并入「公告/简介」卡第三行，右值「已关闭 4 项能力」、点开底部弹窗（文案全走 `group.text.super_*`；老 `group.info.super_note` 的「3 项」文案已无引用，表里未删以免 iOS 生成物漂移）；③ 会话列表删除：服务端 DELETE 成功后本机会话行没移走（`applyConversationList` 只 upsert、陈旧行只删群），改走 `MessageService.deleteConversation`；④ 免打扰铃铛挪到名称行置顶图标之后。`GroupInfoHost.kt` 拆出 `GroupPickHost` 后 573/600。Pixel 2 XL 实测。
+
 **2026-10-06 标题栏统一 + 群聊标题（已合入 main，未 push）**：设计 `../IMServer/docs/design/TOPBAR_UNIFY_DESIGN.md`。
 ① 栏高固定 56（`IMDimens.topBarHeight` = iOS `kIMLiquidBarHeight`，`heightIn(min)` 防大字号裁切），外框抽成 `Modifier.topBarChrome`，`IMTopBar` / 搜索态顶栏 / FriendPicker 共用；② 栏色跟随页面底色（默认 `groupedBackground`，`pageBackground` 页——收藏阅读器、聊天记录、WebView、转发卡片弹层、TextReader——传 `containerColor`），页面 inset 不迁移；
 ③ 群聊副标题 `ChatSubtitle.resolve`（输入带名 → 连接态 → 成员数/大群，对齐 iOS）、群备注标题随 `conv_update` 实时刷新（`ConvRemarkSignal.of` 只认 settings 帧，delete 帧也带 `remark:""`）；头像首字母跟标题。Pixel 2 XL 实测（深浅色、字号 2.0、备注设置/清除、超级群）。
@@ -53,7 +55,7 @@
 
 ## 已知坑 / 限制
 
-- **体量贴线**（硬闸 600，WARN 线 480）：`GroupInfoHost.kt` 589、`ChatHost.kt` 568、`MessageRepository.kt` 554、`ChatScreen.kt` 549、`MessageService.kt` 546 都很近；动它们之前先拆文件，新增一律放新文件。`Daos.kt` 别再加。
+- **体量贴线**（硬闸 600，WARN 线 480）：`GroupInfoHost.kt` 573、`ChatHost.kt` 568、`MessageRepository.kt` 554、`ChatScreen.kt` 549、`MessageService.kt` 546 都很近；动它们之前先拆文件，新增一律放新文件。`Daos.kt` 别再加。
 - **合并转发记录里的名片 →「发消息」换不了会话**（未修）：`ChatHost` 绑死单一 `convId`，点了只关资料层退回记录页。
 - **`FavoritesHost`/`ChatPickerLayers`/`QrRouteHost` 进 `UserProfileHost` 没接 `onRemarkChanged`**（缓行，按 `ContactsHost` 同一套本机状态覆盖补即可）。
 - **App Links 系统级深链接：明确暂不做**（2026-09-22 拍板）：需要固定公网 HTTPS 域名放 `assetlinks.json`；三端联动，等有部署域名再评估。**改原生 Material 风格：暂缓**（见 `docs/design/MATERIAL_DESIGN_EVAL.md`），别顺手改配色/图标/弹层。

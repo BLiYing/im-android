@@ -70,6 +70,8 @@ internal fun ChatDetailScreen(
     /** 「消息免打扰」行的右值：`common_off` / `notif_mute_until_*` / `common_permanent`
      *  （NOTIFICATIONS_P1_DESIGN §4.2，本页不持免打扰判定逻辑，调用方算好文本传进来——纯展示）。 */
     muteValueText: String,
+    /** 此刻可见的页签（只含有内容的类别，见 [DetailTabs.visible]）；空 = 不画页签条与内容区。 */
+    tabs: List<DetailTab>,
     tab: DetailTab,
     onTabChange: (DetailTab) -> Unit,
     /** 当前页签的归档数据（链接页签走 [linkMessages]，这里为空）。 */
@@ -124,7 +126,6 @@ internal fun ChatDetailScreen(
     val c = IMTheme.colors
     com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave() // 离开本页暂停语音（保留位点）
     val d = IMTheme.dimens
-    val tabs = DetailTabs.visible(isGroup = false, hasContacts = !contacts?.messages.isNullOrEmpty())
     val showBody = !galleryOnly && !isSystemPeer
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
@@ -142,7 +143,10 @@ internal fun ChatDetailScreen(
         // **头部拆成几个独立 item，别再合回一个大 item**（2026-09-17「详情页很卡」一并收的）：
         // 合在一起时头像 + 操作排 + 两张卡 + 页签条是同一个 item，往回滚到它露出一个像素，
         // 整块就得在同一帧里重新组合、测量——那一帧正好卡在手指下。拆开后每次只进来一小块。
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(
+            // 页签内容区左右横滑切页签（对齐 iOS swipeToNextTab:/swipeToPrevTab:）；会话媒体库页没有页签条
+            Modifier.fillMaxSize().swipeToSwitchTab(if (galleryOnly) emptyList() else tabs, tab, onTabChange),
+        ) {
             if (!galleryOnly) item(key = "header") {
                 // —— 大头像头部（对齐 iOS 的 300pt tableHeaderView）——
                 Column(
@@ -216,14 +220,15 @@ internal fun ChatDetailScreen(
             if (showBody) item(key = "settings_footer") {
                 IMSectionFooter(stringResource(R.string.chat_detail_mute_footer))
             }
-            if (showBody) item(key = "tabs") {
+            if (showBody && tabs.isNotEmpty()) item(key = "tabs") {
                 Spacer(Modifier.height(d.cardGap))
                 DetailTabBar(tabs, tab) { onTabChange(it) }
             }
 
             // —— 页签内容（与群资料共用同一段渲染，见 DetailArchive.archiveTab）——
             // 系统通知会话没有可归档的媒体/文件/链接，整段不渲染（对齐 Web `showDetailBody`）。
-            if (!isSystemPeer) archiveTab(
+            // 没有任何有内容的页签（还没拉到 / 真没有）就整段不画——不先占一个「加载中」再变空态
+            if (!isSystemPeer && (galleryOnly || tabs.isNotEmpty())) archiveTab(
                 tab = tab,
                 convId = conv.convId,
                 archive = archive,

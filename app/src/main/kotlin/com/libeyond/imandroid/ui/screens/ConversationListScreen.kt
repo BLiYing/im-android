@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.BellOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.libeyond.imandroid.R
@@ -230,6 +231,15 @@ private fun ConversationRow(
                     Spacer(Modifier.width(4.dp))
                     Text("📌", fontSize = 11.sp)
                 }
+                // 免打扰铃铛：名称 → 置顶 → 免打扰，状态图标紧跟名称（对齐 iOS `_nameStateStack`，
+                // 14dp 次要色 bell.slash.fill）；定时免打扰到期后跟着消失，判据同未读徽标。
+                if (MuteState.isMutedNow(conv.muted, conv.muteUntil, nowMs)) {
+                    Spacer(Modifier.width(4.dp))
+                    androidx.compose.foundation.Image(
+                        Lucide.BellOff, null, Modifier.size(14.dp),
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.textSecondary),
+                    )
+                }
             }
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -331,7 +341,8 @@ private fun UnreadBadge(conv: ConversationEntity, nowMs: Long) {
         conv.markedUnread -> Box(
             modifier = Modifier.size(10.dp).clip(CircleShape).background(c.unreadBadge),
         )
-        mutedNow -> Text("🔕", fontSize = 11.sp)
+        // 免打扰的铃铛不在这里：iOS 把它放在**名称行**、紧跟置顶图标（`_nameStateStack`），
+        // 这一格只给未读徽标（灰色表示免打扰）。此前把 🔕 画在时间下方，位置与 iOS 不符。
         else -> Spacer(Modifier.height(1.dp))
     }
 }

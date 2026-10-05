@@ -160,11 +160,24 @@ fun ChatDetailHost(
     /** 归档要转发的那一项（长按菜单与查看器「更多」共用这一份状态，见 ArchiveActionsHost 的注释）。 */
     var archiveForward by remember(conv.convId) { mutableStateOf<ArchiveTarget?>(null) }
 
-    var tab by remember(conv.convId) { mutableStateOf(initialTab) }
+    var pickedTab by remember(conv.convId) { mutableStateOf(initialTab) }
     // 归档取数与「链接」本地扫都收在这两个 helper 里（群资料那侧共用同一份）
-    val archive = rememberConvArchive(client, conv.convId, tab)
+    val archives = rememberConvArchiveSet(client, conv.convId)
+    val contacts = com.libeyond.imandroid.ui.screens.rememberContactTab(
+        client, conv.convId, isGroup = false,
+        remarkOf = { uid -> knownFriends[uid]?.remark }, groupNameOf = { null },
+        onOpen = { contactCard = it },
+    )
+    // 链接 / 名片要先扫出结果才知道页签出不出现，所以这里常驻订阅（扫描在后台线程，见 rememberLocalScan）
     // 这两份只在各自页签上订阅本地消息表（理由见 rememberLocalScan）
-    val linkMessages = rememberLinkMessages(client, conv.convId, active = tab == DetailTab.Links)
+    val linkMessages = rememberLinkMessages(client, conv.convId, active = true)
+    // 只显示有内容的页签（对齐 iOS）；选中项落在集合外时退到第一个可见的。会话媒体库页不要页签条，原样用选中项
+    val tabs = DetailTabs.visible(
+        isGroup = false,
+        nonEmpty = archives.nonEmpty + contentTabs(linkMessages, contacts),
+    )
+    val tab = if (galleryOnly) pickedTab else DetailTabs.resolve(tabs, pickedTab)
+    val archive = archives.of(tab)
     // 语音页签的波形：服务端归档接口不回带，从本地消息表按 conv_seq 兜底（见 rememberVoiceWaveforms）
     val voiceWaveforms = rememberVoiceWaveforms(client, conv.convId, active = tab == DetailTab.Voice)
 
@@ -245,11 +258,8 @@ fun ChatDetailHost(
                     title = title,
                     handle = knownFriends[conv.peerUid]?.handle.orEmpty(),
                     subtitle = headerSubtitle,
-                    contacts = com.libeyond.imandroid.ui.screens.rememberContactTab(
-                        client, conv.convId, isGroup = false,
-                        remarkOf = { uid -> knownFriends[uid]?.remark }, groupNameOf = { null },
-                        onOpen = { contactCard = it },
-                    ),
+                    contacts = contacts,
+                    tabs = tabs,
                     onCopyUsername = {
                         val bare = knownFriends[conv.peerUid]?.handle.orEmpty().removePrefix("@")
                         if (bare.isEmpty()) toast = Str.s(R.string.chat_detail_no_username)
@@ -262,7 +272,7 @@ fun ChatDetailHost(
                     pinned = pinned,
                     muteValueText = if (mutedNow) MuteState.untilText(muteUntil, muteTick) else stringResource(R.string.common_off),
                     tab = tab,
-                    onTabChange = { tab = it },
+                    onTabChange = { pickedTab = it },
                     archive = archive.items,
                     linkMessages = linkMessages,
                     loading = archive.loading,
