@@ -15,4 +15,13 @@ data class MsgOpSignal(val convId: String, val op: String, val seqs: List<Long>)
 }
 
 /** 会话备注变更（conv_update settings 帧）。[remark] 为全值，`""` = 已清除。 */
-data class ConvRemarkSignal(val convId: String, val remark: String)
+data class ConvRemarkSignal(val convId: String, val remark: String) {
+    companion object {
+        /**
+         * 只有 settings 帧的 `remark` 才是真值。**delete 帧也带 `"remark":""`**（服务端无 omitempty），
+         * 若不挡，别的设备删除会话会让正开着的聊天页标题误回退成群名。
+         */
+        fun of(u: com.libeyond.imandroid.sdk.protocol.ConvUpdateData): ConvRemarkSignal? =
+            if (u.action == "settings") ConvRemarkSignal(u.convId, u.remark) else null
+    }
+}

@@ -57,7 +57,7 @@ internal fun FriendPickerScreen(
             Text(
                 stringResource(R.string.common_cancel), color = c.accent,
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.width(64.dp).clickable(onClick = onCancel),
+                modifier = Modifier.width(d.topBarSide).clickable(onClick = onCancel),
             )
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text(
@@ -66,7 +66,7 @@ internal fun FriendPickerScreen(
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
-            Box(Modifier.width(64.dp))
+            Box(Modifier.width(d.topBarSide))
         }
         if (friends.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

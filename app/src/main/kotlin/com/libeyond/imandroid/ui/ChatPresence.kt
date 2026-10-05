@@ -20,7 +20,9 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // 从 ChatHost.kt 拆出（2026-09-10，那份文件顶在 600/600 行）：聊天页副标题与群备注——
 // 有自己的心跳定时器、watch 订阅与帧监听，按 CODING_STYLE §7① 本就该是独立的一块。
@@ -126,22 +128,29 @@ internal fun rememberChatSubtitle(
  * （此时标题用进页快照，见 [ChatSubtitle.title]）。
  */
 @Composable
-internal fun rememberGroupRemark(client: IMClient, conv: ConversationEntity): String? {
+internal fun rememberGroupRemark(client: IMClient, conv: ConversationEntity, connected: Boolean): String? {
     var remark by remember(conv.convId) { mutableStateOf<String?>(null) }
     // 帧版本：GET 在途时若先收到 conv_update 帧（更新鲜），GET 的旧结果不能再覆盖它
     var frameRev by remember(conv.convId) { mutableStateOf(0) }
-    LaunchedEffect(conv.convId) {
-        if (!conv.isGroup) return@LaunchedEffect
-        client.convRemarks.collect { if (it.convId == conv.convId) { remark = it.remark; frameRev++ } }
-    }
-    // 连上（含重连）就拉一次：进页时断网拉失败，重连后自愈，不必等下一帧
-    val connected = client.socket.state.collectAsState().value == ConnState.Connected
+    // 一个 effect 里**先订阅、后拉取**（UNDISPATCHED：协程体先跑到订阅点才往下走），顺序是结构性的，
+    // 不靠两个 effect 的启动先后。连上（含重连）重进：进页时断网拉失败，重连后自愈。
     LaunchedEffect(conv.convId, connected) {
-        if (!conv.isGroup || !connected) return@LaunchedEffect
-        val rev = frameRev
-        runCatchingCancellable { client.conversationsApi.settings(conv.convId) }
-            .onSuccess { if (rev == frameRev) remark = it.remark }
-            .onFailure { IMLog.tag("IM.Chat").w("group_remark_load_failed", "err" to it.javaClass.simpleName) }
+        if (!conv.isGroup) return@LaunchedEffect
+        launch(start = CoroutineStart.UNDISPATCHED) {
+            client.convRemarks.collect { if (it.convId == conv.convId) { remark = it.remark; frameRev++ } }
+        }
+        if (!connected) return@LaunchedEffect
+        // 连着但 HTTP 失败（超时 / 5xx）不会再有 connected 翻转，所以限次退避重试，别一次失败就整场用快照
+        for (waitMs in REMARK_RETRY_MS) {
+            delay(waitMs)
+            val rev = frameRev
+            val r = runCatchingCancellable { client.conversationsApi.settings(conv.convId) }
+            r.onSuccess { if (rev == frameRev) remark = it.remark }
+            if (r.isSuccess) break
+            IMLog.tag("IM.Chat").w("group_remark_load_failed", "err" to (r.exceptionOrNull()?.javaClass?.simpleName ?: ""))
+        }
     }
     return remark
 }
+
+private val REMARK_RETRY_MS = longArrayOf(0L, 3_000L, 10_000L)

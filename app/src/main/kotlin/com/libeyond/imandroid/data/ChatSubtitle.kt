@@ -59,6 +59,8 @@ object ChatSubtitle {
      * - [groupRemark] 为 null（还没拉回 / 拉取失败）→ 用快照，离线时也不丢备注；
      * - 非空白 → 用备注（实时值）；
      * - 空白（备注被清除）→ 用 [realGroupName]，**不能回退快照**——快照里可能还是已被清掉的旧备注。
+     *   调用方保证群资料已拉回时 [realGroupName] 非空（空群名已换成「未命名群」）；仅群资料**还没拉回**（null）时才无从得知，
+     *   回退快照——这是已知的窄窗口（进页后群资料几百毫秒内就位，远早于有人清备注）。
      */
     fun title(snapshotTitle: String, isGroup: Boolean, groupRemark: String?, realGroupName: String?): String = when {
         !isGroup || groupRemark == null -> snapshotTitle
