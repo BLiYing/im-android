@@ -11,6 +11,8 @@ import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ChangePasswordRules
 import com.libeyond.imandroid.data.PasswordFeedback
+import com.libeyond.imandroid.data.PrivacyPage
+import com.libeyond.imandroid.data.SettingsSub
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
@@ -22,9 +24,6 @@ import com.libeyond.imandroid.ui.screens.ChangePasswordScreen
 import com.libeyond.imandroid.ui.screens.PrivacySecurityScreen
 import kotlinx.coroutines.launch
 
-/** 「隐私与安全」里的页面。 */
-private enum class PrivacyPage { Main, Blocked, ChangePassword }
-
 private data class PasswordForm(val old: String = "", val new: String = "", val confirm: String = "")
 
 /**
@@ -32,10 +31,10 @@ private data class PasswordForm(val old: String = "", val new: String = "", val 
  * `IMChangePasswordViewController`）。状态与副作用都在这里，三个 Screen 纯展示（CODING_STYLE §7②）。
  */
 @Composable
-fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit) {
+fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: SettingsSub = SettingsSub.None) {
     val scope = rememberCoroutineScope()
 
-    var page by remember { mutableStateOf(PrivacyPage.Main) }
+    var page by remember { mutableStateOf((initialSub as? SettingsSub.Privacy)?.page ?: PrivacyPage.Main) }
     /** 黑名单。容器页的计数与列表页**共用这一份**：进列表页时先显上次的，拉回来再换。 */
     var blocked by remember { mutableStateOf<List<FriendEntry>?>(null) }
     var blockedError by remember { mutableStateOf("") }

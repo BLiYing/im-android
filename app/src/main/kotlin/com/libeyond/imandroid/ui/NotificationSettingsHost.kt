@@ -34,6 +34,7 @@ import com.libeyond.imandroid.data.NotificationPage
 import com.libeyond.imandroid.data.NotificationPermission
 import com.libeyond.imandroid.data.NotificationSettings
 import com.libeyond.imandroid.data.NotificationSettingsStore
+import com.libeyond.imandroid.data.SettingsSub
 import com.libeyond.imandroid.data.MuteDuration
 import com.libeyond.imandroid.data.accountFields
 import com.libeyond.imandroid.data.db.ConversationEntity
@@ -64,10 +65,13 @@ fun NotificationSettingsHost(
     client: IMClient,
     onOpenChat: (ConversationEntity) -> Unit,
     onBack: () -> Unit,
+    /** 设置搜索的落点：直接以该页为初始页（返回键沿原链逐级退）。 */
+    initialSub: SettingsSub = SettingsSub.None,
 ) {
-    var page by remember { mutableStateOf(NotificationPage.Main) }
+    val start = initialSub as? SettingsSub.Notification
+    var page by remember { mutableStateOf(start?.page ?: NotificationPage.Main) }
     /** 当前 Type/Sound 子页是关于私聊还是群聊——与 [page] 是两个独立维度，见 `data/NotificationNav.kt`。 */
-    var kind by remember { mutableStateOf(false) }
+    var kind by remember { mutableStateOf(start?.group ?: false) }
 
     BackHandler {
         val prev = NotificationNav.back(page)

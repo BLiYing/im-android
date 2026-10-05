@@ -12,6 +12,8 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.data.MePage
+import com.libeyond.imandroid.data.SettingsRoute
+import com.libeyond.imandroid.data.SettingsSub
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
@@ -36,8 +38,16 @@ fun MeHost(
     bottomBar: @Composable () -> Unit,
     /** 收藏里的名片 → 资料页 →「发消息」：交给外壳进聊天页（与通讯录那条同一个出口）。 */
     onOpenChat: (com.libeyond.imandroid.data.db.ConversationEntity) -> Unit = {},
+    /** 来自首页全局搜索「设置」分组的落点：直接开到那一页（返回键沿各页原链退回本页）。 */
+    initialRoute: SettingsRoute? = null,
+    /** 落点已读走：外壳据此清掉它，否则之后手动切回「我」tab 会被旧落点再带进二级页。 */
+    onRouteConsumed: () -> Unit = {},
 ) {
-    var page by remember { mutableStateOf(MePage.List) }
+    LaunchedEffect(Unit) { if (initialRoute != null) onRouteConsumed() }
+    var page by remember { mutableStateOf(initialRoute?.page ?: MePage.List) }
+    // 落点只用一次：回到列表后再手点同一行，不能又被它带进二级页
+    var sub by remember { mutableStateOf(initialRoute?.sub ?: SettingsSub.None) }
+    LaunchedEffect(page) { if (page == MePage.List) sub = SettingsSub.None }
     // 先用本机副本顶上：断网拉不到 /users/me 时头部仍是真名字，不掉成「未命名用户」
     var me by remember { mutableStateOf<UserCard?>(client.cachedMyProfile()) }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -69,12 +79,13 @@ fun MeHost(
             )
             MePage.Notifications -> NotificationSettingsHost(
                 client = client,
+                initialSub = sub,
                 onOpenChat = onOpenChat,
                 onBack = { page = MePage.List },
             )
             MePage.Devices -> DevicesHost(client = client, onBack = { page = MePage.List })
-            MePage.DataStorage -> DataStorageHost(client = client, onBack = { page = MePage.List })
-            MePage.Privacy -> PrivacySecurityHost(client = client, onBack = { page = MePage.List })
+            MePage.DataStorage -> DataStorageHost(client = client, initialSub = sub, onBack = { page = MePage.List })
+            MePage.Privacy -> PrivacySecurityHost(client = client, initialSub = sub, onBack = { page = MePage.List })
             MePage.Qr -> QrCardHost(client = client, me = me, onBack = { page = MePage.List })
             MePage.ShareCard -> ShareMyCardHost(client = client, me = me, onBack = { page = MePage.List })
             MePage.Language -> LanguageHost(onBack = { page = MePage.List })

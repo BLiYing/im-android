@@ -51,6 +51,7 @@ import com.libeyond.imandroid.sdk.logging.PerfMarks
 import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.ConversationAction
+import com.libeyond.imandroid.data.SettingsRoute
 import com.libeyond.imandroid.data.ConversationActions
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.MuteState
@@ -85,6 +86,8 @@ private enum class Tab(@StringRes val labelRes: Int) {
 fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     val owner = client.uid.orEmpty()
     var tab by remember { mutableStateOf(Tab.Chats) }
+    /** 首页搜索点中的设置项落点：切到「我」tab 时一次性交给 [MeHost]（它随 tab 切走而离开组合，状态只能挂这里）。 */
+    var settingsRoute by remember { mutableStateOf<SettingsRoute?>(null) }
     // 本地好友表：uid → 整行。资料页进页即用它定型，避免闪动。
     // **存整行不只存 status**：群成员资料页还要拿 remark 当种子，
     // 否则给好友起过备注时，标题会先显昵称、拉到名片后再跳成备注——同一类闪动。
@@ -221,6 +224,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                 onOpenChat = { openConv = it },
                                 onOpenChatAt = { c, seq -> chatArm = ChatArm(locateSeq = seq); openConv = c },
                                 onLongPress = { c, rect -> menuFor = c; menuAnchor = rect },
+                                onOpenSetting = { settingsRoute = it; tab = Tab.Me },
                                 bottomBar = bottomBar,
                                 muteNow = muteTick,
                                 listState = chatsListState,
@@ -229,6 +233,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                             Tab.Me -> MeHost(
                                 client = client, onLogout = onLogout, bottomBar = bottomBar,
                                 onOpenChat = { openConv = it },
+                                initialRoute = settingsRoute,
+                                onRouteConsumed = { settingsRoute = null },
                             )
                         }
                         menuFor?.let { target ->

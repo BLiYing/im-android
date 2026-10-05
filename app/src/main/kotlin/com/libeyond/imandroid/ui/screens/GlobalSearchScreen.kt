@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ChatSearch
 import com.libeyond.imandroid.data.GlobalSearch
+import com.libeyond.imandroid.data.SettingsSearchEntry
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
@@ -36,7 +37,7 @@ import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
- * 首页全局搜索页（对齐 iOS `IMGlobalSearchViewController`）：会话 / 联系人 / 聊天记录三组本地结果，
+ * 首页全局搜索页（对齐 iOS `IMGlobalSearchViewController`）：会话 / 联系人 / 聊天记录 / 设置四组本地结果，
  * 有关键词时末尾恒显「搜索用户「x」」入口（在线找人 / 加好友）。纯展示，数据与动作全经参数注入。
  */
 @Composable
@@ -46,10 +47,13 @@ fun GlobalSearchScreen(
     convs: List<ConversationEntity>,
     friends: List<FriendEntry>,
     records: List<GlobalSearch.RecordHit>,
+    /** 设置项命中（[com.libeyond.imandroid.data.SettingsSearchIndex.hits]）；空 = 不出「设置」分组。 */
+    settings: List<SettingsSearchEntry>,
     titleOf: (ConversationEntity) -> String,
     onOpenConv: (ConversationEntity) -> Unit,
     onOpenFriend: (FriendEntry) -> Unit,
     onOpenRecord: (GlobalSearch.RecordHit) -> Unit,
+    onOpenSetting: (SettingsSearchEntry) -> Unit,
     onSearchUser: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -104,6 +108,12 @@ fun GlobalSearchScreen(
                     )
                 }
             }
+            if (settings.isNotEmpty()) {
+                item("h-settings") { IMSectionHeader(stringResource(R.string.settings_title)) }
+                items(settings.size, key = { "s-" + settings[it].id }) { i ->
+                    SettingsResultRow(settings[i], keyword) { onOpenSetting(settings[i]) }
+                }
+            }
             item("h-user") { IMSectionHeader(stringResource(R.string.search_section_users)) }
             item("user") {
                 ResultRow(
@@ -156,7 +166,7 @@ private fun ResultRow(
 
 /** 命中词用强调色 + 柔底高亮（口径同会话内搜索，区间来自 [ChatSearch.matchRanges]）。 */
 @Composable
-private fun highlighted(text: String, keyword: String): AnnotatedString {
+internal fun highlighted(text: String, keyword: String): AnnotatedString {
     val c = IMTheme.colors
     val accent = c.accent
     val soft = c.accentSoft

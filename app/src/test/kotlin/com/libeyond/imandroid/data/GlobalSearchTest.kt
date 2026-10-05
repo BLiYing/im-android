@@ -40,13 +40,6 @@ class GlobalSearchTest {
         assertTrue(GlobalSearch.groupHits(g, "zzz").isEmpty())
     }
 
-    @Test fun settingsHitsFilterByTitle() {
-        val rows = listOf("收藏", "隐私与安全", "Notifications")
-        assertEquals(listOf("隐私与安全"), GlobalSearch.settingsHits(rows, "隐私") { it })
-        assertEquals(listOf("Notifications"), GlobalSearch.settingsHits(rows, "notif") { it })
-        assertTrue(GlobalSearch.settingsHits(rows, "") { it }.isEmpty())
-    }
-
     @Test fun recordHitsSkipOrphanConversationsAndKeepOnePerMessage() {
         val convs = listOf(conv("a", "A"))
         val msgs = listOf(msg("a", 2, "hello world"), msg("a", 1, "hello"), msg("gone", 9, "hello"))

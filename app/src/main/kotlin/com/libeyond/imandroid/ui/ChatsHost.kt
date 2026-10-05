@@ -22,6 +22,7 @@ import com.libeyond.imandroid.data.ChatsPage
 import com.libeyond.imandroid.data.ConversationListPhase
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.PresenceDisplay
+import com.libeyond.imandroid.data.SettingsRoute
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
@@ -51,6 +52,8 @@ fun ChatsHost(
     /** 点聊天记录命中：进会话并定位到那条（[MainScreen] 把 seq 交给聊天页，同详情页「定位」）。 */
     onOpenChatAt: (ConversationEntity, Long) -> Unit,
     onLongPress: (ConversationEntity, Rect) -> Unit,
+    /** 点设置搜索命中：外壳切到「我」tab 并开到目标页。 */
+    onOpenSetting: (SettingsRoute) -> Unit = {},
     bottomBar: @Composable () -> Unit,
     /** 定时免打扰到期刷新用的当前时刻（NOTIFICATIONS_P1_DESIGN §4.4）——喂给 [ConversationListScreen]
      *  的铃铛/未读徽标；由调用方（`MainScreen`）算一次，不在这里另起一份定时器。 */
@@ -132,6 +135,7 @@ fun ChatsHost(
                 knownFriends = knownFriends,
                 onOpenChat = onOpenChat,
                 onOpenChatAt = onOpenChatAt,
+                onOpenSetting = onOpenSetting,
                 onSearchUser = { q -> addFriendQuery = q; page = ChatsPage.AddFriend },
                 onBack = { page = ChatsPage.List },
             )

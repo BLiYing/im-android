@@ -10,6 +10,9 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.GlobalSearch
+import com.libeyond.imandroid.data.LanguageStore
+import com.libeyond.imandroid.data.SettingsRoute
+import com.libeyond.imandroid.data.SettingsSearchIndex
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.searchAllMessages
 import com.libeyond.imandroid.sdk.IMClient
@@ -31,6 +34,7 @@ fun GlobalSearchHost(
     onOpenChat: (ConversationEntity) -> Unit,
     onOpenChatAt: (ConversationEntity, Long) -> Unit,
     onSearchUser: (String) -> Unit,
+    onOpenSetting: (SettingsRoute) -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -46,18 +50,24 @@ fun GlobalSearchHost(
         records = GlobalSearch.recordHits(msgs, conversations, query)
     }
 
+    // 登记表文案现烤（Str），语言切换后要重算：以当前语言 tag 为 key
+    val allSettings = remember(LanguageStore.resolved) { SettingsSearchIndex.entries() }
+    val settingHits = remember(allSettings, query) { SettingsSearchIndex.hits(allSettings, query) }
+
     GlobalSearchScreen(
         query = query,
         onQueryChange = { query = it },
         convs = GlobalSearch.convHits(conversations, query, titleOf),
         friends = GlobalSearch.friendHits(knownFriends.values, query),
         records = records,
+        settings = settingHits,
         titleOf = titleOf,
         onOpenConv = onOpenChat,
         onOpenFriend = { f ->
             if (f.userId.isNotEmpty() && f.userId != owner) onOpenChat(client.conversationStubFor(f.userId, f.displayName, f.avatarUrl))
         },
         onOpenRecord = { r -> onOpenChatAt(r.conv, r.msg.convSeq) },
+        onOpenSetting = { onOpenSetting(it.route) },
         onSearchUser = { onSearchUser(query.trim()) },
         onBack = onBack,
     )

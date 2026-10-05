@@ -14,6 +14,7 @@ import com.libeyond.imandroid.data.DownloadCategory
 import com.libeyond.imandroid.data.DownloadNetwork
 import com.libeyond.imandroid.data.DownloadSettingsUi
 import com.libeyond.imandroid.data.NetworkPolicy
+import com.libeyond.imandroid.data.SettingsSub
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
@@ -31,6 +32,12 @@ private sealed interface StoragePage {
     data object Main : StoragePage
     data class Network(val net: DownloadNetwork) : StoragePage
     data class Category(val net: DownloadNetwork, val cat: DownloadCategory) : StoragePage
+}
+
+/** 设置搜索的落点 → 初始页；返回键沿 类别 → 网络 → 主页 的原链退。 */
+private fun initialStoragePage(sub: SettingsSub): StoragePage {
+    val s = sub as? SettingsSub.Storage ?: return StoragePage.Main
+    return if (s.category == null) StoragePage.Network(s.network) else StoragePage.Category(s.network, s.category)
 }
 
 /** push 转场的深度：主页 → 某个网络 → 某个类别，逐层深一层。 */
@@ -51,12 +58,12 @@ private fun depthOf(p: StoragePage): Int = when (p) {
  * 本端滑杆的拖动位置只活在 `IMStepSlider` 自己的状态里、松手才进 store，不要副本也做到了。
  */
 @Composable
-fun DataStorageHost(client: IMClient, onBack: () -> Unit) {
+fun DataStorageHost(client: IMClient, onBack: () -> Unit, initialSub: SettingsSub = SettingsSub.None) {
     val context = LocalContext.current
     val store = client.downloadSettingsStore
     val settings = store.state.collectAsState().value.settings
 
-    var page by remember { mutableStateOf<StoragePage>(StoragePage.Main) }
+    var page by remember { mutableStateOf(initialStoragePage(initialSub)) }
     var cacheBytes by remember { mutableStateOf<Long?>(null) }
     var clearing by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
