@@ -59,14 +59,8 @@ data class SettingsSearchEntry(
  */
 object SettingsSearchIndex {
 
-    /**
-     * 「提示音」页的口语叫法；英文页标题已是 Sound，别名只补中文口径。
-     * 有意硬编码中文：仅补中文口径，多语言待 strings.json 机制。
-     */
-    private val SOUND_ALIASES = listOf("声音")
-
-    /** 两个网络页就是「自动下载」设置，页面标题里没有这几个字（同 iOS，仅补中文口径）。 */
-    private val AUTO_DOWNLOAD_ALIASES = listOf("自动下载")
+    /** 同义词来自文案表（`search.alias.*`，逗号分隔，半/全角均可），随界面语言切换；只增补页面标题里没有的口语叫法。 */
+    private fun aliasesOf(raw: String): List<String> = splitAliases(raw)
 
     fun entries(): List<SettingsSearchEntry> = buildList {
         val notif = Str.s(R.string.ios_settings_row_notifications)
@@ -97,7 +91,7 @@ object SettingsSearchIndex {
             add(SettingsSearchEntry("notif_$kind", typeTitle, listOf(notif, typeTitle), SettingsGlyph.Bell, SettingsTint.Red, typeRoute))
             val soundRoute = SettingsRoute(MePage.Notifications, SettingsSub.Notification(NotificationPage.Sound, group))
             val sound = Str.s(R.string.notif_type_sound)
-            add(SettingsSearchEntry("notif_${kind}_sound", sound, listOf(notif, typeTitle, sound), SettingsGlyph.Volume, SettingsTint.Red, soundRoute, aliases = SOUND_ALIASES))
+            add(SettingsSearchEntry("notif_${kind}_sound", sound, listOf(notif, typeTitle, sound), SettingsGlyph.Volume, SettingsTint.Red, soundRoute, aliases = aliasesOf(Str.s(R.string.search_alias_sound))))
         }
 
         // 隐私与安全
@@ -110,7 +104,7 @@ object SettingsSearchIndex {
         for (net in DownloadNetwork.entries) {
             val netGlyph = if (net == DownloadNetwork.Wifi) SettingsGlyph.Wifi else SettingsGlyph.Smartphone
             add(SettingsSearchEntry("storage_${net.name.lowercase()}", net.title, listOf(storage, net.title), netGlyph, SettingsTint.Green,
-                SettingsRoute(MePage.DataStorage, SettingsSub.Storage(net, null)), aliases = AUTO_DOWNLOAD_ALIASES))
+                SettingsRoute(MePage.DataStorage, SettingsSub.Storage(net, null)), aliases = aliasesOf(Str.s(R.string.search_alias_auto_download))))
             for (cat in DownloadCategory.entries) {
                 val glyph = when (cat) { DownloadCategory.Image -> SettingsGlyph.Image; DownloadCategory.Video -> SettingsGlyph.Video; DownloadCategory.File -> SettingsGlyph.File }
                 add(SettingsSearchEntry("storage_${net.name.lowercase()}_${cat.name.lowercase()}", cat.title, listOf(storage, net.title, cat.title),
@@ -135,3 +129,7 @@ object SettingsSearchIndex {
 
     private fun haystack(e: SettingsSearchEntry): String = (e.path + e.title).joinToString(SettingsSearchEntry.PATH_SEPARATOR)
 }
+
+/** 「a,b，c」→ [a, b, c]：去空白、去空项。纯函数、包级（理由同 `rtcTokenFrom`：不碰带初始化的 object）。 */
+internal fun splitAliases(raw: String): List<String> =
+    raw.split(',', '，').map { it.trim() }.filter { it.isNotEmpty() }

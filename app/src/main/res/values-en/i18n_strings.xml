@@ -1135,7 +1135,6 @@
     <string name="ios_tab_contacts">Contacts</string>
     <string name="ios_tab_me">Me</string>
     <string name="ios_tab_messages">Messages</string>
-    <string name="ios_tab_search">Search</string>
     <string name="login_button_login">Log in</string>
     <string name="login_button_register">Sign up and log in</string>
     <string name="login_error_fill_credentials">Enter your username and password</string>
@@ -1708,20 +1707,21 @@
     <string name="record_chat_history">Chat history</string>
     <string name="record_dirty_card">[Contact]</string>
     <string name="record_dirty_record">[Chat History]</string>
+    <string name="rtc_connecting">Connecting to the call service…</string>
     <string name="rtc_error_id_empty">%1$s is empty</string>
     <string name="rtc_error_id_has_whitespace">%1$s contains whitespace: %2$s</string>
     <string name="rtc_error_id_too_long">%1$s exceeds %2$d bytes</string>
     <string name="rtc_error_no_callees">Select members to call</string>
     <string name="rtc_error_not_started">The call service isn’t running. Please log in again.</string>
-    <string name="rtc_connecting">Connecting to the call service…</string>
     <string name="rtc_error_token_fetch_failed">Failed to fetch the call credential</string>
     <string name="rtc_invite_in_call">In a call</string>
     <string name="rtc_kind_group_id">Group ID</string>
     <string name="rtc_kind_peer_id">Peer ID</string>
     <string name="scene_kicked_logged_out">This account was logged out on another device. Please log in again.</string>
-    <string name="search_global_placeholder">Search chats, contacts, and messages</string>
+    <string name="search_alias_auto_download">auto download,auto-download,cellular,data</string>
+    <string name="search_alias_sound">sound,tone,ringtone,alert</string>
     <string name="search_contacts_placeholder">Search contacts and groups</string>
-    <string name="search_me_placeholder">Search settings</string>
+    <string name="search_global_placeholder">Search chats, contacts, and messages</string>
     <string name="search_no_matches">No results found</string>
     <plurals name="search_result_member_count">
         <item quantity="one">%1$d member</item>
@@ -1729,7 +1729,9 @@
     </plurals>
     <string name="search_section_contacts">Contacts</string>
     <string name="search_section_conversations">Chats</string>
+    <string name="search_section_groups">Groups</string>
     <string name="search_section_records">Messages</string>
+    <string name="search_section_settings">Settings</string>
     <string name="search_section_users">Users</string>
     <string name="search_user_avatar_initial">S</string>
     <string name="search_user_row_subtitle">Find by exact uid or phone number and add as a friend</string>

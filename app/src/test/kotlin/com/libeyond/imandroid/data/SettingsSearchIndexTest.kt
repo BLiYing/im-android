@@ -102,4 +102,10 @@ class SettingsSearchIndexTest {
     @Test fun searchWifiFindsNetworkPageThenItsCategories() {
         assertEquals(listOf("storage_wifi", "storage_wifi_image", "storage_wifi_video", "storage_wifi_file"), hits("Wi-Fi"))
     }
+
+    @Test
+    fun splitAliases_半角全角逗号都认_去空白空项() {
+        assertEquals(listOf("声音", "提示音", "铃声"), splitAliases(" 声音,提示音，铃声 ,, "))
+        assertEquals(emptyList<String>(), splitAliases(""))
+    }
 }
