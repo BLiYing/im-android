@@ -350,6 +350,10 @@ interface ConversationDao {
     @Query("SELECT * FROM conversation WHERE ownerUid = :owner AND peerUid = :peer AND isGroup = 0 LIMIT 1")
     suspend fun byPeer(owner: String, peer: String): ConversationEntity?
 
+    /** conv_update(settings) 只改四列设置：单语句原子，**不要**读-改-写整行（会把已被并发删掉的行写回来）。行不存在时影响 0 行。 */
+    @Query("UPDATE conversation SET pinnedAt = :pinnedAt, muted = :muted, muteUntil = :muteUntil, markedUnread = :markedUnread WHERE ownerUid = :owner AND convId = :convId")
+    suspend fun updateSettings(owner: String, convId: String, pinnedAt: Long, muted: Boolean, muteUntil: Long, markedUnread: Boolean)
+
     /** 只改对端资料三列，不动未读 / 游标 / 置顶等别的列（读-改-写整行会盖掉并发的同步进度）。 */
     @Query("UPDATE conversation SET title = :title, avatarUrl = :avatarUrl, peerRemark = :peerRemark WHERE ownerUid = :owner AND convId = :convId")
     suspend fun updatePeerProfile(owner: String, convId: String, title: String, avatarUrl: String, peerRemark: String)

@@ -446,15 +446,13 @@ class MessageRepository(
 
     /** 应用 conv_update（§6.8）。下行**携带变更后的完整状态**，直接覆盖本地。 */
     suspend fun applyConvUpdate(owner: String, u: ConvUpdateData) {
-        val c = conversations.byId(owner, u.convId) ?: return
-        conversations.upsert(
-            c.copy(
-                pinnedAt = u.pinnedAt,
-                muted = u.muted,
-                muteUntil = u.muteUntil,
-                markedUnread = u.markedUnread,
-            )
-        )
+        // delete 帧（本端 DELETE 的回声 / 别的设备删了）：整行移走。此前对所有帧都「读行→copy→upsert」，
+        // 回声帧比 removeConversation 慢半拍时把刚删的行原样写回（OPPO 复现：行不消失、重启才没）。
+        if (u.action == "delete") {
+            removeConversation(owner, u.convId)
+        } else {
+            conversations.updateSettings(owner, u.convId, u.pinnedAt, u.muted, u.muteUntil, u.markedUnread)
+        }
         log.i("conv_update_applied", "convId" to u.convId, "action" to u.action)
     }
 
