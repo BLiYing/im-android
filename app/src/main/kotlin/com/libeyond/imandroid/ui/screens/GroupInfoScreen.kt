@@ -171,7 +171,7 @@ fun GroupInfoScreen(
                         style = MaterialTheme.typography.titleLarge,
                         color = c.textPrimary,
                         textAlign = TextAlign.Center,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(2.dp))

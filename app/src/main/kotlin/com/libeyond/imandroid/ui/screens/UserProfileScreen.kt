@@ -74,11 +74,13 @@ fun UserProfileScreen(
         ) {
             IMAvatar(card.displayName, seed = card.userId, avatarUrl = card.avatarUrl, size = 64.dp)
             Spacer(Modifier.width(d.space3))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(
                     card.displayName,
                     style = MaterialTheme.typography.titleLarge,
                     color = c.textPrimary,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
                 // 副标题=在线态。**不重复显示下方已列出的 @句柄**（2026-08-30 收口）
                 val presenceLabel = Presence.label(

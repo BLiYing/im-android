@@ -1675,6 +1675,9 @@
     <string name="rtc_kind_peer_id">对方 id</string>
     <string name="scene_kicked_logged_out">该账号已在其他设备退出登录，请重新登录</string>
     <string name="search_global_placeholder">搜索会话、联系人、聊天记录</string>
+    <string name="search_contacts_placeholder">搜索联系人、群聊</string>
+    <string name="search_me_placeholder">搜索设置</string>
+    <string name="search_no_matches">没有找到相关结果</string>
     <plurals name="search_result_member_count">
         <item quantity="other">%1$d 人</item>
     </plurals>

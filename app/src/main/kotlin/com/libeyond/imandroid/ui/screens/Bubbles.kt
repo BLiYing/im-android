@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -224,8 +225,15 @@ internal fun Bubble(
                 modifier = Modifier
                     .widthIn(max = bubbleMax)
                     .then(if (isCall && pressed) Modifier.alpha(0.7f) else Modifier)
+                    .then(
+                        // 长按预览浮起：阴影跟着气泡走，而不是整行（行是全宽的）
+                        if (com.libeyond.imandroid.ui.components.LocalMenuPreviewLift.current) {
+                            Modifier.shadow(12.dp, RoundedCornerShape(appearance.bubbleRadius))
+                        } else Modifier,
+                    )
                     .clip(RoundedCornerShape(appearance.bubbleRadius))
                     .background(if (mine) c.bubbleMe else c.bubbleThem)
+                    .locateFlash()
                     .then(
                         if (onLongPress != null && !recalled) {
                             Modifier.combinedClickable(

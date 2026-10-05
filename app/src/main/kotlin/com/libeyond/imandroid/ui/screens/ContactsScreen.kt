@@ -51,7 +51,10 @@ import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.IMSearchField
 import com.libeyond.imandroid.ui.components.IMTopBar
+import com.libeyond.imandroid.data.GlobalSearch
+import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.ui.components.TopBarCircleButton
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -80,6 +83,11 @@ fun ContactsScreen(
     onOpenFriend: (FriendEntry) -> Unit,
     /** 左滑动作（删除 / 拉黑 / 解除拉黑）。由 Host 执行并负责二次确认。 */
     onFriendAction: (FriendEntry, FriendAction) -> Unit = { _, _ -> },
+    /** 我加入的群（搜索用；没拉到时为空）。 */
+    groups: List<GroupInfo> = emptyList(),
+    onOpenGroup: (GroupInfo) -> Unit = {},
+    /** 搜索无结果时「搜索用户「x」」入口：带关键词进加好友页。 */
+    onSearchUser: (String) -> Unit = {},
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -100,6 +108,26 @@ fun ContactsScreen(
                 )
             },
         )
+
+        // 搜索：本地联系人 + 群聊（备注/昵称/账号/群名），分组展示；无结果给「按账号搜索用户」入口
+        var query by remember { mutableStateOf("") }
+        IMSearchField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = stringResource(R.string.search_contacts_placeholder),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = d.space2),
+        )
+        if (query.isNotBlank()) {
+            ContactsSearchResults(
+                keyword = query.trim(),
+                friends = GlobalSearch.friendHits(friends, query),
+                groups = GlobalSearch.groupHits(groups, query),
+                onOpenFriend = onOpenFriend,
+                onOpenGroup = onOpenGroup,
+                onSearchUser = { onSearchUser(query.trim()) },
+            )
+            return@Column
+        }
 
         // 按拼音首字母分组（判据在 ContactSection，与 iOS IMContactSectionIndex 同一套规则）
         val groups = remember(friends) { ContactSection.group(friends) { it.displayName } }
@@ -275,4 +303,74 @@ private fun FriendRow(f: FriendEntry, onClick: () -> Unit) {
         if (f.blocked) Text(stringResource(R.string.common_blocked), color = c.textTertiary, fontSize = 11.sp)
     }
     Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
+}
+
+/** 通讯录搜索结果：联系人 / 群聊两组；两组都空时只剩「搜索用户」入口（复用加好友页）。 */
+@Composable
+private fun ContactsSearchResults(
+    keyword: String,
+    friends: List<FriendEntry>,
+    groups: List<GroupInfo>,
+    onOpenFriend: (FriendEntry) -> Unit,
+    onOpenGroup: (GroupInfo) -> Unit,
+    onSearchUser: () -> Unit,
+) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    LazyColumn(Modifier.fillMaxSize()) {
+        if (friends.isNotEmpty()) {
+            item("h-friend") { SectionLabel(stringResource(R.string.search_section_contacts)) }
+            items(friends, key = { "f-" + it.userId }) { f -> FriendRow(f, onClick = { onOpenFriend(f) }) }
+        }
+        if (groups.isNotEmpty()) {
+            item("h-group") { SectionLabel(stringResource(R.string.common_group_chat)) }
+            items(groups, key = { "g-" + it.convId }) { g ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(c.pageBackground).clickable { onOpenGroup(g) }
+                        .padding(horizontal = d.space4, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IMAvatar(displayName = g.name, seed = g.convId, avatarUrl = g.avatarUrl, size = 40.dp)
+                    Spacer(Modifier.width(d.space3))
+                    Text(
+                        g.name, color = c.textPrimary, style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                    )
+                }
+                Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
+            }
+        }
+        if (friends.isEmpty() && groups.isEmpty()) {
+            item("empty") {
+                Text(
+                    stringResource(R.string.search_no_matches), color = c.textTertiary,
+                    style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                )
+            }
+            item("user") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(c.pageBackground).clickable(onClick = onSearchUser)
+                        .padding(horizontal = d.space4, vertical = d.space3),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier.size(40.dp).clip(CircleShape).background(ENTRY_NEW_FRIENDS),
+                        contentAlignment = Alignment.Center,
+                    ) { Image(Lucide.UserPlus, null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(Color.White)) }
+                    Spacer(Modifier.width(d.space3))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.search_user_row_title, keyword), color = c.textPrimary,
+                            style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            stringResource(R.string.search_user_row_subtitle), color = c.textSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

@@ -11,6 +11,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -225,7 +227,11 @@ internal fun ChatMessageMenu(
                 // 宫格浮起的是**手指按住的那一格**（同 iOS）：anchor 就是那一格的矩形，
                 // 这里按它铺满即可（格子是正方形）。
                 val tileSize = with(androidx.compose.ui.platform.LocalDensity.current) { anchor.width.toDp() }
-                Box(Modifier.clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))) {
+                Box(
+                    Modifier
+                        .shadow(12.dp, RoundedCornerShape(IMTheme.appearance.bubbleRadius))
+                        .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius)),
+                ) {
                     // 与宫格原位同一份渲染（门控磨砂等）；点图片 = 关菜单（见 AlbumTilePreview）
                     AlbumTilePreview(
                         tile = AlbumTile(
