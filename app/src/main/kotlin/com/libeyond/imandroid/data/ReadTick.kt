@@ -2,8 +2,8 @@ package com.libeyond.imandroid.data
 
 /**
  * 「我发的消息」的已读勾（对齐 iOS `peerReadSeq` 复用）：**单聊与群聊共用同一个字段**——
- * 单聊 = 对端读位点（实时靠 receipt 帧）；群聊 = `group_read_seq`（= 其他成员读位点的最小值，**不实时**：
- * 服务端刻意不把群回执扇出给其他成员，只在会话列表快照 / 同步时回带）。
+ * 单聊 = 对端读位点（实时靠 receipt 帧）；群聊 = `group_read_seq`（= 其他成员读位点的最小值）：群回执本身不扇出，
+ * 但这个最小值变大时服务端推 `group_read` 帧（[applyGroupRead]，GROUP_READ_REALTIME_DESIGN），会话列表快照兜底。
  * 群聊双勾的含义是「所有人都读过」。
  */
 object ReadTick {

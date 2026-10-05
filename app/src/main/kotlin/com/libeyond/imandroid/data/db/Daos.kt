@@ -389,6 +389,16 @@ interface ConversationDao {
     @Query("SELECT peerReadSeq FROM conversation WHERE ownerUid = :owner AND convId = :convId")
     fun observePeerReadSeq(owner: String, convId: String): kotlinx.coroutines.flow.Flow<Long>
 
+    /**
+     * 群「全员已读」位点（`group_read` 帧）写进会话行的 `peerReadSeq`，**只增不减**、**只对群**
+     * （单聊这一列是对端读位点，由 receipt 维护，不能被群帧误写）。会话行不存在时影响 0 行。
+     */
+    @Query(
+        "UPDATE conversation SET peerReadSeq = :seq " +
+            "WHERE ownerUid = :owner AND convId = :convId AND isGroup = 1 AND peerReadSeq < :seq",
+    )
+    suspend fun raiseGroupRead(owner: String, convId: String, seq: Long)
+
     /** 本机清空位点**只增不减**（[ConversationEntity.clearedUpTo]）。 */
     @Query("UPDATE conversation SET clearedUpTo = :seq WHERE ownerUid = :owner AND convId = :convId AND clearedUpTo < :seq")
     suspend fun raiseClearedUpTo(owner: String, convId: String, seq: Long)

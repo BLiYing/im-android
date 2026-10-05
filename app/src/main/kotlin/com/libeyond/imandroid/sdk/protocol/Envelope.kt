@@ -31,6 +31,9 @@ object FrameType {
     const val CONV_UPDATE = "conv_update"
     const val CAPABILITIES_UPDATE = "capabilities_update"
     const val CONV_BUMP = "conv_bump"
+
+    /** 群「全员已读」位点变大（下行，PROTOCOL §5.3）。 */
+    const val GROUP_READ = "group_read"
     const val WINDOW_REQ = "window_req"
     const val WINDOW_RESP = "window_resp"
     const val MSG_HIDDEN = "msg_hidden"

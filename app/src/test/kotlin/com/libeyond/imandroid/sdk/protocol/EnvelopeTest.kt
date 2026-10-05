@@ -76,6 +76,7 @@ class EnvelopeTest {
         assertEquals("capabilities_update", FrameType.CAPABILITIES_UPDATE)
         assertEquals("voice_transcript", FrameType.VOICE_TRANSCRIPT)
         assertEquals("msg_hidden", FrameType.MSG_HIDDEN)
+        assertEquals("group_read", FrameType.GROUP_READ)
     }
 
     @Test
@@ -154,6 +155,14 @@ class SyncGapTest {
             com.libeyond.imandroid.sdk.protocol.SyncCursorItem("u_1_2", 57L, maxGap = 400L),
         )
         assertTrue(json.contains("\"max_gap\":400"))
+    }
+
+    @Test
+    fun `group_read 解析出会话与全员已读位点`() {
+        val json = """{"conv_id":"g_a","group_read_seq":130}"""
+        val d = ProtocolJson.decodeFromString(com.libeyond.imandroid.sdk.protocol.GroupReadData.serializer(), json)
+        assertEquals("g_a", d.convId)
+        assertEquals(130L, d.groupReadSeq)
     }
 
     @Test

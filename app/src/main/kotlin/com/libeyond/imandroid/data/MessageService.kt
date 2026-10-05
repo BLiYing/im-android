@@ -7,6 +7,7 @@ import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.GroupEventData
 import com.libeyond.imandroid.sdk.protocol.ConvBumpData
+import com.libeyond.imandroid.sdk.protocol.GroupReadData
 import com.libeyond.imandroid.sdk.protocol.AckData
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
@@ -178,6 +179,10 @@ class MessageService(
                     // sync/window 补拉都不经过这里——见 IncomingAlert 类注释。
                     IncomingAlert.handle(owner, m, repo)
                 }
+            }
+
+            FrameType.GROUP_READ -> data?.let {
+                repo.applyGroupRead(owner, ProtocolJson.decodeFromJsonElement(GroupReadData.serializer(), it))
             }
 
             FrameType.CONV_BUMP -> data?.let {

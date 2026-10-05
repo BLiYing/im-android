@@ -231,6 +231,16 @@ data class MessageData(
     @SerialName("mention_spans") val mentionSpans: List<MentionSpan>? = null,
 )
 
+/**
+ * group_read 下行负载（PROTOCOL §5.3）：本人视角的群「全员已读」位点（除我之外全体成员已读位点的最小值），
+ * 只在变大时推。设计见 IMServer `docs/design/GROUP_READ_REALTIME_DESIGN.md`。
+ */
+@Serializable
+data class GroupReadData(
+    @SerialName("conv_id") val convId: String = "",
+    @SerialName("group_read_seq") val groupReadSeq: Long = 0,
+)
+
 /** receipt 上下行负载（PROTOCOL §5）。 */
 @Serializable
 data class ReceiptData(
