@@ -88,6 +88,9 @@ fun ContactsScreen(
     onOpenGroup: (GroupInfo) -> Unit = {},
     /** 搜索无结果时「搜索用户「x」」入口：带关键词进加好友页。 */
     onSearchUser: (String) -> Unit = {},
+    /** 搜索词由 Host 持有：点结果进二级页再返回，本页会离开组合，词留在这里才不丢（iOS 搜索栏随 VC 常驻）。 */
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -110,10 +113,9 @@ fun ContactsScreen(
         )
 
         // 搜索：本地联系人 + 群聊（备注/昵称/账号/群名），分组展示；无结果给「按账号搜索用户」入口
-        var query by remember { mutableStateOf("") }
         IMSearchField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = onQueryChange,
             placeholder = stringResource(R.string.search_contacts_placeholder),
             modifier = Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = d.space2),
         )

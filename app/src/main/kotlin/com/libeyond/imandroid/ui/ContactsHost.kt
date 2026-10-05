@@ -54,6 +54,8 @@ fun ContactsHost(
     var toast by remember { mutableStateOf<String?>(null) }
     /** 通讯录搜索无结果时带进加好友页的初始关键词（点右上角「添加朋友」为空）。 */
     var addFriendQuery by remember { mutableStateOf("") }
+    /** 通讯录搜索词：放 Host 层，进二级页（资料 / 加好友）再返回不丢。 */
+    var searchQuery by remember { mutableStateOf("") }
     /**
      * 左滑「删除」待确认的那位好友（null = 没有）。
      *
@@ -88,12 +90,17 @@ fun ContactsHost(
     }
 
     LaunchedEffect(Unit) {
-        reload()
-        // 通讯录搜索要搜群名：静默刷新一次我加入的群（失败就用上面的离线快照，不打扰）
-        runCatchingCancellable { client.groups.myGroups() }.onSuccess {
-            groups = it
-            runCatchingCancellable { client.roster.saveGroups(owner, it) }
+        // 群列表与好友列表互不依赖：并发拉，别让弱网下的好友请求拖慢群搜索（原先串行）
+        launch {
+            // 通讯录搜索要搜群名：静默刷新一次我加入的群（失败就用上面的离线快照，不打扰，但留痕）
+            runCatchingCancellable { client.groups.myGroups() }
+                .onSuccess {
+                    groups = it
+                    runCatchingCancellable { client.roster.saveGroups(owner, it) }
+                }
+                .onFailure { IMLog.tag("IM.Contacts").w("groups_refresh_failed", "err" to it.javaClass.simpleName) }
         }
+        reload()
     }
 
     // **收到任意 friend 帧即重新拉列表**，event 只作语义/日志（PROTOCOL §6.5）。
@@ -114,6 +121,8 @@ fun ContactsHost(
         when (p) {
             ContactsPage.List -> TabRoot(bottomBar) {
                 ContactsScreen(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
                     friends = accepted,
                     pendingCount = pending.size,
                     onOpenNewFriends = { page = ContactsPage.NewFriends },

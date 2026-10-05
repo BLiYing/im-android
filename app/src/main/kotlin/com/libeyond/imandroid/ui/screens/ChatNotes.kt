@@ -111,6 +111,7 @@ internal fun SystemNote(
             modifier = Modifier
                 .clip(RoundedCornerShape(11.dp))
                 .background(c.datePillBackground)
+                .locateFlash() // 定位命中系统行 / 通话记录行：iOS flashRowAtIndexPath 对无气泡的 cell 回落整行，这里闪胶囊
                 .padding(horizontal = 10.dp, vertical = 4.dp),
         ) {
             ClickableText(
