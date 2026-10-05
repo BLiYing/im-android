@@ -70,6 +70,8 @@ fun GroupJoinPreviewScreen(
                 style = MaterialTheme.typography.titleLarge,
                 color = c.textPrimary,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(6.dp))
             Text(

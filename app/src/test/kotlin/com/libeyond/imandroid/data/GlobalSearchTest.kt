@@ -30,6 +30,23 @@ class GlobalSearchTest {
         assertEquals(listOf("u1"), GlobalSearch.friendHits(f, "U1").map { it.userId })
     }
 
+    @Test fun groupHitsMatchNameCaseInsensitiveAndBlankIsEmpty() {
+        val g = listOf(
+            com.libeyond.imandroid.sdk.api.GroupInfo(convId = "g1", name = "Android 群"),
+            com.libeyond.imandroid.sdk.api.GroupInfo(convId = "g2", name = "设计"),
+        )
+        assertEquals(listOf("g1"), GlobalSearch.groupHits(g, " android ").map { it.convId })
+        assertTrue(GlobalSearch.groupHits(g, " ").isEmpty())
+        assertTrue(GlobalSearch.groupHits(g, "zzz").isEmpty())
+    }
+
+    @Test fun settingsHitsFilterByTitle() {
+        val rows = listOf("收藏", "隐私与安全", "Notifications")
+        assertEquals(listOf("隐私与安全"), GlobalSearch.settingsHits(rows, "隐私") { it })
+        assertEquals(listOf("Notifications"), GlobalSearch.settingsHits(rows, "notif") { it })
+        assertTrue(GlobalSearch.settingsHits(rows, "") { it }.isEmpty())
+    }
+
     @Test fun recordHitsSkipOrphanConversationsAndKeepOnePerMessage() {
         val convs = listOf(conv("a", "A"))
         val msgs = listOf(msg("a", 2, "hello world"), msg("a", 1, "hello"), msg("gone", 9, "hello"))

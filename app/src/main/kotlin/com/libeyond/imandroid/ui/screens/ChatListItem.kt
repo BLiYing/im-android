@@ -83,7 +83,6 @@ internal fun ChatListItem(
     onOpenRecord: (String) -> Unit,
     onCallBack: (Boolean) -> Unit,
 ) {
-    val c = IMTheme.colors
     val r0 = rows[i]
     // 菜单开着的那一行整行隐形（保留占位，列表不跳）。
     // **宫格例外**：只隐被长按的那一格（浮起来的也只有那一格），
@@ -103,7 +102,6 @@ internal fun ChatListItem(
     Row(
         Modifier
             .alpha(if (hidden) 0f else 1f)
-            .background(if (highlighted) c.accentSoft else androidx.compose.ui.graphics.Color.Transparent)
             .then(
                 if (selecting && selMsg != null) {
                     Modifier.clickable { onToggleSelect(selMsg) }
@@ -121,6 +119,7 @@ internal fun ChatListItem(
         }
         SelectionGutterSpacer()
     }
+    androidx.compose.runtime.CompositionLocalProvider(LocalLocateFlash provides highlighted) {
     ChatRowView(
         rows = rows,
         i = i,
@@ -139,5 +138,6 @@ internal fun ChatListItem(
         hiddenTile = if (r0 is ChatRow.Album) menuForSeq else 0L,
         selection = if (r0 is ChatRow.Album) selection else null, onToggleSelect = onToggleSelect, // 只宫格要逐格圈：别的行不吃 selection，免得每勾一下全体行重组
     )
+    }
     }
 }

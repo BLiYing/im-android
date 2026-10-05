@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,7 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,8 +44,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.R
@@ -65,9 +70,13 @@ fun GroupTextSheet(
     val clipboard = LocalClipboardManager.current
     // 吐司画在弹窗窗口里：Dialog 是独立窗口，宿主页的吐司会被它盖住
     var copied by remember { mutableStateOf(false) }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    // **不用 Dialog 窗口**：Android 15 的 Dialog 窗口内容区被状态栏高度下推、Compose 却按整屏量，
+    // 底部「复制全文」被挤出屏幕（2026-10-05 PKD130 / Android 15 复现，Pixel 2 XL 无此问题）。
+    // 与 IMCardSheet 一样画在组合树内、自己处理 insets。
+    BackHandler(onBack = onDismiss)
+    run {
         Box(
-            Modifier.fillMaxSize().clickable(
+            Modifier.fillMaxSize().background(c.overlay).clickable(
                 interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss,
             ),
             contentAlignment = Alignment.BottomCenter,
@@ -78,7 +87,7 @@ fun GroupTextSheet(
                     .background(c.groupedBackground)
                     // 吞掉点击，别让弹窗本体的点击穿透到遮罩把自己关了
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-                    .navigationBarsPadding()
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime).only(WindowInsetsSides.Bottom))
                     .padding(horizontal = d.space4),
             ) {
                 Box(
@@ -100,7 +109,7 @@ fun GroupTextSheet(
                     Text(subtitle, color = c.textSecondary, style = MaterialTheme.typography.bodySmall)
                 }
                 Spacer(Modifier.height(14.dp))
-                Box(Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 420.dp).verticalScroll(rememberScrollState())) {
+                Box(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(min = 120.dp, max = 420.dp).verticalScroll(rememberScrollState())) {
                     SelectionContainer {
                         Text(body, color = c.textPrimary, style = MaterialTheme.typography.bodyLarge)
                     }

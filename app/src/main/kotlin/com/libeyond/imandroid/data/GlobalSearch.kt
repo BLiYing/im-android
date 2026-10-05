@@ -31,6 +31,20 @@ object GlobalSearch {
         }
     }
 
+    /** 通讯录页搜索：我加入的群按群名命中。 */
+    fun groupHits(groups: List<com.libeyond.imandroid.sdk.api.GroupInfo>, keyword: String): List<com.libeyond.imandroid.sdk.api.GroupInfo> {
+        val q = ListSearch.normalizedQuery(keyword)
+        if (q.isEmpty()) return emptyList()
+        return groups.filter { it.name.contains(q, ignoreCase = true) }
+    }
+
+    /** 「我」页搜索：按条目标题过滤（空查询 = 空集，调用方据此显示原页面）。 */
+    fun <T> settingsHits(items: List<T>, keyword: String, titleOf: (T) -> String): List<T> {
+        val q = ListSearch.normalizedQuery(keyword)
+        if (q.isEmpty()) return emptyList()
+        return items.filter { titleOf(it).contains(q, ignoreCase = true) }
+    }
+
     fun recordHits(msgs: List<MessageEntity>, convs: List<ConversationEntity>, keyword: String): List<RecordHit> {
         val needle = keyword.trim().lowercase()
         if (needle.isEmpty()) return emptyList()

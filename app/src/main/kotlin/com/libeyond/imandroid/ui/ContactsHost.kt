@@ -52,6 +52,8 @@ fun ContactsHost(
     // 点好友先进**资料页**，不直接进聊天（三端统一的微信式口径）
     var profileOf by remember { mutableStateOf<FriendEntry?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
+    /** 通讯录搜索无结果时带进加好友页的初始关键词（点右上角「添加朋友」为空）。 */
+    var addFriendQuery by remember { mutableStateOf("") }
     /**
      * 左滑「删除」待确认的那位好友（null = 没有）。
      *
@@ -85,7 +87,14 @@ fun ContactsHost(
         }
     }
 
-    LaunchedEffect(Unit) { reload() }
+    LaunchedEffect(Unit) {
+        reload()
+        // 通讯录搜索要搜群名：静默刷新一次我加入的群（失败就用上面的离线快照，不打扰）
+        runCatchingCancellable { client.groups.myGroups() }.onSuccess {
+            groups = it
+            runCatchingCancellable { client.roster.saveGroups(owner, it) }
+        }
+    }
 
     // **收到任意 friend 帧即重新拉列表**，event 只作语义/日志（PROTOCOL §6.5）。
     LaunchedEffect(Unit) { client.friendEvents.collect { reload() } }
@@ -126,7 +135,10 @@ fun ContactsHost(
                             }
                         }
                     },
-                    onAddFriend = { page = ContactsPage.Search },
+                    onAddFriend = { addFriendQuery = ""; page = ContactsPage.Search },
+                    groups = groups,
+                    onOpenGroup = { g -> onOpenChat(client.groupConversationStubFor(g.convId, g.name, g.avatarUrl)) },
+                    onSearchUser = { q -> addFriendQuery = q; page = ContactsPage.Search },
                     onOpenGroups = {
                         page = ContactsPage.Groups
                         scope.launch {
@@ -200,6 +212,7 @@ fun ContactsHost(
                 onOpenChat = onOpenChat,
                 onChanged = { scope.launch { reload() } },
                 onBack = { page = ContactsPage.List },
+                initialQuery = addFriendQuery,
             )
         }
     }

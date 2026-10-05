@@ -180,7 +180,8 @@ internal fun AlbumBubble(
         Box(
             modifier = Modifier
                 .width(AlbumLayout.WIDTH.dp)
-                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius)),
+                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
+                .locateFlash(),
         ) {
             Column {
                 var idx = 0

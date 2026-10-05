@@ -129,11 +129,13 @@ fun MessageContextMenu(
                     .graphicsLayer {
                         scaleX = lift.value
                         scaleY = lift.value
-                    }
-                    .shadow(if (lift.value > 1f) 12.dp else 0.dp, RoundedCornerShape(d.radiusCard)),
+                    },
                 // **不吞点击**：这一层是整行全宽的，吞了就等于「气泡旁边的空白区点了没反应」——
                 // 2026-09-08 用户报的正是这个。iOS 点预览本身也是关菜单，所以让点击穿到背景最省事。
-            ) { preview() }
+            ) {
+                // 阴影交给预览里的气泡自己画（Bubble）：这一层是整行全宽的，在它身上投影就是整行高亮
+                androidx.compose.runtime.CompositionLocalProvider(LocalMenuPreviewLift provides (lift.value > 1f)) { preview() }
+            }
         }
 
         // ② 菜单卡片
@@ -175,6 +177,9 @@ private fun MenuDivider() {
             .fillMaxWidth().background(IMTheme.colors.separator),
     )
 }
+
+/** 长按预览是否已浮起（气泡据此自画阴影）。 */
+val LocalMenuPreviewLift = androidx.compose.runtime.compositionLocalOf { false }
 
 /** 一行：图标 + 文案（+ 有子菜单时右侧 `›`）。图标列即便某项没图标也占位，文字才对得齐。 */
 @Composable

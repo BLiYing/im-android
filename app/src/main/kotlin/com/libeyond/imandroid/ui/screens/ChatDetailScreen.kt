@@ -147,12 +147,16 @@ internal fun ChatDetailScreen(
                 // —— 大头像头部（对齐 iOS 的 300pt tableHeaderView）——
                 Column(
                     Modifier.fillMaxWidth().background(c.pageBackground)
-                        .clickable(onClick = onOpenProfile).padding(vertical = 20.dp),
+                        .clickable(onClick = onOpenProfile).padding(vertical = 20.dp, horizontal = d.space4),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     IMAvatar(title, seed = conv.peerUid, avatarUrl = conv.avatarUrl, size = 100.dp)
                     Spacer(Modifier.height(12.dp))
-                    Text(title, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                    Text(
+                        title, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
                     // 副标题 = 在线态，空串整行隐藏；句柄在下面「用户名」行，这里不重复
                     if (subtitle.isNotEmpty()) {
                         Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)

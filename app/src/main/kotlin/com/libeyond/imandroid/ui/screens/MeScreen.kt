@@ -13,6 +13,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.libeyond.imandroid.data.GlobalSearch
+import com.libeyond.imandroid.ui.components.IMSearchField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -141,6 +147,39 @@ fun MeScreen(
             actionText = stringResource(R.string.common_edit),
             onAction = onOpenProfile,
         )
+
+        // 搜索只搜本页的功能项（设置 / 收藏 / 通话…），命中直接跳转；退出登录不参与
+        var query by remember { mutableStateOf("") }
+        IMSearchField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = stringResource(R.string.search_me_placeholder),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = d.space2),
+        )
+        val hits = GlobalSearch.settingsHits(groups.flatten().filter { !it.destructive }, query) { it.title }
+        if (query.isNotBlank()) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                if (hits.isEmpty()) {
+                    Text(
+                        stringResource(R.string.search_no_matches), color = c.textTertiary,
+                        style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    )
+                } else {
+                    Spacer(Modifier.height(d.cardGap))
+                    IMSettingsGroup {
+                        hits.forEachIndexed { ri, row ->
+                            if (ri > 0) IMRowDivider(insetStart = d.settingsSeparatorInset)
+                            IMSettingsRow(
+                                title = row.title, onClick = row.onClick, icon = row.icon,
+                                iconBackground = row.iconBg, rightValue = row.rightValue,
+                            )
+                        }
+                    }
+                }
+            }
+            return@Column
+        }
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             ProfileHeader(me, fallbackName, seed, onOpenProfile)
