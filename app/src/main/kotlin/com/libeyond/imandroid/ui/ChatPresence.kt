@@ -22,9 +22,9 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import kotlinx.coroutines.delay
 
-// 从 ChatHost.kt 平移（2026-09-10，那份文件顶在 600/600 行）。
-// 拆的是「聊天页副标题：在线态 / 正在输入」——它有自己的心跳定时器与 watch 订阅，
-// 按 CODING_STYLE §7① 本就该是独立的一块。逐字平移，未改行为。
+// 从 ChatHost.kt 拆出（2026-09-10，那份文件顶在 600/600 行）：聊天页副标题与群备注——
+// 有自己的心跳定时器、watch 订阅与帧监听，按 CODING_STYLE §7① 本就该是独立的一块。
+// 2026-10-06：副标题改按 `ChatSubtitle.resolve` 选（对齐 iOS：输入 → 连接态 → 在线态 / 成员数），新增群备注。
 
 /**
  * 聊天页标题下那一行。空串 = 不显示。选哪一种由 [ChatSubtitle.resolve] 决定（对齐 iOS
@@ -90,12 +90,13 @@ internal fun rememberChatSubtitle(
         typingNow = System.currentTimeMillis()
     }
 
-    val conn by client.socket.state.collectAsState()
-    val spec = remember(conv.convId, presenceMap, typingMap, tick, typingNow, conn, groupInfo, showConnState) {
+    // 详情页不用连接态：不订阅，免得每次重连抖动都重组整页
+    val conn = if (showConnState) client.socket.state.collectAsState().value else ConnState.Connected
+    val spec = remember(conv.convId, presenceMap, typingMap, tick, typingNow, conn, groupInfo) {
         ChatSubtitle.resolve(
             isGroup = conv.isGroup,
             typingUid = client.presence.typingIn(conv.convId, maxOf(tick, typingNow)),
-            conn = if (showConnState) conn else ConnState.Connected,
+            conn = conn,
             peerPresence = if (conv.isGroup) "" else client.presence.snapshotOf(conv.peerUid).let { p ->
                 Presence.label(Presence.display(p.status, p.onlineUntil, p.lastSeen, tick), tick)
             },
@@ -126,12 +127,20 @@ internal fun rememberChatSubtitle(
 @Composable
 internal fun rememberGroupRemark(client: IMClient, conv: ConversationEntity): String {
     var remark by remember(conv.convId) { mutableStateOf("") }
+    // 帧版本：GET 在途时若先收到 conv_update 帧（更新鲜），GET 的旧结果不能再覆盖它
+    var frameRev by remember(conv.convId) { mutableStateOf(0) }
     LaunchedEffect(conv.convId) {
         if (!conv.isGroup) return@LaunchedEffect
+        client.convRemarks.collect { if (it.convId == conv.convId) { remark = it.remark; frameRev++ } }
+    }
+    // 连上（含重连）就拉一次：进页时断网拉失败，重连后自愈，不必等下一帧
+    val connected = client.socket.state.collectAsState().value == ConnState.Connected
+    LaunchedEffect(conv.convId, connected) {
+        if (!conv.isGroup || !connected) return@LaunchedEffect
+        val rev = frameRev
         runCatchingCancellable { client.conversationsApi.settings(conv.convId) }
-            .onSuccess { remark = it.remark }
+            .onSuccess { if (rev == frameRev) remark = it.remark }
             .onFailure { IMLog.tag("IM.Chat").w("group_remark_load_failed", "err" to it.javaClass.simpleName) }
-        client.convRemarks.collect { if (it.convId == conv.convId) remark = it.remark }
     }
     return remark
 }

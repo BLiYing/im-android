@@ -119,6 +119,7 @@ fun ForwardPickerScreen(
                     sheet.dismiss { onConfirm(targets) }
                 }
             },
+            containerColor = c.pageBackground, // IMCardSheet 底色是 pageBackground，栏跟它同色
         )
         IMSearchField(
             value = query,

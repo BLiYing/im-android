@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
@@ -66,29 +65,42 @@ fun TopBarCircleButton(
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
-    // 外层只占左键图标的高、圆钮 requiredSize 溢出：栏高现在是固定的 [IMDimens.topBarHeight]，
-    // 这层包装保留是为了不改圆钮在栏内的垂直居中位置与点击命中范围（溢出部分不裁剪，命中照常覆盖整个圆）。
+    // 栏高固定 [IMDimens.topBarHeight]，圆钮在栏内垂直居中即可
     Box(
-        modifier = modifier.size(width = d.topBarCircleButton, height = d.topBarIcon),
+        modifier = modifier
+            .size(d.topBarCircleButton)
+            .clip(CircleShape)
+            .background(c.subtleFill)
+            .border(0.5.dp, c.separator, CircleShape)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = Modifier
-                .requiredSize(d.topBarCircleButton)
-                .clip(CircleShape)
-                .background(c.subtleFill)
-                .border(0.5.dp, c.separator, CircleShape)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                imageVector = icon,
-                contentDescription = description,
-                modifier = Modifier.size(d.topBarCircleIcon),
-                colorFilter = ColorFilter.tint(c.textPrimary),
-            )
-        }
+        Image(
+            imageVector = icon,
+            contentDescription = description,
+            modifier = Modifier.size(d.topBarCircleIcon),
+            colorFilter = ColorFilter.tint(c.textPrimary),
+        )
     }
+}
+
+/**
+ * 标题栏的**外框**：底色 + 最小高 [com.libeyond.imandroid.ui.theme.IMDimens.topBarHeight] + 左右内边距。
+ * [IMTopBar]、聊天内搜索态顶栏、名片选择页的自带头共用——栏色或栏高要改只改这一处
+ * （此前各抄一份，正是栏高漂移的由来）。用 `heightIn(min)` 而不是定高：系统字号放大到 1.5~2 倍时，
+ * 17sp 标题 + 13sp 副标题超过 56dp，定高会把文字裁到状态栏 / 分割线上，宁可栏随字撑高。
+ *
+ * @param color 栏底色；[Color.Unspecified] = 跟随页面 `groupedBackground`。
+ */
+@Composable
+fun Modifier.topBarChrome(color: Color = Color.Unspecified): Modifier {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
+    return this
+        .fillMaxWidth()
+        .background(if (color.isSpecified) color else c.groupedBackground)
+        .heightIn(min = d.topBarHeight)
+        .padding(horizontal = d.space3)
 }
 
 /**
@@ -141,11 +153,7 @@ fun IMTopBar(
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(if (containerColor.isSpecified) containerColor else c.groupedBackground)
-            .height(d.topBarHeight)
-            .padding(horizontal = d.space3),
+        modifier = modifier.topBarChrome(containerColor),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(d.topBarSide), contentAlignment = Alignment.CenterStart) {

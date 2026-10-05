@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -57,7 +58,7 @@ fun TextReader(msg: MessageEntity, chatFontSize: Float, onToast: (String) -> Uni
     val label = stringResource(R.string.chat_text_approx_chars, LongText.countLabel(LongText.charCount(msg.content)))
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Column(Modifier.fillMaxSize().background(c.pageBackground).statusBarsPadding()) {
-            Row(Modifier.fillMaxWidth().height(IMTheme.dimens.topBarHeight), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().heightIn(min = IMTheme.dimens.topBarHeight), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.height(IMTheme.dimens.topBarHeight).clickable(onClick = onDismiss).padding(horizontal = 16.dp), Alignment.Center) {
                     Icon(Lucide.X, stringResource(R.string.common_close), tint = c.textPrimary)
                 }

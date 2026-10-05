@@ -7,6 +7,10 @@
 
 ## 当前焦点
 
+**2026-10-06 标题栏统一 + 群聊标题（分支 `feat/topbar-unify`，worktree `../im-android-wt-topbar`，自测 + code review 完成，待用户通知合入）**：设计 `../IMServer/docs/design/TOPBAR_UNIFY_DESIGN.md`（IMServer 分支 `docs/topbar-unify`，worktree `../IMServer-wt-topbar`）。
+① 栏高固定 56（`IMDimens.topBarHeight` = iOS `kIMLiquidBarHeight`，`heightIn(min)` 防大字号裁切），外框抽成 `Modifier.topBarChrome`，`IMTopBar` / 搜索态顶栏 / FriendPicker 共用；② 栏色跟随页面底色（默认 `groupedBackground`，`pageBackground` 页——收藏阅读器、聊天记录、WebView、转发卡片弹层、TextReader——传 `containerColor`），页面 inset 不迁移；
+③ 群聊副标题 `ChatSubtitle.resolve`（输入带名 → 连接态 → 成员数/大群，对齐 iOS）、群备注标题（进页拉 settings + `conv_update.remark` 全值，`ConvRemarkSignal`；缺键不触发）；头像首字母不跟备注。未做：Web 不动（左对齐是刻意差异）。
+
 **2026-10-05 搜索入口收敛（main，SEARCH_DESIGN §3.1）**：「我」页内搜索框已删（通讯录页内搜索保留）；首页全局搜索新增「设置」分组（会话→联系人→聊天记录→设置→搜索用户）。登记表 `data/SettingsSearchIndex.kt`（显式登记；一级行 + 通知私聊/群聊/提示音 + 已屏蔽/修改密码 + 自动下载网络/分类；退出登录、文件夹不进）；点命中 → `MainScreen.settingsRoute` 切「我」tab → `MeHost(initialRoute)` → 各 Host `initialSub` 作初始页，返回键沿原链退到「我」页。OPPO 真机验过（深链 3 层与返回、中英文、深色）。zh 文案里没有「声音」二字（是「提示音」），搜「声音」无命中。
 
 **2026-10-05 UI 批（分支 `fix/ui-batch-0610`，worktree `../im-android-wt-fixes`，待用户确认合入）**：① 定位高亮 / 长按预览阴影改为只作用于气泡（`BubbleFlash.kt`，同 iOS `flashRowAtIndexPath:`，accent α0.35 淡出）；② 详情页/资料页/入群预览的名称加边距+截断；③ 群公告/简介弹窗改为组合树内浮层（Android 15 的 Dialog 窗口内容被状态栏高度下推，「复制全文」被挤出屏，PKD130 复现并验过）；④ 「我」页与通讯录页加内联搜索（我：搜功能项；通讯录：联系人+群聊，无结果给「搜索用户」入口）。定位高亮的实机效果未验。

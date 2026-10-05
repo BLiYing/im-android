@@ -27,6 +27,7 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.topBarChrome
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -50,8 +51,7 @@ internal fun FriendPickerScreen(
         Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding(),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().background(c.groupedBackground)
-                .height(d.topBarHeight).padding(horizontal = d.space3), // 与 IMTopBar 同高同色
+            modifier = Modifier.topBarChrome(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(

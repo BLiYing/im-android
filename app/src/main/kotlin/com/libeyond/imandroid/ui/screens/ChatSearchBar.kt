@@ -47,6 +47,7 @@ import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.X
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.ui.components.topBarChrome
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -54,7 +55,7 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  *
  * 结构照 iOS `IMChatViewController+Search.m` 的 `buildSearchTopBar`：🔍 + 输入框 + 「取消」。
  * **不做液态玻璃**（Android 上手搓只会得到形似神不似的半透明模糊，`docs/UI_PARITY_IOS.md §4`），
- * 用与 `IMTopBar` 同一层的纯色 surface，高度也随它，切换时列表不跳。
+ * 外框与 `IMTopBar` 共用 `topBarChrome`（跟随页面底色、同最小高），切换时列表不跳。
  */
 @Composable
 internal fun ChatSearchTopBar(
@@ -77,11 +78,7 @@ internal fun ChatSearchTopBar(
     }
     Column {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(c.groupedBackground) // 与 IMTopBar 同色：状态栏后面露的是页面底色
-                .height(d.topBarHeight) // 与 IMTopBar 同高，进出搜索态栏不跳
-                .padding(horizontal = d.space3),
+            modifier = Modifier.topBarChrome(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(

@@ -87,6 +87,8 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 fun ChatScreen(
     convId: String,
     title: String,
+    /** 右上头像的首字母来源：真实群名 / 昵称，**不跟群备注走**（iOS `installInfoAvatarButton name:groupName`）。 */
+    avatarLabel: String = title,
     myUid: String,
     /** 群聊：对方消息要挂发送者头像（UI_SPEC §3）。 */
     isGroup: Boolean,
@@ -346,7 +348,7 @@ fun ChatScreen(
                 // 标题也保留可点（iOS 就是点标题进详情），但**可见入口是右边那个头像**
                 onTitleClick = onOpenInfo,
                 avatar = TopBarAvatar(
-                    label = title,
+                    label = avatarLabel,
                     // 单聊用对端 uid（与会话列表同种子：同色，且系统通知 777000 才能认出来换成应用 logo）
                     seed = avatarSeed,
                     url = avatarUrl,

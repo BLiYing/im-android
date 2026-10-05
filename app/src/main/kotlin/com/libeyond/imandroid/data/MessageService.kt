@@ -243,7 +243,7 @@ class MessageService(
             FrameType.CONV_UPDATE -> data?.let { el ->
                 val u = ProtocolJson.decodeFromJsonElement(ConvUpdateData.serializer(), el)
                 repo.applyConvUpdate(owner, u)
-                if (u.action != "delete") _convRemarks.tryEmit(ConvRemarkSignal(u.convId, u.remark))
+                u.remark?.let { _convRemarks.tryEmit(ConvRemarkSignal(u.convId, it)) } // 缺键不发：免得旧服务端 / 别种帧把标题冲回群名
             }
 
             FrameType.MSG_HIDDEN -> data?.let { el ->
