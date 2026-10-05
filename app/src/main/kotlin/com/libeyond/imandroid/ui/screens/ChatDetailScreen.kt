@@ -230,6 +230,7 @@ internal fun ChatDetailScreen(
             // 没有任何有内容的页签（还没拉到 / 真没有）就整段不画——不先占一个「加载中」再变空态
             if (!isSystemPeer && (galleryOnly || tabs.isNotEmpty())) archiveTab(
                 tab = tab,
+                inset = !galleryOnly,
                 convId = conv.convId,
                 archive = archive,
                 linkMessages = linkMessages,

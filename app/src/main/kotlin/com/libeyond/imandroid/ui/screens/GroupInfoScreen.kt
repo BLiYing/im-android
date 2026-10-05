@@ -368,6 +368,7 @@ fun GroupInfoScreen(
                 }
                 else -> archiveTab(
                     tab = tab,
+                    inset = !galleryOnly,
                     convId = info.convId,
                     archive = archive,
                     linkMessages = linkMessages,

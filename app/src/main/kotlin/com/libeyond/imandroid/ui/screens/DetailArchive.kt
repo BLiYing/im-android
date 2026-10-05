@@ -213,6 +213,8 @@ internal fun LoadMore(onLoadMore: () -> Unit) {
  */
 internal fun LazyListScope.archiveTab(
     tab: DetailTab,
+    /** 套卡片边距 / 圆角（详情页 / 群资料）；会话媒体库页（galleryOnly）传 false 保持整屏宽宫格。 */
+    inset: Boolean = true,
     /** 所属会话：语音行的播放标识与已播红点按会话分（见 [VoiceRules.playableId]）。 */
     convId: String,
     archive: List<ConvMediaItem>,
@@ -286,7 +288,7 @@ internal fun LazyListScope.archiveTab(
                 item { Hint(DetailTabs.emptyText(tab)) }
             } else {
                 mediaGrid(
-                    archive, host, useTls, isGroupOf = { isGroup }, onOpenArchive = onOpenArchive, inset = true,
+                    archive, host, useTls, isGroupOf = { isGroup }, onOpenArchive = onOpenArchive, inset = inset,
                     onLongPressItem = { item, r -> onLongPressArchive(item.toArchiveTarget(), r) },
                 )
                 if (hasMore) item { LoadMore(onLoadMore) }

@@ -478,7 +478,7 @@ fun GroupInfoHost(
             scope.launch {
                 // **只删本机**（同 iOS）：服务端没有"替所有人删历史"的接口
                 client.repo.clearConversation(client.uid.orEmpty(), convId)
-                archive.reload() // 归档页签是服务端分页，已加载的要按新位点重载（同 ChatDetailHost）
+                archives.reloadAll() // 归档页签是服务端分页，已加载的要按新位点重载（同 ChatDetailHost）
                 toast = Str.s(R.string.chat_detail_clear_history_done)
             }
         },

@@ -169,7 +169,7 @@ fun ChatDetailHost(
         onOpen = { contactCard = it },
     )
     // 链接 / 名片要先扫出结果才知道页签出不出现，所以这里常驻订阅（扫描在后台线程，见 rememberLocalScan）
-    // 这两份只在各自页签上订阅本地消息表（理由见 rememberLocalScan）
+    // 注意：这使 rememberLocalScan 的「只在对应页签订阅」约定不再成立（页进来就常驻两路 500 行扫描，已知取舍）
     val linkMessages = rememberLinkMessages(client, conv.convId, active = true)
     // 只显示有内容的页签（对齐 iOS）；选中项落在集合外时退到第一个可见的。会话媒体库页不要页签条，原样用选中项
     val tabs = DetailTabs.visible(
@@ -408,7 +408,7 @@ fun ChatDetailHost(
                     client.repo.clearConversation(owner, conv.convId)
                     // 详情页的媒体 / 文件 / 语音页签是服务端归档分页、已加载那份还留着刚清掉的项：重载一次（请求带清空位点，
                     // 滤掉位点以内；iOS 清空后页签当场清空）
-                    archive.reload()
+                    archives.reloadAll()
                     toast = Str.s(R.string.chat_detail_clear_history_done)
                 }
             },

@@ -86,6 +86,9 @@ class ConvArchiveSet internal constructor(
         else -> EMPTY
     }
 
+    /** 三类全部从头重拉（清空聊天记录后用：页签是否出现取决于各类是否有内容，只重拉当前类会留下旧页签）。 */
+    fun reloadAll() { media.reload(); files.reload(); voice.reload() }
+
     /** 已拉到内容的归档类别。首页还没回来的类别不在里面——页签先不展示，而不是先占位再变空。 */
     val nonEmpty: Set<DetailTab>
         get() = buildSet {
