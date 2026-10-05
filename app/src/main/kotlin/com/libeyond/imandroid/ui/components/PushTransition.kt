@@ -72,7 +72,7 @@ fun <S> PushTransition(
         Inert(inert = transition.targetState == EnterExitState.PostExit) {
             // 转场进行中（进场页）：先吞一次返回键。连按两下返回时第二下落在刚显露的根页上，
             // 那里没人接返回键，会直接退出应用；页内自己的 BackHandler 注册得更晚、优先级更高，不受影响
-            BackHandler(enabled = transition.currentState != transition.targetState) {}
+            BackHandler(enabled = transition.targetState == EnterExitState.Visible && transition.currentState != EnterExitState.Visible) {}
             content(state)
         }
     }
