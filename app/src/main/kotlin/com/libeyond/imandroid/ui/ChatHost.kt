@@ -249,7 +249,7 @@ fun ChatHost(
     // 副标题（在线态 / 正在输入）连同它的心跳与 watch 订阅，见 ChatPresence.kt
     val subtitle = rememberChatSubtitle(client, conv, gs.info, nameOf = { uid -> friendsByUid[uid]?.displayName ?: memberNames[uid] ?: uid })
     val groupRemark = rememberGroupRemark(client, conv)
-    val realTitle = Forward.titleOf(conv) { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } }
+    val snapshotTitle = Forward.titleOf(conv) { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } }
 
     var lastTypingSent by remember(conv.convId) { mutableStateOf(0L) }
     var replyTo by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
@@ -320,7 +320,7 @@ fun ChatHost(
     Box(Modifier.fillMaxSize().then(if (covered) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier)) {
     ChatScreen(
         convId = conv.convId,
-        title = ChatSubtitle.title(realTitle, conv.isGroup, groupRemark),
+        title = ChatSubtitle.title(snapshotTitle, conv.isGroup, groupRemark, gs.info?.name),
         avatarUrl = conv.avatarUrl,
         avatarSeed = if (conv.isGroup) conv.convId else conv.peerUid.ifBlank { conv.convId },
         myUid = owner,

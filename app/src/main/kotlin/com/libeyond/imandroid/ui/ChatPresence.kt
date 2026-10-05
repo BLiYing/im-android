@@ -122,11 +122,12 @@ internal fun rememberChatSubtitle(
 
 /**
  * 群备注（G1，仅本人可见、多端同步）：进页拉一次单会话设置，之后随 conv_update 帧的全值就地刷新。
- * 对齐 iOS `loadConvRemark` + `onConvUpdatedForRemark`。单聊恒为空串。
+ * 对齐 iOS `loadConvRemark` + `onConvUpdatedForRemark`。单聊、或还没拉回 / 拉取失败时为 null
+ * （此时标题用进页快照，见 [ChatSubtitle.title]）。
  */
 @Composable
-internal fun rememberGroupRemark(client: IMClient, conv: ConversationEntity): String {
-    var remark by remember(conv.convId) { mutableStateOf("") }
+internal fun rememberGroupRemark(client: IMClient, conv: ConversationEntity): String? {
+    var remark by remember(conv.convId) { mutableStateOf<String?>(null) }
     // 帧版本：GET 在途时若先收到 conv_update 帧（更新鲜），GET 的旧结果不能再覆盖它
     var frameRev by remember(conv.convId) { mutableStateOf(0) }
     LaunchedEffect(conv.convId) {

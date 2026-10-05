@@ -51,7 +51,18 @@ object ChatSubtitle {
         }
     }
 
-    /** 群备注（仅本人可见、多端同步）非空即替代群名作标题；单聊不用它（单聊走好友备注）。 */
-    fun title(base: String, isGroup: Boolean, groupRemark: String): String =
-        if (isGroup && groupRemark.isNotBlank()) groupRemark else base
+    /**
+     * 聊天页标题。对齐 iOS `updateTitle`：群备注（仅本人可见、多端同步）非空 > 真实群名。单聊不用它（单聊走好友备注）。
+     *
+     * [snapshotTitle] 是进页时的会话快照标题（`DisplayName.ofConversation`，**已含进页那一刻的备注**），
+     * 页面开着时它不会跟着变，所以：
+     * - [groupRemark] 为 null（还没拉回 / 拉取失败）→ 用快照，离线时也不丢备注；
+     * - 非空白 → 用备注（实时值）；
+     * - 空白（备注被清除）→ 用 [realGroupName]，**不能回退快照**——快照里可能还是已被清掉的旧备注。
+     */
+    fun title(snapshotTitle: String, isGroup: Boolean, groupRemark: String?, realGroupName: String?): String = when {
+        !isGroup || groupRemark == null -> snapshotTitle
+        groupRemark.isNotBlank() -> groupRemark
+        else -> realGroupName?.takeIf { it.isNotBlank() } ?: snapshotTitle
+    }
 }

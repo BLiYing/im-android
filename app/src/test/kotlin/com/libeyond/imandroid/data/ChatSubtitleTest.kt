@@ -62,14 +62,24 @@ class ChatSubtitleTest {
     @Test fun `单聊在线态为空不显示副标题`() =
         assertEquals(ChatSubtitleSpec.None, single(presence = ""))
 
-    @Test fun `群备注非空替代群名`() =
-        assertEquals("项目组", ChatSubtitle.title("真实群名", true, "项目组"))
+    // —— 标题（对齐 iOS updateTitle；快照标题已含进页时的备注，页面开着时不会跟着变）——
 
-    @Test fun `群备注为空或空白回退群名`() {
-        assertEquals("真实群名", ChatSubtitle.title("真实群名", true, ""))
-        assertEquals("真实群名", ChatSubtitle.title("真实群名", true, "  "))
+    @Test fun `群备注非空白用备注`() =
+        assertEquals("项目组", ChatSubtitle.title("快照名", true, "项目组", "真实群名"))
+
+    @Test fun `备注被清除回退真实群名而不是含旧备注的快照`() {
+        assertEquals("真实群名", ChatSubtitle.title("旧备注", true, "", "真实群名"))
+        assertEquals("真实群名", ChatSubtitle.title("旧备注", true, "  ", "真实群名"))
     }
 
+    @Test fun `备注被清除但群资料没拉回时才回退快照`() {
+        assertEquals("快照名", ChatSubtitle.title("快照名", true, "", null))
+        assertEquals("快照名", ChatSubtitle.title("快照名", true, "", " "))
+    }
+
+    @Test fun `备注还没拉回或拉取失败时用快照`() =
+        assertEquals("快照名", ChatSubtitle.title("快照名", true, null, "真实群名"))
+
     @Test fun `单聊不使用会话备注`() =
-        assertEquals("老王", ChatSubtitle.title("老王", false, "不该出现"))
+        assertEquals("老王", ChatSubtitle.title("老王", false, "不该出现", "不该出现"))
 }
