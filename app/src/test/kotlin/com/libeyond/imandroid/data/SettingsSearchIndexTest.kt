@@ -32,6 +32,11 @@ class SettingsSearchIndexTest {
         assertEquals(hits("省电"), listOf("power_saving"))
     }
 
+    @Test fun soundAliasFindsNotificationSoundPagesOnly() {
+        // 文案叫「提示音」，用户搜「声音」：别名只挂在提示音页，且不牵出别的条目
+        assertEquals(listOf("notif_private_sound", "notif_group_sound"), hits("声音"))
+    }
+
     @Test fun soundEntriesDisambiguatedByPath() {
         val sound = SettingsSearchIndex.hits(all, "提示音").filter { it.title == "提示音" }
         assertEquals(listOf("notif_private_sound", "notif_group_sound"), sound.map { it.id })

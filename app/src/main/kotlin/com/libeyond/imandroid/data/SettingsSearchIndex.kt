@@ -39,6 +39,8 @@ data class SettingsSearchEntry(
     val glyph: SettingsGlyph,
     val tint: SettingsTint,
     val route: SettingsRoute,
+    /** 仅供匹配的同义词（不显示）：文案叫「提示音」但用户会搜「声音」。命中算「标题命中」档。 */
+    val aliases: List<String> = emptyList(),
 ) {
     /** 副标题「A › B」；一级行为空串。 */
     val subtitle: String get() = path.joinToString(PATH_SEPARATOR)
@@ -56,6 +58,9 @@ data class SettingsSearchEntry(
  * 文案走 [Str]（现烤，切语言立刻生效），所以每次调用 [entries] 重新生成。
  */
 object SettingsSearchIndex {
+
+    /** 「提示音」页的口语叫法；英文页标题已是 Sound，别名只补中文口径。 */
+    private val SOUND_ALIASES = listOf("声音")
 
     fun entries(): List<SettingsSearchEntry> = buildList {
         val notif = Str.s(R.string.ios_settings_row_notifications)
@@ -83,7 +88,7 @@ object SettingsSearchIndex {
             val typeRoute = SettingsRoute(MePage.Notifications, SettingsSub.Notification(NotificationPage.Type, group))
             add(SettingsSearchEntry("notif_$kind", typeTitle, listOf(notif), SettingsGlyph.Bell, SettingsTint.Red, typeRoute))
             val soundRoute = SettingsRoute(MePage.Notifications, SettingsSub.Notification(NotificationPage.Sound, group))
-            add(SettingsSearchEntry("notif_${kind}_sound", Str.s(R.string.notif_type_sound), listOf(notif, typeTitle), SettingsGlyph.Volume, SettingsTint.Red, soundRoute))
+            add(SettingsSearchEntry("notif_${kind}_sound", Str.s(R.string.notif_type_sound), listOf(notif, typeTitle), SettingsGlyph.Volume, SettingsTint.Red, soundRoute, aliases = SOUND_ALIASES))
         }
 
         // 隐私与安全
@@ -117,8 +122,8 @@ object SettingsSearchIndex {
         if (q.isEmpty()) return emptyList()
         return entries
             .filter { haystack(it).contains(q, ignoreCase = true) }
-            .sortedBy { if (it.title.contains(q, ignoreCase = true)) 0 else 1 }
+            .sortedBy { e -> if ((listOf(e.title) + e.aliases).any { it.contains(q, ignoreCase = true) }) 0 else 1 }
     }
 
-    private fun haystack(e: SettingsSearchEntry): String = (e.path + e.title).joinToString(" ")
+    private fun haystack(e: SettingsSearchEntry): String = (e.path + e.title + e.aliases).joinToString(" ")
 }
