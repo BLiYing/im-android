@@ -396,7 +396,7 @@ private fun RetryHint(onRetry: () -> Unit) {
 internal fun FavoriteReaderScreen(text: String, onBack: () -> Unit) {
     val c = IMTheme.colors
     Column(Modifier.fillMaxSize().background(c.pageBackground).systemBarsPadding()) {
-        IMTopBar(title = stringResource(R.string.favorites_reader_title), onLeft = onBack)
+        IMTopBar(title = stringResource(R.string.favorites_reader_title), onLeft = onBack, containerColor = c.pageBackground)
         androidx.compose.foundation.text.selection.SelectionContainer(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         ) {

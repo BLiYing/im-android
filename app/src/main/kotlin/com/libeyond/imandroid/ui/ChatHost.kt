@@ -6,6 +6,7 @@ import com.libeyond.imandroid.data.PinnedBanner
 import com.libeyond.imandroid.data.ReadTick
 import com.libeyond.imandroid.data.sendText
 import com.libeyond.imandroid.ui.screens.MentionPanel
+import com.libeyond.imandroid.data.ChatSubtitle
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.sendTyping
 import androidx.activity.compose.BackHandler
@@ -246,7 +247,8 @@ fun ChatHost(
     }
 
     // 副标题（在线态 / 正在输入）连同它的心跳与 watch 订阅，见 ChatPresence.kt
-    val subtitle = rememberChatSubtitle(client, conv)
+    val subtitle = rememberChatSubtitle(client, conv, gs.info, nameOf = { uid -> friendsByUid[uid]?.displayName ?: memberNames[uid] ?: uid })
+    val groupRemark = rememberGroupRemark(client, conv)
 
     var lastTypingSent by remember(conv.convId) { mutableStateOf(0L) }
     var replyTo by remember(conv.convId) { mutableStateOf<MessageEntity?>(null) }
@@ -317,7 +319,9 @@ fun ChatHost(
     Box(Modifier.fillMaxSize().then(if (covered) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier)) {
     ChatScreen(
         convId = conv.convId,
-        title = Forward.titleOf(conv) { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } },
+        title = ChatSubtitle.title(
+            Forward.titleOf(conv) { uid -> friendsByUid[uid]?.let { DisplayName.ofFriend(it) } }, conv.isGroup, groupRemark,
+        ),
         avatarUrl = conv.avatarUrl,
         avatarSeed = if (conv.isGroup) conv.convId else conv.peerUid.ifBlank { conv.convId },
         myUid = owner,

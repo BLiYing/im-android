@@ -103,6 +103,10 @@ class MessageService(
     /** 某会话里的消息被撤回/删除/编辑/置顶（落库之后发）。置顶横幅据此重拉，见 [MsgOpSignal]。 */
     val msgOps: SharedFlow<MsgOpSignal> = _msgOps.asSharedFlow()
 
+    private val _convRemarks = MutableSharedFlow<ConvRemarkSignal>(extraBufferCapacity = 16)
+    /** 会话备注变了（本机详情页 / 本人其它端改，conv_update settings 帧带全值）。聊天页标题据此就地刷新。 */
+    val convRemarks: SharedFlow<ConvRemarkSignal> = _convRemarks.asSharedFlow()
+
     private val _groupEvents = MutableSharedFlow<GroupEventData>(extraBufferCapacity = 16)
     /** 收到 `group` 帧（§6.6）。各页面按自己的 convId 过滤；全局级的（入群结果提示）在 `AppRoot` 订。 */
     val groupEvents: SharedFlow<GroupEventData> = _groupEvents.asSharedFlow()
@@ -237,7 +241,9 @@ class MessageService(
             }
 
             FrameType.CONV_UPDATE -> data?.let { el ->
-                repo.applyConvUpdate(owner, ProtocolJson.decodeFromJsonElement(ConvUpdateData.serializer(), el))
+                val u = ProtocolJson.decodeFromJsonElement(ConvUpdateData.serializer(), el)
+                repo.applyConvUpdate(owner, u)
+                if (u.action != "delete") _convRemarks.tryEmit(ConvRemarkSignal(u.convId, u.remark))
             }
 
             FrameType.MSG_HIDDEN -> data?.let { el ->

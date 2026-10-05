@@ -277,6 +277,9 @@ class IMClient(context: Context) {
     /** 群变更帧（PROTOCOL §6.6）：群资料页/聊天页按 convId 过滤，被移出/解散时退出。 */
     val groupEvents: SharedFlow<com.libeyond.imandroid.sdk.protocol.GroupEventData> get() = messages.groupEvents
 
+    /** 会话备注变更信号（聊天页标题就地刷新用）。 */
+    val convRemarks: SharedFlow<com.libeyond.imandroid.data.ConvRemarkSignal> get() = messages.convRemarks
+
     /** 消息被撤回/删除/编辑/置顶的信号（置顶横幅对齐服务端用）。 */
     val msgOps: SharedFlow<com.libeyond.imandroid.data.MsgOpSignal> get() = messages.msgOps
 

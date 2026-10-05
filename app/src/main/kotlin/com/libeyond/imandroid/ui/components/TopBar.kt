@@ -23,7 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -64,9 +66,8 @@ fun TopBarCircleButton(
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
-    // **只按左键图标的高参与标题栏测量**：栏高因此与二级页（返回箭头）一模一样，圆钮上下各溢出 6，
-    // 落在栏自带的 12 内边距里。此前按圆钮直径撑，一级页（消息 / 通讯录）的栏比二级页高一截（2026-09-15 用户报）。
-    // 溢出部分不裁剪，点击命中照常覆盖整个圆。
+    // 外层只占左键图标的高、圆钮 requiredSize 溢出：栏高现在是固定的 [IMDimens.topBarHeight]，
+    // 这层包装保留是为了不改圆钮在栏内的垂直居中位置与点击命中范围（溢出部分不裁剪，命中照常覆盖整个圆）。
     Box(
         modifier = modifier.size(width = d.topBarCircleButton, height = d.topBarIcon),
         contentAlignment = Alignment.Center,
@@ -127,6 +128,13 @@ fun IMTopBar(
     right: (@Composable () -> Unit)? = null,
     onTitleClick: (() -> Unit)? = null,
     showDivider: Boolean = true,
+    /**
+     * 栏底色。默认 **跟随页面底色 [com.libeyond.imandroid.ui.theme.IMColors.groupedBackground]**：
+     * 状态栏是透明的，它后面露出的是页面 Column 的底色，栏若另画 `surface`，深色下
+     * （`#323232` 对 `#1F1F1F`）状态栏与标题栏就是两种颜色。对齐 iOS `IMLiquidNavigationBar`
+     * 的底色取 `systemBackground`（与页面同色）。页面底色不是 groupedBackground 的页面自己传。
+     */
+    containerColor: Color = Color.Unspecified,
     /** 返回钮右上角的红圈数字（聊天页：**其它会话**的未读总数，对齐 iOS `backBadge`）。≤0 不显；>99 显「99+」。 */
     leftBadge: Int = 0,
 ) {
@@ -135,8 +143,9 @@ fun IMTopBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(c.surface)
-            .padding(horizontal = d.space3, vertical = d.space3),
+            .background(if (containerColor.isSpecified) containerColor else c.groupedBackground)
+            .height(d.topBarHeight)
+            .padding(horizontal = d.space3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(d.topBarSide), contentAlignment = Alignment.CenterStart) {

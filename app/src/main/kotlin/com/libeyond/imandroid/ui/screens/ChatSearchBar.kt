@@ -79,8 +79,9 @@ internal fun ChatSearchTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(c.surface)
-                .padding(horizontal = d.space3, vertical = d.space3),
+                .background(c.groupedBackground) // 与 IMTopBar 同色：状态栏后面露的是页面底色
+                .height(d.topBarHeight) // 与 IMTopBar 同高，进出搜索态栏不跳
+                .padding(horizontal = d.space3),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
@@ -88,7 +89,7 @@ internal fun ChatSearchTopBar(
                     .weight(1f)
                     .heightIn(min = d.inputControl)
                     .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
-                    .background(c.pageBackground)
+                    .background(c.surfaceElevated) // 栏已跟页面同色，输入框要比栏亮一档才分得出
                     .padding(horizontal = d.space3),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

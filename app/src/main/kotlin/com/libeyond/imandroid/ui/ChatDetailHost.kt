@@ -98,7 +98,7 @@ fun ChatDetailHost(
     // 点「名片」页签里的一行 → 该用户的资料页（盖在详情页之上；自己则进个人资料，由 MemberProfileHost 收口）
     var contactCard by remember(conv.convId) { mutableStateOf<com.libeyond.imandroid.data.CardContent.Contact?>(null) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-    val headerSubtitle = if (conv.isGroup) "" else rememberChatSubtitle(client, conv)
+    val headerSubtitle = if (conv.isGroup) "" else rememberChatSubtitle(client, conv, showConnState = false)
     var askFriend by remember(conv.convId) { mutableStateOf<FriendRequestTarget?>(null) }
     val saveMedia = rememberMediaSaver { toast = it }
 

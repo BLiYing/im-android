@@ -210,6 +210,7 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit) {
                 )
             },
             showDivider = !loading,
+            containerColor = c.pageBackground,
         )
         if (loading) {
             LinearProgressIndicator(

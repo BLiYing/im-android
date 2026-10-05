@@ -8,21 +8,40 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.ChatSubtitle
+import com.libeyond.imandroid.data.ChatSubtitleSpec
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.sendWatch
+import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.api.GroupInfo
 import kotlinx.coroutines.delay
 
 // 从 ChatHost.kt 平移（2026-09-10，那份文件顶在 600/600 行）。
 // 拆的是「聊天页副标题：在线态 / 正在输入」——它有自己的心跳定时器与 watch 订阅，
 // 按 CODING_STYLE §7① 本就该是独立的一块。逐字平移，未改行为。
 
-/** 聊天页标题下那一行。空串 = 不显示（群聊没人在输入时）。 */
+/**
+ * 聊天页标题下那一行。空串 = 不显示。选哪一种由 [ChatSubtitle.resolve] 决定（对齐 iOS
+ * `im_navigationSubtitle`：输入 → 连接态 → 单聊在线态 / 群成员数），这里只管心跳 / watch 与文案渲染。
+ *
+ * @param groupInfo 聊天页已拉的群资料（取 memberCount / isSuper）；单聊或未拉回为 null。
+ * @param nameOf 群里「谁在输入」的 uid → 显示名（好友备注 > 群昵称 > uid）。
+ * @param showConnState 连接态是否参与副标题。聊天页开；会话详情页头部不开（iOS 详情页也没有连接态）。
+ */
 @Composable
-internal fun rememberChatSubtitle(client: IMClient, conv: ConversationEntity): String {
+internal fun rememberChatSubtitle(
+    client: IMClient,
+    conv: ConversationEntity,
+    groupInfo: GroupInfo? = null,
+    nameOf: (String) -> String = { it },
+    showConnState: Boolean = true,
+): String {
     // —— 在线态：租约模型要求客户端自己敲心跳重算 ——
     // 「租约到期」是纯粹的时间流逝，不触发任何回调；不主动重算的话，
     // 用户静止不动时副标题会**永远**停在「在线」（PROTOCOL §5.5）。
@@ -71,17 +90,48 @@ internal fun rememberChatSubtitle(client: IMClient, conv: ConversationEntity): S
         typingNow = System.currentTimeMillis()
     }
 
-    val typingLabel = stringResource(R.string.chat_typing)
-    val subtitle = remember(conv.convId, presenceMap, typingMap, tick, typingNow) {
-        val who = client.presence.typingIn(conv.convId, maxOf(tick, typingNow))
-        when {
-            who != null -> typingLabel
-            conv.isGroup -> ""
-            else -> {
-                val p = client.presence.snapshotOf(conv.peerUid)
+    val conn by client.socket.state.collectAsState()
+    val spec = remember(conv.convId, presenceMap, typingMap, tick, typingNow, conn, groupInfo, showConnState) {
+        ChatSubtitle.resolve(
+            isGroup = conv.isGroup,
+            typingUid = client.presence.typingIn(conv.convId, maxOf(tick, typingNow)),
+            conn = if (showConnState) conn else ConnState.Connected,
+            peerPresence = if (conv.isGroup) "" else client.presence.snapshotOf(conv.peerUid).let { p ->
                 Presence.label(Presence.display(p.status, p.onlineUntil, p.lastSeen, tick), tick)
-            }
-        }
+            },
+            memberCount = groupInfo?.memberCount ?: 0,
+            loadedMembers = groupInfo?.members?.size ?: 0,
+            isSuper = groupInfo?.isSuper ?: conv.isSuper,
+        )
     }
-    return subtitle
+    return when (val sp = spec) {
+        ChatSubtitleSpec.None -> ""
+        ChatSubtitleSpec.Typing -> stringResource(R.string.chat_typing)
+        is ChatSubtitleSpec.TypingNamed -> stringResource(R.string.chat_typing_named, nameOf(sp.uid))
+        ChatSubtitleSpec.Connecting -> stringResource(R.string.conn_state_connecting)
+        ChatSubtitleSpec.Disconnected -> stringResource(R.string.conn_state_disconnected)
+        is ChatSubtitleSpec.PeerPresence -> sp.text
+        is ChatSubtitleSpec.Members -> pluralStringResource(
+            if (sp.isSuper) R.plurals.chat_header_member_count_super else R.plurals.chat_header_member_count,
+            sp.count, sp.count,
+        )
+        ChatSubtitleSpec.SuperOnly -> stringResource(R.string.group_text_super)
+    }
+}
+
+/**
+ * 群备注（G1，仅本人可见、多端同步）：进页拉一次单会话设置，之后随 conv_update 帧的全值就地刷新。
+ * 对齐 iOS `loadConvRemark` + `onConvUpdatedForRemark`。单聊恒为空串。
+ */
+@Composable
+internal fun rememberGroupRemark(client: IMClient, conv: ConversationEntity): String {
+    var remark by remember(conv.convId) { mutableStateOf("") }
+    LaunchedEffect(conv.convId) {
+        if (!conv.isGroup) return@LaunchedEffect
+        runCatchingCancellable { client.conversationsApi.settings(conv.convId) }
+            .onSuccess { remark = it.remark }
+            .onFailure { IMLog.tag("IM.Chat").w("group_remark_load_failed", "err" to it.javaClass.simpleName) }
+        client.convRemarks.collect { if (it.convId == conv.convId) remark = it.remark }
+    }
+    return remark
 }

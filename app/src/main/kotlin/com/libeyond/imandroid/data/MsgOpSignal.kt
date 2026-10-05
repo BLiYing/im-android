@@ -13,3 +13,6 @@ data class MsgOpSignal(val convId: String, val op: String, val seqs: List<Long>)
         const val HIDE = "hide"
     }
 }
+
+/** 会话备注变更（conv_update settings 帧）。[remark] 为全值，`""` = 已清除。 */
+data class ConvRemarkSignal(val convId: String, val remark: String)

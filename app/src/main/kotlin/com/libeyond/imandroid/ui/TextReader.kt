@@ -57,8 +57,8 @@ fun TextReader(msg: MessageEntity, chatFontSize: Float, onToast: (String) -> Uni
     val label = stringResource(R.string.chat_text_approx_chars, LongText.countLabel(LongText.charCount(msg.content)))
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Column(Modifier.fillMaxSize().background(c.pageBackground).statusBarsPadding()) {
-            Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.height(48.dp).clickable(onClick = onDismiss).padding(horizontal = 16.dp), Alignment.Center) {
+            Row(Modifier.fillMaxWidth().height(IMTheme.dimens.topBarHeight), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.height(IMTheme.dimens.topBarHeight).clickable(onClick = onDismiss).padding(horizontal = 16.dp), Alignment.Center) {
                     Icon(Lucide.X, stringResource(R.string.common_close), tint = c.textPrimary)
                 }
                 Text(
@@ -68,7 +68,7 @@ fun TextReader(msg: MessageEntity, chatFontSize: Float, onToast: (String) -> Uni
                 StepButton("A－", stringResource(R.string.chat_reader_font_smaller), step > -1) { step-- }
                 StepButton("A＋", stringResource(R.string.chat_reader_font_larger), step < 3) { step++ }
                 Box(
-                    Modifier.height(48.dp).clickable {
+                    Modifier.height(IMTheme.dimens.topBarHeight).clickable {
                         clipboard.setText(AnnotatedString(msg.content))
                         onToast(com.libeyond.imandroid.i18n.Str.s(R.string.common_copied_full_text))
                     }.padding(horizontal = 14.dp),
@@ -94,7 +94,7 @@ fun TextReader(msg: MessageEntity, chatFontSize: Float, onToast: (String) -> Uni
 private fun StepButton(glyph: String, desc: String, enabled: Boolean, onClick: () -> Unit) {
     val c = IMTheme.colors
     Box(
-        Modifier.height(48.dp).then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+        Modifier.height(IMTheme.dimens.topBarHeight).then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
             .semantics { contentDescription = desc }.padding(horizontal = 10.dp),
         Alignment.Center,
     ) {

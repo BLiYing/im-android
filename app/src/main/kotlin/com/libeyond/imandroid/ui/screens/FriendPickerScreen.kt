@@ -50,8 +50,8 @@ internal fun FriendPickerScreen(
         Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding(),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().background(c.surface)
-                .padding(horizontal = d.space3, vertical = d.space3),
+            modifier = Modifier.fillMaxWidth().background(c.groupedBackground)
+                .height(d.topBarHeight).padding(horizontal = d.space3), // 与 IMTopBar 同高同色
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(

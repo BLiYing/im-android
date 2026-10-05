@@ -91,7 +91,7 @@ internal fun ChatRecordScreen(
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
             .systemBarsPadding(),
     ) {
-        IMTopBar(title = doc?.title ?: stringResource(R.string.record_chat_history), onLeft = onBack)
+        IMTopBar(title = doc?.title ?: stringResource(R.string.record_chat_history), onLeft = onBack, containerColor = c.pageBackground)
         val items = doc?.items.orEmpty()
         LazyColumn(Modifier.fillMaxSize()) {
             itemsIndexed(items) { i, item ->
