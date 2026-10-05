@@ -2,6 +2,7 @@ package com.libeyond.imandroid.ui.components
 
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -50,6 +51,8 @@ private fun <T> pushSpec(): FiniteAnimationSpec<T> = tween(PUSH_DURATION_MS, eas
  * 不隔离的话，旧页的返回键回调还挂在分发器上（连按两下返回会被它吞掉一下），
  * 手指也还能点到正在滑走的列表（连点两下打开两个会话）。
  *
+ * 转场进行中进场页会吞掉一次返回键（见 content 内的 BackHandler），防止连按返回把应用退出。
+ *
  * @param contentKey 同一个 key 视为同一页，状态变了也不转场（比如会话实体被刷新）。
  */
 @Composable
@@ -66,7 +69,12 @@ fun <S> PushTransition(
         label = "push",
         contentKey = contentKey,
     ) { state ->
-        Inert(inert = transition.targetState == EnterExitState.PostExit) { content(state) }
+        Inert(inert = transition.targetState == EnterExitState.PostExit) {
+            // 转场进行中（进场页）：先吞一次返回键。连按两下返回时第二下落在刚显露的根页上，
+            // 那里没人接返回键，会直接退出应用；页内自己的 BackHandler 注册得更晚、优先级更高，不受影响
+            BackHandler(enabled = transition.currentState != transition.targetState) {}
+            content(state)
+        }
     }
 }
 
