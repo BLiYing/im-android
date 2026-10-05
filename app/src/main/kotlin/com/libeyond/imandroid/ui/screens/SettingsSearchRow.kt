@@ -21,7 +21,6 @@ import com.composables.icons.lucide.Ban
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Contrast
-import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.File
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.HardDrive
@@ -45,7 +44,7 @@ import com.libeyond.imandroid.ui.theme.IMSettingsIconColors
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
- * 全局搜索里「设置」分组的一行：左侧与「我」页同款彩色图标方块，标题 + 副标题「A › B」，
+ * 全局搜索里「设置」分组的一行：左侧与「我」页同款彩色图标方块，标题 + 副标题（一级「我」/ 深层整条路径），
  * 命中词都高亮（口径同其它分组，见 [highlighted]）。纯展示。
  */
 @Composable
@@ -64,12 +63,10 @@ fun SettingsResultRow(entry: SettingsSearchEntry, keyword: String, onClick: () -
                 text = highlighted(entry.title, keyword), color = c.textPrimary, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium,
             )
-            if (entry.path.isNotEmpty()) {
-                Text(
-                    text = highlighted(entry.subtitle, keyword), color = c.textSecondary, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium,
-                )
-            }
+            Text(
+                text = highlighted(entry.subtitle, keyword), color = c.textSecondary, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
 }
@@ -88,7 +85,6 @@ private fun glyphOf(g: SettingsGlyph): ImageVector = when (g) {
     SettingsGlyph.Ban -> Lucide.Ban
     SettingsGlyph.Key -> Lucide.Key
     SettingsGlyph.Volume -> Lucide.Volume2
-    SettingsGlyph.Download -> Lucide.Download
     SettingsGlyph.Smartphone -> Lucide.Smartphone
     SettingsGlyph.Wifi -> Lucide.Wifi
     SettingsGlyph.Image -> Lucide.Image

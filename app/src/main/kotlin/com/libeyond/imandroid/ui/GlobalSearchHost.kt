@@ -3,6 +3,7 @@ package com.libeyond.imandroid.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,8 +51,10 @@ fun GlobalSearchHost(
         records = GlobalSearch.recordHits(msgs, conversations, query)
     }
 
-    // 登记表文案现烤（Str），语言切换后要重算：以当前语言 tag 为 key
-    val allSettings = remember(LanguageStore.resolved) { SettingsSearchIndex.entries() }
+    // 登记表文案现烤（Str），语言切换后要重算：真正订阅语言偏好的 StateFlow（pref 变 → 重组 → 重烤），
+    // resolved 只是 pref + 系统语言的派生值，不是 Compose 状态，不能直接当 remember 的响应源
+    val languagePref by LanguageStore.pref.collectAsState()
+    val allSettings = remember(languagePref) { SettingsSearchIndex.entries() }
     val settingHits = remember(allSettings, query) { SettingsSearchIndex.hits(allSettings, query) }
 
     GlobalSearchScreen(

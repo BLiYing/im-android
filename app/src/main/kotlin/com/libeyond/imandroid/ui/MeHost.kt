@@ -43,9 +43,16 @@ fun MeHost(
     /** 落点已读走：外壳据此清掉它，否则之后手动切回「我」tab 会被旧落点再带进二级页。 */
     onRouteConsumed: () -> Unit = {},
 ) {
+    // 深链落点的三处状态与约束（别随手合并，实测过：搜 Wi-Fi → 点自动下载视频 → 返回逐级；切回我 tab 不被旧落点带入）：
+    //  1. [initialRoute]：MainScreen 持有，点搜索命中时置值。MeHost 每次进组合只在 remember 初值里读一次，
+    //     **之后不再看它**（所以它后来变成 null 不会影响已在显示的页）。
+    //  2. [onRouteConsumed]：进组合后立刻通知外壳清掉 1；不清则下次手动切回「我」tab（MeHost 重新进组合）
+    //     又会读到旧落点而被带进二级页。MeHost 是随 tab 切换进出组合的，故必须由外壳清，不能靠 MeHost 自己记。
+    //  3. [sub]：只给各 Host 当「初始页」用（其内部再自己 push/pop）。回到列表就复位为 None，
+    //     否则同一个 MeHost 里再手点同一行，会被残留的 sub 直接带进更深层。
+    // 想简化为「外壳一次性交值」需把 1/2 改为事件流，且要覆盖「tab 切换重进组合」，风险高于收益，故保持。
     LaunchedEffect(Unit) { if (initialRoute != null) onRouteConsumed() }
     var page by remember { mutableStateOf(initialRoute?.page ?: MePage.List) }
-    // 落点只用一次：回到列表后再手点同一行，不能又被它带进二级页
     var sub by remember { mutableStateOf(initialRoute?.sub ?: SettingsSub.None) }
     LaunchedEffect(page) { if (page == MePage.List) sub = SettingsSub.None }
     // 先用本机副本顶上：断网拉不到 /users/me 时头部仍是真名字，不掉成「未命名用户」

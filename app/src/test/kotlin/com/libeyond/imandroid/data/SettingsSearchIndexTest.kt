@@ -40,7 +40,10 @@ class SettingsSearchIndexTest {
     @Test fun soundEntriesDisambiguatedByPath() {
         val sound = SettingsSearchIndex.hits(all, "提示音").filter { it.title == "提示音" }
         assertEquals(listOf("notif_private_sound", "notif_group_sound"), sound.map { it.id })
-        assertEquals(listOf("通知与提示音 › 私聊通知", "通知与提示音 › 群聊通知"), sound.map { it.subtitle })
+        assertEquals(
+            listOf("通知与提示音 › 私聊通知 › 提示音", "通知与提示音 › 群聊通知 › 提示音"),
+            sound.map { it.subtitle },
+        )
     }
 
     @Test fun pathOnlyMatchComesAfterTitleMatches() {
@@ -60,7 +63,7 @@ class SettingsSearchIndexTest {
     }
 
     @Test fun matchesAcrossPathAndTitleConcatenation() {
-        assertEquals(listOf("privacy_password"), hits("隐私与安全 修改密码"))
+        assertEquals(listOf("privacy_password"), hits("隐私与安全 › 修改密码"))
     }
 
     @Test fun routesPointToTheRightPages() {
@@ -72,5 +75,27 @@ class SettingsSearchIndexTest {
             byId.getValue("storage_wifi_video").route,
         )
         assertEquals(SettingsRoute(MePage.Language), byId.getValue("language").route)
+    }
+
+    @Test fun topLevelSubtitleIsMeAndPathEndsWithTitle() {
+        all.filter { it.route.sub == SettingsSub.None }.forEach {
+            assertEquals(listOf(it.title), it.path)
+            assertEquals("我", it.subtitle)
+        }
+        assertTrue(all.all { it.path.last() == it.title })
+    }
+
+    @Test fun autoDownloadPathsMatchIos() {
+        val byId = all.associateBy { it.id }
+        assertEquals(listOf("数据和存储", "使用 Wi-Fi"), byId.getValue("storage_wifi").path)
+        val v = byId.getValue("storage_wifi_video")
+        assertEquals("视频", v.title)
+        assertEquals(listOf("数据和存储", "使用 Wi-Fi", "视频"), v.path)
+        assertEquals("数据和存储 › 使用 Wi-Fi › 视频", v.subtitle)
+        assertEquals(24, all.size)
+    }
+
+    @Test fun searchWifiFindsNetworkPageThenItsCategories() {
+        assertEquals(listOf("storage_wifi", "storage_wifi_image", "storage_wifi_video", "storage_wifi_file"), hits("Wi-Fi"))
     }
 }

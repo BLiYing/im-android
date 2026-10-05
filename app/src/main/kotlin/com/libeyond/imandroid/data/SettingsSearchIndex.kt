@@ -4,7 +4,7 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
 
 /** 设置项图标（纯数据；UI 层映射到 Lucide 图标，与「我」页同款）。 */
-enum class SettingsGlyph { Bookmark, Phone, Laptop, IdCard, Bell, Lock, HardDrive, Contrast, Zap, Globe, Ban, Key, Volume, Download, Smartphone, Wifi, Image, Video, File }
+enum class SettingsGlyph { Bookmark, Phone, Laptop, IdCard, Bell, Lock, HardDrive, Contrast, Zap, Globe, Ban, Key, Volume, Smartphone, Wifi, Image, Video, File }
 
 /** 设置项图标底色（UI 层映射到 `IMTheme.settingsIcons`）。 */
 enum class SettingsTint { Blue, Green, Orange, Red, Gray, Yellow, Purple, Teal }
@@ -29,7 +29,7 @@ data class SettingsRoute(val page: MePage, val sub: SettingsSub = SettingsSub.No
 
 /**
  * 设置项搜索的一条登记（SEARCH_DESIGN §3.1）。
- * @param path 所属页面路径（不含自己），副标题显示「A › B」；一级行为空。
+ * @param path 真实页面层级，**末项即自身标题**（同 iOS `IMSettingsSearchEntry.path`）；一级行只有自己一项。
  * @param route 「打开动作」——纯数据，由 `MeHost` 消费（登记表本身不碰 UI，才能单测）。
  */
 data class SettingsSearchEntry(
@@ -42,8 +42,8 @@ data class SettingsSearchEntry(
     /** 仅供匹配的同义词（不显示）：文案叫「提示音」但用户会搜「声音」。命中算「标题命中」档。 */
     val aliases: List<String> = emptyList(),
 ) {
-    /** 副标题「A › B」；一级行为空串。 */
-    val subtitle: String get() = path.joinToString(PATH_SEPARATOR)
+    /** 副标题：一级行显示「我」（同 iOS，`ios_tab_me`）；更深的行显示整条路径「A › B › 自己」。 */
+    val subtitle: String get() = if (path.size <= 1) Str.s(R.string.ios_tab_me) else path.joinToString(PATH_SEPARATOR)
 
     companion object {
         const val PATH_SEPARATOR = " › "
@@ -59,7 +59,10 @@ data class SettingsSearchEntry(
  */
 object SettingsSearchIndex {
 
-    /** 「提示音」页的口语叫法；英文页标题已是 Sound，别名只补中文口径。 */
+    /**
+     * 「提示音」页的口语叫法；英文页标题已是 Sound，别名只补中文口径。
+     * 有意硬编码中文：仅补中文口径，多语言待 strings.json 机制。
+     */
     private val SOUND_ALIASES = listOf("声音")
 
     fun entries(): List<SettingsSearchEntry> = buildList {
@@ -68,11 +71,13 @@ object SettingsSearchIndex {
         val storage = Str.s(R.string.ios_settings_row_data_storage)
 
         fun top(id: String, res: Int, g: SettingsGlyph, t: SettingsTint, page: MePage) =
-            add(SettingsSearchEntry(id, Str.s(res), emptyList(), g, t, SettingsRoute(page)))
+            Str.s(res).let { add(SettingsSearchEntry(id, it, listOf(it), g, t, SettingsRoute(page))) }
 
         top("favorites", R.string.common_saved_messages, SettingsGlyph.Bookmark, SettingsTint.Blue, MePage.Favorites)
         top("calls", R.string.ios_settings_row_recent_calls, SettingsGlyph.Phone, SettingsTint.Green, MePage.CallHistory)
         top("devices", R.string.settings_row_devices, SettingsGlyph.Laptop, SettingsTint.Orange, MePage.Devices)
+        // 有意的平台差异：iOS 的分享名片是「我」页上的一个动作，Android 是独立页面（MePage.ShareCard），
+        // 所以这里按页面路由登记，不照搬 iOS 的动作式落点。
         top("share_card", R.string.settings_info_share_card, SettingsGlyph.IdCard, SettingsTint.Teal, MePage.ShareCard)
         top("notifications", R.string.ios_settings_row_notifications, SettingsGlyph.Bell, SettingsTint.Red, MePage.Notifications)
         top("privacy", R.string.settings_row_privacy, SettingsGlyph.Lock, SettingsTint.Gray, MePage.Privacy)
@@ -86,26 +91,26 @@ object SettingsSearchIndex {
             val kind = if (group) "group" else "private"
             val typeTitle = Str.s(if (group) R.string.notif_type_group_title else R.string.notif_type_private_title)
             val typeRoute = SettingsRoute(MePage.Notifications, SettingsSub.Notification(NotificationPage.Type, group))
-            add(SettingsSearchEntry("notif_$kind", typeTitle, listOf(notif), SettingsGlyph.Bell, SettingsTint.Red, typeRoute))
+            add(SettingsSearchEntry("notif_$kind", typeTitle, listOf(notif, typeTitle), SettingsGlyph.Bell, SettingsTint.Red, typeRoute))
             val soundRoute = SettingsRoute(MePage.Notifications, SettingsSub.Notification(NotificationPage.Sound, group))
-            add(SettingsSearchEntry("notif_${kind}_sound", Str.s(R.string.notif_type_sound), listOf(notif, typeTitle), SettingsGlyph.Volume, SettingsTint.Red, soundRoute, aliases = SOUND_ALIASES))
+            val sound = Str.s(R.string.notif_type_sound)
+            add(SettingsSearchEntry("notif_${kind}_sound", sound, listOf(notif, typeTitle, sound), SettingsGlyph.Volume, SettingsTint.Red, soundRoute, aliases = SOUND_ALIASES))
         }
 
         // 隐私与安全
-        add(SettingsSearchEntry("privacy_blocked", Str.s(R.string.blocked_title), listOf(privacy), SettingsGlyph.Ban, SettingsTint.Red,
+        add(SettingsSearchEntry("privacy_blocked", Str.s(R.string.blocked_title), listOf(privacy, Str.s(R.string.blocked_title)), SettingsGlyph.Ban, SettingsTint.Red,
             SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.Blocked))))
-        add(SettingsSearchEntry("privacy_password", Str.s(R.string.settings_change_password), listOf(privacy), SettingsGlyph.Key, SettingsTint.Blue,
+        add(SettingsSearchEntry("privacy_password", Str.s(R.string.settings_change_password), listOf(privacy, Str.s(R.string.settings_change_password)), SettingsGlyph.Key, SettingsTint.Blue,
             SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.ChangePassword))))
 
-        // 数据和存储：两个网络页 + 每网络三个媒体分类页（自动下载）
-        val autoDownload = Str.s(R.string.autodl_master_switch)
+        // 数据和存储：两个网络页 [数据和存储, 网络] + 每网络三个分类页 [数据和存储, 网络, 图片/视频/文件]
         for (net in DownloadNetwork.entries) {
             val netGlyph = if (net == DownloadNetwork.Wifi) SettingsGlyph.Wifi else SettingsGlyph.Smartphone
-            add(SettingsSearchEntry("storage_${net.name.lowercase()}", net.title, listOf(storage, autoDownload), netGlyph, SettingsTint.Green,
+            add(SettingsSearchEntry("storage_${net.name.lowercase()}", net.title, listOf(storage, net.title), netGlyph, SettingsTint.Green,
                 SettingsRoute(MePage.DataStorage, SettingsSub.Storage(net, null))))
             for (cat in DownloadCategory.entries) {
                 val glyph = when (cat) { DownloadCategory.Image -> SettingsGlyph.Image; DownloadCategory.Video -> SettingsGlyph.Video; DownloadCategory.File -> SettingsGlyph.File }
-                add(SettingsSearchEntry("storage_${net.name.lowercase()}_${cat.name.lowercase()}", Str.s(R.string.autodl_cat_header_prefix, cat.title), listOf(storage, net.title),
+                add(SettingsSearchEntry("storage_${net.name.lowercase()}_${cat.name.lowercase()}", cat.title, listOf(storage, net.title, cat.title),
                     glyph, SettingsTint.Green, SettingsRoute(MePage.DataStorage, SettingsSub.Storage(net, cat))))
             }
         }
@@ -120,10 +125,10 @@ object SettingsSearchIndex {
     fun hits(entries: List<SettingsSearchEntry>, keyword: String): List<SettingsSearchEntry> {
         val q = ListSearch.normalizedQuery(keyword)
         if (q.isEmpty()) return emptyList()
-        return entries
-            .filter { haystack(it).contains(q, ignoreCase = true) }
-            .sortedBy { e -> if ((listOf(e.title) + e.aliases).any { it.contains(q, ignoreCase = true) }) 0 else 1 }
+        // 同 iOS filterEntries：先「标题/别名命中」档，其余再看「路径+标题」拼接串（别名不进拼接串）
+        val (titleHits, rest) = entries.partition { e -> (listOf(e.title) + e.aliases).any { it.contains(q, ignoreCase = true) } }
+        return titleHits + rest.filter { haystack(it).contains(q, ignoreCase = true) }
     }
 
-    private fun haystack(e: SettingsSearchEntry): String = (e.path + e.title + e.aliases).joinToString(" ")
+    private fun haystack(e: SettingsSearchEntry): String = (e.path + e.title).joinToString(SettingsSearchEntry.PATH_SEPARATOR)
 }

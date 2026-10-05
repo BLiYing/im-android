@@ -181,7 +181,7 @@ fun IMSettingsRow(
 
 /** 设置行左侧的彩色圆角图标方块（[IMSettingsRow] 与带图标的 [IMSwitchRow] 共用）。 */
 @Composable
-fun SettingsIconTile(icon: ImageVector, iconBackground: Color) {
+internal fun SettingsIconTile(icon: ImageVector, iconBackground: Color) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Box(
