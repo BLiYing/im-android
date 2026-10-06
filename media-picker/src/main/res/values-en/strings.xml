@@ -18,4 +18,7 @@
     <string name="mp_limit">You can select up to %1$d</string>
     <string name="mp_video_preview_note">▶ %1$s · Not played in preview</string>
     <string name="mp_back">Back</string>
+    <string name="mp_album">Photos</string>
+    <string name="mp_denied_message">Photo access is off, so photos and videos can\'t be picked. Allow access in system Settings.</string>
+    <string name="mp_go_settings">Open Settings</string>
 </resources>

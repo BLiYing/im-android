@@ -38,7 +38,7 @@ internal fun ChatPickerLayers(
     onOpenChat: (ConversationEntity) -> Unit = {},
     /** 选联系人发名片中（null = 不在选）。 */
     pickingFriend: List<FriendEntry>?,
-    /** 选图中（自建相册页；无权限时它自己会降级到系统选择器）。 */
+    /** 选图中（自建相册页；无权限时它自己显示「去设置」空状态）。 */
     picking: Boolean,
     onCloseUser: () -> Unit,
     onCancelFriendPicker: () -> Unit,

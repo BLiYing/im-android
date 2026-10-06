@@ -123,16 +123,40 @@ object MediaCompressor {
         }
     }
 
-    /** 只读图片像素尺寸（不解码像素，几乎零成本）。协议要 `media_w`/`media_h` 让对端按原比例预留气泡。 */
+    /** 旋转 90/270 度后宽高互换（EXIF 方向 5~8 里需要换的那几种）。纯算术，可单测。 */
+    fun displaySize(width: Int, height: Int, rotation: Int): Pair<Int, Int> =
+        if (rotation == 90 || rotation == 270) height to width else width to height
+
+    /** EXIF 方向对应的旋转角；读不到（非 JPEG/HEIC、流打不开）一律 0。 */
+    fun exifRotation(context: Context, uri: Uri): Int = try {
+        context.contentResolver.openInputStream(uri)?.use {
+            rotationOf(ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL))
+        } ?: 0
+    } catch (e: Exception) {
+        0
+    }
+
+    /**
+     * 图片**显示方向**的像素尺寸（不解码像素，几乎零成本）。协议要 `media_w`/`media_h` 让对端按原比例预留气泡。
+     *
+     * `BitmapFactory` 的 `inJustDecodeBounds` 给的是**存储方向**的宽高，不看 EXIF：
+     * 竖拍的原图（存成 4000×3000 + 旋转 90 标记）会被报成横的，对端按 4:3 预留、
+     * 图加载出来是 3:4，整个气泡跳一下。所以这里要按 EXIF 换算一次。
+     * 「原图」模式字节不重新编码、EXIF 原样带着走，这条路径才会踩到；压缩路径已把朝向落到像素上。
+     */
     fun imageSize(context: Context, uri: Uri): Pair<Int, Int>? = try {
         val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o) }
-        if (o.outWidth > 0 && o.outHeight > 0) o.outWidth to o.outHeight else null
+        if (o.outWidth > 0 && o.outHeight > 0) {
+            displaySize(o.outWidth, o.outHeight, exifRotation(context, uri))
+        } else {
+            null
+        }
     } catch (e: Exception) {
         null
     }
 
-    /** 读**已编码字节**的像素尺寸（压缩后要重新量一次，压完的宽高和原图不同）。 */
+    /** 读**已编码字节**的像素尺寸（压缩后要重新量一次，压完的宽高和原图不同；压缩产物无 EXIF，不用换算）。 */
     fun imageSizeOf(bytes: ByteArray): Pair<Int, Int>? = try {
         val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)

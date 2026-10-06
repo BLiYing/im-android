@@ -99,7 +99,7 @@ fun ChatHost(
     // —— 转发（M4-3）——
     // 待转发的任务（null = 没在转发）：逐条 or 合并，见 ChatSelectionActions.kt 的 ForwardJob
     var forwarding by remember(conv.convId) { mutableStateOf<ForwardJob?>(null) }
-    /** 选图中（覆盖在聊天页之上的自建相册页；无权限时它自己会降级到系统选择器）。 */
+    /** 选图中（覆盖在聊天页之上的自建相册页；无权限时它自己显示「去设置」空状态）。 */
     // toast 要声明在下面那些 launcher 回调之前——回调里会赋值
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
     // 存相册：权限分支与三段文案都在 rememberMediaSaver 里，这里只拿到一个可调的函数

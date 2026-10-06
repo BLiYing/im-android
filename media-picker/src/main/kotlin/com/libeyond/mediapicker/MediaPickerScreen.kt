@@ -187,7 +187,7 @@ fun MediaPickerScreen(
 private data class PreviewTarget(val assets: List<MediaAsset>, val index: Int)
 
 @Composable
-private fun PickerTopBar(
+internal fun PickerTopBar(
     title: String,
     canSwitch: Boolean,
     expanded: Boolean,

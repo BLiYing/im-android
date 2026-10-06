@@ -49,7 +49,7 @@ class MediaPermissionTest {
 
     @Test
     fun `Android 14 只授权部分照片是 Partial 不是 None`() {
-        // 认成 None 会降级回系统选择器；认成 Full 会让用户以为相册里只有几张 —— 都错
+        // 认成 None 会把用户挡在「去设置」空状态外面；认成 Full 会让用户以为相册里只有几张 —— 都错
         assertEquals(
             Access.Partial,
             MediaPermission.access(34, setOf(MediaPermission.READ_USER_SELECTED)),
@@ -83,7 +83,7 @@ class MediaPermissionTest {
     }
 
     @Test
-    fun `只拒了视频不该让整个选择器降级`() {
+    fun `只拒了视频不该让整个选择器落到被拒空状态`() {
         // 以图片权限为准：单独拒视频的用户仍然要能发图
         val onlyImages = setOf(MediaPermission.READ_IMAGES)
         assertEquals(Access.Full, MediaPermission.access(33, onlyImages))

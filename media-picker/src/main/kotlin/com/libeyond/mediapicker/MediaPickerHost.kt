@@ -2,12 +2,13 @@ package com.libeyond.mediapicker
 
 import androidx.compose.ui.res.stringResource
 import android.content.pm.PackageManager
-import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
@@ -15,19 +16,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 选图入口（模块的**唯一**公开入口）：权限 → 自建宫格页；**权限被拒就降级回系统选择器**。
+ * 选图入口（模块的**唯一**公开入口）：权限 → 自建宫格页。
  *
- * 降级这条路是刻意保留的：读相册是敏感权限，用户完全可能拒绝，
- * 而「拒绝 = 发不了图」是不能接受的产品结果。降级后在 Android 11 上确实是 DocumentsUI
- * （体验差，正是自建这一页的原因），但**功能不消失**。
- *
- * 对调用方而言两条路是同一个出口：都回调一组 [PickedMedia]，**按发送顺序**。
+ * **权限被拒不降级**，而是在同一页里显示空状态（说明 + 「去设置」，见 [MediaPickerDenied]），
+ * 从系统设置回来时自动重查权限、直接进宫格。
+ * 此前这里会降级回系统选择器（`PickMultipleVisualMedia`）——那条路没有原图勾选、没有编号，
+ * 在 Android 11 上还是 DocumentsUI 文件浏览器，两套交互并存只会让人分不清；
+ * 且被拒的用户仍有拍摄/文件两个入口可发图，不是被堵死。
+ * 将来若上架审核（Play 的相册权限政策）要求改用系统 Photo Picker，接回思路见
+ * IMServer `docs/UI_SPEC.md` §6.4（`PickMultipleVisualMedia` + 自己查 URI 元数据补出 [PickedMedia]）。
  *
  * @param skin 颜色与间距（模块不认识业务主题，见 [MediaPickerSkin]）
  * @param log  日志转发到调用方的统一入口（模块不直接打日志，见 [MediaPickerLog]）
@@ -61,21 +67,10 @@ fun MediaPickerHost(
     var loading by remember { mutableStateOf(false) }
     /** 已经没有下一页了：不置这个标志，滑到底会无限重查最后一页。 */
     var exhausted by remember { mutableStateOf(false) }
-    /** 已经把决定权交给系统选择器了：这一帧不要再渲染自建页，也不要再申请权限。 */
-    var delegated by remember { mutableStateOf(false) }
+    /** 首次权限请求还没回来：这段时间不要闪「被拒」空状态（系统权限弹窗正压在上面）。 */
+    var asking by remember { mutableStateOf(!MediaPermission.canBrowse(access)) }
     /** 首屏是否已加载过：避免 `LaunchedEffect(bucketId)` 在首次组合时和权限流程抢跑。 */
     var ready by remember { mutableStateOf(false) }
-
-    val systemPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(MediaPick.LIMIT),
-    ) { uris ->
-        if (uris.isEmpty()) {
-            onDismiss()
-        } else {
-            // 系统选择器只给 URI，元数据要自己查一遍（名字/体积/类型都要用来发消息）
-            onPicked(uris.map { describe(context, it) }, sendOriginal)
-        }
-    }
 
     val askPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -83,20 +78,21 @@ fun MediaPickerHost(
         val granted = result.filterValues { it }.keys
         access = MediaPermission.access(sdk, granted)
         canVideo = includeVideo && MediaPermission.canReadVideo(sdk, granted)
-        if (!MediaPermission.canBrowse(access)) {
-            // 被拒 → 不纠缠、不弹「去设置」说教，直接给系统选择器，用户照样能发图
-            log.d("album_permission_denied_fallback")
-            delegated = true
-            systemPicker.launch(
-                PickVisualMediaRequest(
-                    if (includeVideo) {
-                        ActivityResultContracts.PickVisualMedia.ImageAndVideo
-                    } else {
-                        ActivityResultContracts.PickVisualMedia.ImageOnly
-                    },
-                ),
-            )
+        asking = false
+    }
+
+    // 从系统设置（或「管理授权的照片」）回来：权限可能已变，重查一次，不要让用户再点一遍
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val granted = grantedSet()
+                access = MediaPermission.access(sdk, granted)
+                canVideo = includeVideo && MediaPermission.canReadVideo(sdk, granted)
+            }
         }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
 
     LaunchedEffect(Unit) {
@@ -128,7 +124,14 @@ fun MediaPickerHost(
         ready = true
     }
 
-    if (delegated || !MediaPermission.canBrowse(access)) return
+    if (!MediaPermission.canBrowse(access)) {
+        if (!asking) {
+            MediaPickerTheme(skin) {
+                MediaPickerDenied(onCancel = onDismiss, onOpenSettings = { openAppSettings(context, log) })
+            }
+        }
+        return
+    }
 
     androidx.compose.runtime.CompositionLocalProvider(
         LocalPickerImageLoader provides rememberPickerImageLoader(),
@@ -192,34 +195,14 @@ data class PickedMedia(
 
 internal fun MediaAsset.toPicked() = PickedMedia(uri, displayName, mime, sizeBytes, isVideo)
 
-/**
- * 系统选择器只回 URI，元数据得自己查。读不到就给一组能用的兜底值——
- * 这条路已经是降级路径了，再因为查不到名字而整个失败就太脆了。
- */
-private fun describe(context: android.content.Context, uri: Uri): PickedMedia {
-    val cr = context.contentResolver
-    val mime = cr.getType(uri) ?: "image/jpeg"
-    var name: String? = null
-    var size = 0L
+private fun openAppSettings(context: android.content.Context, log: MediaPickerLog) {
     try {
-        cr.query(uri, null, null, null, null)?.use { c ->
-            val nameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            val sizeIdx = c.getColumnIndex(OpenableColumns.SIZE)
-            if (c.moveToFirst()) {
-                if (nameIdx >= 0) name = c.getString(nameIdx)
-                if (sizeIdx >= 0 && !c.isNull(sizeIdx)) size = c.getLong(sizeIdx)
-            }
-        }
-    } catch (_: Exception) {
-        // 兜底值已经够用，查不到就算了
+        context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    } catch (e: Exception) {
+        // 极个别精简 ROM 没有应用详情页：吞掉，用户仍可手动去设置（页面上的文案已说明）
+        log.w("open_app_settings_failed", "err" to e.javaClass.simpleName)
     }
-    val isVideo = mime.startsWith("video/")
-    return PickedMedia(
-        uri = uri.toString(),
-        displayName = name ?: ((if (isVideo) "video_" else "image_") + System.currentTimeMillis() +
-            "." + mime.substringAfterLast('/')),
-        mime = mime,
-        sizeBytes = size,
-        isVideo = isVideo,
-    )
 }
