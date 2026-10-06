@@ -6,7 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
-（空——暂无进行中的事项）
+**聊天选图器收尾（2026-10-07，已合入 main）**：`:media-picker` 被拒改同页空状态（无降级）、原图流式上传（≥8MB 私有副本可续传，杀进程后实测续传成功）、封面单次探测、压缩 ≤2 并发；今日在 OPPO 实测另修两处：①发送方视频被省电模式（「始终开启」）画成磨砂——磨砂只给接收侧；②竖拍视频待发气泡先画成横矩形再变竖——`PendingMediaBubble` 写死横向尺寸，现落行前用 `VideoProbe.info` / 图片 bounds 预探宽高写进待发行，待发与正式气泡共用 `rememberMediaDisplaySize`。待验证见根目录 `current_task.md` 下一步 0。
 
 ## 下一步
 
@@ -23,6 +23,10 @@
 8. 小尾巴（均不影响行为）：「刷新补名失败不重试」靠下次连接/刷新自愈；`resolveKind` 对畸形 convId 当群聊（测试已钉住）；`VoiceLocalStore.putText` 每次重写整份 FIFO 顺序表；`PendingVoiceBubble` 里多余的 `coerceAtLeast(160.dp)`；`applySync` 对全是 `msg_op`/墓碑的一页也调 `bumpConversationFromLatest`（白多一次索引 SELECT）。
 
 ## 已知坑 / 限制
+
+- **OPPO（MTK）4K 视频没有封面/缩略**：硬解上限 2560×1440，`MediaMetadataRetriever` 与 `ContentResolver.loadThumbnail` 都失败（实测），宫格与待发气泡同样空白；发出去的视频没有 `poster`。设备限制，别当 bug 反复查；真要兜底得自己 `MediaCodec` 走软解。
+- **App 的省电模式（设置里「始终开启」）会让视频预加载生效值为关**：`MediaBubbles`/`AlbumBubble` 对**接收侧**视频只画磨砂、不拉封面；自己发的（`ungated`）必须照常画封面，别再把这个分支放开到发送方。测省电相关 UI 前先看 `shared_prefs/im_power_saving.xml` 的 `mode`。
+- **OPPO 禁 `screenrecord`（`/sdcard`、`/data/local/tmp` 都 Permission denied）**：抓过程用循环 `adb exec-out screencap -p`（每张约 0.4s）。`pm revoke` 也被禁，改权限走「应用详情 → 权限管理」界面。
 
 - **群资料页有本地快照**（`data/GroupInfoCache.kt`，`filesDir/group_info/<uid>_<convId>.json`，剔成员表）：进页先画快照、网络回来覆盖；没快照退 `GroupInfoPlaceholder`（只画顶栏 + 头像 + 群名，**不画任何依赖角色/开关/人数的入口**，默认值会让权限判定放开）。拉不到有「点击重试」。
 - **登录被顶（账号在别处登录）后应用不会立刻回登录页**：群资料等页面请求全 401，页面停着；重启才见「你的账号已在别处登录」。未修，属登录失效反馈问题。
