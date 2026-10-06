@@ -216,11 +216,22 @@ private fun VideoContent(
         val poster = msg.poster
         val frosted = rememberFrostedPainter(msg.thumb)
         val gatedNow = !gate.ready && !ungated
+        // **自己发的、还没传完**：content 仍是本地 URI（content:// / file://），直接画本地首帧（全局 Coil 带
+        // VideoFrameDecoder，相册宫格的待发格同做法）。磨砂占位是给**接收方**「原图没到」用的——发送方手里
+        // 本来就有原片，再给他看一块模糊图（封面 URL 回来之前）就是多余的退化（与 iOS 发送方一致）。
+        val localCover = if (ungated) msg.content.takeIf { it.startsWith("content:") || it.startsWith("file:") } else null
         // 省电模式（§4.3）：「视频预加载」关闭或省电生效 → 不拉封面（也不解帧），只显内嵌 thumb 的磨砂图，
         // 与未下载门控同外观；点开播放照常
         val preload = com.libeyond.imandroid.ui.theme.LocalPowerSave.current.videoPreload
         // 无内嵌 thumb 时退回封面图（封面是普通图片请求，不是视频抽帧）；只跳过 VideoFrameDecoder 的解帧
-        if (gatedNow || (!preload && frosted != null)) {
+        if (localCover != null) {
+            AsyncImage(
+                model = localCover,
+                contentDescription = stringResource(R.string.chat_media_alt_video_cover),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (gatedNow || (!preload && frosted != null)) {
             // **未下载（门控态）一律只显内嵌 thumb 的磨砂图**，不拉封面——与 iOS `IMImageCell`（gated：thumb 优先、
             // 无 thumb 留中性底、「绝不为占位联网」）和图片气泡同口径。此前有 poster 就直接画清晰封面，
             // 自动下载关着时视频看着已经「下好了」，磨砂占位成了死代码（2026-10-03 用户报，iOS 早年同一个坑）。
@@ -234,9 +245,9 @@ private fun VideoContent(
                 model = MediaUrl.absolute(poster, host, useTls),
                 contentDescription = stringResource(R.string.chat_media_alt_video_cover),
                 contentScale = ContentScale.Crop,
-                // 封面还在下载 / 下不动时，先给内嵌缩略的磨砂版（M4-7）
-                placeholder = frosted,
-                error = frosted,
+                // 封面还在下载 / 下不动时，先给内嵌缩略的磨砂版（M4-7）；**自己发的不给**（理由见 localCover）
+                placeholder = if (mine) null else frosted,
+                error = if (mine) null else frosted,
                 modifier = Modifier.fillMaxSize(),
             )
         } else if (frosted != null) {
