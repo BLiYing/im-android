@@ -730,6 +730,7 @@
     <string name="err_300203">你不在该群中</string>
     <string name="err_300205">群成员已达上限</string>
     <string name="err_300211">你的入群申请刚被拒绝，请稍后再试</string>
+    <string name="err_300213">群管理员最多 5 位</string>
     <string name="err_500101">转文字暂未开启（服务端未配置识别引擎）</string>
     <string name="err_500102">识别失败，请稍后重试</string>
     <string name="err_500103">转文字服务繁忙，请稍后再试</string>
@@ -899,8 +900,8 @@
     <string name="group_admin_list_revoke_done">已撤销管理员</string>
     <string name="group_admin_picker_add_count">添加（%1$d/%2$d）</string>
     <string name="group_admin_picker_empty">没有可设为管理员的普通成员</string>
-    <string name="group_admin_picker_limit_note">一次最多添加 %1$d 位管理员。</string>
-    <string name="group_admin_picker_limit_toast">一次最多添加 %1$d 位管理员</string>
+    <string name="group_admin_picker_limit_note">最多还能添加 %1$d 位管理员。</string>
+    <string name="group_admin_picker_limit_toast">最多还能添加 %1$d 位管理员</string>
     <string name="group_admin_picker_selected_subtitle">已勾选%1$d/%2$d人</string>
     <string name="group_admin_picker_title">添加管理员</string>
     <string name="group_announcement_published_at">%1$s 发布</string>

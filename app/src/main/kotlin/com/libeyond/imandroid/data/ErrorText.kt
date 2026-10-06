@@ -37,6 +37,7 @@ object ErrorText {
         ErrCode.GROUP_MEMBER_LIMIT -> R.string.err_300205
         ErrCode.GROUP_BANNED -> R.string.qr_action_banned_note
         ErrCode.GROUP_JOIN_COOLDOWN -> R.string.err_300211
+        ErrCode.GROUP_ADMIN_LIMIT -> R.string.err_300213
         ErrCode.GROUP_INVITE_REVOKED -> R.string.qr_action_admin_only_note
         ErrCode.RATE_LIMITED -> R.string.err_100002
         else -> null

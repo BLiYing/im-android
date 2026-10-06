@@ -72,6 +72,7 @@ object ErrCode {
     const val GROUP_JOIN_PENDING = 300210
     const val GROUP_JOIN_COOLDOWN = 300211
     const val GROUP_INVITE_REVOKED = 300212
+    const val GROUP_ADMIN_LIMIT = 300213
 
     // --- 文件 5000xx ---
     const val FILE_TOO_LARGE = 500001

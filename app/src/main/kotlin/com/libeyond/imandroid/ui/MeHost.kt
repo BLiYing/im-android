@@ -52,7 +52,8 @@ fun MeHost(
     //     否则同一个 MeHost 里再手点同一行，会被残留的 sub 直接带进更深层。
     // 想简化为「外壳一次性交值」需把 1/2 改为事件流，且要覆盖「tab 切换重进组合」，风险高于收益，故保持。
     LaunchedEffect(Unit) { if (initialRoute != null) onRouteConsumed() }
-    var page by remember { mutableStateOf(initialRoute?.page ?: MePage.List) }
+    // rememberSaveable：重建 Activity（切语言等）后停在原二级页；`sub` 含不可序列化的对象，不存，重建后回该页首层
+    var page by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(initialRoute?.page ?: MePage.List) }
     var sub by remember { mutableStateOf(initialRoute?.sub ?: SettingsSub.None) }
     LaunchedEffect(page) { if (page == MePage.List) sub = SettingsSub.None }
     // 先用本机副本顶上：断网拉不到 /users/me 时头部仍是真名字，不掉成「未命名用户」

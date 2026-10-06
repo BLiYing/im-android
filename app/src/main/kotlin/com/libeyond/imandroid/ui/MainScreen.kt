@@ -85,7 +85,8 @@ private enum class Tab(@StringRes val labelRes: Int) {
 @Composable
 fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     val owner = client.uid.orEmpty()
-    var tab by remember { mutableStateOf(Tab.Chats) }
+    // rememberSaveable：切语言 / 旋转 / 深浅色会重建 Activity，重建后停在原 tab（原先 remember 一律回消息页）
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(Tab.Chats) }
     /** 首页搜索点中的设置项落点：切到「我」tab 时一次性交给 [MeHost]（它随 tab 切走而离开组合，状态只能挂这里）。 */
     var settingsRoute by remember { mutableStateOf<SettingsRoute?>(null) }
     // 本地好友表：uid → 整行。资料页进页即用它定型，避免闪动。

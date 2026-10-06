@@ -754,6 +754,7 @@
     <string name="err_300203">You’re not in this group</string>
     <string name="err_300205">The group has reached its member limit</string>
     <string name="err_300211">Your join request was just declined. Try again later.</string>
+    <string name="err_300213">A group can have at most 5 admins</string>
     <string name="err_500101">Voice-to-text isn’t enabled (the server has no speech engine configured)</string>
     <string name="err_500102">Recognition failed. Try again later.</string>
     <string name="err_500103">Voice-to-text is busy. Try again later.</string>
@@ -933,8 +934,8 @@
     <string name="group_admin_list_revoke_done">Admin revoked</string>
     <string name="group_admin_picker_add_count">Add (%1$d/%2$d)</string>
     <string name="group_admin_picker_empty">No regular members available to make admin</string>
-    <string name="group_admin_picker_limit_note">You can add up to %1$d admins at a time.</string>
-    <string name="group_admin_picker_limit_toast">You can add up to %1$d admins at a time</string>
+    <string name="group_admin_picker_limit_note">You can add up to %1$d more admins.</string>
+    <string name="group_admin_picker_limit_toast">You can add up to %1$d more admins</string>
     <string name="group_admin_picker_selected_subtitle">%1$d/%2$d selected</string>
     <string name="group_admin_picker_title">Add admins</string>
     <string name="group_announcement_published_at">Posted %1$s</string>
