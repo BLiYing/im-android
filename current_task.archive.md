@@ -2507,3 +2507,34 @@
 >   （`avatarOf` 取 `groupConvById[chatGroupId].avatarUrl`，`IMAvatar` seed 用群会话 id，同会话列表），
 >   删 `GroupCallAvatar`；行内时间改 `TimeFormat.bubbleTime`（`HH:mm`，日期交给分组头）；箭头次要色、
 >   名字 16 SemiBold、分组头 Bold，按 UX 稿对齐。`./scripts/test.sh` 986/986。
+
+---
+## 2026-10-06 归档自 current_task.md「当前焦点」
+**2026-10-06 列表首行入口行对齐（main，未 push）**：`ui/screens/LeadingEntryRow.kt`（槽 40 + 间距 12，文字左缘 68）替换通知例外 / 管理员 / 群资料成员页签的私有入口行；成员页签新增「添加成员」行（原头部下邀请卡取消），满员提示并入成员页签。Pixel 2 XL 验过例外页与群资料成员页签，管理员页未目测。
+
+**2026-10-06 详情页/会话列表对齐 iOS 一批（已合入 main，未 push）**：① 单聊/群资料页签只显示有内容的类别（`DetailTabs.visible(isGroup, nonEmpty)`，进页并行预拉媒体/文件/语音首页 `ConvArchiveSet`，链接/名片本地扫），内容区左右横滑切签，页签内容套卡片边距（`ArchiveCardRow`，左右 16、首尾圆角）；② 大群说明并入「公告/简介」卡第三行，右值「已关闭 4 项能力」、点开底部弹窗（文案全走 `group.text.super_*`；老 `group.info.super_note` 的「3 项」文案已无引用，表里未删以免 iOS 生成物漂移）；③ 会话列表删除：服务端 DELETE 成功后本机会话行没移走（`applyConversationList` 只 upsert、陈旧行只删群），改走 `MessageService.deleteConversation`；④ 免打扰铃铛挪到名称行置顶图标之后。`GroupInfoHost.kt` 拆出 `GroupPickHost` 后 573/600。Pixel 2 XL 实测。
+
+**2026-10-06 标题栏统一 + 群聊标题（已合入 main，未 push）**：设计 `../IMServer/docs/design/TOPBAR_UNIFY_DESIGN.md`。
+① 栏高固定 56（`IMDimens.topBarHeight` = iOS `kIMLiquidBarHeight`，`heightIn(min)` 防大字号裁切），外框抽成 `Modifier.topBarChrome`，`IMTopBar` / 搜索态顶栏 / FriendPicker 共用；② 栏色跟随页面底色（默认 `groupedBackground`，`pageBackground` 页——收藏阅读器、聊天记录、WebView、转发卡片弹层、TextReader——传 `containerColor`），页面 inset 不迁移；
+③ 群聊副标题 `ChatSubtitle.resolve`（输入带名 → 连接态 → 成员数/大群，对齐 iOS）、群备注标题随 `conv_update` 实时刷新（`ConvRemarkSignal.of` 只认 settings 帧，delete 帧也带 `remark:""`）；头像首字母跟标题。Pixel 2 XL 实测（深浅色、字号 2.0、备注设置/清除、超级群）。
+会话列表页连接态副标题也按 iOS 区分「连接中…」/「未连接」（`ChatSubtitle.connection`，与聊天页共用一份映射，Pixel 断线实测）。未做：大字号下搜索态顶栏比带副标题的栏矮，进出搜索列表会跳一下（heightIn 的已知取舍）。Web 不动（左对齐是刻意差异）。
+
+**2026-10-05 搜索入口收敛（main，SEARCH_DESIGN §3.1）**：「我」页内搜索框已删（通讯录页内搜索保留）；首页全局搜索新增「设置」分组（会话→联系人→聊天记录→设置→搜索用户）。登记表 `data/SettingsSearchIndex.kt`（显式登记；一级行 + 通知私聊/群聊/提示音 + 已屏蔽/修改密码 + 自动下载网络/分类；退出登录、文件夹不进）；点命中 → `MainScreen.settingsRoute` 切「我」tab → `MeHost(initialRoute)` → 各 Host `initialSub` 作初始页，返回键沿原链退到「我」页。OPPO 真机验过（深链 3 层与返回、中英文、深色）。zh 文案里没有「声音」二字（是「提示音」），搜「声音」无命中。
+
+**2026-10-05 UI 批（分支 `fix/ui-batch-0610`，worktree `../im-android-wt-fixes`，待用户确认合入）**：① 定位高亮 / 长按预览阴影改为只作用于气泡（`BubbleFlash.kt`，同 iOS `flashRowAtIndexPath:`，accent α0.35 淡出）；② 详情页/资料页/入群预览的名称加边距+截断；③ 群公告/简介弹窗改为组合树内浮层（Android 15 的 Dialog 窗口内容被状态栏高度下推，「复制全文」被挤出屏，PKD130 复现并验过）；④ 「我」页与通讯录页加内联搜索（我：搜功能项；通讯录：联系人+群聊，无结果给「搜索用户」入口）。定位高亮的实机效果未验。
+
+**2026-10-03 补**：首页全局搜索（`GlobalSearchHost`/`GlobalSearchScreen`/`data/GlobalSearch`，会话列表顶部搜索胶囊进入；未做：群行「N 人」副标题、进页自动弹键盘、进会话再返回回到列表而非搜索页）；长按菜单对齐 iOS（视频/文件无图说不再给「复制链接」；待发气泡/格菜单改同款压暗+图标菜单，经全屏 Dialog 承载，Pixel 实测）。待发文本「翻译」、长按背景整页模糊仍是已知差距（见 PARITY 差异表）。
+
+无进行中的开发任务。**2026-10-02~03 补齐了离线积压整套**（设计与逐项状态以 `../IMServer/docs/design/OFFLINE_BACKLOG_DESIGN.md` §5 为唯一来源，压测数字见 `../IMServer/docs/ops/LOAD_TESTING.md` §11）：
+- **取数与同步**：C1 区间清单（消息 + 区间 + 游标同事务）· C2 `max_gap`/`too_long` · C3 进会话取数分流（锚点窗 / 尾窗 / 上滚 / **向下续接**）· C4 `conv_bump` 与 ↓ 先问区间清单 · C5 delivered 合批 · 本机清空位点 `clearedUpTo`（三端统一）。
+- **整会话问题分流（C6）**：「本地齐不齐」问区间清单；会话内搜索服务端翻页；日历 / 跳最早 / 某天在有缺口时只认当天、否则「需要联网」；↓N 数 `tip − 读位点`；搜索/日历/媒体服务端结果滤清空位点；**查看器**本地打底取「点中那条所在本地段」+ 向更旧 / **向更新**（服务端 `media?after=`）续拉；资料页媒体/文件/语音页签并入服务端分页。
+- **真机验证**（Pixel 2 XL，10 万积压大群）：点进 ~0.5s 落在未读分割线、↓ 角标 `99+`、锚点窗连续向下读（`#83`→`#1112`，每窗 ~0.6s）。`apply_ms` 偏高与进会话掉帧已定性（非 C1 开销、不随积压增长，`LOAD_TESTING` §11.8）。
+- **2026-10-03 UI 对齐 iOS**：详情页 / 群资料 / 收藏页的页签条改为居中且贴合内容（`SegTabBar`，此前拉满、页签靠左、右侧一大片空底）；**点到自己进「我的资料」（可编辑）而非「用户信息」页**（`UserProfileHost` 一处收口，六处入口都经它）。
+- **2026-10-03 群相关五项（用户报）**：① 群系统消息里自己显示「我」（`SysSegments.displayName(selfUid)`，聊天行 + 会话列表预览）；② 群资料「群管理」行右侧补「仅群主/管理员」（有待审时改红字角标，同 iOS）；③ 进群确认等开关改**乐观更新**（`GroupSettings.applied`；服务端读写本身没问题）；④ 入群申请页签换成共用 `SegTabBar`，**iOS 同步补了页签**（`IMJoinRequestsViewController`，此前 iOS 只拉 pending、同意后整条消失）；⑤ **点人统一走 `MemberProfileHost`**（= 聊天头像那条路），群成员 / 通讯录 / 收藏 / 扫码 / 聊天头像五处收口。
+- **2026-10-03 第二批（用户报，Pixel 2 XL 真机 + iOS 模拟器验过）**：① **清空聊天记录**：会话行不再沉到列表最底（`clearConversation` 误把 `lastTimestamp` 置 0，现保留位置只清预览）；详情页「媒体/文件/语音」页签清空后立即重载（此前仍显示旧图）。清空**不动**未读数与已读位点——**产品确认保留**（2026-10-03：清空后未读还在、来新消息仍能看到是有意的好功能；三端一致，别当 bug 改）。② **进会话定位**：`ChatEntry.CONTEXT_BEFORE` 3→0（分割线/首条未读对齐视口顶部，同 iOS `anchorRowToTop:` 与 Web），此前留 3 条上下文把未读竖图挤到屏幕下沿、下半截被切；③ **视频门控态只显磨砂 thumb**（`VideoContent`：未下载不再画清晰 `poster`，同 iOS `IMImageCell` gated 分支）；宫格本就是磨砂；④ **选人页**（设管理员/转让群主/邀请/群通话共用 `PickListScreen`，iOS 同样共用 `IMFriendPickerViewController`）补顶部搜索 + A–Z 分组 + 右侧索引尺；⑤ **扫一扫页**对齐 iOS：取景框上移 40、提示在框下 22（原先压进框里）、相册钮在提示下 26，补底部「扫码 / 我的二维码」页签。
+- **2026-10-03 补缺口第一批（`group` 帧消费）**：`MessageService` 新增 `groupEvents` 流 + 群待审数（`pendingCounts`，不落库）；群资料页收本群帧重拉；被移出/解散 → 提示 + 关聊天/群资料页 + 本机删会话行（`MessageRepository.removeConversation`；此前退群/解散后本机行会残留）；入群审批结果提示（`GroupEventsEffect`，必须画在 `MainScreen` 内容之后否则被盖住）；会话列表红字「[N 待审]」。Pixel 真机四条链路验过。**`GroupInfoHost.kt` 600 行（顶格），`ChatScreen`/`ChatHost`/`MessageService` 均 ≥594：动它们之前必须先拆。**
+- **2026-10-03 补缺口第二、三批**：拒收说明行（`SendRejection`，单条与相册都有；200103 带「发送好友申请」）+ 输入栏禁言锁（`ComposerLock`，到期自动解锁）+ 加好友验证消息弹窗（`FriendRequestPrompt`，四处入口共用）+ 业务错误码本地化（`ErrorText`）；**置顶横幅整块**（`ChatBanners.kt` 状态 / `screens/ChatBannerStack.kt` 画 / `data/PinnedBanner.kt` 纯判据；置顶集合不落库，靠 `msgOps` 信号对齐）。`ChatHost` 的群资料状态拆到 `ChatGroupState.kt`。Pixel 真机验过。
+- **2026-10-03 补缺口第四~七批（对照 iOS，CLIENT_PARITY 对应行已改）**：群已读 ✓✓ + 「N 人已读」（`ReadTick`/`ReadReceiptsSheet`）· 编辑/翻译/单条举报（`ChatMessageOps`）· 长文本三档（`LongText`/`TextReader`）· 禁言时长档/移出确认（`GroupMemberMenu`）· 返回键未读徽标 · 登录补拉 hidden · 通讯录名片页签 + 分享名片 · 建群两步流 · `UserProfileCache`（`/users/batch`）· `RosterCache`（好友/群离线快照，Room v17）· 审批横幅直达入群申请列表 · 收藏「以聊天模式查看」。**上传整块**：`ChunkedUploader`（暂停/续传/取消，服务端 offset 为准）+ `PendingMediaStore`（≥8MB 私有副本 `filesDir/pending_media` + `.uploadid` 旁路）+ 常驻串行队列 + 气泡/宫格钮盘 + 待发行长按菜单；单张粘贴图+文字合并 caption。**2026-10-03 已在 Pixel 补验**：暂停/续传/杀进程续传/取消（1GB）、待发行长按菜单、caption 粘贴（单聊）、收藏邀请链接原生入群。caption 配文 @（群）与相册宫格各格钮盘由用户在 OPPO 验过通过。
+- **2026-10-03 长按菜单对照 iOS 补齐**：① 宫格长按浮起的那一格改为与原位同一份渲染（`AlbumTilePreview`，门控磨砂不再被原图顶掉）；② 菜单顺序对齐（多选移到编辑之后）；③ 通话记录长按补「为所有人删除」档（我发的/群管理）；④ 待发件菜单判据收进 `PendingMenu`（取消发送=本地媒体件、删除=失败件），宫格里的待发格也有菜单。待发菜单仍是 DropdownMenu（无浮起预览）；未真机验（Pixel 会话列表为空，无宫格数据）。
+- **2026-10-03 进群确认对普通成员邀请生效（Android 跟进）**：`GroupApi.invite` 返回 `InviteResult{added,pending}`（老服务端无字段=Plain）；`InviteOutcome.of` 判据（pending→待审 toast；两者皆空→「都已在群里」；部分→partial）；入群申请行 `inviterNickname` 非空显「由 X 邀请」替代附言。Pixel 真机验过 toast + 服务端 `inviter_nickname`。
+- 拆分：`ChatScreen` → `ChatJumpButton`、`MessageService` → `MessageSendSimple`；`ChatHost` 早先拆出 `ChatLookups` / `ChatTailSync`。
