@@ -12,26 +12,21 @@
 
 ## 下一步
 
-1. **真机验证欠账**（均已实现，需两台设备/两个账号才测得全；验完再合并对应分支）：
-   - 通知与提示音 P1 第一批 `feature/notif-p1a`（横幅出现/点击/上滑/自动收/按住暂停/连发替换/进会话收起/预览关文案/通话中不出，「添加例外」另一端同步）与第二批 `feature/notif-p1b`（定时免打扰：三个入口时长菜单、到期后铃铛/角标/例外列表自动刷新、另一端 `conv_update` 显示「永久」、免打扰期间改置顶/标未读/群备注 `mute_until`）。
-   - 设置 ▸ 最近通话剩余项：滚动分页时序、「未接」tab 连续翻页观感、`callEnded` 重拉首页、群聊行跳转、空/401/网络错误三态——需攒几通真实通话（含群通话）。
-   - 归档查看器「更多」五项、合并转发记录页内翻页、长按预览里点图/点链接只关菜单；转发带 @ 图片到群后「别人视角」点被 @ 的名字与强提醒；「对方撤回」两种文案（单设备单账号测不出）。
-   - **离线积压**：查看器**向更新方向**续拉只有单测 + 变异 + 服务端 curl，**没做真机端到端**（要停在缺口会话的历史段里点图，造数据成本高）；离线时的「只能翻已加载的部分」提示没在真机上看过。
-2. **离线积压剩余**：「@我的消息列表」入口（服务端接口已有，三端 UI 都缺，产品暂不要）。
-3. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：`ChatDetailHost` 已全部接完，`GroupInfoHost` 仅 `Media` 一支已接。
+1. **离线积压剩余**：「@我的消息列表」入口（服务端接口已有，三端 UI 都缺，产品暂不要）。
+2. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：`ChatDetailHost` 已全部接完，`GroupInfoHost` 仅 `Media` 一支已接。
    - 根因：`ui/components/PushTransition.kt` 要退场页按冻结的 `state` 渲染，而这些 host 是「关闭即把数据变量置空」，退场时数据已没，半路变白。改法 = 「是否打开」与「显示什么数据」拆两个变量，关闭只翻布尔（参照 `ChatDetailHost` 的 `viewingOpen`/`viewingData`）。
-   - 余 8 支未动（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/Manage/Qr），逐支来；**全部改完才把 9 支统一进一个 `PushTransition(page, depthOf)`**。`GroupInfoHost.kt` 已贴 600 行硬闸，**动它之前先拆文件**。
+   - 余 8 支未动（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/Manage/Qr），逐支来；**全部改完才把 9 支统一进一个 `PushTransition(page, depthOf)`**。`GroupInfoHost.kt` 现 574/600（已拆出 `GroupInfoDialogs/Live/Settings.kt`，仍贴线），**动它之前先拆文件**。
    - `ChatHost` 覆盖层栈（`ChatOverlays.kt`，`ChatRecord` 可嵌套压栈）范围最大且是产品判断，**动手前先问用户**。
-4. 卡片弹层推广：@提及、选文件、已读详情、日期跳转、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`。
-5. 收藏剩余：来源名到群昵称级；长按菜单缺举报、翻译。
-6. 宫格按 `IMAlbumRowPattern` 重写布局 + 五道防跳版闸。
-7. `docs/UI_PARITY_IOS.md` 剩余 🔴：水滴头部形变、「名片」页签、隐私页无障碍。
-8. 群成员头像图：首字母色块对但无头像缓存，要先做 `POST /users/batch` 解析器。
-9. 小尾巴（均不影响行为）：「刷新补名失败不重试」靠下次连接/刷新自愈；`resolveKind` 对畸形 convId 当群聊（测试已钉住）；`VoiceTranscriptStore.putText` 每次重写整份 FIFO 顺序表；`PendingVoiceBubble` 里多余的 `coerceAtLeast(160.dp)`；`applySync` 对全是 `msg_op`/墓碑的一页也调 `bumpConversationFromLatest`（白多一次索引 SELECT）。
+3. 卡片弹层推广：@提及（`MentionPanel`）、选文件、日期跳转（现为 `AlertDialog`）、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`（已读详情已换）。
+4. 收藏剩余：来源名到群昵称级；收藏页长按菜单是否已覆盖举报、翻译待核（聊天侧已做）。
+5. 宫格：「五道防跳版闸」是否齐全待核（布局已按 `IMAlbumRowPattern` 对齐）。
+6. `docs/UI_PARITY_IOS.md` 剩余 🔴：水滴头部形变、隐私页无障碍；该文档里「名片」页签一行仍写没有 🔴，实际已做（`84a1636`），顺手改 ✅。
+7. 群成员头像图：首字母色块对但无头像缓存；`POST /users/batch` 解析器已有（`UserProfileCache`，用于发送者头像），待接到群成员头像。
+8. 小尾巴（均不影响行为）：「刷新补名失败不重试」靠下次连接/刷新自愈；`resolveKind` 对畸形 convId 当群聊（测试已钉住）；`VoiceLocalStore.putText` 每次重写整份 FIFO 顺序表；`PendingVoiceBubble` 里多余的 `coerceAtLeast(160.dp)`；`applySync` 对全是 `msg_op`/墓碑的一页也调 `bumpConversationFromLatest`（白多一次索引 SELECT）。
 
 ## 已知坑 / 限制
 
-- **体量贴线**（硬闸 600，WARN 线 480）：`GroupInfoHost.kt` 573、`ChatHost.kt` 568、`MessageRepository.kt` 554、`ChatScreen.kt` 549、`MessageService.kt` 546 都很近；动它们之前先拆文件，新增一律放新文件。`Daos.kt` 别再加。
+- **体量贴线**（硬闸 600，WARN 线 480）：`GroupInfoHost.kt` 574、`ChatHost.kt` 589（**只差 11 行**）、`MessageRepository.kt` 580、`ChatScreen.kt` 532、`MessageService.kt` 506 都很近；动它们之前先拆文件，新增一律放新文件。`Daos.kt` 别再加。
 - **合并转发记录里的名片 →「发消息」换不了会话**（未修）：`ChatHost` 绑死单一 `convId`，点了只关资料层退回记录页。
 - **`FavoritesHost`/`ChatPickerLayers`/`QrRouteHost` 进 `UserProfileHost` 没接 `onRemarkChanged`**（缓行，按 `ContactsHost` 同一套本机状态覆盖补即可）。
 - **App Links 系统级深链接：明确暂不做**（2026-09-22 拍板）：需要固定公网 HTTPS 域名放 `assetlinks.json`；三端联动，等有部署域名再评估。**改原生 Material 风格：暂缓**（见 `docs/design/MATERIAL_DESIGN_EVAL.md`），别顺手改配色/图标/弹层。

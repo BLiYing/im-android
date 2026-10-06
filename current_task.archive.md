@@ -2538,3 +2538,22 @@
 - **2026-10-03 长按菜单对照 iOS 补齐**：① 宫格长按浮起的那一格改为与原位同一份渲染（`AlbumTilePreview`，门控磨砂不再被原图顶掉）；② 菜单顺序对齐（多选移到编辑之后）；③ 通话记录长按补「为所有人删除」档（我发的/群管理）；④ 待发件菜单判据收进 `PendingMenu`（取消发送=本地媒体件、删除=失败件），宫格里的待发格也有菜单。待发菜单仍是 DropdownMenu（无浮起预览）；未真机验（Pixel 会话列表为空，无宫格数据）。
 - **2026-10-03 进群确认对普通成员邀请生效（Android 跟进）**：`GroupApi.invite` 返回 `InviteResult{added,pending}`（老服务端无字段=Plain）；`InviteOutcome.of` 判据（pending→待审 toast；两者皆空→「都已在群里」；部分→partial）；入群申请行 `inviterNickname` 非空显「由 X 邀请」替代附言。Pixel 真机验过 toast + 服务端 `inviter_nickname`。
 - 拆分：`ChatScreen` → `ChatJumpButton`、`MessageService` → `MessageSendSimple`；`ChatHost` 早先拆出 `ChatLookups` / `ChatTailSync`。
+
+---
+## 2026-10-06 归档自 current_task.md「下一步」（核对后改写前的原文）
+1. **真机验证欠账**（均已实现，需两台设备/两个账号才测得全；验完再合并对应分支）：
+   - 通知与提示音 P1 第一批 `feature/notif-p1a`（横幅出现/点击/上滑/自动收/按住暂停/连发替换/进会话收起/预览关文案/通话中不出，「添加例外」另一端同步）与第二批 `feature/notif-p1b`（定时免打扰：三个入口时长菜单、到期后铃铛/角标/例外列表自动刷新、另一端 `conv_update` 显示「永久」、免打扰期间改置顶/标未读/群备注 `mute_until`）。
+   - 设置 ▸ 最近通话剩余项：滚动分页时序、「未接」tab 连续翻页观感、`callEnded` 重拉首页、群聊行跳转、空/401/网络错误三态——需攒几通真实通话（含群通话）。
+   - 归档查看器「更多」五项、合并转发记录页内翻页、长按预览里点图/点链接只关菜单；转发带 @ 图片到群后「别人视角」点被 @ 的名字与强提醒；「对方撤回」两种文案（单设备单账号测不出）。
+   - **离线积压**：查看器**向更新方向**续拉只有单测 + 变异 + 服务端 curl，**没做真机端到端**（要停在缺口会话的历史段里点图，造数据成本高）；离线时的「只能翻已加载的部分」提示没在真机上看过。
+2. **离线积压剩余**：「@我的消息列表」入口（服务端接口已有，三端 UI 都缺，产品暂不要）。
+3. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：`ChatDetailHost` 已全部接完，`GroupInfoHost` 仅 `Media` 一支已接。
+   - 根因：`ui/components/PushTransition.kt` 要退场页按冻结的 `state` 渲染，而这些 host 是「关闭即把数据变量置空」，退场时数据已没，半路变白。改法 = 「是否打开」与「显示什么数据」拆两个变量，关闭只翻布尔（参照 `ChatDetailHost` 的 `viewingOpen`/`viewingData`）。
+   - 余 8 支未动（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/Manage/Qr），逐支来；**全部改完才把 9 支统一进一个 `PushTransition(page, depthOf)`**。`GroupInfoHost.kt` 已贴 600 行硬闸，**动它之前先拆文件**。
+   - `ChatHost` 覆盖层栈（`ChatOverlays.kt`，`ChatRecord` 可嵌套压栈）范围最大且是产品判断，**动手前先问用户**。
+4. 卡片弹层推广：@提及、选文件、已读详情、日期跳转、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`。
+5. 收藏剩余：来源名到群昵称级；长按菜单缺举报、翻译。
+6. 宫格按 `IMAlbumRowPattern` 重写布局 + 五道防跳版闸。
+7. `docs/UI_PARITY_IOS.md` 剩余 🔴：水滴头部形变、「名片」页签、隐私页无障碍。
+8. 群成员头像图：首字母色块对但无头像缓存，要先做 `POST /users/batch` 解析器。
+9. 小尾巴（均不影响行为）：「刷新补名失败不重试」靠下次连接/刷新自愈；`resolveKind` 对畸形 convId 当群聊（测试已钉住）；`VoiceTranscriptStore.putText` 每次重写整份 FIFO 顺序表；`PendingVoiceBubble` 里多余的 `coerceAtLeast(160.dp)`；`applySync` 对全是 `msg_op`/墓碑的一页也调 `bumpConversationFromLatest`（白多一次索引 SELECT）。
