@@ -50,7 +50,6 @@ import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 private val EXCEPTION_AVATAR = 40.dp
-private val ADD_EXCEPTION_ICON = 26.dp
 
 /**
  * 私聊 / 群聊通知子页（NOTIFICATIONS_DESIGN §2.3 + NOTIFICATIONS_P1_DESIGN §2），两种类型共用同一份结构
@@ -126,7 +125,11 @@ internal fun NotificationTypeScreen(
             Spacer(Modifier.height(d.cardGap))
             IMSectionHeader(stringResource(R.string.notif_section_exceptions))
             IMSettingsGroup {
-                AddExceptionRow(onClick = onAddException)
+                LeadingEntryRow(
+                    icon = { AccentCircleIcon() },
+                    title = stringResource(R.string.notif_exceptions_add),
+                    onClick = onAddException,
+                )
                 exceptions.forEach { conv ->
                     IMRowDivider(insetStart = d.space4 + EXCEPTION_AVATAR + d.space3)
                     val opened = openedId == conv.convId
@@ -147,42 +150,6 @@ internal fun NotificationTypeScreen(
             }
             Spacer(Modifier.height(d.sectionGap))
         }
-    }
-}
-
-/**
- * 「添加例外」行（NOTIFICATIONS_P1_DESIGN §2 + 草图 02A）：绿色文字 + 圆形 ＋ 号，恒排在例外组最上面。
- * 「绿色」= 本 App 的强调色（`IMTheme.colors.accent` 本就是绿，`ui/theme/Tokens.kt`），不是另起一个颜色。
- */
-@Composable
-private fun AddExceptionRow(onClick: () -> Unit) {
-    val c = IMTheme.colors
-    val d = IMTheme.dimens
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .defaultMinSize(minHeight = d.settingsRowHeight)
-            .padding(horizontal = d.space4, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier.size(ADD_EXCEPTION_ICON).clip(CircleShape).background(c.accent),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                imageVector = Lucide.Plus,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                colorFilter = ColorFilter.tint(c.onAccent),
-            )
-        }
-        Spacer(Modifier.width(d.space3))
-        Text(
-            text = stringResource(R.string.notif_exceptions_add),
-            color = c.accent,
-            style = MaterialTheme.typography.bodyLarge,
-        )
     }
 }
 

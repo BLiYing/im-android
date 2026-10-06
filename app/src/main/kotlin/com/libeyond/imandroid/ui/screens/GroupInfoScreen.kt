@@ -37,6 +37,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Megaphone
 import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.UserPlus
 import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.ui.announceSubtitle
 import com.libeyond.imandroid.R
@@ -288,53 +289,6 @@ fun GroupInfoScreen(
 
             // 「聊天媒体」那一行没有了——归档已经是下面的内联页签（对齐 iOS）。
             // 同一件事留两个入口，其中一个还要跳出去，是本端此前与 iOS 差得最远的一处。
-            if (!galleryOnly && GroupPermissions.canInvite(info)) item(key = "invite") {
-                Spacer(Modifier.height(d.cardGap))
-                Column(
-                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().clickable { onInvite() }
-                            .padding(horizontal = d.space4, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(stringResource(R.string.group_info_invite_friends), color = c.textPrimary,
-                            style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                        Text("›", color = c.textTertiary)
-                    }
-                }
-            }
-
-            // 满员提示：紧跟在邀请入口之后（iOS 成员页签里「添加成员」下面那一行），与邀请卡同一份门控的下面
-            if (!galleryOnly && upgradeHint != null) item(key = "upgrade_hint") {
-                Spacer(Modifier.height(d.cardGap))
-                Column(
-                    Modifier.fillMaxWidth().padding(horizontal = d.space4)
-                        .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
-                        .clickable(onClick = upgradeHint.onTap)
-                        .padding(horizontal = d.space4, vertical = 12.dp),
-                ) {
-                    Text(
-                        stringResource(R.string.group_upgrade_hint_title, upgradeHint.maxMembers), color = c.textPrimary,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    // 5 条短句分行（不是一大段），行距放宽——iOS 同
-                    val lines = listOf(
-                        stringResource(R.string.group_upgrade_hint_item_1, upgradeHint.maxSupergroupMembers),
-                        stringResource(R.string.group_upgrade_hint_item_2),
-                        stringResource(R.string.group_upgrade_hint_item_3),
-                        stringResource(R.string.group_upgrade_hint_item_4_short),
-                        stringResource(R.string.group_upgrade_hint_tap_copy_id),
-                    )
-                    Text(
-                        lines.joinToString("\n"), color = c.textSecondary,
-                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 20.sp),
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
-
             if (!galleryOnly) item(key = "tabs") {
                 Spacer(Modifier.height(d.cardGap))
                 DetailTabBar(tabs, tab) { onTabChange(it) }
@@ -343,11 +297,34 @@ fun GroupInfoScreen(
             // —— 页签内容 ——
             when (tab) {
                 DetailTab.Members -> {
-                    if (GroupMemberSearch.shouldOffer(info.memberCount, members.size)) {
-                        item(key = "member_search_entry") { MemberSearchEntryRow(onClick = onOpenMemberSearch) }
+                    // 前导入口行（搜索成员 / 添加成员）同属一张卡；满员提示卡夹在入口与成员之间时入口卡单独收口
+                    val canAdd = !galleryOnly && GroupPermissions.canInvite(info)
+                    val offerSearch = GroupMemberSearch.shouldOffer(info.memberCount, members.size)
+                    val entryCount = (if (offerSearch) 1 else 0) + (if (canAdd) 1 else 0)
+                    val hint = upgradeHint.takeIf { !galleryOnly }
+                    val joined = hint == null  // 入口行与成员行连成一张卡
+                    val memberBase = if (joined) entryCount else 0
+                    val total = memberBase + members.size
+                    val entryTotal = if (joined) total else entryCount
+                    if (offerSearch) item(key = "member_search_entry") {
+                        ArchiveCardRow(0, entryTotal) {
+                            LeadingEntryRow(
+                                icon = { AccentLineIcon(Lucide.Search) }, title = stringResource(R.string.group_member_search),
+                                onClick = onOpenMemberSearch, showChevron = true, divider = true,
+                            )
+                        }
                     }
+                    if (canAdd) item(key = "member_add_entry") {
+                        ArchiveCardRow(if (offerSearch) 1 else 0, entryTotal) {
+                            LeadingEntryRow(
+                                icon = { AccentLineIcon(Lucide.UserPlus) }, title = stringResource(R.string.group_member_add),
+                                onClick = onInvite, showChevron = true, divider = true,
+                            )
+                        }
+                    }
+                    if (hint != null) item(key = "upgrade_hint") { UpgradeHintCard(hint) }
                     itemsIndexed(members, key = { _, m -> m.userId }) { i, m ->
-                        ArchiveCardRow(i, members.size) {
+                        ArchiveCardRow(memberBase + i, total) {
                             MemberRow(
                                 m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) },
                                 background = c.cardBackground,
@@ -434,26 +411,35 @@ internal fun MemberRow(
     Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
 }
 
-/** 「搜索成员」入口行——只在大群（`GroupMemberSearch.shouldOffer`）显示，摆在成员列表最上面。 */
+/** 满员提示卡（并入成员页签「添加成员」之后）；左缘 16 与入口行 / 成员行同列。 */
 @Composable
-private fun MemberSearchEntryRow(onClick: () -> Unit) {
+private fun UpgradeHintCard(upgradeHint: GroupUpgradeHintUi) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
-    Row(
-        modifier = Modifier.fillMaxWidth().background(c.pageBackground).clickable(onClick = onClick)
-            .padding(horizontal = d.space4, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = d.cardGap / 2)
+            .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)
+            .clickable(onClick = upgradeHint.onTap)
+            .padding(horizontal = d.space4, vertical = 12.dp),
     ) {
-        Image(
-            imageVector = Lucide.Search,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.textSecondary),
+        Text(
+            stringResource(R.string.group_upgrade_hint_title, upgradeHint.maxMembers), color = c.textPrimary,
+            style = MaterialTheme.typography.bodyLarge,
         )
-        Spacer(Modifier.width(d.space3))
-        Text(stringResource(R.string.group_member_search), color = c.textSecondary, style = MaterialTheme.typography.bodyLarge)
+        // 5 条短句分行（不是一大段），行距放宽——iOS 同
+        val lines = listOf(
+            stringResource(R.string.group_upgrade_hint_item_1, upgradeHint.maxSupergroupMembers),
+            stringResource(R.string.group_upgrade_hint_item_2),
+            stringResource(R.string.group_upgrade_hint_item_3),
+            stringResource(R.string.group_upgrade_hint_item_4_short),
+            stringResource(R.string.group_upgrade_hint_tap_copy_id),
+        )
+        Text(
+            lines.joinToString("\n"), color = c.textSecondary,
+            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 20.sp),
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
-    Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
 }
 
 /** 折行/连续空白压成单行预览（详情页卡与 iOS `aboutSingleLinePreview:` 一致）。 */

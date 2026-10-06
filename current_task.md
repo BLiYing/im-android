@@ -7,6 +7,8 @@
 
 ## 当前焦点
 
+**2026-10-06 列表首行入口行对齐（main，未 push）**：`ui/screens/LeadingEntryRow.kt`（槽 40 + 间距 12，文字左缘 68）替换通知例外 / 管理员 / 群资料成员页签的私有入口行；成员页签新增「添加成员」行（原头部下邀请卡取消），满员提示并入成员页签。Pixel 2 XL 验过例外页与群资料成员页签，管理员页未目测。
+
 **2026-10-06 详情页/会话列表对齐 iOS 一批（已合入 main，未 push）**：① 单聊/群资料页签只显示有内容的类别（`DetailTabs.visible(isGroup, nonEmpty)`，进页并行预拉媒体/文件/语音首页 `ConvArchiveSet`，链接/名片本地扫），内容区左右横滑切签，页签内容套卡片边距（`ArchiveCardRow`，左右 16、首尾圆角）；② 大群说明并入「公告/简介」卡第三行，右值「已关闭 4 项能力」、点开底部弹窗（文案全走 `group.text.super_*`；老 `group.info.super_note` 的「3 项」文案已无引用，表里未删以免 iOS 生成物漂移）；③ 会话列表删除：服务端 DELETE 成功后本机会话行没移走（`applyConversationList` 只 upsert、陈旧行只删群），改走 `MessageService.deleteConversation`；④ 免打扰铃铛挪到名称行置顶图标之后。`GroupInfoHost.kt` 拆出 `GroupPickHost` 后 573/600。Pixel 2 XL 实测。
 
 **2026-10-06 标题栏统一 + 群聊标题（已合入 main，未 push）**：设计 `../IMServer/docs/design/TOPBAR_UNIFY_DESIGN.md`。

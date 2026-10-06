@@ -73,7 +73,11 @@ internal fun GroupAdminListScreen(
             item(key = "admins-h") { SectionHeader(stringResource(R.string.group_admin_list_count_title, admins.size)) }
             item(key = "admins") {
                 Column(Modifier.padding(horizontal = d.space4).clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground)) {
-                    if (canEdit) AddAdminRow(onAdd)
+                    if (canEdit) LeadingEntryRow(
+                        icon = { AccentLineIcon(Lucide.UserPlus) },
+                        title = stringResource(R.string.group_admin_picker_title),
+                        onClick = onAdd, showChevron = true, divider = true,
+                    )
                     if (admins.isEmpty()) {
                         Text(
                             stringResource(R.string.group_admin_list_empty), color = c.textSecondary,
@@ -114,28 +118,6 @@ private fun SectionHeader(text: String) {
         text, color = IMTheme.colors.textTertiary, style = MaterialTheme.typography.bodyMedium,
         modifier = Modifier.padding(start = IMTheme.dimens.space4 + 4.dp, top = 16.dp, bottom = 6.dp),
     )
-}
-
-/** 「添加管理员」入口行（仅群主）：主色文字 + 图标 + 右箭头，对齐 iOS 的 accent 行。 */
-@Composable
-private fun AddAdminRow(onClick: () -> Unit) {
-    val c = IMTheme.colors
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick)
-            .padding(horizontal = IMTheme.dimens.space4, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Image(
-            imageVector = Lucide.UserPlus, contentDescription = null, modifier = Modifier.size(20.dp),
-            colorFilter = ColorFilter.tint(c.accent),
-        )
-        Spacer(Modifier.width(IMTheme.dimens.space3))
-        Text(
-            stringResource(R.string.group_admin_picker_title), color = c.accent,
-            style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f),
-        )
-        Text("›", color = c.textTertiary)
-    }
 }
 
 /**
