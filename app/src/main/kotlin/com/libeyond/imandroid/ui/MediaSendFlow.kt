@@ -22,18 +22,23 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.mediapicker.MediaCompressor
 import com.libeyond.mediapicker.PickedMedia
 import com.libeyond.mediapicker.VideoProbe
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
  * 把选择器选中的一批媒体发出去。
  *
- * **两条选图路径（自建宫格页 / 权限被拒时降级的系统选择器）共用这一个出口**——
- * 不共用的话，「≥2 个才带 group_id」这条聚簇判据就会有两份，迟早分叉成
- * 「自建页发的成宫格、降级路径发的散成单张」。
+ * 相册选择页、相机拍照共用这一个出口——「≥2 个才带 group_id」这条聚簇判据只留一份，
+ * 不然迟早分叉成「相册发的成宫格、别处发的散成单张」。
  *
- * 图片走整包上传（压缩后几百 KB），**视频走分片**（服务端上限 2GB，整包读进内存就是 OOM）。
+ * 图片压缩后整包上传（几百 KB）；**视频与「原图」走流式/分片**（服务端上限 2GB，整包读进内存就是 OOM）。
  */
 internal class MediaSendFlow(
     private val context: Context,
@@ -79,36 +84,53 @@ internal class MediaSendFlow(
             )
         }
 
-        // ② 再逐个压缩 / 上传 / 发帧，沿用上面那一行的 client_msg_id
-        for ((idx, m) in items.withIndex()) {
-            val uri = Uri.parse(m.uri)
-            val cid = cids[idx]
-            if (m.isVideo) sendVideo(m, uri, gid, cid, onToast) else sendImage(m, uri, gid, cid, sendOriginal, caption.takeIf { items.size == 1 })
+        // ② 再逐个上传 / 发帧，沿用上面那一行的 client_msg_id。
+        //    **压缩提前并行**（最多 [COMPRESS_PARALLELISM] 张同时在解码）：上传是串行的，
+        //    压缩却不必排在上一张的上传后面——否则 9 张是「压→传→压→传…」，设备在传输等待时白白闲着。
+        //    并发上限是为了内存：一张 8000×6000 的图按 inSampleSize 解完仍是十几 MB 的位图，9 张齐开会 OOM。
+        coroutineScope {
+            val gate = Semaphore(COMPRESS_PARALLELISM)
+            val precompressed = items.map { m ->
+                if (m.isVideo || sendOriginal) {
+                    null
+                } else {
+                    compressAsync(this, gate, Uri.parse(m.uri))
+                }
+            }
+            for ((idx, m) in items.withIndex()) {
+                val uri = Uri.parse(m.uri)
+                val cid = cids[idx]
+                if (m.isVideo) {
+                    sendVideo(m, uri, gid, cid, onToast)
+                } else {
+                    sendImage(m, uri, gid, cid, caption.takeIf { items.size == 1 }, precompressed[idx])
+                }
+            }
         }
     }
 
+    private fun compressAsync(scope: CoroutineScope, gate: Semaphore, uri: Uri): Deferred<ByteArray?> =
+        scope.async(Dispatchers.IO) {
+            gate.withPermit { MediaCompressor.compressImage(context, uri, log = PickerLog) }
+        }
+
+    /**
+     * @param precompressed 提前并行压缩的结果；**null = 用户选了「原图」**。
+     *        压缩失败（结果为 null）回落成原图流式发——压不动的多半是奇怪格式，原样发出去反而能用。
+     */
     private suspend fun sendImage(
         m: PickedMedia,
         uri: Uri,
         gid: String?,
         pendingId: String?,
-        sendOriginal: Boolean,
-        caption: String? = null,
+        caption: String?,
+        precompressed: Deferred<ByteArray?>?,
     ) {
-        // 压缩失败**回落原图**而不是放弃这一张——压不动的多半是奇怪格式，原样发出去反而能用
-        val compressed = if (sendOriginal) {
-            null
-        } else {
-            withContext(Dispatchers.IO) { MediaCompressor.compressImage(context, uri, log = PickerLog) }
+        val bytes = precompressed?.await()
+        if (bytes == null) {
+            sendImageOriginal(m, uri, gid, pendingId, caption)
+            return
         }
-        val bytes = compressed
-            ?: withContext(Dispatchers.IO) { readAllBytes(uri) }
-            ?: run {
-                log.w("pick_read_failed")
-                // 行已经落在屏幕上了，读不出来就得把它标失败——否则那一格永远转圈
-                pendingId?.let { client.messages.markMediaFailed(it) }
-                return
-            }
         val (w, h) = MediaCompressor.imageSizeOf(bytes) ?: (0 to 0)
         // 极小模糊缩略（M4-7）：**由真正要发出去的那份字节生成**，不是原始文件——
         // 压缩会改尺寸/朝向，拿原图算出来的占位与收端最终看到的图对不上。
@@ -121,8 +143,8 @@ internal class MediaSendFlow(
             bytes = bytes,
             // 压过的一律改成 .jpg / image/jpeg：字节已经是 JPEG 了，
             // 名字还写 .heic 会让对端按 heic 解、必然失败
-            fileName = if (compressed != null) MediaCompressor.jpegNameFor(m.displayName) else m.displayName,
-            mimeType = if (compressed != null) "image/jpeg" else m.mime,
+            fileName = MediaCompressor.jpegNameFor(m.displayName),
+            mimeType = "image/jpeg",
             contentType = ContentType.IMAGE,
             localPreviewUri = m.uri,
             groupId = gid,
@@ -132,6 +154,55 @@ internal class MediaSendFlow(
             pendingId = pendingId,
             caption = caption,
         )
+    }
+
+    /**
+     * 「原图」：字节**不整个读进内存**，走与视频同一条流式上传（≥ 分片阈值的落私有副本、可暂停续传；
+     * 更小的内部一次读完）。以前这里 `readBytes()`，一张 100MB 的原图直接 OOM。
+     *
+     * 宽高、缩略都按 **EXIF 方向**算（原图的字节不重新编码、EXIF 原样发出去，收端按 EXIF 显示）。
+     */
+    private suspend fun sendImageOriginal(m: PickedMedia, uri: Uri, gid: String?, pendingId: String?, caption: String?) {
+        val size = withContext(Dispatchers.IO) { sourceSize(uri, m.sizeBytes) }
+        if (size <= 0) {
+            log.w("pick_read_failed")
+            // 行已经落在屏幕上了，读不出来就得把它标失败——否则那一格永远转圈
+            pendingId?.let { client.messages.markMediaFailed(it) }
+            return
+        }
+        val (w, h) = withContext(Dispatchers.IO) { MediaCompressor.imageSize(context, uri) } ?: (0 to 0)
+        val thumb = withContext(Dispatchers.IO) { ThumbEncode.fromUri(context, uri) }
+        pendingId?.let { client.messages.attachMediaThumb(it, thumb) }
+        client.messages.sendMediaStream(
+            convId = conv.convId,
+            to = to,
+            openStream = { context.contentResolver.openInputStream(uri) },
+            totalBytes = size,
+            fileName = m.displayName,
+            mimeType = m.mime,
+            contentType = ContentType.IMAGE,
+            localPreviewUri = m.uri,
+            groupId = gid,
+            mediaW = w.takeIf { it > 0 },
+            mediaH = h.takeIf { it > 0 },
+            thumb = thumb,
+            pendingId = pendingId,
+            caption = caption,
+        )
+    }
+
+    /**
+     * 要上传的真实字节数。分片协议按**声明大小**校验，多一字节少一字节都会被服务端拒，
+     * 所以优先问文件本身；问不到才用选择器给的值（相机那条路给的是占位 1，只在压缩路径里用得上）。
+     */
+    private fun sourceSize(uri: Uri, declared: Long): Long {
+        val len = try {
+            context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+        } catch (e: Exception) {
+            log.w("pick_size_failed", "err" to e.javaClass.simpleName)
+            -1L
+        }
+        return if (len > 0) len else declared
     }
 
     private suspend fun sendVideo(
@@ -147,19 +218,22 @@ internal class MediaSendFlow(
             pendingId?.let { client.messages.markMediaFailed(it) }
             return
         }
-        val info = withContext(Dispatchers.IO) { VideoProbe.info(context, uri, PickerLog) }
-        // 封面：抽首帧 → 单独上传 → URL 放 poster。
+        // 元数据与首帧一次探测拿齐（同一个 MediaMetadataRetriever，不重复解析容器头）
+        val probe = withContext(Dispatchers.IO) { VideoProbe.probe(context, uri, log = PickerLog) }
+        val info = probe.info
+        val posterBytes = probe.poster
+        // 视频的缩略取**封面首帧**（iOS 同）——视频本身解不出 20px 缩略，
+        // 而封面正好是收端未下载时该看到的那一帧。
+        // **先于封面上传落到气泡上**：上传要走网络，缩略是本地算的，没理由让占位等一次 POST。
+        val thumb = withContext(Dispatchers.IO) { ThumbEncode.fromImageBytes(posterBytes) }
+        pendingId?.let { client.messages.attachMediaThumb(it, thumb) }
+        // 封面：单独上传 → URL 放 poster。
         // **失败不阻断发送**——没封面的视频对端仍能点开，整条发不出去就是彻底没了。
-        val posterBytes = withContext(Dispatchers.IO) { VideoProbe.poster(context, uri, log = PickerLog) }
         val posterUrl = posterBytes?.let { bytes ->
             runCatchingCancellable {
                 client.upload.upload(bytes, "poster.jpg", "image/jpeg").url
             }.getOrNull()
         }
-        // 视频的缩略取**封面首帧**（iOS 同）——视频本身解不出 20px 缩略，
-        // 而封面正好是收端未下载时该看到的那一帧
-        val thumb = withContext(Dispatchers.IO) { ThumbEncode.fromImageBytes(posterBytes) }
-        pendingId?.let { client.messages.attachMediaThumb(it, thumb) }
         client.messages.sendMediaStream(
             convId = conv.convId,
             to = to,
@@ -178,24 +252,6 @@ internal class MediaSendFlow(
             thumb = thumb,
             pendingId = pendingId,
         )
-    }
-
-    /**
-     * 读原始字节（「原图」模式，或压缩失败的回落路径）。
-     *
-     * **这里不再有 20MB 闸门**：闸门挪到了选择器里（`MediaPick.selectable`，按服务端真实上限判），
-     * 在宫格上就把超限的置灰，比让用户选完再失败好。
-     * 仍可能 OOM——原图模式下一张 100MB 的图确实会整个进内存；压缩路径（默认）不走这里。
-     */
-    private fun readAllBytes(uri: Uri): ByteArray? = try {
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-    } catch (e: Exception) {
-        log.w("pick_read_error", "err" to e.javaClass.simpleName)
-        null
-    } catch (e: OutOfMemoryError) {
-        // 大文件 OOM 是 Error，catch(Exception) 抓不到
-        log.w("pick_read_oom")
-        null
     }
 
     /** 发一个任意文件（➕ 面板「文件」）。类型白名单在服务端，端上不预筛。 */
@@ -317,6 +373,9 @@ internal class MediaSendFlow(
     }
 
     companion object {
+        /** 同时在解码的图片数上限（理由见 [send] 里的 ②）。 */
+        const val COMPRESS_PARALLELISM = 2
+
         /**
          * 给系统相机一个可写的 `content://`。
          *

@@ -1,7 +1,11 @@
 package com.libeyond.imandroid.data
 
 import android.graphics.Bitmap
+import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.net.Uri
+import com.libeyond.mediapicker.MediaCompressor
 import java.io.ByteArrayOutputStream
 
 /**
@@ -25,6 +29,30 @@ object ThumbEncode {
         return runCatching { fromImageBytes(file.readBytes()) }.getOrNull()
     }
 
+    /**
+     * 从 `content://` 原图生成（「原图」流式发送不把字节整个读进内存，所以拿不到 bytes）。
+     * 按 EXIF 方向转正再缩：原图字节带着 EXIF 原样发出去，收端会转正显示，占位必须同向。
+     */
+    fun fromUri(context: Context, uri: Uri): String? = runCatching {
+        val cr = context.contentResolver
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        cr.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        val rotation = MediaCompressor.exifRotation(context, uri)
+        val (dw, dh) = MediaCompressor.displaySize(bounds.outWidth, bounds.outHeight, rotation)
+        val (tw, th) = TinyThumb.targetSize(dw, dh)
+        if (tw <= 0 || th <= 0) return null
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
+        }
+        val src = cr.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) } ?: return null
+        val oriented = if (rotation != 0) {
+            Bitmap.createBitmap(src, 0, 0, src.width, src.height, Matrix().apply { postRotate(rotation.toFloat()) }, true)
+        } else {
+            src
+        }
+        encodeTiny(oriented, tw, th)
+    }.getOrNull()
+
     fun fromImageBytes(bytes: ByteArray?): String? {
         if (bytes == null || bytes.isEmpty()) return null
         return runCatching {
@@ -39,11 +67,15 @@ object ThumbEncode {
                 inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
             }
             val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) ?: return null
-            val small = Bitmap.createScaledBitmap(src, tw, th, true)
-            val out = ByteArrayOutputStream()
-            small.compress(Bitmap.CompressFormat.JPEG, TinyThumb.QUALITY, out)
-            TinyThumb.dataUri(out.toByteArray())
+            encodeTiny(src, tw, th)
         }.getOrNull()
+    }
+
+    private fun encodeTiny(src: Bitmap, tw: Int, th: Int): String? {
+        val small = Bitmap.createScaledBitmap(src, tw, th, true)
+        val out = ByteArrayOutputStream()
+        small.compress(Bitmap.CompressFormat.JPEG, TinyThumb.QUALITY, out)
+        return TinyThumb.dataUri(out.toByteArray())
     }
 
     /** 解码到「至少还有 20px 见方」就够——再大只是多烧内存。2 的幂，`inSampleSize` 的要求。 */

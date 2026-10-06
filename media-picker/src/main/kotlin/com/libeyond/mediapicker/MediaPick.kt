@@ -18,6 +18,7 @@ package com.libeyond.mediapicker
  * `build.version.extensions.r = 0`、`ACTION_PICK_IMAGES` 无任何 handler，落到了 DocumentsUI。
  * 没有宫格、没有编号多选、要先在文件夹里翻——这不是能接受的发图体验。
  *
+ * 权限被拒时**不再**降级回系统选择器（同页空状态 + 去设置，见 [MediaPickerHost]）。
  * 详见 IMServer `docs/UI_SPEC.md` §6.4（登记为刻意的平台差异）。
  */
 object MediaPick {

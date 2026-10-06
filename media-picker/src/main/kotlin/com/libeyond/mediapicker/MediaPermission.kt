@@ -29,7 +29,7 @@ object MediaPermission {
         /** Android 14+ 只授权了部分照片 → 走自建宫格页，但要给「管理选中的照片」入口。 */
         Partial,
 
-        /** 一点都没有 → **降级回系统选择器**，功能不消失（哪怕 Android 11 上是 DocumentsUI）。 */
+        /** 一点都没有 → 同页空状态（说明 + 去设置，见 [MediaPickerDenied]），**不降级**到系统选择器。 */
         None,
     }
 
@@ -56,7 +56,7 @@ object MediaPermission {
     /**
      * 已授予的权限集合 → 当前能力。
      *
-     * **以图片权限为准**：视频权限是加项，用户单独拒了视频不该让整个选择器降级——
+     * **以图片权限为准**：视频权限是加项，用户单独拒了视频不该让整个选择器落到被拒空状态——
      * 那样他连图都发不了。视频能不能读由查询结果自己说话。
      */
     fun access(sdkInt: Int, granted: Set<String>): Access = when {

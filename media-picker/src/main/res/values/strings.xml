@@ -18,4 +18,7 @@
     <string name="mp_limit">最多选 %1$d 个</string>
     <string name="mp_video_preview_note">▶ %1$s · 预览不播放</string>
     <string name="mp_back">返回</string>
+    <string name="mp_album">相册</string>
+    <string name="mp_denied_message">没有相册访问权限，无法选择照片和视频。请在系统设置中允许访问。</string>
+    <string name="mp_go_settings">去设置</string>
 </resources>

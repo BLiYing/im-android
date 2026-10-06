@@ -67,6 +67,24 @@ class MediaCompressorTest {
     }
 
     @Test
+    fun `旋转 90 或 270 度宽高互换其余不换`() {
+        // 竖拍原图：存储 4000×3000 + EXIF 6（转 90），显示是 3000×4000
+        assertEquals(3000 to 4000, MediaCompressor.displaySize(4000, 3000, 90))
+        assertEquals(3000 to 4000, MediaCompressor.displaySize(4000, 3000, 270))
+        assertEquals(4000 to 3000, MediaCompressor.displaySize(4000, 3000, 0))
+        assertEquals(4000 to 3000, MediaCompressor.displaySize(4000, 3000, 180))
+    }
+
+    @Test
+    fun `EXIF 方向 1 到 8 里换宽高的恰好是 5 6 7 8`() {
+        val swapped = (0..8).filter {
+            val (w, h) = MediaCompressor.displaySize(4000, 3000, MediaCompressor.rotationOf(it))
+            w == 3000 && h == 4000
+        }
+        assertEquals(listOf(5, 6, 7, 8), swapped)
+    }
+
+    @Test
     fun `压过的文件名必须变成 jpg`() {
         // 字节已经是 JPEG，名字还写 heic 会让对端按 heic 解、必然失败
         assertEquals("IMG_0001.jpg", MediaCompressor.jpegNameFor("IMG_0001.HEIC"))
