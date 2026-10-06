@@ -30,6 +30,7 @@ import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
+import com.libeyond.imandroid.data.GroupInfoCache
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupBan
 import com.libeyond.imandroid.sdk.api.GroupMember
@@ -69,6 +70,8 @@ fun GroupInfoHost(
     initialTab: DetailTab = DetailTab.Members,
     /** 只当会话媒体库用（查看器右下角「媒体」钮进的那一页）。见 `ChatDetailScreen.galleryOnly`。 */
     galleryOnly: Boolean = false,
+    /** 没有本地快照时的占位（会话快照里的群名 / 头像），**不当真资料用**，见 `GroupInfoPlaceholder`。 */
+    seed: GroupInfo? = null,
     openJoinRequests: Boolean = false, // 直接落在「入群申请」列表（审批横幅点入，iOS 同）
     onBack: () -> Unit,
     onLeft: () -> Unit,
@@ -77,7 +80,11 @@ fun GroupInfoHost(
     val context = LocalContext.current
     // 「链接」页签点一条在 App 内打开（宿主 WebLinkHost，iOS `openLink:`）
     val openLink = com.libeyond.imandroid.ui.components.LocalOpenLink.current
-    var info by remember(convId) { mutableStateOf<GroupInfo?>(null) }
+    // 本地快照（上次拉到的群资料）：进页即画整页，网络回来再静默覆盖；没有快照才退到占位页
+    val infoCache = remember(context) { GroupInfoCache(java.io.File(context.filesDir, "group_info")) }
+    var info by remember(convId) { mutableStateOf<GroupInfo?>(infoCache.load(client.uid.orEmpty(), convId)) }
+    var infoFailed by remember(convId) { mutableStateOf(false) }
+    var infoReload by remember(convId) { mutableStateOf(0) }
     val membersState = rememberGroupMembersState(client, convId)
 
     // 点开的成员资料页盖在群资料之上；开着时本页的返回让位给它
@@ -158,9 +165,24 @@ fun GroupInfoHost(
     // 置顶/免打扰/群昵称/群备注（对齐 iOS Settings 区）+ 公告/简介全文，状态见 GroupInfoSettings.kt
     val settings = rememberGroupInfoSettings(client, convId, scope)
 
-    GroupInfoLiveLoad(client, convId, onInfo = { info = it }, refreshMembers = { membersState.refresh() }) { settings.load() }
+    GroupInfoLiveLoad(
+        client, convId,
+        onInfo = {
+            info = it
+            infoFailed = false
+            val owner = client.uid.orEmpty()
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) { infoCache.save(owner, it) }
+        },
+        refreshMembers = { membersState.refresh() },
+        loadSettings = { settings.load() },
+        reloadKey = infoReload,
+        onLoadFailed = { infoFailed = true },
+    )
 
-    val g = info ?: return
+    val g = info ?: run {
+        GroupInfoPlaceholder(seed, failed = infoFailed, onRetry = { infoFailed = false; infoReload++ }, onBack = onBack)
+        return
+    }
 
     // —— 群管理（G1/G2）——
     var manage by remember(convId) { mutableStateOf<GroupManageAction?>(null) }

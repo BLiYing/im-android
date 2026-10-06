@@ -82,7 +82,19 @@ internal class ManageToast(val text: String?)
 
 /** 发邀请并给出提示文案；失败抛 [ApiException] 由 runManage 统一提示。 */
 internal suspend fun inviteText(client: IMClient, convId: String, ids: List<String>): String? =
-    inviteOutcomeText(InviteOutcome.of(ids.size, client.groups.invite(convId, ids)))
+    try {
+        inviteOutcomeText(InviteOutcome.of(ids.size, client.groups.invite(convId, ids)))
+    } catch (e: com.libeyond.imandroid.sdk.http.ApiException) {
+        // 按业务码给原因（对齐 iOS / Web）；没收录的码继续抛，让 runManage 走通用「失败（码）」。
+        inviteErrorText(e.code) ?: throw e
+    }
+
+/** 邀请失败的业务码 → 文案；三端同口径：已达上限 300205 / 被移出冷却 300207 / 无邀请权 300204。 */
+internal fun inviteErrorText(code: Int): String? = when (code) {
+    com.libeyond.imandroid.sdk.protocol.ErrCode.GROUP_BANNED -> Str.s(R.string.group_info_reinvite_blocked)
+    com.libeyond.imandroid.sdk.protocol.ErrCode.NO_GROUP_PERMISSION -> Str.s(R.string.chat_detail_invite_members_blocked)
+    else -> com.libeyond.imandroid.data.ErrorText.friendlyRes(code)?.let { Str.s(it) }
+}
 
 /** 邀请结果的提示；[InviteOutcome.Plain] 返回 null，由 runManage 走通用成功文案。 */
 internal fun inviteOutcomeText(o: InviteOutcome): String? = when (o) {

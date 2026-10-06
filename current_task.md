@@ -6,8 +6,6 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
-**三端已读/菜单/管理员一批修复（2026-10-06，已 commit + push）**：群语音已读双勾（iOS 曾无条件排除群聊）、九宫格已读勾（三端同规则，见 `IMServer/docs/design/READ_TICK_DESIGN.md` §4；Android 相册行曾不上报已读）、iOS 单字气泡 meta 被压成「…」、Android 长按菜单恒在气泡下方（气泡上移让位）、添加管理员总数 ≤ 5（上限 = 5 − 已有，客户端规则，服务端无总数上限）、会话列表搜索提示词含设置、Android 置顶/未读样式对齐 iOS、通讯录入口建群后进群、「跟随系统」改读 `LocaleManager.systemLocales`（OPPO 实测英文→跟随系统变回中文）。用户真机自测通过。管理员总数上限已补服务端（`MaxGroupAdmins=5`、`300213`，**后端需重启**：`cd ../IMServer && ./scripts/dev.sh --no-tail`）；Android 重建 Activity 后停在原 tab / 「我」二级页（`rememberSaveable`）。
-
 （空——暂无进行中的事项）
 
 ## 下一步
@@ -15,7 +13,7 @@
 1. **离线积压剩余**：「@我的消息列表」入口（服务端接口已有，三端 UI 都缺，产品暂不要）。
 2. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：`ChatDetailHost` 已全部接完，`GroupInfoHost` 仅 `Media` 一支已接。
    - 根因：`ui/components/PushTransition.kt` 要退场页按冻结的 `state` 渲染，而这些 host 是「关闭即把数据变量置空」，退场时数据已没，半路变白。改法 = 「是否打开」与「显示什么数据」拆两个变量，关闭只翻布尔（参照 `ChatDetailHost` 的 `viewingOpen`/`viewingData`）。
-   - 余 8 支未动（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/Manage/Qr），逐支来；**全部改完才把 9 支统一进一个 `PushTransition(page, depthOf)`**。`GroupInfoHost.kt` 现 574/600（已拆出 `GroupInfoDialogs/Live/Settings.kt`，仍贴线），**动它之前先拆文件**。
+   - 余 8 支未动（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/Manage/Qr），逐支来；**全部改完才把 9 支统一进一个 `PushTransition(page, depthOf)`**。`GroupInfoHost.kt` 现 596/600（已拆出 `GroupInfoDialogs/Live/Settings/Placeholder.kt`，贴线），**动它之前先拆文件**。
    - `ChatHost` 覆盖层栈（`ChatOverlays.kt`，`ChatRecord` 可嵌套压栈）范围最大且是产品判断，**动手前先问用户**。
 3. 卡片弹层推广：@提及（`MentionPanel`）、选文件、日期跳转（现为 `AlertDialog`）、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`（已读详情已换）。
 4. 收藏剩余：来源名到群昵称级；收藏页长按菜单是否已覆盖举报、翻译待核（聊天侧已做）。
@@ -26,7 +24,10 @@
 
 ## 已知坑 / 限制
 
-- **体量贴线**（硬闸 600，WARN 线 480）：`GroupInfoHost.kt` 574、`ChatHost.kt` 589（**只差 11 行**）、`MessageRepository.kt` 580、`ChatScreen.kt` 532、`MessageService.kt` 506 都很近；动它们之前先拆文件，新增一律放新文件。`Daos.kt` 别再加。
+- **群资料页有本地快照**（`data/GroupInfoCache.kt`，`filesDir/group_info/<uid>_<convId>.json`，剔成员表）：进页先画快照、网络回来覆盖；没快照退 `GroupInfoPlaceholder`（只画顶栏 + 头像 + 群名，**不画任何依赖角色/开关/人数的入口**，默认值会让权限判定放开）。拉不到有「点击重试」。
+- **登录被顶（账号在别处登录）后应用不会立刻回登录页**：群资料等页面请求全 401，页面停着；重启才见「你的账号已在别处登录」。未修，属登录失效反馈问题。
+
+- **体量贴线**（硬闸 600，WARN 线 480）：`GroupInfoHost.kt` 596、`ChatHost.kt` 589（**只差 11 行**）、`MessageRepository.kt` 580、`ChatScreen.kt` 532、`MessageService.kt` 506 都很近；动它们之前先拆文件，新增一律放新文件。`Daos.kt` 别再加。
 - **合并转发记录里的名片 →「发消息」换不了会话**（未修）：`ChatHost` 绑死单一 `convId`，点了只关资料层退回记录页。
 - **`FavoritesHost`/`ChatPickerLayers`/`QrRouteHost` 进 `UserProfileHost` 没接 `onRemarkChanged`**（缓行，按 `ContactsHost` 同一套本机状态覆盖补即可）。
 - **App Links 系统级深链接：明确暂不做**（2026-09-22 拍板）：需要固定公网 HTTPS 域名放 `assetlinks.json`；三端联动，等有部署域名再评估。**改原生 Material 风格：暂缓**（见 `docs/design/MATERIAL_DESIGN_EVAL.md`），别顺手改配色/图标/弹层。

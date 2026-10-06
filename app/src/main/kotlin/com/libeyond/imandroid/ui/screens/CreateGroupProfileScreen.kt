@@ -38,6 +38,8 @@ import com.composables.icons.lucide.X
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.GroupNameDefault
+import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.ui.theme.LocalMediaHost
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMErrorText
@@ -87,8 +89,10 @@ fun CreateGroupProfileScreen(
                 ) {
                     when {
                         avatarUploading -> CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                        // 上传返回的是相对路径，要补成绝对地址才加载得出来（同 IMAvatar）
                         avatarUrl.isNotBlank() -> AsyncImage(
-                            model = avatarUrl, contentDescription = null,
+                            model = LocalMediaHost.current.let { MediaUrl.absolute(avatarUrl, it.host, it.useTls) },
+                            contentDescription = null,
                             contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                         )
                         name.isNotBlank() -> Text(DisplayName.initials(name), color = c.onAccent, style = MaterialTheme.typography.titleLarge)

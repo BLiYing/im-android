@@ -24,11 +24,14 @@ fun GroupInfoLiveLoad(
     onInfo: (GroupInfo) -> Unit,
     refreshMembers: suspend () -> Unit,
     loadSettings: suspend () -> Unit,
+    /** 改一下就重新取一次（占位页的「重试」）。 */
+    reloadKey: Int = 0,
+    onLoadFailed: () -> Unit = {},
 ) {
-    LaunchedEffect(convId) {
+    LaunchedEffect(convId, reloadKey) {
         suspend fun load() {
             runCatching { onInfo(client.groups.info(convId)) }
-                .onFailure { IMLog.tag("IM.Group").w("group_info_failed") }
+                .onFailure { IMLog.tag("IM.Group").w("group_info_failed"); onLoadFailed() }
             refreshMembers()
         }
         launch(start = CoroutineStart.UNDISPATCHED) {

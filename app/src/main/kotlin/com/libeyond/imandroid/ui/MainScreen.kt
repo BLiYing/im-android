@@ -412,6 +412,7 @@ private fun InfoPage(
             onLocateInChat = { seq -> onArm(ChatArm(locateSeq = seq)) },
             initialTab = initialTab ?: com.libeyond.imandroid.data.DetailTab.Members,
             galleryOnly = galleryOnly,
+            seed = com.libeyond.imandroid.sdk.api.GroupInfo(convId = conv.convId, name = conv.title, avatarUrl = conv.avatarUrl),
             openJoinRequests = openJoinRequests,
             onBack = onBack,
             onLeft = onLeft,
