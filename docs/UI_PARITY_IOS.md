@@ -81,7 +81,7 @@ Tabs      —— 内联页签：成员 / 媒体 / 文件 / 语音 / 链接 / 名
 | 语音页签内播放 | 有 | **不可点**（播放要接聊天页那套单例播放器，否则会同时响两处） | 🔴 欠账 |
 | 归档的数据来源 | **本地已加载的消息**（`IMChatDetailTabs message:matchesKind:`） | **服务端接口** `GET /conversations/{id}/media` | 🟢 刻意差异 |
 | 「链接」页签 | 有（本地扫文本，`IMFirstURLInText`） | 有（同样本地扫文本——服务端不覆盖这一格） | ✅ 已对齐 |
-| 「名片」页签 | 有 | 没有 | 🔴 欠账 |
+| 「名片」页签 | 有 | 已补（`84a1636`：名片页签 / 点名片进资料页 / 分享我的名片） | ✅ |
 | **头部操作排**（大头像下一排 pills） | 有（`actionPillSpecs`：加好友 / 消息 / 呼叫 / 视频 / 搜索 / 更多） | 已补（`DetailActionBar` + `DetailActions`，2026-09-08） | ✅ |
 | 「更多」菜单 | Telegram 式锚点 popover（`IMPopoverCard`） | Material `DropdownMenu`（锚在「更多」上） | 🟢 刻意差异 |
 | 「清空聊天记录」 | 有（**只清本机**） | 已补（`MessageRepository.clearConversation`，同口径） | ✅ |
