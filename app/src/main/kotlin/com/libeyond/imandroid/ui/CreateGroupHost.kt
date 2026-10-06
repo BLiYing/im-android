@@ -116,6 +116,7 @@ fun CreateGroupHost(
                 friends = friends,
                 selected = picks,
                 onToggle = { id -> picks = if (id in picks) picks - id else picks + id },
+                onSelectAll = { picks = it },
                 maxMembers = maxMembers,
                 onNext = { step = 1 },
                 onBack = onBack,

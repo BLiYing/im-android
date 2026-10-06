@@ -3,12 +3,15 @@ package com.libeyond.imandroid.ui.screens
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,6 +45,7 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ContactSection
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.GroupNameDefault
+import com.libeyond.imandroid.data.GroupSelectAll
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMErrorText
@@ -64,6 +68,8 @@ fun CreateGroupScreen(
     friends: List<FriendEntry>,
     selected: Set<String>,
     onToggle: (String) -> Unit,
+    /** 「全选 / 取消全选」：传入新的整份选中集合（口径见 `GroupSelectAll`）。 */
+    onSelectAll: (Set<String>) -> Unit,
     maxMembers: Int,
     /** 「下一步」：进建群资料页（头像/群名/成员）。一个好友都没选时禁用。 */
     onNext: () -> Unit,
@@ -109,6 +115,25 @@ fun CreateGroupScreen(
             query, { query = it }, stringResource(R.string.friend_picker_search_placeholder),
             enabled = true, modifier = Modifier.padding(horizontal = d.space4, vertical = d.space2),
         )
+
+        val visibleIds = remember(filtered) { filtered.map { it.userId } }
+        if (GroupSelectAll.isVisible(visibleIds)) {
+            val allOn = GroupSelectAll.allSelected(selected, visibleIds)
+            // 不随列表滚动（在 LazyColumn 之外）；点击区含文字左右各 8dp
+            Row(Modifier.fillMaxWidth().height(32.dp).padding(end = d.space4 - 8.dp), horizontalArrangement = Arrangement.End) {
+                Box(
+                    Modifier.fillMaxHeight()
+                        .clickable { onSelectAll(GroupSelectAll.next(selected, visibleIds, GroupSelectAll.limitOf(maxMembers))) }
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        stringResource(if (allOn) R.string.common_deselect_all else R.string.common_select_all),
+                        color = c.accent, style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
 
         Box(Modifier.weight(1f)) {
             LazyColumn(Modifier.fillMaxSize(), state = listState) {
