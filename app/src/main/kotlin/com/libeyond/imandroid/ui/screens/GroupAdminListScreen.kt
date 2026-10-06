@@ -66,7 +66,7 @@ internal fun GroupAdminListScreen(
                 item(key = "owner-h") { SectionHeader(stringResource(R.string.group_role_owner)) }
                 item(key = "owner") {
                     Box(Modifier.padding(horizontal = d.space4).clip(RoundedCornerShape(d.radiusCard))) {
-                        MemberRow(owner, onClick = { onOpenMember(owner) }, onLongClick = { onMemberLongPress(owner) }, background = c.cardBackground)
+                        MemberRow(owner, onClick = { onOpenMember(owner) }, onLongClick = { onMemberLongPress(owner) }, background = c.cardBackground, divider = false)
                     }
                 }
             }
@@ -85,13 +85,14 @@ internal fun GroupAdminListScreen(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = d.space4, vertical = 14.dp),
                         )
                     }
-                    admins.forEach { m ->
+                    admins.forEachIndexed { i, m ->
+                        val line = i < admins.size - 1
                         if (canEdit) {
                             SwipeToRevokeRow(onRevoke = { onRevoke(m) }) {
-                                MemberRow(m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) }, background = c.cardBackground)
+                                MemberRow(m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) }, background = c.cardBackground, divider = line)
                             }
                         } else {
-                            MemberRow(m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) }, background = c.cardBackground)
+                            MemberRow(m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) }, background = c.cardBackground, divider = line)
                         }
                     }
                 }

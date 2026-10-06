@@ -328,6 +328,7 @@ fun GroupInfoScreen(
                             MemberRow(
                                 m, onClick = { onOpenMember(m) }, onLongClick = { onMemberLongPress(m) },
                                 background = c.cardBackground,
+                                divider = i < members.size - 1 || hasMoreMembers,
                             )
                         }
                     }
@@ -376,9 +377,12 @@ fun GroupInfoScreen(
 internal fun MemberRow(
     m: GroupMember, onClick: () -> Unit, onLongClick: () -> Unit,
     background: androidx.compose.ui.graphics.Color = IMTheme.colors.pageBackground,
+    divider: Boolean = true,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
+    // 外包 Column：父级是 Box（卡片行）时，分割线才会落在行底而不是叠到行顶、与上一行入口行的分割线重成双线
+    Column {
     Row(
         modifier = Modifier.fillMaxWidth().background(background).combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = d.space4, vertical = 10.dp),
@@ -408,7 +412,8 @@ internal fun MemberRow(
             }
         }
     }
-    Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
+    if (divider) Box(Modifier.fillMaxWidth().height(0.5.dp).padding(start = 68.dp).background(c.separator))
+    }
 }
 
 /** 满员提示卡（并入成员页签「添加成员」之后）；左缘 16 与入口行 / 成员行同列。 */
