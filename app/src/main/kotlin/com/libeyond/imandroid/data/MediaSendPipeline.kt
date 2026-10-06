@@ -206,8 +206,8 @@ internal class MediaSendPipeline(
      * 而宫格要 ≥2 条同组待发行才成形——用户点完「发送」先看到空白，再看到单张，
      * 最后才凑成宫格。**先把整批行一次性落库**，宫格在点发送那一刻就在。
      *
-     * 宽高/时长/封面此刻还不知道（要解码），由 [MessageRepository.updatePendingMedia]
-     * 在算出来之后回写——不回写就是 resend 丢字段。
+     * 封面/缩略此刻还没有（要解码），由 [MessageRepository.updatePendingMedia] 在算出来之后回写——
+     * 不回写就是 resend 丢字段。宽高/时长若调用方能**廉价**读到（只读头），落行时就带上（见 `mediaW`）。
      */
     suspend fun createPendingRow(
         convId: String,
@@ -227,6 +227,12 @@ internal class MediaSendPipeline(
         /** 配文 @（仅 caption 路径）：已编码的 JSON，随待发行落库，重发据此重新推导。 */
         mentionSpans: String? = null,
         mentions: String? = null,
+        /**
+         * 图片/视频的**显示**宽高（已按 EXIF / 旋转换算），落行前能廉价读到就传（只读头，不解码）：
+         * 气泡首次渲染就是对的比例，不会先按默认横向画、压缩/探测完再跳成竖的。读不到传 null，由后续回写补上。
+         */
+        mediaW: Int? = null,
+        mediaH: Int? = null,
     ): String? {
         val owner = ownerProvider() ?: return null
         return repo.createPending(
@@ -234,6 +240,7 @@ internal class MediaSendPipeline(
             content = localPreviewUri, contentType = contentType,
             groupId = groupId, fileName = fileName, fileSize = fileSize, caption = caption,
             duration = duration, waveform = waveform, mentionSpans = mentionSpans, mentions = mentions,
+            mediaW = mediaW, mediaH = mediaH,
         ).clientMsgId.also { if (contentType != ContentType.VOICE) uploadProgress.queued(it, fileSize) } // 整批行先落库=先排队，气泡显「等待中」+ ✕
     }
 

@@ -307,9 +307,9 @@ private fun AlbumTileView(
         AsyncImage(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，所以选完立刻有图、
             // 不用等上传完；自己发的那几格（gate 为 null）同样按地址直出。
-            // 省电模式（§4.3，只管接收侧预览）：已发出 / 收到的视频格不走 VideoFrameDecoder 解帧；待发格（发送路径）不动，
-            // 只显磨砂 thumb；图片格不受影响
-            model = if (m.contentType == ContentType.VIDEO && !sending && !com.libeyond.imandroid.ui.theme.LocalPowerSave.current.videoPreload) {
+            // 省电模式（§4.3，只管接收侧预览）：收到的视频格不走 VideoFrameDecoder 解帧、只显磨砂 thumb；
+            // 待发格与**自己发的格（ungated）**不动；图片格不受影响
+            model = if (m.contentType == ContentType.VIDEO && !sending && !ungated && !com.libeyond.imandroid.ui.theme.LocalPowerSave.current.videoPreload) {
                 null
             } else if (ungated) MediaUrl.absolute(m.url, host, useTls) else gate?.model,
             contentDescription = if (m.contentType == ContentType.VIDEO) {

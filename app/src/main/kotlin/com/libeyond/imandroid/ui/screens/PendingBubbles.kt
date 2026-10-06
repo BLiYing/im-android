@@ -74,8 +74,16 @@ internal fun PendingMediaBubble(
     state: UploadState? = null,
     onToggle: () -> Unit = {},
     onCancel: () -> Unit = {},
+    /** 待发行里的显示宽高（落行前只读头探到的）；都有才按它画，与发出后的正式气泡同尺寸，不先横后竖地跳。 */
+    mediaW: Int? = null,
+    mediaH: Int? = null,
 ) {
     val c = IMTheme.colors
+    // 宽高未知（老待发行 / 探测超时）才退回固定的横向矩形
+    val known = (mediaW ?: 0) > 0 && (mediaH ?: 0) > 0
+    val fitted = rememberMediaDisplaySize(mediaW, mediaH)
+    val boxW = if (known) fitted.width else AlbumLayout.WIDTH.dp
+    val boxH = if (known) fitted.height else AlbumLayout.SINGLE_ROW_HEIGHT.dp
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
@@ -83,7 +91,7 @@ internal fun PendingMediaBubble(
     ) {
         Box(
             modifier = Modifier
-                .width(AlbumLayout.WIDTH.dp)
+                .width(boxW)
                 .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
                 .background(c.subtleFill),
         ) {
@@ -93,13 +101,13 @@ internal fun PendingMediaBubble(
                 model = localUri,
                 contentDescription = if (isVideo) stringResource(R.string.common_video) else stringResource(R.string.common_image),
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.width(AlbumLayout.WIDTH.dp).height(AlbumLayout.SINGLE_ROW_HEIGHT.dp),
+                modifier = Modifier.width(boxW).height(boxH),
             )
             if (sending || failed) {
                 Box(
                     Modifier
-                        .width(AlbumLayout.WIDTH.dp)
-                        .height(AlbumLayout.SINGLE_ROW_HEIGHT.dp)
+                        .width(boxW)
+                        .height(boxH)
                         .background(c.overlay),
                 )
             }

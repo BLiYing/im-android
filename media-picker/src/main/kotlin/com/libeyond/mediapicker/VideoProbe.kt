@@ -61,6 +61,21 @@ object VideoProbe {
 
     class Probe(val info: VideoInfo?, val poster: ByteArray?)
 
+    /**
+     * **只读元数据**（宽高已按旋转换算、时长），不解码任何帧——毫秒级。必须在 IO 线程调用。
+     *
+     * 给「落待发行之前」用：行落库那一刻就要有显示尺寸，不然气泡先按默认比例画、探测完再跳成竖的
+     * （竖拍视频恰恰是最常见的情形）。封面抽帧慢，仍留在 [probe] 里发送阶段再做。
+     */
+    fun info(context: Context, uri: Uri, log: MediaPickerLog = MediaPickerLog.None): VideoInfo? {
+        var out: VideoInfo? = null
+        retrieve(context, uri, log) { r ->
+            out = readInfo(r).display()
+            Unit
+        }
+        return out
+    }
+
     /** 容器里存的宽高（**未**按旋转换算）+ 旋转角。 */
     private class RawInfo(val width: Int, val height: Int, val durationMs: Int, val rotation: Int) {
         /** 竖着拍的视频，宽高在容器里是横的、靠旋转标记转过来——不换的话对端按 16:9 预留气泡，实际是 9:16。 */

@@ -116,10 +116,14 @@ fun MediaContent(
  * 按原图像素只缩不放、短边不足 80 再放大；像素未知时是方块——**视频也一样**，不再猜 16:9。
  */
 @Composable
-internal fun rememberMediaDisplaySize(msg: MessageEntity): DpSize {
+internal fun rememberMediaDisplaySize(msg: MessageEntity): DpSize = rememberMediaDisplaySize(msg.mediaW, msg.mediaH)
+
+/** 同上，直接给宽高：待发气泡（[PendingMediaBubble]）用它，与发出后的正式气泡**同一个式子**，ack 前后不跳尺寸。 */
+@Composable
+internal fun rememberMediaDisplaySize(mediaW: Int?, mediaH: Int?): DpSize {
     val screenW = LocalConfiguration.current.screenWidthDp
-    return remember(msg.mediaW, msg.mediaH, screenW) {
-        val s = MediaDisplaySize.fit(msg.mediaW, msg.mediaH, MediaDisplaySize.box(screenW.toFloat()))
+    return remember(mediaW, mediaH, screenW) {
+        val s = MediaDisplaySize.fit(mediaW, mediaH, MediaDisplaySize.box(screenW.toFloat()))
         DpSize(s.width.dp, s.height.dp)
     }
 }
@@ -221,7 +225,8 @@ private fun VideoContent(
         // 本来就有原片，再给他看一块模糊图（封面 URL 回来之前）就是多余的退化（与 iOS 发送方一致）。
         val localCover = if (ungated) msg.content.takeIf { it.startsWith("content:") || it.startsWith("file:") } else null
         // 省电模式（§4.3）：「视频预加载」关闭或省电生效 → 不拉封面（也不解帧），只显内嵌 thumb 的磨砂图，
-        // 与未下载门控同外观；点开播放照常
+        // 与未下载门控同外观；点开播放照常。**只管接收侧**：自己发的（ungated）手里有原片/封面，
+        // 照常画封面，不能把发出去的视频显示成一团模糊（2026-10-07 OPPO 省电「始终开启」下实测）
         val preload = com.libeyond.imandroid.ui.theme.LocalPowerSave.current.videoPreload
         // 无内嵌 thumb 时退回封面图（封面是普通图片请求，不是视频抽帧）；只跳过 VideoFrameDecoder 的解帧
         if (localCover != null) {
@@ -231,7 +236,7 @@ private fun VideoContent(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
-        } else if (gatedNow || (!preload && frosted != null)) {
+        } else if (gatedNow || (!preload && !ungated && frosted != null)) {
             // **未下载（门控态）一律只显内嵌 thumb 的磨砂图**，不拉封面——与 iOS `IMImageCell`（gated：thumb 优先、
             // 无 thumb 留中性底、「绝不为占位联网」）和图片气泡同口径。此前有 poster 就直接画清晰封面，
             // 自动下载关着时视频看着已经「下好了」，磨砂占位成了死代码（2026-10-03 用户报，iOS 早年同一个坑）。

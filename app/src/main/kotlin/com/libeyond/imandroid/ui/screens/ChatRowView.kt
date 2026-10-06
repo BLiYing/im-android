@@ -347,6 +347,8 @@ internal fun ChatRowView(
                     failed = shownFailed,
                     progress = pct,
                     onRetry = { onRetry(r.msg.clientMsgId) },
+                    mediaW = r.msg.mediaW,
+                    mediaH = r.msg.mediaH,
                 )
             } else if (isVoice) {
                 PendingVoiceBubble(

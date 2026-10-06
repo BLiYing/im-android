@@ -22,6 +22,7 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.mediapicker.MediaCompressor
 import com.libeyond.mediapicker.MediaPick
 import com.libeyond.mediapicker.PickedMedia
+import com.libeyond.mediapicker.VideoInfo
 import com.libeyond.mediapicker.VideoProbe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -31,6 +32,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 /**
@@ -69,7 +71,12 @@ internal class MediaSendFlow(
         //    用户点完发送先看到空白、再看到单张，最后才凑成宫格
         //    （2026-09-08 用户报的「发送时不是九宫格形态」的前半段）。
         //    落行只写一次本地库，几十毫秒内整组宫格就在屏幕上了。
-        val cids = items.map { m ->
+        // 宽高/时长在落行前**只读头**探一遍（毫秒级，不解码）：气泡首帧就是对的比例。
+        // 此前落行时没有宽高，竖拍视频先按默认横向比例画、探测完才跳成竖的。
+        // 读不到（云盘慢 / 格式怪）就放弃，按老办法由后续回写补；单个探测限时，不拖慢整批行出现。
+        val metas = coroutineScope { items.map { m -> async(Dispatchers.IO) { probeSize(m) } }.map { it.await() } }
+        val cids = items.mapIndexed { i, m ->
+            val meta = metas[i]
             client.messages.createMediaPending(
                 convId = conv.convId,
                 to = to,
@@ -82,6 +89,9 @@ internal class MediaSendFlow(
                 caption = caption.takeIf { items.size == 1 },
                 mentionSpans = at?.let { Mention.encodeSpans(it.spans) }.takeIf { items.size == 1 },
                 mentions = at?.let { Mention.encodeMentions(it.mentions) }.takeIf { items.size == 1 },
+                mediaW = meta?.width?.takeIf { it > 0 },
+                mediaH = meta?.height?.takeIf { it > 0 },
+                duration = meta?.durationMs?.takeIf { it > 0 && m.isVideo },
             )
         }
 
@@ -107,6 +117,16 @@ internal class MediaSendFlow(
                     sendImage(m, uri, gid, cid, caption.takeIf { items.size == 1 }, precompressed[idx])
                 }
             }
+        }
+    }
+
+    /** 落行前的廉价探测：视频读容器头（含旋转换算），图片读 bounds（含 EXIF 换算）。限时 [PROBE_TIMEOUT_MS]。 */
+    private suspend fun probeSize(m: PickedMedia): VideoInfo? = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
+        val uri = Uri.parse(m.uri)
+        if (m.isVideo) {
+            VideoProbe.info(context, uri, PickerLog)
+        } else {
+            MediaCompressor.imageSize(context, uri)?.let { (w, h) -> VideoInfo(w, h, 0) }
         }
     }
 
@@ -395,6 +415,9 @@ internal class MediaSendFlow(
     companion object {
         /** 同时在解码的图片数上限（理由见 [send] 里的 ②）。 */
         const val COMPRESS_PARALLELISM = 2
+
+        /** 落行前探测宽高的单项限时：超了就放弃（按老办法后续回写），别让整批气泡等一个慢的云盘文件。 */
+        private const val PROBE_TIMEOUT_MS = 1_500L
 
         /**
          * 给系统相机一个可写的 `content://`。

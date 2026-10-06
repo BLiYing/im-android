@@ -23,9 +23,11 @@ suspend fun MessageService.createMediaPending(
     waveform: String? = null,
     mentionSpans: String? = null,
     mentions: String? = null,
+    mediaW: Int? = null,
+    mediaH: Int? = null,
 ): String? = media.createPendingRow(
     convId, to, contentType, localPreviewUri, fileName, fileSize, caption, groupId,
-    duration, waveform, mentionSpans, mentions,
+    duration, waveform, mentionSpans, mentions, mediaW, mediaH,
 )
 
 /** 见 [MediaSendPipeline.attachThumb]。 */
