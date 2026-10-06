@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.CallRecord
 import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.data.AlbumTick
 import com.libeyond.imandroid.data.ReadTick
 import com.libeyond.imandroid.data.ReplyNames
 import com.libeyond.imandroid.data.SendRejection
@@ -186,6 +187,15 @@ internal fun ChatRowView(
             },
             selecting = selection != null,
             mine = albumMine,
+            tick = AlbumTick.state(
+                r.members.map { m ->
+                    when (m) {
+                        is AlbumMember.Sent -> AlbumTick.Member(m.msg.convSeq, failed = false)
+                        is AlbumMember.Sending -> AlbumTick.Member(0, failed = m.msg.state == SendState.Failed.name)
+                    }
+                },
+                albumMine, peerReadSeq,
+            ),
             timestamp = when (val l = r.members.last()) {
                 is AlbumMember.Sent -> l.msg.timestamp
                 is AlbumMember.Sending -> l.msg.createdAt

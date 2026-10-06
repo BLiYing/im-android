@@ -12,9 +12,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import androidx.compose.runtime.withFrameNanos
@@ -285,6 +285,30 @@ internal fun ChatListSync(
         }
     }
 
+    // —— 贴着底时，最后一行**自己长高**也要跟着贴 ——
+    // 上面那条只在「行数 / 出箱集合变了」且 1 s 保质期内重贴；而发一张图时最后一行的高度是**事后**才定的：
+    // 待发行 → 确认行（占位 → 真实宽高 / 解码完成）常在保质期之后，行数又没变，于是新图行被截下半截
+    // （2026-10-06 用户报「发单张图列表没滚到最底」）。这里盯最后一行的高度：变化前正贴底、变化后离了底 → 重贴。
+    val draggedNow by rememberUpdatedState(listDragged)
+    LaunchedEffect(listState, marks) {
+        var prevCount = -1
+        var prevLastSize = -1
+        var prevAtBottom = false
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.takeIf { it.index == info.totalItemsCount - 1 }
+            Triple(info.totalItemsCount, last?.size ?: -1, info.distanceToBottomPx())
+        }.collect { (count, lastSize, dist) ->
+            val lastGrew = count == prevCount && prevLastSize >= 0 && lastSize >= 0 && lastSize != prevLastSize
+            if (lastGrew && prevAtBottom && dist != 0 && !draggedNow && SystemClock.uptimeMillis() >= marks.locatingUntil) {
+                stickToBottom(listState)
+            }
+            prevCount = count
+            prevLastSize = lastSize
+            prevAtBottom = dist == 0
+        }
+    }
+
     // —— 滚到顶部附近就加载更早的一页 ——
     //
     // 两件事一起做，缺一条都会出问题：
@@ -364,7 +388,15 @@ internal fun ChatListSync(
         if (!marks.didEntry || covered) return@LaunchedEffect
         snapshotFlow {
             listState.layoutInfo.visibleItemsInfo
-                .mapNotNull { (rows.getOrNull(it.index) as? ChatRow.Confirmed)?.msg?.convSeq }
+                .mapNotNull {
+                    when (val r = rows.getOrNull(it.index)) {
+                        is ChatRow.Confirmed -> r.msg.convSeq
+                        // 九宫格整组一行：取组内最大 seq。此前只认 Confirmed，相册行永远报不上已读，
+                        // 对端的相册勾（看最后一条）停在单勾。
+                        is ChatRow.Album -> r.sent.maxOfOrNull { m -> m.convSeq }
+                        else -> null
+                    }
+                }
                 .maxOrNull()
         }.filterNotNull().distinctUntilChanged().collect { onVisibleSeq(it) }
     }

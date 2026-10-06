@@ -901,6 +901,7 @@
     <string name="group_admin_picker_empty">没有可设为管理员的普通成员</string>
     <string name="group_admin_picker_limit_note">一次最多添加 %1$d 位管理员。</string>
     <string name="group_admin_picker_limit_toast">一次最多添加 %1$d 位管理员</string>
+    <string name="group_admin_picker_selected_subtitle">已勾选%1$d/%2$d人</string>
     <string name="group_admin_picker_title">添加管理员</string>
     <string name="group_announcement_published_at">%1$s 发布</string>
     <string name="group_avatar_add">添加群头像</string>
@@ -1677,7 +1678,7 @@
     <string name="search_alias_auto_download">自动下载,流量,下载</string>
     <string name="search_alias_sound">声音,提示音,铃声</string>
     <string name="search_contacts_placeholder">搜索联系人、群聊</string>
-    <string name="search_global_placeholder">搜索会话、联系人、聊天记录</string>
+    <string name="search_global_placeholder">搜索会话、联系人、聊天记录、设置</string>
     <string name="search_no_matches">没有找到相关结果</string>
     <plurals name="search_result_member_count">
         <item quantity="other">%1$d 人</item>

@@ -24,3 +24,23 @@ object ReadTick {
     /** 这条我发的消息要不要画已读双勾（蓝）。`0` = 还没人读过；[HIDDEN] 一律不画。 */
     fun isRead(readSeq: Long, convSeq: Long): Boolean = readSeq > 0 && readSeq >= convSeq
 }
+
+/**
+ * 相册（九宫格）胶囊的状态勾（READ_TICK_DESIGN §4，对齐 iOS `IMAlbumTickStateForMembers` / Web `albumTickState`）。
+ * 整组只画一个状态：任一失败 → 不画；任一未发出 → 「发送中」；全部发出 → 取**末条** convSeq 判已读/未读。
+ * 「已发出」按 convSeq > 0 判（待发件没有 conv_seq）。
+ */
+object AlbumTick {
+    enum class State { None, Sending, Sent, Read }
+
+    /** 一个成员的最小信息：[convSeq] 待发恒为 0。 */
+    data class Member(val convSeq: Long, val failed: Boolean)
+
+    fun state(members: List<Member>, mine: Boolean, readSeq: Long): State {
+        if (!mine || members.isEmpty()) return State.None
+        if (members.any { it.failed }) return State.None
+        if (members.any { it.convSeq <= 0 }) return State.Sending
+        if (readSeq == ReadTick.HIDDEN) return State.None
+        return if (ReadTick.isRead(readSeq, members.last().convSeq)) State.Read else State.Sent
+    }
+}

@@ -44,6 +44,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.BellOff
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pin
+import androidx.compose.ui.graphics.compositeOver
+import com.libeyond.imandroid.data.ConversationRowStyle
 import com.composables.icons.lucide.Plus
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ChatSubtitle
@@ -188,7 +191,8 @@ private fun ConversationRow(
             // 行高 76 = 12 + 52 + 12（UI_SPEC §2，iOS 写死 rowHeight 76）。
             // 用 heightIn(min) 不用 height：长昵称换行时允许长高，不裁内容。
             .heightIn(min = d.convRowHeight)
-            .background(c.pageBackground)
+            // 置顶行底色：强调色 α0.10 叠在页面底色上（iOS `contentView.backgroundColor`，深浅色皆适配）
+            .background(if (conv.pinnedAt > 0) c.accent.copy(alpha = 0.10f).compositeOver(c.pageBackground) else c.pageBackground)
             .onGloballyPositioned { rect = it.boundsInWindow() }
             .combinedClickable(onClick = onClick, onLongClick = { onLongClick(rect) })
             .padding(horizontal = d.space4, vertical = d.space3),
@@ -227,9 +231,13 @@ private fun ConversationRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                // 置顶图标与免打扰铃铛**同款**：14dp 次要色矢量（iOS `pin.fill` / `bell.slash.fill` 同 tintColor）
                 if (conv.pinnedAt > 0) {
                     Spacer(Modifier.width(4.dp))
-                    Text("📌", fontSize = 11.sp)
+                    androidx.compose.foundation.Image(
+                        Lucide.Pin, null, Modifier.size(14.dp),
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.textSecondary),
+                    )
                 }
                 // 免打扰铃铛：名称 → 置顶 → 免打扰，状态图标紧跟名称（对齐 iOS `_nameStateStack`，
                 // 14dp 次要色 bell.slash.fill）；定时免打扰到期后跟着消失，判据同未读徽标。
@@ -264,7 +272,7 @@ private fun ConversationRow(
                 if (!conv.isGroup && conv.lastFrom == myUid && !conv.lastRecalled && conv.lastContent.isNotBlank()) {
                     val read = conv.peerReadSeq >= conv.lastConvSeq
                     ReadTickIcon(
-                        read, if (read) c.checkRead else c.textTertiary,
+                        read, if (read) c.checkRead else c.textSecondary,
                         MaterialTheme.typography.bodyMedium.fontSize,
                     )
                     Spacer(Modifier.width(3.dp))
@@ -316,7 +324,7 @@ private fun UnreadBadge(conv: ConversationEntity, nowMs: Long) {
     val mutedNow = MuteState.isMutedNow(conv.muted, conv.muteUntil, nowMs)
     when {
         conv.unread > 0 -> {
-            val strongAlert = !mutedNow || conv.mentionUnread
+            val strongAlert = ConversationRowStyle.strongAlert(mutedNow, conv.mentionUnread)
             val d = IMTheme.dimens
             Box(
                 // 高 20、最小宽 20（UI_SPEC §2，与 iOS _badge.heightAnchor 同值）：
@@ -325,12 +333,12 @@ private fun UnreadBadge(conv: ConversationEntity, nowMs: Long) {
                     .height(d.unreadBadgeHeight)
                     .widthIn(min = d.unreadBadgeHeight)
                     .clip(CircleShape)
-                    .background(if (strongAlert) c.unreadBadge else c.textTertiary)
+                    .background(if (strongAlert) c.unreadBadge else c.unreadBadgeMuted)
                     .padding(horizontal = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (conv.unread > 99) "99+" else conv.unread.toString(),
+                    text = ConversationRowStyle.compactCount(conv.unread),
                     color = c.onAccent,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
@@ -339,7 +347,9 @@ private fun UnreadBadge(conv: ConversationEntity, nowMs: Long) {
             }
         }
         conv.markedUnread -> Box(
-            modifier = Modifier.size(10.dp).clip(CircleShape).background(c.unreadBadge),
+            // 标未读圆点同徽标：免打扰且没被 @ → 灰（iOS `_dot.backgroundColor = unreadColor`）
+            modifier = Modifier.size(10.dp).clip(CircleShape)
+                .background(if (ConversationRowStyle.strongAlert(mutedNow, conv.mentionUnread)) c.unreadBadge else c.unreadBadgeMuted),
         )
         // 免打扰的铃铛不在这里：iOS 把它放在**名称行**、紧跟置顶图标（`_nameStateStack`），
         // 这一格只给未读徽标（灰色表示免打扰）。此前把 🔕 画在时间下方，位置与 iOS 不符。

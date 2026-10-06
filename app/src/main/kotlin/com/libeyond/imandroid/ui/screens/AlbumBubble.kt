@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.AlbumLayout
+import com.libeyond.imandroid.data.AlbumTick
 import com.libeyond.imandroid.data.PendingMenu
 import com.libeyond.imandroid.data.SenderRun
 import com.libeyond.imandroid.ui.rememberFrostedPainter
@@ -112,6 +113,8 @@ internal fun AlbumBubble(
     mine: Boolean,
     /** 群聊——自动下载策略的单聊/群聊分档要用。 */
     isGroup: Boolean = false,
+    /** 整组状态勾（READ_TICK_DESIGN §4），由 [com.libeyond.imandroid.data.AlbumTick] 算好。 */
+    tick: AlbumTick.State = AlbumTick.State.None,
     timestamp: Long,
     host: String,
     useTls: Boolean,
@@ -214,21 +217,15 @@ internal fun AlbumBubble(
                     }
                 }
             }
-            // 时间胶囊：浮在右下角图片之上，必须带底色（图是不透明的）
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(c.overlay)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            ) {
-                Text(
-                    TimeFormat.bubbleTime(timestamp),
-                    color = c.onMedia,
-                    fontSize = 10.sp,
-                )
-            }
+            // 时间胶囊：浮在右下角图片之上，与单图 / 视频同一枚（[MediaMetaChip]：底色 + 垂直居中 + 状态勾）
+            MediaMetaChip(
+                modifier = Modifier.align(Alignment.BottomEnd),
+                timestamp = timestamp,
+                mine = mine,
+                sending = tick == AlbumTick.State.Sending,
+                delivered = tick == AlbumTick.State.Sent || tick == AlbumTick.State.Read,
+                read = tick == AlbumTick.State.Read,
+            )
         }
         }
     }

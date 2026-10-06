@@ -60,11 +60,13 @@ internal fun PickListScreen(
     /** 多选时的已选集合；单选传空。 */
     selected: Set<String> = emptySet(),
     multi: Boolean = false,
-    /** 多选上限；`0` = 不限。超限时不再让勾。 */
-    limit: Int = 0,
+    /** 多选上限；负数 = 不限（`0` = 一个都不能勾：管理员名额已满）。超限时不再让勾。 */
+    limit: Int = -1,
     emptyText: String = stringResource(R.string.common_no_selectable_people),
     /** 多选确认钮文案（默认「确定」；添加管理员写「添加（n/5）」）。 */
     confirmText: String = stringResource(R.string.common_confirm),
+    /** 非空 = 副标题固定用它（添加管理员「已勾选x/N人」，0 人也显示）；null = 默认「已选 n 人」。 */
+    subtitleOverride: String? = null,
     onToggle: (String) -> Unit = {},
     onPick: (PickRow) -> Unit = {},
     onConfirm: () -> Unit = {},
@@ -85,7 +87,9 @@ internal fun PickListScreen(
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding().imePadding()) {
         IMTopBar(
             title = title,
-            subtitle = if (multi && selected.isNotEmpty()) {
+            subtitle = if (subtitleOverride != null) {
+                subtitleOverride
+            } else if (multi && selected.isNotEmpty()) {
                 pluralStringResource(R.plurals.chat_select_selected, selected.size, selected.size)
             } else {
                 ""
@@ -125,7 +129,7 @@ internal fun PickListScreen(
             items(g.items, key = { it.id }) { r ->
                 val on = r.id in selected
                 // 到上限后**未选中的行不再可点**——让它可点、点了没反应是最糟的一种
-                val enabled = !multi || on || limit <= 0 || selected.size < limit
+                val enabled = !multi || on || limit < 0 || selected.size < limit
                 Column {
                     Row(
                         Modifier.fillMaxWidth().background(c.surface)

@@ -56,13 +56,14 @@ internal fun GroupPickPage(
                 PickPurpose.AddAdmin, PickPurpose.Invite, PickPurpose.Call -> Unit
             }
         },
-        limit = GroupPick.maxPick(purpose) ?: 0,
-        // iOS 的确认钮写「添加（n/5）」，别只写「确定」——一次最多几位得让人看见
-        confirmText = if (purpose == PickPurpose.AddAdmin) {
-            stringResource(R.string.group_admin_picker_add_count, picked.size, GroupPick.MAX_ADMIN_BATCH)
+        limit = GroupPick.maxPick(purpose, members) ?: -1,
+        // 对齐 iOS：确认钮就叫「确认」，标题「添加管理员」+ 副标题「已勾选x/N人」（N = 剩余名额，已有管理员占名额）
+        subtitleOverride = if (purpose == PickPurpose.AddAdmin) {
+            stringResource(R.string.group_admin_picker_selected_subtitle, picked.size, GroupPick.maxPick(purpose, members) ?: 0)
         } else {
-            stringResource(R.string.common_confirm)
+            null
         },
+        confirmText = stringResource(R.string.common_confirm),
         onConfirm = { if (purpose == PickPurpose.AddAdmin) onAddAdmins(picked.toList()) else onConfirmInvite(picked.toList()) },
         onBack = onBack,
     )
@@ -97,10 +98,10 @@ internal fun GroupPickHost(
         picked = picked,
         myUid = myUid,
         onToggle = { id ->
-            val next = GroupPick.toggle(purpose, picked, id)
+            val next = GroupPick.toggle(purpose, picked, id, members)
             if (next == picked && id !in picked) {
                 onToast(
-                    if (purpose == PickPurpose.AddAdmin) Str.s(R.string.group_admin_picker_limit_toast, GroupPick.MAX_ADMIN_BATCH)
+                    if (purpose == PickPurpose.AddAdmin) Str.s(R.string.group_admin_picker_limit_toast, GroupPick.maxPick(purpose, members) ?: 0)
                     else Str.s(R.string.chat_detail_group_call_pick_max, GroupPick.MAX_CALL_PICK),
                 )
             }

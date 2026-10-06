@@ -53,7 +53,25 @@ object LanguageStore {
     val pref: StateFlow<LanguagePref> = _pref.asStateFlow()
 
     /** RtcCall 读这个喂给 Kit：已经解析过「跟随系统」，永远是一个具体语言。 */
-    val resolved: ResolvedLanguage get() = resolve(_pref.value, Locale.getDefault().language)
+    val resolved: ResolvedLanguage get() = resolve(_pref.value, systemLanguage())
+
+    /**
+     * **设备系统**语言主码。不能读 `Locale.getDefault()`：API 33+ 一旦 [applyToResources] 把 App 级语言设成 en，
+     * 进程的默认 Locale 就跟着变成 en——「跟随系统」再读它，永远解析成上次选的语言（2026-10-06 OPPO 复现：
+     * 选 English → 改回跟随系统，界面仍是英文）。`Resources.getSystem()` 的配置不受 App 级语言覆盖。
+     */
+    internal fun systemLanguage(): String {
+        // API 33+：`LocaleManager.systemLocales` 才是权威（不受 App 级覆盖影响）；
+        // 实测 `Resources.getSystem().configuration` 在 OPPO 上仍会带出 App 级语言。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ::appContext.isInitialized) {
+            runCatching {
+                val l = appContext.getSystemService(LocaleManager::class.java).systemLocales
+                if (!l.isEmpty) return l[0].language
+            }
+        }
+        val l = android.content.res.Resources.getSystem().configuration.locales
+        return if (l.isEmpty) Locale.getDefault().language else l[0].language
+    }
 
     /** [IMApp.onCreate] 里调一次即可；不必等登录——「我」页与 RtcCall 都可能在登录前后读它。 */
     fun init(context: Context) {

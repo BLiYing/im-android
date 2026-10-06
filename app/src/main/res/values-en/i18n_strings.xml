@@ -935,6 +935,7 @@
     <string name="group_admin_picker_empty">No regular members available to make admin</string>
     <string name="group_admin_picker_limit_note">You can add up to %1$d admins at a time.</string>
     <string name="group_admin_picker_limit_toast">You can add up to %1$d admins at a time</string>
+    <string name="group_admin_picker_selected_subtitle">%1$d/%2$d selected</string>
     <string name="group_admin_picker_title">Add admins</string>
     <string name="group_announcement_published_at">Posted %1$s</string>
     <string name="group_avatar_add">Add group photo</string>
@@ -1721,7 +1722,7 @@
     <string name="search_alias_auto_download">auto download,auto-download,cellular,data</string>
     <string name="search_alias_sound">sound,tone,ringtone,alert</string>
     <string name="search_contacts_placeholder">Search contacts and groups</string>
-    <string name="search_global_placeholder">Search chats, contacts, and messages</string>
+    <string name="search_global_placeholder">Search chats, contacts, messages, and settings</string>
     <string name="search_no_matches">No results found</string>
     <plurals name="search_result_member_count">
         <item quantity="one">%1$d member</item>

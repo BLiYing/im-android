@@ -47,6 +47,8 @@ data class IMColors(
     val online: Color,
     val link: Color,
     val unreadBadge: Color,
+    /** 免打扰会话的未读徽标 / 标未读圆点底色（iOS `UIColor.systemGrayColor`，@我 时仍用 [unreadBadge]）。 */
+    val unreadBadgeMuted: Color,
 
     // --- 聊天 ---
     val bubbleMe: Color,
@@ -126,6 +128,7 @@ val LightIMColors = IMColors(
     online = Color(0xFF1AAB5B),
     link = Color(0xFF2477D4),
     unreadBadge = Color(0xFF3E91FF),
+    unreadBadgeMuted = Color(0xFF8E8E93),
 
     bubbleMe = Color(0xFFE3FDD0),
     bubbleThem = Color(0xFFFFFFFF),
@@ -183,6 +186,7 @@ val DarkIMColors = IMColors(
     online = Color(0xFF42C77A),
     link = Color(0xFF66A9FF),
     unreadBadge = Color(0xFF3E91FF),
+    unreadBadgeMuted = Color(0xFF8E8E93),
 
     bubbleMe = Color(0xFF1F4D2E),
     bubbleThem = Color(0xFF262D31),

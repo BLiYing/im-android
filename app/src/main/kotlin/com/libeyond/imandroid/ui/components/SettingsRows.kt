@@ -165,6 +165,10 @@ fun IMSettingsRow(
                 text = rightValue,
                 color = if (muted) c.textTertiary else c.textSecondary,
                 style = MaterialTheme.typography.bodyMedium,
+                // 右值恒一行（iOS detailTextLabel 同）：「跟随系统（简体中文）」曾在全角括号处折成两行
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.width(6.dp))
         }

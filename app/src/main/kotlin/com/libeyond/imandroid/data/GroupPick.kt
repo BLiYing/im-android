@@ -73,10 +73,17 @@ object GroupPick {
     /** 一次最多添加几位管理员（对齐 iOS `IMGroupAdminMaxBatch`；服务端没有批量接口，端上串行逐个 PUT）。 */
     const val MAX_ADMIN_BATCH = 5
 
-    /** 多选上限；`null` = 不限。 */
-    fun maxPick(purpose: PickPurpose): Int? = when (purpose) {
+    /**
+     * 群管理员总数上限（= [MAX_ADMIN_BATCH]：iOS 一次最多勾 5 位，产品口径同为「管理员最多 5 位」）。
+     * 已有管理员**占名额**（只数 role=ADMIN，群主不算管理员），所以这次最多还能勾 [adminSlotsLeft] 位。
+     */
+    fun adminSlotsLeft(members: List<GroupMember>): Int =
+        (MAX_ADMIN_BATCH - members.count { it.role == GroupMember.ROLE_ADMIN }).coerceAtLeast(0)
+
+    /** 多选上限；`null` = 不限。设管理员 = 剩余名额（[members] 为当前群成员；空 = 未知，按一批上限）。 */
+    fun maxPick(purpose: PickPurpose, members: List<GroupMember> = emptyList()): Int? = when (purpose) {
         PickPurpose.Call -> MAX_CALL_PICK
-        PickPurpose.AddAdmin -> MAX_ADMIN_BATCH
+        PickPurpose.AddAdmin -> if (members.isEmpty()) MAX_ADMIN_BATCH else adminSlotsLeft(members)
         else -> null
     }
 
@@ -84,8 +91,8 @@ object GroupPick {
      * 勾选 / 取消勾选一个人。已选的永远能取消；有上限的用途（[maxPick]）满了之后**不再加**（返回原集合，
      * 调用方比较前后是否相等来决定要不要提示）。其余用途不设上限。
      */
-    fun toggle(purpose: PickPurpose, picked: Set<String>, id: String): Set<String> {
-        val cap = maxPick(purpose)
+    fun toggle(purpose: PickPurpose, picked: Set<String>, id: String, members: List<GroupMember> = emptyList()): Set<String> {
+        val cap = maxPick(purpose, members)
         return when {
             id in picked -> picked - id
             cap != null && picked.size >= cap -> picked

@@ -2,7 +2,12 @@ package com.libeyond.imandroid.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -90,13 +95,30 @@ fun MessageContextMenu(
         if (animate) lift.animateTo(1.02f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow))
     }
 
-    // 菜单高度按项数估算（每项 48 + 上下 8）——只用来判断"下方放不放得下"，
-    // 估偏一点不影响正确性：放不下就翻上方，翻上方也放不下就贴顶。
-    val estMenuH: Dp = (shown.size * 48 + 16).dp
+    // —— 竖向布局：**菜单永远贴在气泡下方，气泡自己让位**（iOS UIContextMenu 同口径：预览上移、菜单在下）。——
+    // 旧版「下方放不下就翻到上方、再放不下贴顶」在矮屏（Pixel 2 XL 仅 640dp）上，顶部只有一条消息时
+    // 也会翻上去、并按 24dp 贴顶压在气泡身上。现在：下方放不下 → 预览上移 [shift]（有 preview 才能移，
+    // 原行已被隐藏，不会出现重影），仍不够 → 菜单限高并可滚动，**绝不盖住被按的气泡**。
+    // 没有 preview 的调用方（待发气泡，原行就在原位、移不动）退回「放不下翻上方」。
+    val rowH = 53.dp
+    // 子菜单里多一行「返回」
+    val estMenuH: Dp = rowH * (shown.size + if (submenu != null) 1 else 0)
     val gap = 8.dp
-    val below = anchorBottom + gap
-    val fitsBelow = below + estMenuH < screenH - 24.dp
-    val menuTop = if (fitsBelow) below else (anchorTop - gap - estMenuH).coerceAtLeast(24.dp)
+    val edge = 24.dp
+    val limit = screenH - edge
+    val canShift = preview != null
+    val deficit = (anchorBottom + gap + estMenuH - limit).coerceAtLeast(0.dp)
+    val shiftTarget: Dp = if (canShift) minOf(deficit, (anchorTop - edge).coerceAtLeast(0.dp)) else 0.dp
+    val shift by animateDpAsState(
+        shiftTarget,
+        if (animate) spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow) else snap(),
+        label = "menuShift",
+    )
+    val belowTop = anchorBottom - shiftTarget + gap
+    val roomBelow = limit - belowTop
+    val flipAbove = !canShift && roomBelow < estMenuH
+    val menuH: Dp = if (flipAbove) estMenuH else minOf(estMenuH, roomBelow.coerceAtLeast(rowH * 2))
+    val menuTop = if (flipAbove) (anchorTop - gap - estMenuH).coerceAtLeast(edge) else anchorBottom - shift + gap
 
     // **定宽**不是 min 宽：用 widthIn(min) 时「为所有人删除」这类长项会把卡片撑过 200dp，
     // 再按 200 算左边缘就会溢出屏幕右侧（实测第一版右边被裁掉）。
@@ -124,7 +146,7 @@ fun MessageContextMenu(
                 modifier = Modifier
                     // **按 anchor 的左上角与宽度定位**，不再假定"anchor 一定是整行"：
                     // 长按九宫格里一格时 anchor 就是那一格，浮起的也只该是那一格。
-                    .padding(start = anchorLeft, top = anchorTop)
+                    .padding(start = anchorLeft, top = anchorTop - shift)
                     .width(anchorWidth)
                     .graphicsLayer {
                         scaleX = lift.value
@@ -143,9 +165,11 @@ fun MessageContextMenu(
             modifier = Modifier
                 .padding(start = menuLeft, top = menuTop)
                 .width(menuW)
+                .heightIn(max = menuH)
                 .clip(RoundedCornerShape(d.radiusCard))
                 .background(c.surfaceElevated)
-                .clickable(enabled = false) {},
+                .clickable(enabled = false) {}
+                .verticalScroll(rememberScrollState()),
         ) {
             // 子菜单里给一行返回上一级——否则进了子菜单只能关掉重来
             if (submenu != null) {

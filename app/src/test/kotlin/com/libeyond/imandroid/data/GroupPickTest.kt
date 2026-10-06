@@ -111,4 +111,21 @@ class GroupPickTest {
         for (i in 1..20) picked = GroupPick.toggle(PickPurpose.Invite, picked, "u$i")
         assertEquals(20, picked.size)
     }
+
+    /** 已有管理员占名额：2 位管理员 → 这次最多再勾 3 位；满 5 位则一个都勾不了（群主不算管理员）。 */
+    @Test
+    fun add_admin_cap_counts_existing_admins() {
+        fun m(id: String, role: String) = GroupMember(userId = id, role = role)
+        val two = listOf(m("o", GroupMember.ROLE_OWNER), m("a1", GroupMember.ROLE_ADMIN), m("a2", GroupMember.ROLE_ADMIN), m("x", GroupMember.ROLE_MEMBER))
+        assertEquals(3, GroupPick.adminSlotsLeft(two))
+        assertEquals(3, GroupPick.maxPick(PickPurpose.AddAdmin, two))
+        var picked = emptySet<String>()
+        for (i in 1..3) picked = GroupPick.toggle(PickPurpose.AddAdmin, picked, "u$i", two)
+        assertEquals(picked, GroupPick.toggle(PickPurpose.AddAdmin, picked, "u4", two))
+
+        val full = (1..5).map { m("a$it", GroupMember.ROLE_ADMIN) } + m("x", GroupMember.ROLE_MEMBER)
+        assertEquals(0, GroupPick.adminSlotsLeft(full))
+        assertEquals(emptySet<String>(), GroupPick.toggle(PickPurpose.AddAdmin, emptySet(), "x", full))
+        assertEquals(5, GroupPick.adminSlotsLeft(listOf(m("o", GroupMember.ROLE_OWNER), m("x", GroupMember.ROLE_MEMBER))))
+    }
 }

@@ -215,7 +215,11 @@ fun ContactsHost(
             ContactsPage.CreateGroup -> CreateGroupHost(
                 client = client,
                 seedFriends = accepted,
-                onCreated = { page = ContactsPage.List },
+                // 建成直接进新群（同 iOS IMGroupListViewController createTapped：回列表页再进群聊）
+                onCreated = { g ->
+                    page = ContactsPage.List
+                    onOpenChat(client.groupConversationStubFor(g.convId, g.name, g.avatarUrl))
+                },
                 onBack = { page = ContactsPage.List },
             )
 

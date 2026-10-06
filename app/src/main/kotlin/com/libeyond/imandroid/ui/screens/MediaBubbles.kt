@@ -348,23 +348,41 @@ internal fun MediaMetaChip(
     read: Boolean,
 ) {
     val c = IMTheme.colors
-    Row(
+    // 外层 Box 定高 18 并**居中**内层 Row：内层用 alignByBaseline / alignBy 对基线，
+    // 带对齐线的子项会被 Row 顶在上沿、忽略 verticalAlignment——直接给 Row 定高就会「内容贴上沿、
+    // 下面空一截」（2026-10-06 用户报：时间 + 勾在胶囊里不垂直居中）。
+    Box(
         modifier = modifier
             .padding(6.dp)
             .height(18.dp)
             .clip(RoundedCornerShape(9.dp))
             .background(c.overlay)
             .padding(horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        contentAlignment = Alignment.Center,
     ) {
-        Text(TimeFormat.bubbleTime(timestamp), color = c.onMedia, fontSize = 10.sp, modifier = Modifier.alignByBaseline())
-        if (!mine) return@Row
-        if (sending) {
-            Spacer(Modifier.width(3.dp))
-            Text("🕐", fontSize = 9.sp)
-        } else if (delivered) {
-            Spacer(Modifier.width(3.dp))
-            ReadTickIcon(read, if (read) c.checkReadOnMedia else c.onMedia, 10.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                TimeFormat.bubbleTime(timestamp), color = c.onMedia,
+                // 行高钉死并两端裁平：默认行高 / 字体内边距不对称，会让字形偏离胶囊中线
+                style = androidx.compose.ui.text.TextStyle(
+                    fontSize = 10.sp, lineHeight = 12.sp,
+                    platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+                    lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                        alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                        trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+                    ),
+                ),
+                modifier = Modifier.alignByBaseline(),
+            )
+            if (mine) {
+                if (sending) {
+                    Spacer(Modifier.width(3.dp))
+                    Text("🕐", fontSize = 9.sp)
+                } else if (delivered) {
+                    Spacer(Modifier.width(3.dp))
+                    ReadTickIcon(read, if (read) c.checkReadOnMedia else c.onMedia, 10.sp)
+                }
+            }
         }
     }
 }
