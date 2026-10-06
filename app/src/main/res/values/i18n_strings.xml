@@ -1145,10 +1145,22 @@
     <string name="media_download_tap_to_open">点击打开</string>
     <string name="media_file_open_needs_download">文件不在本地，请先下载</string>
     <string name="media_image_expired">图片已失效</string>
-    <plurals name="media_picker_selected_count">
-        <item quantity="other">已选 %1$d 项</item>
-    </plurals>
-    <string name="media_picker_send_original">发送原图/原视频</string>
+    <string name="media_picker_all">全部</string>
+    <string name="media_picker_denied">没有相册权限，无法选择照片和视频</string>
+    <string name="media_picker_empty">相册里没有照片或视频</string>
+    <string name="media_picker_empty_partial">你授权的照片里没有内容</string>
+    <string name="media_picker_go_settings">去设置</string>
+    <string name="media_picker_limit">最多选 %1$d 个</string>
+    <string name="media_picker_manage_access">管理授权的照片</string>
+    <string name="media_picker_original">原图</string>
+    <string name="media_picker_original_size">原图 (%1$s)</string>
+    <string name="media_picker_partial_access">只能看到你授权的照片 · 管理</string>
+    <string name="media_picker_preview">预览</string>
+    <string name="media_picker_send_count">发送(%1$d)</string>
+    <string name="media_picker_too_large">超过 %1$s</string>
+    <string name="media_picker_unnamed">未命名</string>
+    <string name="media_picker_unreadable">这个文件读不出来</string>
+    <string name="media_picker_video_preview_note">▶ %1$s · 预览不播放</string>
     <string name="media_placeholder_expired">已失效</string>
     <string name="media_save_failed_network_storage">保存失败，请检查网络与存储空间</string>
     <string name="media_save_failed_too_large">保存失败：文件太大</string>

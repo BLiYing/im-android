@@ -1179,11 +1179,22 @@
     <string name="media_download_tap_to_open">Tap to open</string>
     <string name="media_file_open_needs_download">This file isn\'t downloaded yet. Download it first.</string>
     <string name="media_image_expired">Image expired</string>
-    <plurals name="media_picker_selected_count">
-        <item quantity="one">%1$d item selected</item>
-        <item quantity="other">%1$d items selected</item>
-    </plurals>
-    <string name="media_picker_send_original">Send original</string>
+    <string name="media_picker_all">All</string>
+    <string name="media_picker_denied">Photo access is off, so you can’t pick photos or videos</string>
+    <string name="media_picker_empty">No photos or videos</string>
+    <string name="media_picker_empty_partial">No photos in your allowed selection</string>
+    <string name="media_picker_go_settings">Open Settings</string>
+    <string name="media_picker_limit">You can select up to %1$d</string>
+    <string name="media_picker_manage_access">Manage allowed photos</string>
+    <string name="media_picker_original">Original</string>
+    <string name="media_picker_original_size">Original (%1$s)</string>
+    <string name="media_picker_partial_access">Only showing photos you’ve allowed · Manage</string>
+    <string name="media_picker_preview">Preview</string>
+    <string name="media_picker_send_count">Send (%1$d)</string>
+    <string name="media_picker_too_large">Over %1$s</string>
+    <string name="media_picker_unnamed">Untitled</string>
+    <string name="media_picker_unreadable">Can’t read this file</string>
+    <string name="media_picker_video_preview_note">▶ %1$s · Preview only</string>
     <string name="media_placeholder_expired">Expired</string>
     <string name="media_save_failed_network_storage">Save failed — check your network and storage space</string>
     <string name="media_save_failed_too_large">Save failed: file is too large</string>
