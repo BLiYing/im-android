@@ -152,4 +152,27 @@ class MediaPickTest {
         val list = listOf(asset(1), asset(3))
         assertEquals(listOf(1L, 3L), MediaPick.ordered(list, listOf(1L, 2L, 3L)).map { it.id })
     }
+
+    // —— 原图流式上传的声明大小 ——
+
+    @Test
+    fun `文件长度可信时直接用它`() {
+        assertEquals(500L, MediaPick.uploadSize(500, 999) { error("不该数流") })
+    }
+
+    @Test
+    fun `问不到长度时用选择器给的真实值`() {
+        assertEquals(999L, MediaPick.uploadSize(-1, 999) { error("不该数流") })
+    }
+
+    @Test
+    fun `相机占位1不当真值，问不到长度就数流`() {
+        assertEquals(1234L, MediaPick.uploadSize(-1, MediaPick.SIZE_UNKNOWN) { 1234 })
+    }
+
+    @Test
+    fun `数流也读不出来返回0交给调用方标失败`() {
+        assertEquals(0L, MediaPick.uploadSize(-1, MediaPick.SIZE_UNKNOWN) { -1 })
+        assertEquals(0L, MediaPick.uploadSize(0, 0) { 0 })
+    }
 }

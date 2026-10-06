@@ -50,6 +50,25 @@ object MediaPick {
         return selected + id
     }
 
+    /**
+     * 调用方拿不到真实字节数时给 [PickedMedia.sizeBytes] 的占位（相机产物：字节数由压缩结果决定）。
+     * 取 1 只为过 [selectable] / 「0 = MediaStore 坏行」那道判断——它**不是真实大小**，
+     * 声明给分片上传会被服务端按大小校验拒掉，所以走原图流式时必须经 [uploadSize] 换成真值。
+     */
+    const val SIZE_UNKNOWN = 1L
+
+    /**
+     * 原图流式上传要声明的字节数。分片协议按**声明大小**校验，多一字节少一字节都会被拒。
+     *
+     * 优先级：文件本身的长度（[fileLength]，问不到传 -1）＞ 选择器给的 [declared]（占位 [SIZE_UNKNOWN] 不算）
+     * ＞ 把流数一遍（[count]，只在前两者都不可信时才调，不落内存）。
+     */
+    fun uploadSize(fileLength: Long, declared: Long, count: () -> Long): Long = when {
+        fileLength > 0 -> fileLength
+        declared > SIZE_UNKNOWN -> declared
+        else -> count().coerceAtLeast(0)
+    }
+
     /** 编号（1-based）；未选中返回 0。 */
     fun indexOf(selected: List<Long>, id: Long): Int = selected.indexOf(id) + 1
 

@@ -20,6 +20,7 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.mediapicker.MediaCompressor
+import com.libeyond.mediapicker.MediaPick
 import com.libeyond.mediapicker.PickedMedia
 import com.libeyond.mediapicker.VideoProbe
 import kotlinx.coroutines.CoroutineScope
@@ -192,17 +193,36 @@ internal class MediaSendFlow(
     }
 
     /**
-     * 要上传的真实字节数。分片协议按**声明大小**校验，多一字节少一字节都会被服务端拒，
-     * 所以优先问文件本身；问不到才用选择器给的值（相机那条路给的是占位 1，只在压缩路径里用得上）。
+     * 要上传的真实字节数（取舍规则见 [MediaPick.uploadSize]）。
+     * 相机那条路给的是占位 [MediaPick.SIZE_UNKNOWN]：压缩失败回落到原图流式时，
+     * 文件长度又问不到，就把流数一遍，而不是把占位 1 当真值声明给服务端。
      */
     private fun sourceSize(uri: Uri, declared: Long): Long {
+        val cr = context.contentResolver
         val len = try {
-            context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+            cr.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
         } catch (e: Exception) {
             log.w("pick_size_failed", "err" to e.javaClass.simpleName)
             -1L
         }
-        return if (len > 0) len else declared
+        return MediaPick.uploadSize(len, declared) { countBytes(uri) }
+    }
+
+    /** 数流的字节数（不落内存）。读不出来返回 0，调用方据此标失败。 */
+    private fun countBytes(uri: Uri): Long = try {
+        context.contentResolver.openInputStream(uri)?.use { ins ->
+            val buf = ByteArray(64 * 1024)
+            var total = 0L
+            while (true) {
+                val n = ins.read(buf)
+                if (n < 0) break
+                total += n
+            }
+            total
+        } ?: 0L
+    } catch (e: Exception) {
+        log.w("pick_count_failed", "err" to e.javaClass.simpleName)
+        0L
     }
 
     private suspend fun sendVideo(

@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
+import com.libeyond.mediapicker.MediaPick
 import com.libeyond.mediapicker.PickedMedia
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -52,9 +53,9 @@ internal fun rememberChatMediaLaunchers(
                             uri = uri.toString(),
                             displayName = "camera_${System.currentTimeMillis()}.jpg",
                             mime = "image/jpeg",
-                            // 相机产物走压缩路径，字节数由压缩后的结果决定，这里给 1 只为过
-                            // 「0 = MediaStore 坏行」那道判断
-                            sizeBytes = 1,
+                            // 相机产物走压缩路径，字节数由压缩后的结果决定；占位只为过
+                            // 「0 = MediaStore 坏行」那道判断（压缩失败回落原图时由 uploadSize 换成真值）
+                            sizeBytes = MediaPick.SIZE_UNKNOWN,
                             isVideo = false,
                         ),
                     ),
