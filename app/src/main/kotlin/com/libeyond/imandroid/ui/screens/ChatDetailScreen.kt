@@ -121,12 +121,18 @@ internal fun ChatDetailScreen(
      * `actions`/`moreItems` 已经在调用方经 `DetailActions.pillsFor/moreFor` 收窄，这里只补齐正文。
      */
     isSystemPeer: Boolean = false,
+    /**
+     * 对端是否好友（宿主 `friend?.status == ACCEPTED`，起步值取 knownFriends、拉回后校正）。
+     * 非好友只留头像 + 操作排（对齐 iOS `IMChatDetailViewController sectionLayout`）：
+     * 备注名/用户名卡、置顶/免打扰卡及 footer、页签与其内容全部隐藏。默认 true 保持其它调用不变。
+     */
+    isFriend: Boolean = true,
     onBack: () -> Unit,
 ) {
     val c = IMTheme.colors
     com.libeyond.imandroid.ui.voice.PauseVoiceOnLeave() // 离开本页暂停语音（保留位点）
     val d = IMTheme.dimens
-    val showBody = !galleryOnly && !isSystemPeer
+    val showBody = !galleryOnly && !isSystemPeer && isFriend
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         // 会话媒体库的标题是**「图片与视频」**，不是会话名——逐字对齐 iOS
@@ -228,7 +234,7 @@ internal fun ChatDetailScreen(
             // —— 页签内容（与群资料共用同一段渲染，见 DetailArchive.archiveTab）——
             // 系统通知会话没有可归档的媒体/文件/链接，整段不渲染（对齐 Web `showDetailBody`）。
             // 没有任何有内容的页签（还没拉到 / 真没有）就整段不画——不先占一个「加载中」再变空态
-            if (!isSystemPeer && (galleryOnly || tabs.isNotEmpty())) archiveTab(
+            if (!isSystemPeer && (galleryOnly || (isFriend && tabs.isNotEmpty()))) archiveTab(
                 tab = tab,
                 inset = !galleryOnly,
                 convId = conv.convId,

@@ -7,7 +7,7 @@ enum class PendingAction { Copy, CancelSend, Delete }
 
 /**
  * 待发件长按菜单的判据（纯函数，对齐 iOS `messageActionsForMessage:` 对 convSeq<=0 的那几条）：
- * - 复制：有可复制的文字；
+ * - 复制：**仅待发文本**且有文字；待发媒体即便带图说也不给（iOS：复制要求已发出，待发不给）；
  * - 取消发送：**本地媒体件**（图/视频/文件/语音）仍在发送或已失败——停任务 + 删副本 + 删行一步到位；
  *   文本件没有后台任务，iOS 不给；
  * - 删除：只对**失败**的给（发送中的删行不停上传，传完仍会发出去，是僵尸任务）。
@@ -17,7 +17,7 @@ enum class PendingAction { Copy, CancelSend, Delete }
  */
 object PendingMenu {
     fun actions(contentType: String, failed: Boolean, hasCopyText: Boolean): List<PendingAction> = buildList {
-        if (hasCopyText) add(PendingAction.Copy)
+        if (hasCopyText && contentType == ContentType.TEXT) add(PendingAction.Copy)
         if (isLocalMedia(contentType)) add(PendingAction.CancelSend)
         if (failed) add(PendingAction.Delete)
     }

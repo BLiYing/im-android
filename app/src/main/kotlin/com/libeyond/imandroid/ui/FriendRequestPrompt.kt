@@ -20,7 +20,7 @@ data class FriendRequestTarget(val userId: String, val name: String)
  * 此前四处都直接 `contacts.request(uid)`、恒不带 hello（矩阵 176）。
  *
  * 预填「我是<我的公开昵称>」（微信同款）——这句会发出去，所以只取**公开昵称**，绝不取备注/本机显示名。
- * 上限 50（服务端也截，端上先卡住免得用户以为全发出去了）。
+ * 上限 50 个字符（按码点计，同服务端 rune 口径；服务端也截，端上先卡住免得用户以为全发出去了）。
  *
  * @param onSent 发成功后回调，参数 = 是否已直接成为好友（此时不得提示「已发送」，由本函数统一弹对应提示）。
  */
@@ -49,6 +49,7 @@ fun FriendRequestPrompt(
         initial = if (nick.isNotBlank()) Str.s(R.string.friend_request_hello_prefill, nick) else "",
         label = stringResource(R.string.friend_request_placeholder),
         maxLen = HELLO_MAX,
+        countByCodePoint = true,
         hint = stringResource(R.string.friend_request_alert_message, shown),
         confirmText = stringResource(R.string.common_send),
         onConfirm = { hello ->

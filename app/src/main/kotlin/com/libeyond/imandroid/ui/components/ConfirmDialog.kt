@@ -78,8 +78,11 @@ fun IMTextPrompt(
      * 标题是「添加好友」这类动作名时，或字段有天然占位（群备注的占位是群名）时才传（如「说一句，让对方知道你是谁」）。
      */
     label: String = "",
+    /** true = [maxLen] 与计数按 Unicode 码点（与服务端 rune 口径一致，emoji 算 1）；默认按 UTF-16 长度，其它场景不变。 */
+    countByCodePoint: Boolean = false,
 ) {
     val c = IMTheme.colors
+    fun len(s: String) = if (countByCodePoint) s.codePointCount(0, s.length) else s.length
     var value by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -92,13 +95,13 @@ fun IMTextPrompt(
                 }
                 IMTextField(
                     value = value,
-                    onValueChange = { if (it.length <= maxLen) value = it },
+                    onValueChange = { if (len(it) <= maxLen) value = it },
                     label = label,
                     singleLine = !multiline,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "${value.length}/$maxLen",
+                    "${len(value)}/$maxLen",
                     color = c.textTertiary,
                     style = MaterialTheme.typography.bodySmall,
                 )

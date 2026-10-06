@@ -330,7 +330,7 @@ internal fun ChatRowView(
             PendingActions(
                 contentType = r.msg.contentType,
                 failed = r.msg.state == SendState.Failed.name,
-                copyText = if (r.msg.contentType == ContentType.TEXT) r.msg.content else r.msg.caption,
+                copyText = if (r.msg.contentType == ContentType.TEXT) r.msg.content else null, // 待发媒体带图说也不给复制（对齐 iOS）
                 onCancel = { onCancelPending(cid) },
             ) {
             if (r.msg.contentType == ContentType.CALL && CallRecord.parse(r.msg.content)?.isGroup == true) {

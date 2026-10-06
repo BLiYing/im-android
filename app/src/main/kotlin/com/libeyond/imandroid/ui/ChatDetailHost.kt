@@ -257,6 +257,7 @@ fun ChatDetailHost(
                     conv = conv,
                     title = title,
                     handle = knownFriends[conv.peerUid]?.handle.orEmpty(),
+                    isFriend = friend?.status == FriendEntry.ACCEPTED,
                     subtitle = headerSubtitle,
                     contacts = contacts,
                     tabs = tabs,

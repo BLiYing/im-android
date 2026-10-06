@@ -212,3 +212,85 @@ class ConversationActionsTest {
         assertEquals(ConversationAction.Delete, a.last())
     }
 }
+
+/** 各类型 × 已发出/待发 × 本人/他人 的长按菜单核心组合（含自己发的文件/语音，CLIENT_PARITY #13）。 */
+class MessageActionsMatrixTest {
+    private val now = 1_700_000_000_000L
+    private val me = "1001"
+    private val other = "1002"
+
+    private fun msg(sender: String, type: String, content: String, caption: String? = null, seq: Long = 10) =
+        MessageEntity(
+            ownerUid = me, convId = "u_1001_u_1002", convSeq = seq, sender = sender,
+            contentType = type, content = content, caption = caption, timestamp = now,
+        )
+
+    private fun acts(m: MessageEntity) = MessageActions.availableFor(m, me, false, false, now)
+
+    private val common = listOf(
+        MessageAction.Reply, MessageAction.Forward, MessageAction.Favorite,
+    )
+
+    @Test
+    fun `自己发的已发出文件`() {
+        assertEquals(
+            common + listOf(MessageAction.Recall, MessageAction.MultiSelect, MessageAction.DeleteForEveryone, MessageAction.HideForMe),
+            acts(msg(me, ContentType.FILE, "/uploads/x.pdf")),
+        )
+    }
+
+    @Test
+    fun `自己发的已发出语音转文字在最前且无复制`() {
+        assertEquals(
+            listOf(MessageAction.Transcribe) + common +
+                listOf(MessageAction.Recall, MessageAction.MultiSelect, MessageAction.DeleteForEveryone, MessageAction.HideForMe),
+            acts(msg(me, ContentType.VOICE, "/uploads/x.m4a")),
+        )
+    }
+
+    @Test
+    fun `他人的文件与语音有举报无撤回无为所有人删除`() {
+        val tail = listOf(MessageAction.MultiSelect, MessageAction.Report, MessageAction.HideForMe)
+        assertEquals(common + tail, acts(msg(other, ContentType.FILE, "/uploads/x.pdf")))
+        assertEquals(listOf(MessageAction.Transcribe) + common + tail, acts(msg(other, ContentType.VOICE, "/uploads/x.m4a")))
+    }
+
+    @Test
+    fun `已发出带图说的媒体给复制，无图说的视频文件不给`() {
+        for (t in listOf(ContentType.IMAGE, ContentType.VIDEO, ContentType.FILE)) {
+            assertTrue(MessageAction.Copy in acts(msg(me, t, "/uploads/x", caption = "说明")))
+        }
+        assertFalse(MessageAction.Copy in acts(msg(me, ContentType.VIDEO, "/uploads/x.mp4")))
+        assertTrue(MessageAction.Copy in acts(msg(me, ContentType.IMAGE, "/uploads/x.jpg")))
+    }
+
+    @Test
+    fun `文本本人有编辑翻译他人有翻译举报无编辑`() {
+        val mine = acts(msg(me, ContentType.TEXT, "hi"))
+        assertTrue(MessageAction.Edit in mine && MessageAction.Translate in mine && MessageAction.Copy in mine)
+        assertFalse(MessageAction.Report in mine)
+        val theirs = acts(msg(other, ContentType.TEXT, "hi"))
+        assertTrue(MessageAction.Translate in theirs && MessageAction.Report in theirs)
+        assertFalse(MessageAction.Edit in theirs || MessageAction.Recall in theirs)
+    }
+
+    @Test
+    fun `待发消息走 MessageActions 恒为空（由 PendingMenu 接管）`() {
+        for (t in listOf(ContentType.TEXT, ContentType.IMAGE, ContentType.VIDEO, ContentType.FILE, ContentType.VOICE)) {
+            assertTrue(acts(msg(me, t, "x", seq = 0)).isEmpty())
+        }
+    }
+
+    @Test
+    fun `待发菜单矩阵 带图说媒体无复制，文本有复制`() {
+        fun p(t: String, failed: Boolean, copy: Boolean) = PendingMenu.actions(t, failed, copy)
+        for (t in listOf(ContentType.IMAGE, ContentType.VIDEO, ContentType.FILE)) {
+            assertEquals(listOf(PendingAction.CancelSend), p(t, false, true))
+            assertEquals(listOf(PendingAction.CancelSend, PendingAction.Delete), p(t, true, true))
+        }
+        assertEquals(listOf(PendingAction.CancelSend), p(ContentType.VOICE, false, false))
+        assertEquals(listOf(PendingAction.Copy), p(ContentType.TEXT, false, true))
+        assertEquals(listOf(PendingAction.Copy, PendingAction.Delete), p(ContentType.TEXT, true, true))
+        assertTrue(p(ContentType.TEXT, false, false).isEmpty())
+    }
+}
