@@ -3,8 +3,6 @@ package com.libeyond.imandroid.ui.components
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -16,6 +14,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -67,7 +70,7 @@ import kotlinx.coroutines.launch
  *    Android 11 及以下没有实时模糊，换更不透明的纯色兜住。点任意处关闭。
  * ② **被长按的那一项原位浮起**：调用方隐藏原位、本层重绘一份（[preview]）。从按压时缩到的
  *    [MENU_PRESS_SCALE] 弹起，**以 [focus]（气泡本体）为中心**放大——不是整行的中心，否则贴边的气泡会横移。
- * ③ **菜单贴着它**：从靠近气泡的那个角缩放淡入；下方放不下时预览上移让位。
+ * ③ **菜单贴着它**：从靠近气泡的那个角缩放淡入；靠底时翻到上方、半出屏的先滑回屏内（[placeMenu]）。
  * ④ **收起有动画**：点项 / 点背景 / 返回键都先回落、淡出，结束后才 [onDismiss]（调用方据此把原位显示回来）。
  *
  * @param anchor 预览所在区域在**窗口坐标系**里的矩形（`boundsInWindow()`），通常是整行。
@@ -100,7 +103,6 @@ fun MessageContextMenu(
     val screenW = maxWidth
 
     val anchorTop: Dp = with(density) { anchor.top.toDp() }
-    val anchorBottom: Dp = with(density) { anchor.bottom.toDp() }
     val anchorLeft: Dp = with(density) { anchor.left.toDp() }
     val anchorWidth: Dp = with(density) { anchor.width.toDp() }
 
@@ -142,30 +144,40 @@ fun MessageContextMenu(
     // 返回键也走收起动画（比宿主的覆盖层返回链注册得晚，优先吃到）
     BackHandler(enabled = !leaving) { dismiss() }
 
-    // —— 竖向布局：**菜单永远贴在气泡下方，气泡自己让位**（iOS UIContextMenu 同口径：预览上移、菜单在下）。——
-    // 旧版「下方放不下就翻到上方、再放不下贴顶」在矮屏（Pixel 2 XL 仅 640dp）上，顶部只有一条消息时
-    // 也会翻上去、并按 24dp 贴顶压在气泡身上。现在：下方放不下 → 预览上移 [shift]（有 preview 才能移，
-    // 原行已被隐藏，不会出现重影），仍不够 → 菜单限高并可滚动，**绝不盖住被按的气泡**。
-    // 没有 preview 的调用方退回「放不下翻上方」。
+    // —— 竖向布局：照 iOS 系统 UIContextMenu（[placeMenu]）——
+    // 预览半截出屏先整体滑回屏内、太高先缩小；菜单下方放得下放下方，否则翻到上方、预览原地不动；
+    // 两侧都不够才让预览让位。被按的那一项**永远不被菜单盖住**（矮屏 Pixel 2 XL 640dp 曾踩过）。
     val rowH = 53.dp
     // 子菜单里多一行「返回」
     val estMenuH: Dp = rowH * (shown.size + if (submenu != null) 1 else 0)
     val gap = 8.dp
-    val edge = 24.dp
-    val limit = screenH - edge
-    val canShift = preview != null
-    val deficit = (anchorBottom + gap + estMenuH - limit).coerceAtLeast(0.dp)
-    val shiftTarget: Dp = if (canShift) minOf(deficit, (anchorTop - edge).coerceAtLeast(0.dp)) else 0.dp
-    val shift by animateDpAsState(
-        if (leaving) 0.dp else shiftTarget,
-        if (animate) spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow) else snap(),
-        label = "menuShift",
-    )
-    val belowTop = anchorBottom - shiftTarget + gap
-    val roomBelow = limit - belowTop
-    val flipAbove = !canShift && roomBelow < estMenuH
-    val menuH: Dp = if (flipAbove) estMenuH else minOf(estMenuH, roomBelow.coerceAtLeast(rowH * 2))
-    val menuTop = if (flipAbove) (anchorTop - gap - estMenuH).coerceAtLeast(edge) else anchorBottom - shift + gap
+    val edge = 8.dp
+    // 可见区：状态栏下 / 导航栏上各留一点（预览与菜单可以盖住标题栏、输入栏——它们此刻都糊着）
+    val safeTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + edge
+    val safeBottom = screenH - WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() - edge
+    val f = focus ?: anchor
+    val place = with(density) {
+        placeMenu(
+            focusTop = f.top.toDp().value, focusBottom = f.bottom.toDp().value,
+            safeTop = safeTop.value, safeBottom = safeBottom.value,
+            menuH = estMenuH.value, minMenuH = (rowH * 2).value, gap = gap.value,
+            canMove = preview != null,
+        )
+    }
+    val flipAbove = place.above
+    val menuH: Dp = place.menuHeight.dp
+    val menuTop: Dp = place.menuTop.dp
+    // 预览从原位滑进 / 缩到目标，收起时回到原位（原位此刻才显示回来，无跳变）
+    val shift = remember { Animatable(0f) }
+    val fit = remember { Animatable(1f) }
+    LaunchedEffect(place.shift, place.scale, leaving) {
+        val toShift = if (leaving) 0f else place.shift
+        val toFit = if (leaving) 1f else place.scale
+        if (!animate) { shift.snapTo(toShift); fit.snapTo(toFit); return@LaunchedEffect }
+        val spec = if (leaving) tween<Float>(MENU_EXIT_MS) else spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+        launch { shift.animateTo(toShift, spec) }
+        fit.animateTo(toFit, spec)
+    }
 
     // **定宽**不是 min 宽：用 widthIn(min) 时「为所有人删除」这类长项会把卡片撑过 200dp，
     // 再按 200 算左边缘就会溢出屏幕右侧（实测第一版右边被裁掉）。
@@ -216,11 +228,13 @@ fun MessageContextMenu(
                 modifier = Modifier
                     // **按 anchor 的左上角与宽度定位**，不假定"anchor 一定是整行"：
                     // 长按九宫格里一格时 anchor 就是那一格，浮起的也只该是那一格。
-                    .padding(start = anchorLeft, top = anchorTop - shift)
+                    // offset 而非 padding：半截在屏外的项 top 可以是负数
+                    .offset(x = anchorLeft, y = anchorTop)
                     .width(anchorWidth)
                     .graphicsLayer {
-                        scaleX = lift.value
-                        scaleY = lift.value
+                        translationY = shift.value * density.density
+                        scaleX = lift.value * fit.value
+                        scaleY = lift.value * fit.value
                         transformOrigin = pivot
                     }
                     // 预览**不可交互**：在 Initial 阶段截走所有指针事件，抬手 = 关菜单。
@@ -244,10 +258,14 @@ fun MessageContextMenu(
             }
         }
 
-        // ② 菜单卡片
+        // ② 菜单卡片。行高是估算的（[rowH]），实际可能更矮：翻到上方时按**底边**贴住预览，
+        // 否则估多的那截会变成菜单与预览之间的一道空隙（OPPO 实测）
+        Box(
+            Modifier.offset(x = menuLeft, y = menuTop).width(menuW).height(menuH),
+            contentAlignment = if (flipAbove) Alignment.BottomStart else Alignment.TopStart,
+        ) {
         Column(
             modifier = Modifier
-                .padding(start = menuLeft, top = menuTop)
                 .width(menuW)
                 .graphicsLayer {
                     val t = menuIn.value
@@ -284,6 +302,7 @@ fun MessageContextMenu(
                 }
             }
         }
+        } // 菜单定位框
     }
     } // BoxWithConstraints
 }

@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.components.unclippedBoundsInWindow
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,7 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -170,7 +170,7 @@ internal fun Bubble(
         // 「Row 的左右对齐」不会再叠加一次偏移（第一版挂在气泡 Box 上，预览就画偏了）。
         modifier = Modifier
             .fillMaxWidth()
-            .onGloballyPositioned { bubbleRect = it.boundsInWindow() },
+            .onGloballyPositioned { bubbleRect = it.unclippedBoundsInWindow() },
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
         if (failed && onRetry != null) {
@@ -264,7 +264,7 @@ internal fun Bubble(
                                 },
                                 onLongClick = {
                                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    val body = bodyCoords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: bubbleRect
+                                    val body = bodyCoords[0]?.takeIf { it.isAttached }?.unclippedBoundsInWindow() ?: bubbleRect
                                     onLongPress(com.libeyond.imandroid.ui.components.MenuAnchor(bubbleRect, body))
                                 },
                             )

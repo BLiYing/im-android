@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.components.unclippedBoundsInWindow
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,7 +30,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -294,7 +294,7 @@ private fun AlbumTileView(
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(
         modifier = Modifier.size(width, size)
-            .onGloballyPositioned { tileRect.value = it.boundsInWindow() }
+            .onGloballyPositioned { tileRect.value = it.unclippedBoundsInWindow() }
             // 按住这一格先缩一下（iOS 同），菜单预览从同一比例弹起
             .pressShrink(press, enabled = !selecting)
             .background(c.subtleFill)

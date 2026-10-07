@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.components.unclippedBoundsInWindow
 import com.libeyond.imandroid.ui.voice.VoiceMiniPlayer
 import com.libeyond.imandroid.ui.voice.VoiceSource
 import com.libeyond.imandroid.voice.VoiceRules
@@ -114,7 +115,7 @@ internal fun Modifier.archiveItemGestures(
             onLongClick = onLongPress?.let { cb ->
                 {
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                    val r = coords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero
+                    val r = coords[0]?.takeIf { it.isAttached }?.unclippedBoundsInWindow() ?: Rect.Zero
                     lift.lift(r)
                     cb(r)
                 }

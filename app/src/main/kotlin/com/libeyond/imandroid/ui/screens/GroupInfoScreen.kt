@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.components.unclippedBoundsInWindow
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,7 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import com.libeyond.imandroid.ui.components.liftSource
 import androidx.compose.ui.draw.clip
@@ -396,7 +396,7 @@ internal fun MemberRow(
             .liftSource(lift)
             .combinedClickable(onClick = onClick, onLongClick = {
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                coords[0]?.takeIf { it.isAttached }?.let { lift.lift(it.boundsInWindow()) }
+                coords[0]?.takeIf { it.isAttached }?.let { lift.lift(it.unclippedBoundsInWindow()) }
                 onLongClick()
             })
             .padding(horizontal = d.space4, vertical = 10.dp),

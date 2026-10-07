@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.components.unclippedBoundsInWindow
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -26,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -154,7 +154,7 @@ internal fun PendingActions(
     val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(
-        Modifier.onGloballyPositioned { rect = it.boundsInWindow() }
+        Modifier.onGloballyPositioned { rect = it.unclippedBoundsInWindow() }
             // 与已发出的气泡同一套按压 → 浮起（2026-10-07 用户报「长按发送端与接收端效果不一样」：
             // 待发气泡此前没有预览、原位也不隐藏，只压暗背景）。这一层是整行宽，待发恒在右侧，缩放中心贴右缘
             .pressShrink(press, enabled = acts.isNotEmpty(), origin = PENDING_ORIGIN)

@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.components.unclippedBoundsInWindow
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -199,7 +200,7 @@ private fun ConversationRow(
             .liftSource(lift)
             // 置顶行底色：强调色 α0.10 叠在页面底色上（iOS `contentView.backgroundColor`，深浅色皆适配）
             .background(if (conv.pinnedAt > 0) c.accent.copy(alpha = 0.10f).compositeOver(c.pageBackground) else c.pageBackground)
-            .onGloballyPositioned { rect = it.boundsInWindow() }
+            .onGloballyPositioned { rect = it.unclippedBoundsInWindow() }
             .combinedClickable(onClick = onClick, onLongClick = {
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                 lift.lift(rect)
