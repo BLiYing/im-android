@@ -46,6 +46,12 @@ import com.libeyond.imandroid.ui.screens.GroupInfoScreen
 import com.libeyond.imandroid.ui.screens.GroupManageScreen
 import com.libeyond.imandroid.ui.screens.JoinRequestsScreen
 import com.libeyond.imandroid.ui.components.PushTransition
+import com.libeyond.imandroid.ui.components.ProvideMenuSurface
+import com.libeyond.imandroid.ui.components.menuBackdrop
+import com.libeyond.imandroid.ui.components.rememberMenuSurface
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 
 /**
@@ -121,6 +127,8 @@ fun GroupInfoHost(
     var viewingData by remember(convId) { mutableStateOf<ConvMediaItem?>(null) }
     var archiveMenuFor by remember(convId) { mutableStateOf<ArchiveTarget?>(null) }
     var archiveMenuAnchor by remember(convId) { mutableStateOf(Rect.Zero) }
+    var askFriend by remember(convId) { mutableStateOf<FriendRequestTarget?>(null) } // 成员菜单「添加好友」
+    val menuSurface = rememberMenuSurface() // 长按时页面模糊 + 那一行原位浮起（同 ChatDetailHost）
     /** 归档要转发的那一项（长按菜单与查看器「更多」共用这一份状态，见 ArchiveActionsHost 的注释）。 */
     var archiveForward by remember(convId) { mutableStateOf<ArchiveTarget?>(null) }
     // 治理三页 + 一个通用选人页
@@ -402,9 +410,8 @@ fun GroupInfoHost(
         )
         }
         } else {
-        // **整页替换而不是叠一层**：`GroupInfoHost` 的内容不在自己的 Box 里，
-        // 父布局是谁由调用方决定，叠出来可能是竖排而不是覆盖。替换还顺带让
-        // 详情页的滚动位置与成员分页游标原样留着（那些 remember 都在上面，没被跳过）。
+        // **整页替换而不是叠一层**：父布局由调用方决定，叠出来可能是竖排；替换还让滚动位置与成员分页游标原样留着
+        ProvideMenuSurface(menuSurface) { Box(Modifier.fillMaxSize().menuBackdrop(menuSurface.backdrop)) {
         GroupInfoScreen(
         info = g,
         contacts = contacts,
@@ -483,6 +490,7 @@ fun GroupInfoHost(
             galleryOnly = galleryOnly,
             onBack = onBack,
         )
+        } }
         }
         }
     }
@@ -534,19 +542,6 @@ fun GroupInfoHost(
         runManage = ::runManage,
     )
 
-    // —— 成员长按菜单 ——（判据与拼装在 GroupMemberMenu.kt）
-    memberMenu?.let { m ->
-        GroupMemberMenu(
-            member = m,
-            info = g,
-            myUid = myUid,
-            client = client,
-            convId = convId,
-            runManage = ::runManage,
-            onDismiss = { memberMenu = null },
-        )
-    }
-
     // 设置区弹窗 + 公告/简介全文（拼装在 GroupInfoDialogs.kt）
     GroupInfoSettingsDialogs(
         settings = settings,
@@ -566,22 +561,25 @@ fun GroupInfoHost(
         },
     )
 
-    // 归档长按菜单 + 转发选择页（与单聊详情共用同一份接线）
-    ArchiveActionsHost(
-        client = client,
-        convId = convId,
-        isGroup = true,
-        iAmManager = info?.iAmManager == true,
-        // 同 ChatDetailHost：菜单点完就关，请求不能挂在它身上
-        scope = scope,
-        target = archiveMenuFor,
-        anchor = archiveMenuAnchor,
-        onLocateInChat = { seq -> archiveMenuFor = null; onLocateInChat(seq) },
-        onChanged = { archive.reload() },
-        onToast = { toast = it },
-        onForwardPicker = { archiveForward = it },
-        onDismiss = { archiveMenuFor = null },
-    )
+    ProvideMenuSurface(menuSurface) {
+        // —— 成员长按菜单 ——（判据与拼装在 GroupMemberMenu.kt）
+        memberMenu?.let { m ->
+            GroupMemberMenu(
+                member = m, info = g, myUid = myUid, client = client, convId = convId, knownFriends = knownFriends,
+                runManage = ::runManage, onOpenChat = onOpenChat, onDismiss = { memberMenu = null },
+                onAddFriend = { askFriend = FriendRequestTarget(it.userId, knownFriends[it.userId]?.remark?.ifBlank { null } ?: it.displayName) },
+            )
+        }
+        FriendRequestPrompt(client, askFriend, onDismiss = { askFriend = null }, onToast = { toast = it })
+        // 归档长按菜单 + 转发选择页（与单聊详情共用同一份接线）；scope 用宿主的：菜单点完就关，请求不能挂在它身上
+        ArchiveActionsHost(
+            client = client, convId = convId, isGroup = true, iAmManager = info?.iAmManager == true,
+            scope = scope, target = archiveMenuFor, anchor = archiveMenuAnchor,
+            onLocateInChat = { seq -> archiveMenuFor = null; onLocateInChat(seq) },
+            onChanged = { archive.reload() }, onToast = { toast = it },
+            onForwardPicker = { archiveForward = it }, onDismiss = { archiveMenuFor = null },
+        )
+    }
 
     // 归档转发选择页（长按菜单与查看器「更多」共用）
     archiveForward?.let { t ->

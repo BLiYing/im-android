@@ -28,6 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.libeyond.imandroid.ui.components.liftSource
+import com.libeyond.imandroid.ui.components.rememberLiftHandle
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ColorFilter
@@ -101,12 +103,21 @@ internal fun Modifier.archiveItemGestures(
     // `onGloballyPositioned` 在滚动时对屏上每一格每帧都回调，此前在回调里就地 `boundsInWindow()`
     // ——一屏十几格、每格每帧沿祖先链做一遍坐标变换，算出来的矩形绝大多数永远没人读。
     val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    // 长按原位浮起（iOS 表格行的 UIContextMenu）：本行的绘制录进层，菜单里画它；页面没提供 LocalMenuLift 时是空壳
+    val lift = rememberLiftHandle()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     return this
         .onGloballyPositioned { coords[0] = it }
+        .liftSource(lift)
         .combinedClickable(
             onClick = onClick,
             onLongClick = onLongPress?.let { cb ->
-                { cb(coords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero) }
+                {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    val r = coords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero
+                    lift.lift(r)
+                    cb(r)
+                }
             },
         )
 }

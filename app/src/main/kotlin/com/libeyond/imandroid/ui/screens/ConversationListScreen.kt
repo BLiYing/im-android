@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.libeyond.imandroid.ui.components.liftSource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
@@ -177,6 +178,9 @@ private fun ConversationRow(
     onLongClick: (Rect) -> Unit,
 ) {
     var rect by remember { mutableStateOf(Rect.Zero) }
+    // 长按原位浮起（iOS 会话列表的 UIContextMenu）：本行录进层，菜单里画它（MenuLift.kt）
+    val lift = com.libeyond.imandroid.ui.components.rememberLiftHandle()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val c = IMTheme.colors
     val d = IMTheme.dimens
     // 标题为空（刚收到陌生人首条消息、列表还没拉回来）：先用本机好友表的名字，再退「未命名」，**绝不露 convId**
@@ -191,10 +195,16 @@ private fun ConversationRow(
             // 行高 76 = 12 + 52 + 12（UI_SPEC §2，iOS 写死 rowHeight 76）。
             // 用 heightIn(min) 不用 height：长昵称换行时允许长高，不裁内容。
             .heightIn(min = d.convRowHeight)
+            // 放在底色之前：置顶行的强调色底也要录进浮起的那张卡片
+            .liftSource(lift)
             // 置顶行底色：强调色 α0.10 叠在页面底色上（iOS `contentView.backgroundColor`，深浅色皆适配）
             .background(if (conv.pinnedAt > 0) c.accent.copy(alpha = 0.10f).compositeOver(c.pageBackground) else c.pageBackground)
             .onGloballyPositioned { rect = it.boundsInWindow() }
-            .combinedClickable(onClick = onClick, onLongClick = { onLongClick(rect) })
+            .combinedClickable(onClick = onClick, onLongClick = {
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                lift.lift(rect)
+                onLongClick(rect)
+            })
             .padding(horizontal = d.space4, vertical = d.space3),
         verticalAlignment = Alignment.CenterVertically,
     ) {

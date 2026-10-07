@@ -25,6 +25,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import com.libeyond.imandroid.ui.components.liftSource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -381,10 +384,21 @@ internal fun MemberRow(
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
+    // 长按原位浮起（iOS 成员行的 UIContextMenu）：本行录进层，菜单里画它、锚点也取它（MenuLift.kt）
+    val lift = com.libeyond.imandroid.ui.components.rememberLiftHandle()
+    val coords = androidx.compose.runtime.remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     // 外包 Column：父级是 Box（卡片行）时，分割线才会落在行底而不是叠到行顶、与上一行入口行的分割线重成双线
     Column {
     Row(
-        modifier = Modifier.fillMaxWidth().background(background).combinedClickable(onClick = onClick, onLongClick = onLongClick)
+        modifier = Modifier.fillMaxWidth().background(background)
+            .onGloballyPositioned { coords[0] = it }
+            .liftSource(lift)
+            .combinedClickable(onClick = onClick, onLongClick = {
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                coords[0]?.takeIf { it.isAttached }?.let { lift.lift(it.boundsInWindow()) }
+                onLongClick()
+            })
             .padding(horizontal = d.space4, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

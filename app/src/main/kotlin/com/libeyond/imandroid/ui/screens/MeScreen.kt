@@ -76,6 +76,8 @@ fun MeScreen(
     /** 头像取色种子，一律用 uid（稳定，改昵称不变色）。 */
     seed: String,
     onOpenProfile: () -> Unit,
+    /** 右上「编辑」：直进编辑态（点头部才进只读资料页）。 */
+    onOpenProfileEdit: () -> Unit,
     onOpenQr: () -> Unit,
     onOpenDevices: () -> Unit,
     onOpenDataStorage: () -> Unit,
@@ -142,7 +144,7 @@ fun MeScreen(
             leftDescription = stringResource(R.string.settings_info_my_qr),
             onLeft = onOpenQr,
             actionText = stringResource(R.string.common_edit),
-            onAction = onOpenProfile,
+            onAction = onOpenProfileEdit,
         )
 
         Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {

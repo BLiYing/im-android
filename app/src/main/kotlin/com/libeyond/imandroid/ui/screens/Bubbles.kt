@@ -57,6 +57,7 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.ReadTickIcon
 import com.libeyond.imandroid.ui.components.TimeFormat
+import com.libeyond.imandroid.ui.components.pressShrink
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 // 气泡本体。从 ChatScreen 拆出（CODING_STYLE §7②）：那个文件 526 行触了体量 WARN，
@@ -68,8 +69,8 @@ internal fun Bubble(
     text: String,
     mine: Boolean,
     msg: MessageEntity? = null,
-    /** 长按回调，带上**气泡在窗口里的矩形**——菜单要浮在气泡旁边（对齐 iOS UIContextMenu）。 */
-    onLongPress: ((Rect) -> Unit)? = null,
+    /** 长按回调，带上**整行与气泡本体在窗口里的矩形**——菜单要浮在气泡旁边、以气泡为中心浮起（对齐 iOS UIContextMenu）。 */
+    onLongPress: ((com.libeyond.imandroid.ui.components.MenuAnchor) -> Unit)? = null,
     /** 点开媒体查看器（只对 image/video 生效）。 */
     onOpenMedia: ((MessageEntity) -> Unit)? = null,
     /** 点合并转发卡 → 聊天记录详情页，参数是这条的 content（十七条对齐 #17）。 */
@@ -154,6 +155,12 @@ internal fun Bubble(
     val openLink = com.libeyond.imandroid.ui.components.LocalOpenLink.current
     // 记住整行矩形：长按菜单按它定位（iOS 是 UITargetedPreview 把位图钉回原位）。
     var bubbleRect by remember { mutableStateOf(Rect.Zero) }
+    // 气泡本体的位置：只在长按那一刻读一次，存坐标对象不存矩形（理由同 RectHolder：滚动时每帧回调）
+    val bodyCoords = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    // 长按菜单里的那份预览：只留气泡本体，旁边的头像 / 昵称 / 转发来源 / 红❗ 占位但不画（iOS 只浮起气泡）
+    val inPreview = com.libeyond.imandroid.ui.components.LocalMenuPreview.current
+    val besideAlpha = if (inPreview) Modifier.alpha(0f) else Modifier
     // 气泡最大宽是**内容区的比例**不是固定 dp（UI_SPEC §3）：固定值在窄机上过宽、宽机上过窄。
     // BoxWithConstraints 才能拿到本行可用宽度并按比例折算。
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -171,7 +178,7 @@ internal fun Bubble(
             Text(
                 text = "❗",
                 fontSize = 16.sp,
-                modifier = Modifier.clickable { onRetry() }.padding(end = 4.dp),
+                modifier = Modifier.clickable { onRetry() }.padding(end = 4.dp).then(besideAlpha),
             )
         }
         // —— 头像列（UI_SPEC §3：12 + 30 + 6 = iOS 的 _leading.constant 48）——
@@ -180,7 +187,7 @@ internal fun Bubble(
             // **这里不再加左边距**：消息列表本身的横向内边距就是 chatAvatarLeading（见 ChatScreen），
             // 在这儿再加一次会把整列右推 12dp（实测头像左边距 24 而非 12、气泡左缘 60 而非 48）。
             Box(
-                modifier = Modifier.size(d.chatAvatar).align(Alignment.Bottom)
+                modifier = Modifier.size(d.chatAvatar).align(Alignment.Bottom).then(besideAlpha)
                     .then(
                         if (showAvatar && onAvatarTap != null) Modifier.clickable(onClick = onAvatarTap) else Modifier,
                     ),
@@ -200,7 +207,7 @@ internal fun Bubble(
             // 昵称 + 角色徽标：**只在连续段首条**（iOS `isFirstInSenderRun:`）。
             // 此前每条都显、还没有徽标——连发五条就是五行一样的名字（十七条对齐 #15）。
             if (showSenderName && !senderName.isNullOrBlank()) {
-                SenderHeader(senderName, senderBadge)
+                Box(besideAlpha) { SenderHeader(senderName, senderBadge) }
             }
             val recalled = (msg?.recalledAt ?: 0) > 0
             // 图/视频要贴着气泡边渲染（撤回墓碑是纯文字，不算）
@@ -214,7 +221,7 @@ internal fun Bubble(
                     text = stringResource(R.string.chat_bubble_forward_from, fwd),
                     color = c.textTertiary,
                     fontSize = 11.sp,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp).then(besideAlpha),
                 )
             }
             // 通话记录：整个气泡可点，按下 alpha 0.7、不做涟漪（UX 稿 §03）
@@ -224,6 +231,10 @@ internal fun Bubble(
             Box(
                 modifier = Modifier
                     .widthIn(max = bubbleMax)
+                    // 量的是**未缩放**的气泡本体（放在按压缩放之前），长按菜单以它为中心浮起
+                    .onGloballyPositioned { bodyCoords[0] = it }
+                    // 按住先缩一下（iOS 出菜单前的按压反馈），菜单预览从同一比例弹起
+                    .pressShrink(pressSource, enabled = onLongPress != null && !recalled)
                     .then(if (isCall && pressed) Modifier.alpha(0.7f) else Modifier)
                     .then(
                         // 长按预览浮起：阴影跟着气泡走，而不是整行（行是全宽的）
@@ -251,7 +262,11 @@ internal fun Bubble(
                                         }
                                     }
                                 },
-                                onLongClick = { onLongPress(bubbleRect) },
+                                onLongClick = {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    val body = bodyCoords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: bubbleRect
+                                    onLongPress(com.libeyond.imandroid.ui.components.MenuAnchor(bubbleRect, body))
+                                },
                             )
                         } else Modifier
                     )

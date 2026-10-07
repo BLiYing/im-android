@@ -6,6 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -19,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
@@ -42,6 +47,7 @@ import com.composables.icons.lucide.X
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.components.MessageContextMenu
 import com.libeyond.imandroid.ui.components.SheetItem
+import com.libeyond.imandroid.ui.components.pressShrink
 import com.libeyond.imandroid.data.PendingAction
 import com.libeyond.imandroid.data.PendingMenu
 import com.libeyond.imandroid.data.UploadState
@@ -145,16 +151,30 @@ internal fun PendingActions(
     var open by remember { mutableStateOf(false) }
     var rect by remember { mutableStateOf(Rect.Zero) }
     val acts = PendingMenu.actions(contentType, failed, !copyText.isNullOrEmpty())
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(
-        Modifier.onGloballyPositioned { rect = it.boundsInWindow() }.then(if (acts.isEmpty()) Modifier else Modifier.combinedClickable(
-            onClick = {}, onLongClick = { open = true },
-            indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-        )),
+        Modifier.onGloballyPositioned { rect = it.boundsInWindow() }
+            // 与已发出的气泡同一套按压 → 浮起（2026-10-07 用户报「长按发送端与接收端效果不一样」：
+            // 待发气泡此前没有预览、原位也不隐藏，只压暗背景）。这一层是整行宽，待发恒在右侧，缩放中心贴右缘
+            .pressShrink(press, enabled = acts.isNotEmpty(), origin = PENDING_ORIGIN)
+            .then(if (acts.isEmpty()) Modifier else Modifier.combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    open = true
+                },
+                indication = null, interactionSource = press,
+            )),
     ) {
-        content()
-        PendingMenuPopup(open, rect, acts, copyText, onCancel) { open = false }
+        // 菜单开着时原位隐形（保留占位），由菜单里那份预览接管——同已发出消息的 ChatListItem.hidden
+        Box(Modifier.alpha(if (open) 0f else 1f)) { content() }
+        PendingMenuPopup(open, rect, acts, copyText, onCancel, preview = content) { open = false }
     }
 }
+
+/** 待发气泡（恒为自己发的、贴右侧）浮起 / 按压的中心：右缘居中。 */
+private val PENDING_ORIGIN = androidx.compose.ui.graphics.TransformOrigin(1f, 0.5f)
 
 /**
  * 待发菜单的弹层本体：单条待发气泡与宫格里的待发格共用（iOS 同一份 `messageActionsForMessage:`）。
@@ -168,6 +188,10 @@ internal fun PendingMenuPopup(
     acts: List<PendingAction>,
     copyText: String?,
     onCancel: () -> Unit,
+    /** 原位重绘的那一项（调用方负责把原位隐藏）。null = 只铺背景。 */
+    preview: (@Composable () -> Unit)? = null,
+    /** 浮起中心所在的那块；null = 整行右缘（待发恒在右侧）。 */
+    focus: Rect? = null,
     onDismiss: () -> Unit,
 ) {
     if (!open || acts.isEmpty()) return
@@ -191,10 +215,36 @@ internal fun PendingMenuPopup(
     }
     // MessageContextMenu 是**树内**的全屏覆盖层（聊天页根上才铺得开）；待发气泡/格子里没有那么大的地方，
     // 直接放会被裁在这一格里。包一层全屏 Dialog 把它抬到窗口级，锚点仍是窗口坐标。
+    // 背景模糊照样生效：LocalMenuBackdrop 会带进 Dialog，菜单在那里登记，模糊的是主窗口里的聊天页。
+    // 锚点是**主窗口**坐标，而 Dialog 窗口从状态栏下方开始——不换算的话预览与菜单整体下移一个状态栏高，
+    // 贴底的气泡菜单直接掉出屏幕（2026-10-07 OPPO 实测）。主窗口原点在这里取，Dialog 原点在里面量。
+    // 同理，Dialog 窗口还会比可见区高出一截：菜单的可用高度按主窗口的可见底边算，不按 Dialog 自己的高度。
+    val mainView = androidx.compose.ui.platform.LocalView.current
+    val mainOrigin = remember(anchor) {
+        IntArray(2).also { mainView.rootView.getLocationOnScreen(it) }.let { androidx.compose.ui.geometry.Offset(it[0].toFloat(), it[1].toFloat()) }
+    }
+    val mainBottom = mainOrigin.y + mainView.rootView.height
+    val density = androidx.compose.ui.platform.LocalDensity.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        MessageContextMenu(anchor = anchor, mine = true, items = items, onDismiss = onDismiss)
+        // 关掉系统给 Dialog 的那层默认压暗：背景由菜单自己的材质色 + 模糊负责，叠两层就是一片死黑
+        val dialogWindow = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        androidx.compose.runtime.SideEffect { dialogWindow?.setDimAmount(0f) }
+        var dialogOrigin by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
+        Box(Modifier.fillMaxSize().onGloballyPositioned { dialogOrigin = it.positionOnScreen() }) {
+            // 量到 Dialog 原点之前不画（只差一帧），免得先画在错位处再跳过去
+            val o = dialogOrigin ?: return@Box
+            val delta = mainOrigin - o
+            val visibleH = with(density) { (mainBottom - o.y).toDp() }
+            Box(Modifier.fillMaxWidth().height(visibleH)) {
+                MessageContextMenu(
+                    anchor = anchor.translate(delta), mine = true, items = items, onDismiss = onDismiss,
+                    focus = (focus ?: Rect(anchor.right - 1f, anchor.top, anchor.right, anchor.bottom)).translate(delta),
+                    preview = preview,
+                )
+            }
+        }
     }
 }

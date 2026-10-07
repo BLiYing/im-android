@@ -14,6 +14,8 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.protocol.MsgOp
+import com.libeyond.imandroid.ui.components.LiftPreview
+import com.libeyond.imandroid.ui.components.LocalMenuLift
 import com.libeyond.imandroid.ui.components.MessageContextMenu
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -75,20 +77,21 @@ internal fun ArchiveActionsHost(
         return
     }
 
+    val lift = LocalMenuLift.current
     MessageContextMenu(
         anchor = anchor,
         // 归档行是整行/整格的，菜单一律靠左——这里没有"谁发的"这个方向感
         mine = false,
-        // 归档项不做原位重绘：宫格那一格是张远端图，重绘要再拉一次；
-        // 行则本来就在原位看得见。压暗背景 + 贴着它弹菜单已经说清"操作的是这一项"。
-        preview = null,
+        // 被长按的那一行 / 那一格原位浮起（iOS 表格行的 UIContextMenu）：画的是它自己录下的层
+        // （MenuLift.kt），不按数据重绘——宫格那一格是远端图，重绘要再拉一次。宿主没提供 LocalMenuLift 时只铺背景。
+        preview = lift?.let { { LiftPreview(it) } },
+        // 菜单项点完由菜单自己收起（带动画）再回调 onDismiss，这里不必再关一次
         items = buildArchiveMenu(actions) { a ->
             runArchiveAction(
                 action = a, client = client, convId = convId, owner = owner, target = target,
                 scope = scope, onForwardPicker = onForwardPicker,
                 onLocateInChat = onLocateInChat, onChanged = onChanged, onToast = onToast,
             )
-            onDismiss()
         },
         onDismiss = onDismiss,
     )

@@ -40,11 +40,19 @@ fun MemberProfileHost(
     val shownName = f?.nickname?.ifBlank { null } ?: name
     val shownAvatar = f?.avatarUrl?.ifBlank { null } ?: avatarUrl
     val stubConv = remember(userId, shownName, shownAvatar) { client.conversationStubFor(userId, shownName, shownAvatar) }
+    val armChat = LocalChatArmSink.current
     ChatDetailHost(
         client = client,
         conv = stubConv,
         knownFriends = knownFriends,
         showsMessagePill = true,
+        // 「搜索」pill：开与此人的单聊并进会话内搜索（iOS `openChatForInChatSearch`）。
+        // 此前没接这一路，走的是 ChatDetailHost 的空默认实现——点了毫无反应（2026-10-07 用户报）。
+        // 待办先投给导航层，再走调用方自己的 onOpenChat（关掉所在覆盖层 + 换会话）。
+        onSearchInChat = {
+            armChat(ChatArm(openSearch = true, convId = stubConv.convId))
+            onOpenChat(stubConv)
+        },
         onOpenChat = onOpenChat,
         onBack = onBack,
     )

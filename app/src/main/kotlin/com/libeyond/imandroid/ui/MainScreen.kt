@@ -63,6 +63,9 @@ import com.libeyond.imandroid.ui.components.MessageContextMenu
 import com.libeyond.imandroid.ui.components.MuteDurationSheet
 import com.libeyond.imandroid.ui.components.PushBase
 import com.libeyond.imandroid.ui.components.PushTransition
+import com.libeyond.imandroid.ui.components.ProvideMenuSurface
+import com.libeyond.imandroid.ui.components.menuBackdrop
+import com.libeyond.imandroid.ui.components.rememberMenuSurface
 import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.ui.components.rememberMuteTick
 import kotlinx.coroutines.launch
@@ -180,12 +183,16 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
      * 为什么要绕这一道、为什么两件事合成一个类型，见 [ChatArm]。
      */
     var chatArm by remember { mutableStateOf(ChatArm()) }
+    // 回到会话列表 = 没有聊天页能接待办了：清掉，免得一件没送达的（如资料页「搜索」换会话没成）
+    // 留到以后某次再进那个会话时突然开出搜索态
+    LaunchedEffect(openConv == null) { if (openConv == null) chatArm = ChatArm() }
 
     // 会话列表滚动位置：进聊天页时 Tab 层整个离开组合，放在 ChatsHost/列表里会随之丢失（返回回顶部）
     val chatsListState = androidx.compose.runtime.saveable.rememberSaveable(saver = androidx.compose.foundation.lazy.LazyListState.Saver) {
         androidx.compose.foundation.lazy.LazyListState()
     }
     var menuFor by remember { mutableStateOf<ConversationEntity?>(null) }
+    val tabMenuSurface = rememberMenuSurface()
     var menuAnchor by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     // 会话列表左滑/长按「免打扰」的时长菜单（NOTIFICATIONS_P1_DESIGN §4.1/§4.2）：非空 = 敞开着，
     // 叠在最外层（同 InAppBannerHost 这一层），不是 ConversationMenu 自己的子状态——两个弹层不能
@@ -202,10 +209,17 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     // 应用内横幅（NOTIFICATIONS_P1_DESIGN §1.2）挂在这一层最上面——不是更外层的 AppRoot：
     // 点横幅要"以点会话列表行同一路径"进会话，那条路径就是下面这个 `openConv = it`，
     // 是本函数的私有导航状态，AppRoot 那一层够不着（与 QrRouteHost 挂在这里的理由同构）。
+    /**
+     * 换会话的公共收口。**同一会话不换实体**：资料页「搜索」pill 可能指向正开着的这个单聊
+     * （单聊详情里点对方名片 → 搜索），此时 openConv 已是带未读 / 已读位点的真实会话，
+     * 换成资料页手里那份桩（stub）只会丢字段；待办由 chatArm 送达，用不着换页。
+     */
+    val switchTo: (ConversationEntity) -> Unit = { c -> if (openConv?.convId != c.convId) openConv = c }
+    androidx.compose.runtime.CompositionLocalProvider(LocalChatArmSink provides { chatArm = it }) {
     Box(Modifier.fillMaxSize()) {
         // 扫码/点链接加群路由宿主：挂在这里（不是更外层的 AppRoot）是因为它要改 openConv 来进群聊/单聊，
         // 那份状态是本函数的私有变量，宿主离它太远够不着（QrRouteHost.kt 头注释）。
-        QrRouteHost(client = client, onOpenChat = { openConv = it }) {
+        QrRouteHost(client = client, onOpenChat = switchTo) {
             // —— 一级 push：Tab 根 ↔ 聊天页 ——
             // 进聊天页时整个 Tab 层（连同底栏）向左让开、转场结束后离开组合——与此前 early return 同一语义
             PushTransition(
@@ -216,6 +230,9 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
             ) { conv ->
                 if (conv == null) {
                     Box(Modifier.fillMaxSize().background(IMTheme.colors.groupedBackground)) {
+                        // 长按会话：整页模糊 + 那一行原位浮起（iOS 会话列表的 UIContextMenu）；菜单画在被模糊的这层之外
+                        ProvideMenuSurface(tabMenuSurface) {
+                        Box(Modifier.fillMaxSize().menuBackdrop(tabMenuSurface.backdrop)) {
                         when (tab) {
                             Tab.Chats -> ChatsHost(
                                 client = client,
@@ -238,12 +255,14 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                 onRouteConsumed = { settingsRoute = null },
                             )
                         }
+                        }
                         menuFor?.let { target ->
                             ConversationMenu(
                                 client, target, menuAnchor, scope, muteTick,
                                 onRequestMuteSheet = { conv -> menuFor = null; muteSheetFor = conv },
                                 onDismiss = { menuFor = null },
                             )
+                        }
                         }
                     }
                 } else {
@@ -267,10 +286,11 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                         infoGallery = true
                                         infoForConv = conv
                                     },
-                                    arm = chatArm,
+                                    // 只交归这一页的待办：换会话转场期间旧页还在组合里（见 ChatArm.convId）
+                                    arm = chatArm.forConv(conv.convId),
                                     onArmConsumed = { chatArm = ChatArm() },
                                     covered = covered,
-                                    onOpenChat = { stub -> openConv = stub },
+                                    onOpenChat = switchTo,
                                     // 返回钮红圈 = 其它会话的未读总数（iOS totalUnreadExcludingConv）；按 convId 排除，不含本会话
                                     backUnread = conversations.orEmpty().filter { it.convId != conv.convId }.sumOf { it.unread },
                                 )
@@ -285,7 +305,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                             if (info != null) {
                                 Box(Modifier.fillMaxSize().blockPointerInput()) {
                                     InfoPage(client, info, knownFriends, infoTab, infoGallery, infoApproval,
-                                        onOpenChat = { stub -> infoForConv = null; openConv = stub },
+                                        onOpenChat = { stub -> infoForConv = null; switchTo(stub) },
                                         onArm = { arm -> infoForConv = null; chatArm = arm },
                                         onBack = { infoForConv = null },
                                         onLeft = { infoForConv = null; openConv = null },
@@ -324,6 +344,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
             )
         }
     }
+    }
 }
 
 /**
@@ -347,10 +368,12 @@ private fun ConversationMenu(
     onDismiss: () -> Unit,
 ) {
     val mutedNow = MuteState.isMutedNow(target.muted, target.muteUntil, nowMs)
+    val lift = com.libeyond.imandroid.ui.components.LocalMenuLift.current
     MessageContextMenu(
         anchor = anchor,
         // 会话行是整行全宽的，菜单靠左（跟着行的起始边，与 iOS 的 preview 锚点同侧）
         mine = false,
+        preview = lift?.let { { com.libeyond.imandroid.ui.components.LiftPreview(it) } },
         items = ConversationActions
             .availableFor(target.pinnedAt, mutedNow, target.markedUnread, target.unread)
             .map { a ->
@@ -424,6 +447,8 @@ private fun InfoPage(
             knownFriends = knownFriends,
             onSearchInChat = { onArm(ChatArm(openSearch = true)) },
             onLocateInChat = { seq -> onArm(ChatArm(locateSeq = seq)) },
+            // 「名片」页签点开的资料页里「消息」/「搜索」要能换会话——此前没传，走空默认实现，点了没反应
+            onOpenChat = onOpenChat,
             initialTab = initialTab ?: com.libeyond.imandroid.data.DetailTab.Media,
             galleryOnly = galleryOnly,
             onBack = onBack,

@@ -204,6 +204,28 @@ fun rememberChatLocator(
 data class ChatArm(
     val openSearch: Boolean = false,
     val locateSeq: Long = 0L,
+    /**
+     * 这件待办归哪个会话。空串 = 当前开着的那个（详情页 / 群资料关掉回原聊天页，一直是这种）。
+     *
+     * 资料页「搜索」pill 是**换会话**再开搜索（[LocalChatArmSink]）：换会话有一段 push 转场，
+     * 转场期间**旧聊天页仍在组合里**，不带归属的话它的 `LaunchedEffect(arm)` 会先把待办吃掉并复位，
+     * 新开的那一页反而什么都收不到。
+     */
+    val convId: String = "",
 ) {
     val isEmpty: Boolean get() = !openSearch && locateSeq <= 0L
+
+    /** 交给 [targetConvId] 那一页的待办：不归它的一律当空（见 [convId]）。 */
+    fun forConv(targetConvId: String): ChatArm =
+        if (convId.isEmpty() || convId == targetConvId) this else ChatArm()
 }
+
+/**
+ * 「换到某会话并顺带做件事」的投递口（目前只有资料页「搜索」pill：开与此人的单聊并进搜索态，
+ * 对齐 iOS `IMChatDetailViewController` 的 `openChatForInChatSearch` + `beginInChatSearch`）。
+ *
+ * 用 CompositionLocal 而不是逐层加参数：资料页有六个入口（通讯录 / 群资料 / 收藏 / 扫码 / 聊天页覆盖层 /
+ * 详情页名片），每个都只负责「关掉自己 + 换会话」（它们已有的 `onOpenChat`），待办只需先投到
+ * MainScreen 的 `chatArm` 里——逐层透传要改六条调用链，且每条都只是转手。默认空实现 = 不在 MainScreen 之下。
+ */
+val LocalChatArmSink = androidx.compose.runtime.staticCompositionLocalOf<(ChatArm) -> Unit> { {} }

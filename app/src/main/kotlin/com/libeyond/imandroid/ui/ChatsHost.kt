@@ -156,8 +156,9 @@ fun ChatsHost(
     plusAnchor?.let { anchor ->
         MessageContextMenu(
             anchor = anchor,
-            // ＋ 在右上角：菜单靠右、贴在按钮下方
+            // ＋ 在右上角：菜单靠右、贴在按钮下方；按钮弹出的小菜单，背景几乎不压暗（iOS IMPopoverCard）
             mine = true,
+            popover = true,
             items = listOf(
                 SheetItem(stringResource(R.string.conv_menu_scan), icon = Lucide.ScanQrCode) {
                     openScan?.invoke() ?: run { toast = Str.s(R.string.conv_menu_scan_unavailable) }

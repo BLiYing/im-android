@@ -12,6 +12,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import com.libeyond.imandroid.ui.components.menuBackdrop
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.CardContent
@@ -157,6 +161,8 @@ fun ChatDetailHost(
     // 归档长按菜单（媒体/文件/语音/链接四格共用；接线在 ArchiveActionsHost）
     var archiveMenuFor by remember(conv.convId) { mutableStateOf<ArchiveTarget?>(null) }
     var archiveMenuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
+    // 长按时页面模糊 + 那一行原位浮起（iOS UIContextMenu；MenuLift.kt / MenuBackdrop.kt）
+    val menuSurface = com.libeyond.imandroid.ui.components.rememberMenuSurface()
     /** 归档要转发的那一项（长按菜单与查看器「更多」共用这一份状态，见 ArchiveActionsHost 的注释）。 */
     var archiveForward by remember(conv.convId) { mutableStateOf<ArchiveTarget?>(null) }
 
@@ -252,7 +258,8 @@ fun ChatDetailHost(
                     onBack = { profile = false },
                 )
             }
-            ChatDetailPage.Detail -> {
+            ChatDetailPage.Detail -> com.libeyond.imandroid.ui.components.ProvideMenuSurface(menuSurface) {
+                Box(Modifier.fillMaxSize().menuBackdrop(menuSurface.backdrop)) {
                 ChatDetailScreen(
                     conv = conv,
                     title = title,
@@ -341,6 +348,7 @@ fun ChatDetailHost(
                     isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
                     onBack = onBack,
                 )
+                }
             }
         }
     }
@@ -488,6 +496,7 @@ fun ChatDetailHost(
     }
 
     // 归档长按菜单 + 转发选择页（与群资料那侧共用同一份接线）
+    com.libeyond.imandroid.ui.components.ProvideMenuSurface(menuSurface) {
     ArchiveActionsHost(
         client = client,
         convId = conv.convId,
@@ -504,6 +513,7 @@ fun ChatDetailHost(
         onForwardPicker = { archiveForward = it },
         onDismiss = { archiveMenuFor = null },
     )
+    }
 
     // 归档转发选择页（长按菜单与查看器「更多」共用）
     archiveForward?.let { t ->

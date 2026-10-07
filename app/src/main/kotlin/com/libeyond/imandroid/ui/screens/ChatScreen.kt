@@ -102,7 +102,7 @@ fun ChatScreen(
     onTyping: () -> Unit,
     /** 长按一条消息。 */
     /** 长按一条消息，带上气泡在窗口里的矩形（菜单按它定位）。 */
-    onLongPress: (MessageEntity, Rect) -> Unit,
+    onLongPress: (MessageEntity, com.libeyond.imandroid.ui.components.MenuAnchor) -> Unit,
     /** 点开媒体查看器。 */
     onOpenMedia: (MessageEntity) -> Unit,
     /** 当前引用的目标；null=没在引用。 */

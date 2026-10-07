@@ -49,6 +49,7 @@ import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.TimeFormat
+import com.libeyond.imandroid.ui.components.pressShrink
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -289,20 +290,36 @@ private fun AlbumTileView(
     // 豁免掉的话失效的格子会装作正常、点进去是空查看器，而不是显示 ⊘。
     val ungated = gate == null ||
         (mine && gate.state.phase != com.libeyond.imandroid.data.DownloadPhase.Expired)
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(
-        modifier = Modifier.size(width, size).background(c.subtleFill)
+        modifier = Modifier.size(width, size)
             .onGloballyPositioned { tileRect.value = it.boundsInWindow() }
-            .alpha(if (hidden) 0f else 1f)
+            // 按住这一格先缩一下（iOS 同），菜单预览从同一比例弹起
+            .pressShrink(press, enabled = !selecting)
+            .background(c.subtleFill)
+            // 待发格的菜单开着时同样原位隐形，由菜单里的预览接管（同已发出那几格的 hidden）
+            .alpha(if (hidden || pendingOpen) 0f else 1f)
             .combinedClickable(
+                interactionSource = press,
+                indication = androidx.compose.foundation.LocalIndication.current,
                 // 没下下来的格子点一下是下载（开始 / 暂停 / 重试，失效不做事），**不打开**（iOS `IMAlbumCell` 同）
                 // 多选态：一律是「勾选这一格」，不触发下载也不开查看器
                 onClick = { if (!selecting && !ungated && gate != null && !gate.ready) gate.onTap() else onTap() },
                 onLongClick = if (selecting) null else {
-                    { if (pendingActs.isNotEmpty()) pendingOpen = true else onLongPress(tileRect.value) }
+                    {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        if (pendingActs.isNotEmpty()) pendingOpen = true else onLongPress(tileRect.value)
+                    }
                 },
             ),
     ) {
-        PendingMenuPopup(pendingOpen, tileRect.value, pendingActs, null, m.onCancelUpload) { pendingOpen = false }
+        PendingMenuPopup(
+            pendingOpen, tileRect.value, pendingActs, null, m.onCancelUpload,
+            // 预览就是这一格自己（不响应点击 / 长按）；浮起中心是格子中心
+            preview = { AlbumTileView(m, size, host, useTls, isGroup, mine, selecting = true, width = width) },
+            focus = tileRect.value,
+        ) { pendingOpen = false }
         val frosted = rememberFrostedPainter(m.thumb)
         AsyncImage(
             // 待发那格的 content 是本地 content:// uri——Coil 直接能加载，所以选完立刻有图、

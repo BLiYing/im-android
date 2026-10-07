@@ -38,7 +38,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import com.libeyond.imandroid.ui.components.IMToast
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.runtime.CompositionLocalProvider
+import com.libeyond.imandroid.ui.components.LocalMenuBackdrop
+import com.libeyond.imandroid.ui.components.menuBackdrop
+import com.libeyond.imandroid.ui.components.rememberMenuBackdrop
 import com.libeyond.imandroid.data.ChatWindow
 import com.libeyond.imandroid.data.ChatWindows
 import com.libeyond.imandroid.data.DisplayName
@@ -208,7 +211,8 @@ fun ChatHost(
     // 相机与系统文件选择器这两条「出 App 再回来」的路（含相机产物的跨进程落点），见 ChatMediaLaunchers.kt
     val launchers = rememberChatMediaLaunchers(conv.convId, scope, mediaSend) { toast = it }
     /** 长按菜单锚点：被长按气泡在窗口坐标系里的矩形，菜单按它定位（对齐 iOS UIContextMenu）。 */
-    var menuAnchor by remember(conv.convId) { mutableStateOf(Rect.Zero) }
+    val menuBackdrop = rememberMenuBackdrop()
+    var menuAnchor by remember(conv.convId) { mutableStateOf(com.libeyond.imandroid.ui.components.MenuAnchor.Zero) }
 
     // initial = null：区分「还没读到」与「读到了、就是空的」——首屏定位要等两路都到（ChatScreen.rowsReady）。
     // 换窗时不会退回 null：collectAsState 的值不随换掉的 flow 重置，新一窗到之前保留旧那一窗。
@@ -317,7 +321,12 @@ fun ChatHost(
 
     // 被盖住时不画、不进无障碍树：它还在组合里（为了返回保位），但读屏不该念出一页看不见的聊天。
     // **只包 ChatScreen**：吐司等浮层若也在这个 Box 里，会跟着隐形、计时却照走——提示就丢了
-    Box(Modifier.fillMaxSize().then(if (covered) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier)) {
+    // 长按菜单开着时整页（标题栏 / 列表 / 输入框）模糊——iOS UIContextMenu 同口径（MenuBackdrop.kt）
+    Box(
+        Modifier.fillMaxSize().menuBackdrop(menuBackdrop)
+            .then(if (covered) Modifier.alpha(0f).clearAndSetSemantics {} else Modifier),
+    ) {
+    CompositionLocalProvider(LocalMenuBackdrop provides menuBackdrop) {
     ChatScreen(
         convId = conv.convId,
         title = ChatSubtitle.title(snapshotTitle, conv.isGroup, groupRemark, gs.info?.name?.ifBlank { DisplayName.UNNAMED_GROUP }),
@@ -472,6 +481,7 @@ fun ChatHost(
         covered = covered,
     )
     }
+    }
 
     BatchDeleteConfirm(sel, client, conv.convId, conv.isGroup, iAmManager) { toast = it }
     FriendRequestPrompt(client, askFriend, onDismiss = { askFriend = null }, onToast = { toast = it }) { friendAsked = true }
@@ -565,6 +575,7 @@ fun ChatHost(
     // —— 消息长按菜单 ——（拼装与原位重绘都在 MessageMenuItems.kt）
     menuFor?.let { target ->
         ChatMessageMenu(
+            backdrop = menuBackdrop,
             onToast = { toast = it },
             target = target,
             anchor = menuAnchor,

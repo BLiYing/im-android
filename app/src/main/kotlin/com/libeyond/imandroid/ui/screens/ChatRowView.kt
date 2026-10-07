@@ -96,7 +96,7 @@ internal fun ChatRowView(
     rows: List<ChatRow>,
     i: Int,
     style: ChatRowStyle,
-    onLongPress: (MessageEntity, Rect) -> Unit = { _, _ -> },
+    onLongPress: (MessageEntity, com.libeyond.imandroid.ui.components.MenuAnchor) -> Unit = { _, _ -> },
     onOpenMedia: (MessageEntity) -> Unit = {},
     onOpenUser: (String) -> Unit = {},
     onRetry: (String) -> Unit = {},
@@ -205,7 +205,7 @@ internal fun ChatRowView(
             // 长按**哪一格就带哪一条**（此前恒传 first()，撤回/引用会作用到第一张上）。
             // 还在传的那格无从下手（撤回/引用都要 conv_seq），不响应。
             onLongPressTile = { idx, rect ->
-                (r.members.getOrNull(idx) as? AlbumMember.Sent)?.let { onLongPress(it.msg, rect) }
+                (r.members.getOrNull(idx) as? AlbumMember.Sent)?.let { onLongPress(it.msg, com.libeyond.imandroid.ui.components.MenuAnchor(rect)) }
             },
             hiddenIndex = if (hiddenTile > 0L) {
                 r.members.indexOfFirst { (it as? AlbumMember.Sent)?.msg?.convSeq == hiddenTile }

@@ -6,6 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.MessageCircle
+import com.composables.icons.lucide.UserPlus
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.GroupPermissions
 import com.libeyond.imandroid.sdk.IMClient
@@ -14,9 +17,16 @@ import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.components.ActionSheet
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.SheetItem
+import com.libeyond.imandroid.ui.components.LiftPreview
+import com.libeyond.imandroid.ui.components.LocalMenuLift
+import com.libeyond.imandroid.ui.components.MessageContextMenu
 
 /**
- * 群成员长按菜单（设/撤管理员、禁言、转让、移出）。
+ * 群成员长按菜单（发送消息 / 添加好友，设/撤管理员、禁言、转让、移出）。
+ *
+ * **原位浮起 + 贴着这一行弹**（2026-10-07，对齐 iOS 成员行的 `UIContextMenu`）：此前是底部 ActionSheet，
+ * 按住的那一行毫无标记。预览是那一行自己录下的层（[LiftPreview]），锚点也从那里取。
+ * 首项照 iOS：好友 →「发送消息」，非好友 →「添加好友」（非好友发消息会被 200103 拒收）；之后才是管理项。
  *
  * 从 `GroupInfoHost` 拆出（CODING_STYLE §7②）：那个文件是接线层且已经贴着 600 行硬闸，
  * 而"某个成员能对他做哪几件事"是一块自洽的东西——判据全在纯函数
@@ -34,13 +44,28 @@ internal fun GroupMemberMenu(
     myUid: String,
     client: IMClient,
     convId: String,
+    knownFriends: Map<String, com.libeyond.imandroid.sdk.api.FriendEntry>,
     runManage: (String, suspend () -> Unit) -> Unit,
+    /** 「发送消息」：换到与他的单聊（宿主关掉群资料）。 */
+    onOpenChat: (com.libeyond.imandroid.data.db.ConversationEntity) -> Unit,
+    /** 「添加好友」：交宿主弹验证消息（请求要挂在宿主的作用域上，本菜单点完就离开组合）。 */
+    onAddFriend: (GroupMember) -> Unit,
     onDismiss: () -> Unit,
 ) {
     // 二级：禁言时长选择单 / 移出二次确认。菜单本身点完就关，所以这两层必须挂在**本组件**（它不随菜单项点击离开组合）
     var pickingMute by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf<String?>(null) } // "cooldown" | "forever"
     val actions = buildList {
+        // 点到自己不给任何项（iOS 同：自己那一行长按不弹菜单）
+        if (member.userId != myUid) {
+            if (knownFriends[member.userId]?.status == com.libeyond.imandroid.sdk.api.FriendEntry.ACCEPTED) {
+                add(SheetItem(stringResource(R.string.group_member_action_send_message), icon = Lucide.MessageCircle) {
+                    onOpenChat(client.conversationStubFor(member.userId, member.nickname, member.avatarUrl))
+                })
+            } else {
+                add(SheetItem(stringResource(R.string.common_add_friend), icon = Lucide.UserPlus) { onAddFriend(member) })
+            }
+        }
         if (GroupPermissions.canSetRole(info, member, myUid)) {
             val makeAdmin = !member.isAdmin
             val label = stringResource(
@@ -114,10 +139,19 @@ internal fun GroupMemberMenu(
         )
         return
     }
-    // 点「禁言…」/「移出…」时菜单项先把二级状态置位、随后 ActionSheet 才调 onDismiss——此时不能把宿主的 memberMenu 清掉，
-    // 否则本组件离开组合、二级层跟着没了
-    ActionSheet(
-        title = member.displayName, items = actions,
-        onDismiss = { if (!pickingMute && confirmRemove == null) onDismiss() },
-    )
+    // 点「禁言…」/「移出…」时菜单项先把二级状态置位（本层随即换成二级层），菜单收起后才回调——
+    // 此时不能把宿主的 memberMenu 清掉，否则本组件离开组合、二级层跟着没了
+    val lift = LocalMenuLift.current
+    if (lift != null) {
+        MessageContextMenu(
+            anchor = lift.area, mine = false, items = actions,
+            preview = { LiftPreview(lift) },
+            onDismiss = { if (!pickingMute && confirmRemove == null) onDismiss() },
+        )
+    } else {
+        ActionSheet(
+            title = member.displayName, items = actions,
+            onDismiss = { if (!pickingMute && confirmRemove == null) onDismiss() },
+        )
+    }
 }

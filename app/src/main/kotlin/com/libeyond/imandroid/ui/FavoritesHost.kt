@@ -48,6 +48,11 @@ import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.LocalOpenLink
 import com.libeyond.imandroid.ui.components.MessageContextMenu
+import com.libeyond.imandroid.ui.components.LiftPreview
+import com.libeyond.imandroid.ui.components.LocalMenuLift
+import com.libeyond.imandroid.ui.components.ProvideMenuSurface
+import com.libeyond.imandroid.ui.components.menuBackdrop
+import com.libeyond.imandroid.ui.components.rememberMenuSurface
 import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.ui.components.blockPointerInput
 import com.libeyond.imandroid.ui.screens.FavoritePickUi
@@ -260,6 +265,9 @@ internal fun FavoritesHost(
     LaunchedEffect(chatMode, list.items.size, list.hasMore, list.loading) { if (chatMode && onPicked == null) list.loadMore(client, scope) }
     val srcGroups = remember(list.items) { FavoriteSources.group(list.items, owner) }
     fun srcName(k: String) = FavoriteSources.nameOf(k, convById[k])
+    // 长按收藏：整页模糊 + 那一行 / 那一格原位浮起（iOS 收藏页的 UIContextMenu；MenuLift.kt）
+    val menuSurface = rememberMenuSurface()
+    ProvideMenuSurface(menuSurface) { Box(Modifier.fillMaxSize().menuBackdrop(menuSurface.backdrop)) {
     if (onPicked == null && chatMode && sourceKey == null) {
         FavoriteSourcesScreen(
             groups = remember(srcGroups, query, convById) { FavoriteSources.filter(srcGroups, query, ::srcName) },
@@ -294,6 +302,7 @@ internal fun FavoritesHost(
         onBack = { if (sourceKey != null) { sourceKey = null; tab = null; query = "" } else onBack() },
         pick = pickUi,
     )
+    } }
 
     // —— 打开之后的几页，逐层盖上去（顺序 = 返回键关闭的逆序）——
     reading?.let { text ->
@@ -347,6 +356,7 @@ internal fun FavoritesHost(
     }
 
     menuFor?.let { f ->
+        ProvideMenuSurface(menuSurface) {
         FavoriteMenu(
             client = client, target = f, anchor = menuAnchor, scope = scope,
             onCopy = { text -> clipboard.setText(AnnotatedString(text)); toast = Str.s(R.string.common_copied) },
@@ -359,6 +369,7 @@ internal fun FavoritesHost(
             onToast = { toast = it },
             onDismiss = { menuFor = null },
         )
+        }
     }
 
     forwarding?.let { f ->
@@ -404,9 +415,11 @@ private fun FavoriteMenu(
     val isVideo = target.contentType == ContentType.VIDEO
     val phase = client.downloads.stateOf(target.content, isVideo).phase
     val downloading = phase == DownloadPhase.Downloading || phase == DownloadPhase.Paused
+    val lift = LocalMenuLift.current
     MessageContextMenu(
         anchor = anchor,
         mine = false,
+        preview = lift?.let { { LiftPreview(it) } },
         items = Favorites.actionsFor(target, downloading).map { a ->
             // 点完菜单自己会关（MessageContextMenu 在 onClick 之后调 onDismiss）
             SheetItem(a.label, a.destructive, icon = favoriteActionIcon(a)) {

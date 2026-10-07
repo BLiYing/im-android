@@ -71,7 +71,7 @@ internal fun ChatListItem(
     menuForSeq: Long,
     highlightSeq: Long,
     onToggleSelect: (MessageEntity) -> Unit,
-    onLongPress: (MessageEntity, Rect) -> Unit,
+    onLongPress: (MessageEntity, com.libeyond.imandroid.ui.components.MenuAnchor) -> Unit,
     onOpenMedia: (MessageEntity) -> Unit,
     onOpenUser: (String) -> Unit,
     onRetry: (String) -> Unit,

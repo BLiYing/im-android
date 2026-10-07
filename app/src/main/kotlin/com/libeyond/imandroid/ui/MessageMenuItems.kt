@@ -162,8 +162,10 @@ internal fun archiveActionIcon(a: ArchiveAction) = when (a) {
  */
 @Composable
 internal fun ChatMessageMenu(
+    /** 聊天页的模糊状态：菜单登记在它上面，聊天页才会糊（见 MenuBackdrop.kt）。 */
+    backdrop: com.libeyond.imandroid.ui.components.MenuBackdropState,
     target: MessageEntity,
-    anchor: Rect,
+    anchor: com.libeyond.imandroid.ui.components.MenuAnchor,
     rows: List<ChatRow>,
     rowStyle: ChatRowStyle,
     client: IMClient,
@@ -209,8 +211,10 @@ internal fun ChatMessageMenu(
                 .getOrNull()?.takeIf { it.enabled }
         }
     }
+    androidx.compose.runtime.CompositionLocalProvider(com.libeyond.imandroid.ui.components.LocalMenuBackdrop provides backdrop) {
     MessageContextMenu(
-        anchor = anchor,
+        anchor = anchor.area,
+        focus = anchor.focus,
         mine = target.sender == owner,
         preview = {
             // **与列表本身共用同一段渲染**（ChatRowView）：预览与原位由两份代码画时，
@@ -226,7 +230,7 @@ internal fun ChatMessageMenu(
             if (row is ChatRow.Album) {
                 // 宫格浮起的是**手指按住的那一格**（同 iOS）：anchor 就是那一格的矩形，
                 // 这里按它铺满即可（格子是正方形）。
-                val tileSize = with(androidx.compose.ui.platform.LocalDensity.current) { anchor.width.toDp() }
+                val tileSize = with(androidx.compose.ui.platform.LocalDensity.current) { anchor.area.width.toDp() }
                 Box(
                     Modifier
                         .shadow(12.dp, RoundedCornerShape(IMTheme.appearance.bubbleRadius))
@@ -310,6 +314,7 @@ internal fun ChatMessageMenu(
         },
         onDismiss = onDismiss,
     )
+    }
 }
 
 /**

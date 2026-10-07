@@ -52,6 +52,8 @@ enum class ContactsPage(val depth: Int) {
 enum class MePage(val depth: Int) {
     List(PushNav.ROOT_DEPTH),
     Profile(1),
+    /** 右上「编辑」直进的编辑态资料页；取消/保存都回「我」页，不经过只读态（2026-10-07 用户定）。 */
+    ProfileEdit(1),
     Qr(1),
     Devices(1),
     DataStorage(1),

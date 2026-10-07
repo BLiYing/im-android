@@ -101,10 +101,17 @@ fun MeHost(
             MePage.Language -> LanguageHost(onBack = { page = MePage.List })
             MePage.Appearance -> AppearanceHost(onBack = { page = MePage.List })
             MePage.PowerSaving -> PowerSavingHost(client = client, onBack = { page = MePage.List })
-            MePage.Profile -> MyProfileHost(
+            MePage.Profile, MePage.ProfileEdit -> MyProfileHost(
                 client = client,
                 card = me,
-                onChanged = { me = it; client.cacheMyProfile(it) },
+                // 读转场渲染的 p 而不是实时的 page：退场动画那几百毫秒里本页仍在组合，page 已是 List
+                startEditing = p == MePage.ProfileEdit,
+                onChanged = {
+                    me = it
+                    client.cacheMyProfile(it)
+                    // 直进编辑的一趟保存后直接回「我」页（见 startEditing），「已保存」吐司改由本页出
+                    if (p == MePage.ProfileEdit) toast = Str.s(R.string.profile_saved_toast)
+                },
                 onBack = { page = MePage.List },
             )
             MePage.List -> {
@@ -117,6 +124,7 @@ fun MeHost(
                         languageLabel = languageCurrentLabel(languagePref, LanguageStore.resolved),
                         scrollState = listScroll,
                         onOpenProfile = { page = MePage.Profile },
+                        onOpenProfileEdit = { page = MePage.ProfileEdit },
                         onOpenQr = { page = MePage.Qr },
                         onOpenDevices = { page = MePage.Devices },
                         onOpenDataStorage = { page = MePage.DataStorage },

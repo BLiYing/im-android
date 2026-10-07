@@ -73,6 +73,15 @@ data class IMColors(
     // --- 遮罩 / 阴影 / 中性填充 ---
     val overlay: Color,
     val overlayStrong: Color,
+    /**
+     * 长按菜单的背景罩（对齐 iOS `UIContextMenu`：底下内容高斯模糊 + 一层随明暗切换的材质色）。
+     * [menuScrim] 叠在模糊之上（Android 12+）；[menuScrimFlat] 是没有模糊时（Android 11 及以下）的纯色替身，
+     * 要更不透明才能像 iOS 那样「几乎看不到底下的内容」。浅色是浅灰材质、深色是黑——不再一律压黑。
+     */
+    val menuScrim: Color,
+    val menuScrimFlat: Color,
+    /** 按钮弹出的小菜单（右上角 ＋）的背景：几乎不压暗（iOS `IMPopoverCard` 的 backdrop 是黑 α6%）。 */
+    val popoverScrim: Color,
     val shadowSoft: Color,
     val shadowStrong: Color,
     val subtleFill: Color,
@@ -146,6 +155,9 @@ val LightIMColors = IMColors(
 
     overlay = Color(0x66000000),
     overlayStrong = Color(0xB8000000),
+    menuScrim = Color(0x8CF2F2F7),
+    menuScrimFlat = Color(0xF0F2F2F7),
+    popoverScrim = Color(0x0F000000),
     shadowSoft = Color(0x2E000000),
     shadowStrong = Color(0x47000000),
     subtleFill = Color(0x0D1D2129),
@@ -204,6 +216,9 @@ val DarkIMColors = IMColors(
 
     overlay = Color(0x66000000),
     overlayStrong = Color(0xB8000000),
+    menuScrim = Color(0x8C000000),
+    menuScrimFlat = Color(0xE6000000),
+    popoverScrim = Color(0x26000000),
     shadowSoft = Color(0x2E000000),
     shadowStrong = Color(0x47000000),
     subtleFill = Color(0x12FFFFFF),
