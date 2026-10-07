@@ -118,7 +118,7 @@ fun CreateGroupScreen(
 
         val visibleIds = remember(filtered) { filtered.map { it.userId } }
         if (GroupSelectAll.isVisible(visibleIds)) {
-            val allOn = GroupSelectAll.allSelected(selected, visibleIds)
+            val allOn = GroupSelectAll.showsDeselect(selected, visibleIds, GroupSelectAll.limitOf(maxMembers))
             // 不随列表滚动（在 LazyColumn 之外）；点击区含文字左右各 8dp
             Row(Modifier.fillMaxWidth().height(32.dp).padding(end = d.space4 - 8.dp), horizontalArrangement = Arrangement.End) {
                 Box(

@@ -46,6 +46,10 @@ enum class ContactsPage(val depth: Int) {
     Groups(1),
     Profile(1),
     CreateGroup(2),
+    ;
+
+    /** 返回落到哪一页：建群是从「群聊」列表点进去的，返回回到它（此前一律回通讯录首页，2026-10-07 用户报）。 */
+    val parent: ContactsPage get() = if (this == CreateGroup) Groups else List
 }
 
 /** 「我」Tab 里的页面（对齐 iOS `IMSettingsViewController` push 出去的几页）。 */

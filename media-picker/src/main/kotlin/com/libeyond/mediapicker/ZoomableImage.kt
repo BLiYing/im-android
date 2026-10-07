@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,7 +50,13 @@ fun ZoomableImage(
      * `IMMediaViewerViewController.showThumbPlaceholder` 先画内嵌 thumb 的模糊版，原图到达后原地替换。
      */
     placeholder: androidx.compose.ui.graphics.painter.Painter? = null,
+    /**
+     * 单击（不是双击的那一下）。查看器用它切换顶栏 / 按钮排的显隐（iOS `IMMediaPagerViewController`
+     * 沉浸态）。`null` = 不监听单击，双击放大不用等单击超时。
+     */
+    onTap: (() -> Unit)? = null,
 ) {
+    val latestTap by rememberUpdatedState(onTap)
     var scale by remember(model) { mutableFloatStateOf(1f) }
     var offsetX by remember(model) { mutableFloatStateOf(0f) }
     var offsetY by remember(model) { mutableFloatStateOf(0f) }
@@ -69,8 +76,10 @@ fun ZoomableImage(
             .fillMaxSize()
             .background(Color.Black)
             // 双击那条**必须排在缩放那条前面**：后者会消费掉手势，排在它后面就永远收不到点击。
-            .pointerInput(model) {
+            // 键只认「有没有」单击：lambda 每次重组都是新实例，拿它当键会让手势协程反复重启
+            .pointerInput(model, onTap != null) {
                 detectTapGestures(
+                    onTap = if (onTap != null) { _ -> latestTap?.invoke() } else null,
                     onDoubleTap = {
                         if (scale > 1f) {
                             scale = 1f; offsetX = 0f; offsetY = 0f

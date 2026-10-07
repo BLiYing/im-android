@@ -1,8 +1,13 @@
 package com.libeyond.imandroid.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -166,6 +172,12 @@ internal fun MediaViewerScreen(
     }
 
     var moreOpen by remember { mutableStateOf(false) }
+    // 沉浸态（iOS `IMMediaPagerViewController._chromeVisible`）：默认显示，**单击画面切换显隐**，
+    // 无自动隐藏倒计时；翻页沿用当前态。图片与视频同一套（2026-10-07 用户报：本端点视频是播放/暂停、
+    // 点图片没反应，与 iOS 不一致）。
+    var chromeVisible by remember { mutableStateOf(true) }
+    val toggleChrome = { chromeVisible = !chromeVisible }
+    val dismiss = rememberDragDismiss(onClose)
 
     /**
      * **下完原件的那一刻要重算一次**「本地有没有它」：胶囊该消失、播放器该切到本地那份。
@@ -191,8 +203,20 @@ internal fun MediaViewerScreen(
     }
     val source = sourceOf(current, localOf, host, useTls)
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        HorizontalPager(state = state, modifier = Modifier.fillMaxSize()) { page ->
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = dismiss.backdropAlpha))
+            .dragToDismiss(dismiss),
+    ) {
+        HorizontalPager(
+            state = state,
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                translationY = dismiss.offsetY
+                scaleX = dismiss.contentScale
+                scaleY = dismiss.contentScale
+            },
+        ) { page ->
             val item = pages[page]
             // **只有当前这一页才建播放器**：ExoPlayer 一页一个实例，相邻页也建的话白占内存与解码器
             // （播不起来是不会的——`playWhenReady=false`，但没必要）。非当前页显封面。
@@ -204,9 +228,15 @@ internal fun MediaViewerScreen(
                     host = host,
                     useTls = useTls,
                     controlsBottomPadding = VIDEO_BAR_BOTTOM,
+                    onTap = toggleChrome,
+                    chromeVisible = chromeVisible,
                 )
             } else if (item.contentType == ContentType.VIDEO) {
-                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                Box(Modifier.fillMaxSize().background(Color.Black).clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = toggleChrome,
+                )) {
                     if (item.poster.isNotBlank()) {
                         AsyncImage(
                             model = MediaUrl.absolute(item.poster, host, useTls),
@@ -223,13 +253,16 @@ internal fun MediaViewerScreen(
                     // 磨砂占位：没下到本地的原图是现拉的，那几秒不能是纯黑
                     // （iOS `showThumbPlaceholder` 同）。没有 thumb 的老消息仍回落黑底。
                     placeholder = rememberFrostedPainter(item.thumb),
+                    onTap = toggleChrome,
                 )
             }
         }
 
         // 「查看原视频」（iOS `_originalChip`）：没下到本地的视频是流式播的，拖进度要等、断网放不了。
         // 判据在 data/OriginalVideo.kt，这里只负责画。
-        if (downloads != null) {
+        // 拖拽关闭途中壳一并淡出（iOS 系统下滑关闭同观感）
+        val chromeShown = chromeVisible && !dismiss.dragging
+        if (downloads != null && chromeShown) {
             OriginalVideoChip(
                 item = current,
                 hasLocal = localOf(current) != null,
@@ -241,8 +274,9 @@ internal fun MediaViewerScreen(
             )
         }
 
-        // 关闭：左上角。**图片不做「点空白关闭」**——可缩放，点空白与拖动/双击抢手势。
-        Row(
+        // 关闭：左上角。**单击画面切壳、下拉关闭**（iOS 同）；不做「点空白关闭」。
+        // 壳隐藏时整块移出组合（不只是 alpha=0）：否则透明的顶栏/按钮仍会吃掉点击（iOS 同时停用交互）。
+        ChromeFade(chromeShown, Modifier.align(Alignment.TopCenter)) { Row(
             modifier = Modifier.fillMaxWidth().systemBarsPadding().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -282,10 +316,10 @@ internal fun MediaViewerScreen(
                 // 右侧留出与关闭钮等宽的空位，让标题真正居中
                 Box(Modifier.size(VIEWER_BUTTON))
             }
-        }
+        } }
 
         // 降级说明：挂在顶栏下方，**不挡画面中心、也不与右下角按钮排抢位置**
-        if (!notice.isNullOrBlank()) {
+        if (!notice.isNullOrBlank() && chromeShown) {
             Text(
                 notice,
                 color = Color.White,
@@ -300,9 +334,8 @@ internal fun MediaViewerScreen(
             )
         }
 
-        Row(
+        ChromeFade(chromeShown, Modifier.align(Alignment.BottomEnd)) { Row(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
                 .padding(end = VIEWER_EDGE, bottom = VIEWER_EDGE),
             horizontalArrangement = Arrangement.spacedBy(VIEWER_GAP),
@@ -325,8 +358,14 @@ internal fun MediaViewerScreen(
             }
             if (onOpenGallery != null) ViewerButton(Lucide.LayoutGrid, stringResource(R.string.favorites_category_media), onOpenGallery)
             ViewerButton(Lucide.Download, stringResource(R.string.qr_card_save_to_album)) { onSave(source, current.isVideo) }
-        }
+        } }
     }
+}
+
+/** 壳的淡入淡出（iOS `setChromeVisible:` 0.22s）。 */
+@Composable
+private fun ChromeFade(visible: Boolean, modifier: Modifier, content: @Composable () -> Unit) {
+    AnimatedVisibility(visible, modifier, enter = fadeIn(tween(220)), exit = fadeOut(tween(220))) { content() }
 }
 
 /**

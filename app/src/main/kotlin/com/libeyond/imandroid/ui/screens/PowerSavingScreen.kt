@@ -40,7 +40,6 @@ import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.Video
 import com.composables.icons.lucide.Zap
 import com.libeyond.imandroid.R
-import com.libeyond.imandroid.data.BatteryReading
 import com.libeyond.imandroid.data.PowerSaveDecision
 import com.libeyond.imandroid.data.PowerSaveMode
 import com.libeyond.imandroid.data.PowerSaveReason
@@ -68,7 +67,6 @@ enum class PowerSavingItem { Animations, AutoDownload, VideoPreload, BackgroundC
 fun PowerSavingScreen(
     prefs: PowerSavingPrefs,
     status: PowerSaveStatus,
-    battery: BatteryReading,
     animationsPref: Boolean,
     /** 「后台保持连接」前提（服务端 fcm_enabled 且本次登录令牌已上报）不满足时 false。 */
     backgroundAvailable: Boolean,
@@ -93,7 +91,8 @@ fun PowerSavingScreen(
                     icon = Lucide.Zap,
                     iconBackground = ic.yellow,
                     subtitle = statusSubtitle(prefs, status),
-                    rightValue = battery.level?.let { "$it%" }.orEmpty(),
+                    // 不显示电量百分比（2026-10-07 定，与 iOS 同）：状态栏已有精确电量；
+                    // iOS 17+ 系统只给 5% 粒度的读数，摆在这里只会与状态栏对不上
                 )
             }
 

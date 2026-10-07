@@ -27,7 +27,6 @@ import com.libeyond.imandroid.ui.screens.PowerSavingScreen
 fun PowerSavingHost(client: IMClient, onBack: () -> Unit) {
     val prefs by PowerSavingStore.state.collectAsState()
     val status by PowerSavingStore.status.collectAsState()
-    val battery by PowerSavingStore.battery.collectAsState()
     val appearance by AppearanceStore.state.collectAsState()
     val fcmEnabled by PowerSavingStore.fcmEnabled.collectAsState()
     val tokenReported by client.fcmTokenStore.reportedToken.collectAsState()
@@ -44,7 +43,6 @@ fun PowerSavingHost(client: IMClient, onBack: () -> Unit) {
     PowerSavingScreen(
         prefs = prefs,
         status = status,
-        battery = battery,
         animationsPref = appearance.animationsEnabled,
         backgroundAvailable = BackgroundDisconnect.pushReachable(fcmEnabled, tokenReported != null),
         onMode = { m -> PowerSavingStore.update { it.copy(mode = m) } },

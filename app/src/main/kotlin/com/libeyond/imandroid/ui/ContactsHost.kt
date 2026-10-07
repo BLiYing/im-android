@@ -91,6 +91,22 @@ fun ContactsHost(
         }
     }
 
+    /** 「群聊」列表页的刷新：进页时、通讯录建群成功回到它时。 */
+    fun loadGroups() {
+        scope.launch {
+            groupsLoading = true
+            runCatching { client.groups.myGroups() }
+                .onSuccess {
+                    groups = it
+                    runCatchingCancellable { client.roster.saveGroups(owner, it) }
+                }
+                // 拉不到就留着上一次的列表 + 一句吐司，别把页面停在"还没有加入群聊"上
+                // ——那句空态是**结论**，网络失败时它是假的。
+                .onFailure { toast = Str.s(R.string.contacts_groups_load_failed) }
+            groupsLoading = false
+        }
+    }
+
     LaunchedEffect(Unit) {
         // 群列表与好友列表互不依赖：并发拉，别让弱网下的好友请求拖慢群搜索（原先串行）
         launch {
@@ -116,7 +132,7 @@ fun ContactsHost(
     // **资料页自己带 BackHandler**（UserProfileHost 里），这里不能再截一层，否则要按两次。
     // 挂在转场**外面**、按目标页判：转场中滑走的那一页已被隔离，这里只认要去的那一页
     if (page != ContactsPage.List && page != ContactsPage.Profile) {
-        BackHandler { page = ContactsPage.List }
+        BackHandler { page = page.parent }
     }
 
     PushTransition(targetState = page, depthOf = { it.depth }) { p ->
@@ -153,18 +169,7 @@ fun ContactsHost(
                     onSearchUser = { q -> addFriendQuery = q; page = ContactsPage.Search },
                     onOpenGroups = {
                         page = ContactsPage.Groups
-                        scope.launch {
-                            groupsLoading = true
-                            runCatching { client.groups.myGroups() }
-                                .onSuccess {
-                                    groups = it
-                                    runCatchingCancellable { client.roster.saveGroups(owner, it) }
-                                }
-                                // 拉不到就留着上一次的列表 + 一句吐司，别把页面停在"还没有加入群聊"上
-                                // ——那句空态是**结论**，网络失败时它是假的。
-                                .onFailure { toast = Str.s(R.string.contacts_groups_load_failed) }
-                            groupsLoading = false
-                        }
+                        loadGroups()
                     },
                     onComingSoon = { name -> toast = Str.s(R.string.contacts_coming_soon, name) },
                     // **先进资料页，不直接进聊天**（微信式，三端统一：群成员行、通讯录行都是这个口径）
@@ -215,12 +220,15 @@ fun ContactsHost(
             ContactsPage.CreateGroup -> CreateGroupHost(
                 client = client,
                 seedFriends = accepted,
-                // 建成直接进新群（同 iOS IMGroupListViewController createTapped：回列表页再进群聊）
+                // 建成直接进新群（同 iOS IMGroupListViewController createTapped：回**群列表页**再进群聊，
+                // 从聊天退回来落在群列表、且列表里已有新群）
                 onCreated = { g ->
-                    page = ContactsPage.List
+                    page = ContactsPage.CreateGroup.parent
+                    loadGroups()
                     onOpenChat(client.groupConversationStubFor(g.convId, g.name, g.avatarUrl))
                 },
-                onBack = { page = ContactsPage.List },
+                // 返回回到入口那一页（群聊列表），不是通讯录首页（2026-10-07 用户报）
+                onBack = { page = ContactsPage.CreateGroup.parent },
             )
 
             ContactsPage.Search -> AddFriendHost(

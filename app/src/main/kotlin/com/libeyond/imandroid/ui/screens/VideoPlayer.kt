@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -53,6 +54,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pause
 import com.composables.icons.lucide.Play
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.MediaUrl
@@ -99,6 +101,13 @@ internal fun VideoPlayer(
     useTls: Boolean,
     /** 底部那一行离屏幕底（导航栏之上）多高：要让出查看器右下角那排按钮（见 [VIDEO_BAR_BOTTOM]）。 */
     controlsBottomPadding: Dp = 0.dp,
+    /**
+     * 沉浸态（iOS `chromeless`）：非 null 时**点画面不再播放 / 暂停，而是交给查看器切换壳的显隐**，
+     * 中央钮改成常驻的播放↔暂停切换钮（否则播放中单击只切壳、就没有暂停入口了）。
+     */
+    onTap: (() -> Unit)? = null,
+    /** 壳是否显示：隐藏时中央钮与倍速一起藏起来，**进度条 + 时间常驻**（iOS `setAuxControlsHidden:`）。 */
+    chromeVisible: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val c = IMTheme.colors
@@ -245,10 +254,11 @@ internal fun VideoPlayer(
             Modifier
                 .fillMaxSize()
                 .clickable(
-                    enabled = !failed,
+                    // 沉浸态下播不了也要能点出壳（否则藏起来的关闭/更多就回不来了）
+                    enabled = !failed || onTap != null,
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = toggle,
+                    onClick = onTap ?: toggle,
                 ),
         )
 
@@ -265,8 +275,10 @@ internal fun VideoPlayer(
                 color = Color.White,
                 modifier = Modifier.align(Alignment.Center).size(44.dp),
             )
-        } else if (!started || !playing) {
-            // 居中大播放钮（iOS 同）。播放中不显，让画面干净；暂停靠点画面
+        } else if (if (onTap != null) chromeVisible else !started || !playing) {
+            // 居中大播放钮（iOS 同）。独立打开时播放中不显、暂停靠点画面；
+            // 沉浸态下随壳显隐，播放中显示成暂停钮（iOS `setPlaying:` 的 chromeless 分支）
+            val showsPause = onTap != null && started && playing
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -278,8 +290,8 @@ internal fun VideoPlayer(
             ) {
                 // **不用 "▶" 这类文字字形**：部分设备（实测 OPPO ColorOS）会用彩色 emoji 字体渲染，看着像坏了
                 Image(
-                    imageVector = Lucide.Play,
-                    contentDescription = stringResource(R.string.common_play),
+                    imageVector = if (showsPause) Lucide.Pause else Lucide.Play,
+                    contentDescription = stringResource(if (showsPause) R.string.common_pause else R.string.common_play),
                     modifier = Modifier.size(32.dp),
                     colorFilter = ColorFilter.tint(Color.White),
                 )
@@ -290,6 +302,7 @@ internal fun VideoPlayer(
             PlaybackBar(
                 positionMs = if (scrubbing) scrubTo.toLong() else positionMs,
                 durationMs = durationMs,
+                showsSpeed = chromeVisible,
                 speedLabel = if (speedTouched) String.format(java.util.Locale.US, "%.1fx", SPEEDS[speedIdx]) else stringResource(R.string.chat_media_speed_label),
                 onScrubStart = { scrubbing = true },
                 onScrub = { scrubTo = it },
@@ -318,6 +331,7 @@ internal fun VideoPlayer(
 private fun PlaybackBar(
     positionMs: Long,
     durationMs: Long,
+    showsSpeed: Boolean,
     speedLabel: String,
     onScrubStart: () -> Unit,
     onScrub: (Float) -> Unit,
@@ -357,7 +371,11 @@ private fun PlaybackBar(
             color = Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.clickable(onClick = onCycleSpeed).padding(vertical = 6.dp),
+            // 壳隐藏时只藏不收：占位保留，进度条长度不跟着跳（iOS 也只是 hidden）
+            modifier = Modifier
+                .alpha(if (showsSpeed) 1f else 0f)
+                .clickable(enabled = showsSpeed, onClick = onCycleSpeed)
+                .padding(vertical = 6.dp),
         )
     }
 }

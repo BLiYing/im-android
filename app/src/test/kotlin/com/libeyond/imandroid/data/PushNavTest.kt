@@ -51,4 +51,14 @@ class PushNavTest {
     fun `建群从群聊列表点进去，比群聊列表深一层——从它退回群聊列表才是后退`() {
         assertTrue(ContactsPage.CreateGroup.depth > ContactsPage.Groups.depth)
     }
+
+    @Test
+    fun `通讯录建群返回回到群聊列表，其余二级页回通讯录首页`() {
+        assertEquals(ContactsPage.Groups, ContactsPage.CreateGroup.parent)
+        ContactsPage.entries.filter { it != ContactsPage.CreateGroup }.forEach {
+            assertEquals(ContactsPage.List, it.parent)
+        }
+        // 父页恰好浅一层（List 自己除外），转场方向才是「后退」
+        assertEquals(ContactsPage.CreateGroup.depth - 1, ContactsPage.CreateGroup.parent.depth)
+    }
 }
