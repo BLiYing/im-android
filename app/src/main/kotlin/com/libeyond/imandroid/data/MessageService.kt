@@ -6,6 +6,7 @@ import com.libeyond.imandroid.sdk.api.ConversationsApi
 import com.libeyond.imandroid.sdk.api.UploadApi
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.GroupEventData
+import com.libeyond.imandroid.sdk.protocol.MsgOp
 import com.libeyond.imandroid.sdk.protocol.ConvBumpData
 import com.libeyond.imandroid.sdk.protocol.GroupReadData
 import com.libeyond.imandroid.sdk.protocol.AckData
@@ -71,6 +72,8 @@ class MessageService(
 ) {
     /** 「按锚点开窗」的一问一答（MESSAGE_WINDOW_DESIGN §3.2），实现在 [WindowRequester]。 */
     internal val windows = WindowRequester(socket, scope)
+    /** 删掉摘要那条后重拉会话列表（见 PreviewRefresh.kt）。 */
+    internal val previewRefresher = PreviewRefresher(scope) { refreshConversations() }
 
     /** 服务端可见下界（`window_resp.has_before=false`），每次连上清空，见 [HistoryFloors]。 */
     val historyFloors = HistoryFloors()
@@ -235,6 +238,7 @@ class MessageService(
                 val batch = op.batchDeleteSeqs()
                 if (batch != null) repo.removeMessages(owner, op.convId, batch, retract = true)
                 else repo.applyMsgOp(owner, op)
+                if (op.op == MsgOp.DELETE) refreshIfPreviewRemoved(owner, op.convId, batch ?: listOf(op.targetConvSeq))
                 if (!_msgOps.tryEmit(MsgOpSignal(op.convId, op.op, batch ?: listOf(op.targetConvSeq)))) {
                     log.w("msg_op_signal_dropped", "op" to op.op) // 缓冲满（重连后的积压帧）：置顶横幅靠重连/下次信号再对齐
                 }
@@ -249,6 +253,7 @@ class MessageService(
             FrameType.MSG_HIDDEN -> data?.let { el ->
                 val d = ProtocolJson.decodeFromJsonElement(MsgHiddenData.serializer(), el)
                 repo.removeMessages(owner, d.convId, d.seqs(), retract = false)
+                refreshIfPreviewRemoved(owner, d.convId, d.seqs())
                 _msgOps.tryEmit(MsgOpSignal(d.convId, MsgOpSignal.HIDE, d.seqs()))
             }
 
