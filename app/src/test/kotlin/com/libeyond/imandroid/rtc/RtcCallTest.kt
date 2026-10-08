@@ -3,9 +3,7 @@ package com.libeyond.imandroid.rtc
 import com.libeyond.imandroid.sdk.api.RtcTokenResult
 import com.libeyond.imandroid.sdk.http.ApiException
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -43,20 +41,5 @@ class RtcCallTest {
     fun transport_failure_is_null() {
         val result = Result.failure<RtcTokenResult>(RuntimeException("network down"))
         assertNull(rtcTokenFrom(result))
-    }
-
-    // rtcShouldRecover：对齐 iOS IMRtcHistoryErrorNeedsRelogin（引擎被拆 / 断链类错误才整台重启）。
-
-    @Test
-    fun engine_torn_down_always_recovers() {
-        assertTrue(rtcShouldRecover(engineStarted = false, errorCode = null))
-        assertTrue(rtcShouldRecover(engineStarted = false, errorCode = 9999))
-    }
-
-    @Test
-    fun started_engine_recovers_only_on_link_errors() {
-        for (code in listOf(2007, 1101, 2003)) assertTrue("code=$code", rtcShouldRecover(true, code))
-        assertFalse(rtcShouldRecover(true, 5000))
-        assertFalse(rtcShouldRecover(true, null))
     }
 }

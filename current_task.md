@@ -6,6 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **10-08 接 im-rtc 2.2.0 Kit tokenProvider（已切 JitPack 正式版）**：`RtcCall` 登录交给 Kit（`IMCallKitConfig.tokenProvider` 包 `signToken`），删掉 `recoverEngine` / `placeAfterRecover` / 续票 / 票失效重登 / `tokenFetchFailed`；通话记录先 `IMCallKit.ensureReady`。`imrtc = "2.2.0"`（JitPack），mavenLocal 已注释回去。OPPO 实测：断网冷启动按 2/4/8 s 退避重试，开 Wi-Fi 约 4 s 内登上。test.sh 1498 绿。
 **聊天选图器收尾（2026-10-07，已合入 main）**：`:media-picker` 被拒改同页空状态（无降级）、原图流式上传（≥8MB 私有副本可续传，杀进程后实测续传成功）、封面单次探测、压缩 ≤2 并发；今日在 OPPO 实测另修两处：①发送方视频被省电模式（「始终开启」）画成磨砂——磨砂只给接收侧；②竖拍视频待发气泡先画成横矩形再变竖——`PendingMediaBubble` 写死横向尺寸，现落行前用 `VideoProbe.info` / 图片 bounds 预探宽高写进待发行，待发与正式气泡共用 `rememberMediaDisplaySize`。待验证见根目录 `current_task.md` 下一步 0。
 
 ## 下一步

@@ -4,7 +4,6 @@ import com.imrtc.engine.IMCallEndReason
 import com.imrtc.engine.IMCallEngineListener
 import com.imrtc.engine.IMCallSummary
 import com.imrtc.engine.IMKickedOutReason
-import com.libeyond.imandroid.sdk.api.RtcApi
 import com.libeyond.imandroid.sdk.logging.IMLog
 
 /** [RtcCall] 暴露给事件监听的窄接口：监听只通过它改宿主状态，`generation` / `_inCall` 等保持私有。 */
@@ -14,9 +13,7 @@ internal interface RtcHostBridge {
     fun onBegin()
     fun onEnd(callId: String)
     fun onRecord(plan: CallRecordPlan)
-    fun onAuthExpired(gen: Long, rtcApi: RtcApi, config: RtcConfig)
     fun onFatalKickedOut()
-    fun onTokenWillExpire(gen: Long, rtcApi: RtcApi)
 }
 
 /**
@@ -26,8 +23,6 @@ internal interface RtcHostBridge {
 internal class RtcHostListener(
     private val host: RtcHostBridge,
     private val gen: Long,
-    private val rtcApi: RtcApi,
-    private val config: RtcConfig,
 ) : IMCallEngineListener {
     private val log = IMLog.tag("IM.Rtc")
     private val stale: Boolean get() = host.isStale(gen)
@@ -77,13 +72,10 @@ internal class RtcHostListener(
         if (stale) return
         log.w("rtc_kicked_out", "reason" to reason.name)
         when (reason) {
-            IMKickedOutReason.AUTH_EXPIRED -> host.onAuthExpired(gen, rtcApi, config)
+            // 票失效：Kit 自己取新票重登（tokenProvider，im-rtc 2.2.0），宿主不用管。
+            IMKickedOutReason.AUTH_EXPIRED -> Unit
             IMKickedOutReason.TAKEN_OVER, IMKickedOutReason.CONFIG_REJECTED -> host.onFatalKickedOut()
         }
-    }
-
-    override fun onTokenWillExpire(expiresAtMs: Long) {
-        if (!stale) host.onTokenWillExpire(gen, rtcApi)
     }
 
     override fun onError(code: Int, name: String, message: String, forType: String) {
