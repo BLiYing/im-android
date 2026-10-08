@@ -3,6 +3,7 @@ package com.libeyond.imandroid.fcm
 import com.google.firebase.messaging.FirebaseMessaging
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 取当前 FCM 注册 token 的唯一出口（对齐 [com.libeyond.imandroid.sdk.api.PushTokenApi] 之于
@@ -19,6 +20,7 @@ object FcmToken {
     private val log = IMLog.tag("IM.Fcm")
 
     suspend fun current(): String? = suspendCancellableCoroutine { cont ->
+        deleteArmed.set(false) // 登录后才会取：下次登出能再作废一次
         try {
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (task.isSuccessful) {
@@ -35,18 +37,30 @@ object FcmToken {
     }
 
     /**
-     * 作废本机的 FCM token：服务端下次往它推会收到 UNREGISTERED，随即删掉那条登记（`push/service.go`
-     * outcomeDeleteToken）。用于「本机已登出、推送还在来」。下次登录连上时会取一枚新的再上报。
-     * 失败只记日志（同 [current]，没有 Firebase 配置时不崩）。
+     * 「本机已登出、推送还在来」时作废本机 FCM token：服务端下次往它推会收到 UNREGISTERED，随即删掉那条登记
+     * （`push/service.go` outcomeDeleteToken）。下次登录连上时 [current] 会取一枚新的再上报。
+     *
+     * 同一段登出期只作废一次（推送连发时别每条都打一次 Firebase）；**失败就放开重来**，下一条推送再试——
+     * 此前在结果出来前就置位、且永不复位，失败一次（断网）服务端就会一直往这台登出的设备推（/code-review 2026-10-08）。
+     * 登录后 [current] 被调用（连上即取）时复位，下次登出能再作废。没有 Firebase 配置时只记日志、不崩。
      */
-    fun delete() {
+    fun deleteWhileLoggedOut() {
+        if (!deleteArmed.compareAndSet(false, true)) return
         try {
             FirebaseMessaging.getInstance().deleteToken().addOnCompleteListener { task ->
-                if (task.isSuccessful) log.i("fcm_token_deleted")
-                else log.w("fcm_token_delete_failed", "err" to (task.exception?.javaClass?.simpleName ?: "unknown"))
+                if (task.isSuccessful) {
+                    log.i("fcm_token_deleted")
+                } else {
+                    deleteArmed.set(false)
+                    log.w("fcm_token_delete_failed", "err" to (task.exception?.javaClass?.simpleName ?: "unknown"))
+                }
             }
         } catch (e: Throwable) {
+            deleteArmed.set(false)
             log.w("fcm_token_unavailable", "err" to e.javaClass.simpleName)
         }
     }
+
+    /** true = 本段登出期已作废过（或正在作废）。 */
+    private val deleteArmed = AtomicBoolean(false)
 }

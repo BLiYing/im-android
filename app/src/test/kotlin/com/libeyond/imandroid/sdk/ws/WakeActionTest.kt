@@ -1,5 +1,8 @@
 package com.libeyond.imandroid.sdk.ws
 
+import com.libeyond.imandroid.sdk.protocol.ErrCode
+import com.libeyond.imandroid.sdk.session.TokenSession
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -51,17 +54,35 @@ class WakeActionTest {
     /** 2026-10-08 Pixel：token 过期的 401 被当吊销，本机清凭据、推送还在来。先续期才分得清。 */
     @Test
     fun `401 能续期就先续期`() {
-        assertEquals(UnauthorizedAction.Refresh, unauthorizedActionFor(canRefresh = true, retriedAfterRefresh = false))
+        assertEquals(UnauthorizedAction.Refresh, unauthorizedActionFor(canRefresh = true, failedGen = 3, refreshRetryGen = 0))
     }
 
     @Test
-    fun `续期后的新 token 还 401 就按吊销处理，不死循环`() {
-        assertEquals(UnauthorizedAction.EndRevoked, unauthorizedActionFor(canRefresh = true, retriedAfterRefresh = true))
+    fun `续期后开的那条还 401 就按吊销处理，不死循环`() {
+        assertEquals(UnauthorizedAction.EndRevoked, unauthorizedActionFor(canRefresh = true, failedGen = 4, refreshRetryGen = 4))
+    }
+
+    /** /code-review 2026-10-08：「续过一次」只对续期后开的那一条有效，之后的重连 / 重新登录照样能续。 */
+    @Test
+    fun `别的连接撞 401 照样能续`() {
+        assertEquals(UnauthorizedAction.Refresh, unauthorizedActionFor(canRefresh = true, failedGen = 7, refreshRetryGen = 4))
     }
 
     @Test
     fun `没有续期能力时 401 按吊销处理`() {
-        assertEquals(UnauthorizedAction.EndRevoked, unauthorizedActionFor(canRefresh = false, retriedAfterRefresh = false))
+        assertEquals(UnauthorizedAction.EndRevoked, unauthorizedActionFor(canRefresh = false, failedGen = 1, refreshRetryGen = 0))
+    }
+
+    /** /code-review 2026-10-08：只有鉴权类拒绝才结束会话；封号给封号文案；5xx 之类说不准，退避重试。 */
+    @Test
+    fun `续期结果映射`() {
+        assertEquals(TokenRefresh.Refreshed, tokenRefreshFor(TokenSession.RefreshOutcome.Ok))
+        assertEquals(TokenRefresh.Unreachable, tokenRefreshFor(TokenSession.RefreshOutcome.Unreachable))
+        assertEquals(TokenRefresh.Expired, tokenRefreshFor(TokenSession.RefreshOutcome.NoCredential))
+        assertEquals(TokenRefresh.Rejected, tokenRefreshFor(TokenSession.RefreshOutcome.Rejected(ErrCode.TOKEN_INVALID)))
+        assertEquals(TokenRefresh.Expired, tokenRefreshFor(TokenSession.RefreshOutcome.Rejected(ErrCode.TOKEN_EXPIRED)))
+        assertEquals(TokenRefresh.Banned, tokenRefreshFor(TokenSession.RefreshOutcome.Rejected(ErrCode.ACCOUNT_BANNED)))
+        assertEquals(TokenRefresh.Unreachable, tokenRefreshFor(TokenSession.RefreshOutcome.Rejected(100500)))
     }
 
     @Test

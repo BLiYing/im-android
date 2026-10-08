@@ -176,6 +176,60 @@ class IMSocketUnauthorizedTest {
     }
 
     @Test
+    fun `续期发现账号被封：按封号结束`() = runTest {
+        val r = Rig(this) { TokenRefresh.Banned }
+        r.m.connect()
+        r.reject(0); runCurrent()
+        assertEquals(listOf(SessionEndReason.Banned), r.ended)
+    }
+
+    /** /code-review 2026-10-08：续上后新连接因断网失败、用户退出又登录——第一次 401 不能直接当被踢。 */
+    @Test
+    fun `续过之后退出再登录，第一次 401 还能续`() = runTest {
+        var calls = 0
+        val r = Rig(this) { calls++; TokenRefresh.Refreshed }
+        r.m.connect()
+        r.reject(0); runCurrent()
+        r.listeners[1].onFailure(r.sockets[1], IOException("net"), null)
+        r.m.disconnect()
+        r.m.connect()
+        r.reject(2); runCurrent()
+        assertEquals(2, calls)
+        assertEquals(emptyList<SessionEndReason>(), r.ended)
+    }
+
+    @Test
+    fun `续上后新连接断网、退避重连再 401：还能续`() = runTest {
+        var calls = 0
+        val r = Rig(this) { calls++; TokenRefresh.Refreshed }
+        r.m.connect()
+        r.reject(0); runCurrent()
+        r.listeners[1].onFailure(r.sockets[1], IOException("net"), null)
+        advanceTimeBy(1_000); runCurrent()
+        r.reject(2); runCurrent()
+        assertEquals(2, calls)
+        assertEquals(emptyList<SessionEndReason>(), r.ended)
+    }
+
+    /**
+     * 旧连接迟到的 401 不动新连接。注意：这条走的是 onFailure 开头的过期检查；它与 onUnauthorized 拿锁之间
+     * 被另一线程插入的那种交错（锁内复查代数要挡的）单线程测不出来，见 onUnauthorized 注释。
+     */
+    @Test
+    fun `旧连接迟到的 401 不动新连接`() = runTest {
+        val r = Rig(this) { TokenRefresh.Refreshed }
+        r.m.connect()
+        // 握手失败已把状态置 Idle，401 处理拿锁之前唤醒先开了新连接（第 2 条）
+        r.listeners[0].onFailure(r.sockets[0], IOException("net"), null)
+        r.m.wake("network_available")
+        assertEquals(2, r.sockets.size)
+        r.reject(0); runCurrent() // 旧连接迟到的 401：代数已变，丢弃
+        assertEquals(2, r.sockets.size)
+        assertEquals(ConnState.Connecting, r.m.state.value)
+        assertEquals(emptyList<SessionEndReason>(), r.ended)
+    }
+
+    @Test
     fun `没接续期能力时 401 直接按吊销（旧行为）`() = runTest {
         val r = Rig(this, null)
         r.m.connect()

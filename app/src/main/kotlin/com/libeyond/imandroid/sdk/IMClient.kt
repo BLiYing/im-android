@@ -47,8 +47,7 @@ import com.libeyond.imandroid.sdk.session.MyProfileCodec
 import com.libeyond.imandroid.sdk.session.RestoreOutcome
 import com.libeyond.imandroid.sdk.session.SessionStore
 import com.libeyond.imandroid.sdk.session.TokenSession
-import com.libeyond.imandroid.sdk.protocol.ErrCode
-import com.libeyond.imandroid.sdk.ws.TokenRefresh
+import com.libeyond.imandroid.sdk.ws.tokenRefreshFor
 import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.sdk.ws.IMSocketManager
 import kotlinx.coroutines.CoroutineScope
@@ -255,15 +254,7 @@ class IMClient(context: Context) {
         useTls = BuildConfig.USE_TLS,
         tokenProvider = { session.token },
         // 握手 401 先续期（token 只是过期了的话续上就好），续期被拒才算被踢——见 ws/WakeAction.kt。
-        refreshToken = {
-            when (val r = tokens.refreshNow()) {
-                TokenSession.RefreshOutcome.Ok -> TokenRefresh.Refreshed
-                TokenSession.RefreshOutcome.Unreachable -> TokenRefresh.Unreachable
-                TokenSession.RefreshOutcome.NoCredential -> TokenRefresh.Rejected
-                is TokenSession.RefreshOutcome.Rejected ->
-                    if (r.code == ErrCode.TOKEN_EXPIRED) TokenRefresh.Expired else TokenRefresh.Rejected
-            }
-        },
+        refreshToken = { tokenRefreshFor(tokens.refreshNow()) },
     )
 
     /** 收发编排。UI 通过它发消息、通过 [repo] 读库。 */

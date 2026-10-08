@@ -6,7 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
-- **10-08 修「令牌过期被当成被踢」**：握手 401 先续期（`ws/WakeAction.kt` `unauthorizedActionFor`），续期被拒才回登录页（到寿给「登录已过期」）；`IMSocketManager.manualClose` 初值 true，`connect()` 前唤醒不连（冷启动不再抢在 restore 前拿过期 token 握手）；本机没登录时 FCM 新消息/来电/未接一律丢并 `FcmToken.delete()`。Pixel 实测：改坏 JWT 冷启动 → 续期 → 留在主界面；登录页收推送 → 丢弃 → 服务端 UNREGISTERED 删令牌。test.sh 1514 绿。
+- **10-08 修「令牌过期被当成被踢」**：握手 401 先续期（`ws/WakeAction.kt` `unauthorizedActionFor`），续期被拒才回登录页（到寿给「登录已过期」）；`IMSocketManager.manualClose` 初值 true，`connect()` 前唤醒不连（冷启动不再抢在 restore 前拿过期 token 握手）；本机没登录时 FCM 新消息/来电/未接一律丢并 `FcmToken.delete()`。/code-review 后补：401 处理全程持锁；续期结果只有鉴权码才结束会话（封号→封号文案、5xx→退避）；「续过一次」按连接代数记；FCM 作废失败可重试、登录后复位。Pixel × OPPO × iOS 模拟器两轮换密钥重启均续上。test.sh 1520 绿。
 - 10-08 接 im-rtc 2.2.0 Kit tokenProvider（JitPack 正式版）：`RtcCall` 登录交给 Kit，通话记录先 `IMCallKit.ensureReady`。
 **聊天选图器收尾（2026-10-07，已合入 main）**：`:media-picker` 被拒改同页空状态（无降级）、原图流式上传（≥8MB 私有副本可续传，杀进程后实测续传成功）、封面单次探测、压缩 ≤2 并发；今日在 OPPO 实测另修两处：①发送方视频被省电模式（「始终开启」）画成磨砂——磨砂只给接收侧；②竖拍视频待发气泡先画成横矩形再变竖——`PendingMediaBubble` 写死横向尺寸，现落行前用 `VideoProbe.info` / 图片 bounds 预探宽高写进待发行，待发与正式气泡共用 `rememberMediaDisplaySize`。待验证见根目录 `current_task.md` 下一步 0。
 
