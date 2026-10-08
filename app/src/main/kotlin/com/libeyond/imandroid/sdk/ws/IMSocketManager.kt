@@ -23,8 +23,8 @@ import okhttp3.WebSocketListener
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
-/** 会话被服务端否定的两种原因，UI 据此给不同文案并回登录页。 */
-enum class SessionEndReason { Revoked, Banned }
+/** 会话被服务端否定的原因，UI 据此给不同文案并回登录页。Expired = 续期凭据到了绝对寿命上限。 */
+enum class SessionEndReason { Revoked, Banned, Expired }
 
 /**
  * WebSocket 长连接（对应 iOS `IMSocketManager`、Web `IMClient` 的连接部分）。
@@ -44,6 +44,8 @@ class IMSocketManager(
     @Volatile var useTls: Boolean = false,
     /** 取当前 token；返回 null 时不连。 */
     private val tokenProvider: () -> String?,
+    /** 握手 401 时续一次 token（见 [unauthorizedActionFor]）。null = 不续，401 直接按吊销处理。 */
+    private val refreshToken: (suspend () -> TokenRefresh)? = null,
     /** 测试缝：造一条 WebSocket。默认走 OkHttp。 */
     private val socketFactory: ((Request, WebSocketListener) -> WebSocket)? = null,
 ) {
@@ -82,7 +84,14 @@ class IMSocketManager(
     val sessionEnded: SharedFlow<SessionEndReason> = _sessionEnded.asSharedFlow()
 
     @Volatile private var socket: WebSocket? = null
-    @Volatile private var manualClose = false
+    /**
+     * 初值 **true**：[connect] 之前任何唤醒都不连。冷启动时网络唤醒会抢在 restore（探活 / 续期）之前，
+     * 拿着本地那枚可能已过期的 token 去握手（2026-10-08 Pixel 实测撞 401）。连接只由 [connect] 打开——
+     * 登录成功、或 restore 判定会话可用之后。
+     */
+    @Volatile private var manualClose = true
+    /** 当前这条连接是 401 续期之后开的：它再 401 就不再续（[unauthorizedActionFor]）。连上即清。 */
+    @Volatile private var retriedAfterRefresh = false
     /** 省电模式「后台保持连接」关闭时主动停靠（见 [park]）：不是登出，所以不置 [manualClose]。 */
     @Volatile private var parked = false
     /** 连接代数（RECONNECT.md §3）：每开一条新连接 +1，回调带着自己的代数，不等于当前代的一律丢弃。 */
@@ -157,6 +166,7 @@ class IMSocketManager(
         // 真实触发路径：NetworkMonitor 在 App 启动瞬间就发 wake（此时本地已有 token，
         // 于是连上了），随后 restore() 探活成功，AppRoot 又调一次 connect() ——
         // 2026-09-07 回归实测抓到，日志里 26.349 与 34.261 各连了一次。
+        // （2026-10-08 起 [manualClose] 初值为 true，启动唤醒已不会抢先连；这道检查留作兜底。）
         if (_state.value != ConnState.Idle) {
             log.d("ws_open_skipped", "state" to _state.value.name)
             return@synchronized
@@ -286,6 +296,44 @@ class IMSocketManager(
         scope.launch { _sessionEnded.emit(reason) }
     }
 
+    /**
+     * 握手 401：先续期，续上就立刻用新 token 重连；连不上续期接口就照常退避；
+     * 只有续期被明确拒绝（或续期后的新 token 还 401）才结束会话——判据见 [unauthorizedActionFor]。
+     *
+     * 续期期间状态置 Connecting：挡住唤醒 / 退避再开一条（[openSocket] 只在 Idle 时开）。
+     * 期间若被 park / disconnect，代数变了，回来的结果作废。
+     */
+    private fun onUnauthorized() {
+        val refresh = refreshToken
+        if (unauthorizedActionFor(refresh != null, retriedAfterRefresh) == UnauthorizedAction.EndRevoked) {
+            log.w("ws_handshake_401_revoked", "afterRefresh" to retriedAfterRefresh)
+            retriedAfterRefresh = false
+            endSession(SessionEndReason.Revoked)
+            return
+        }
+        log.i("ws_handshake_401_refreshing")
+        val gen = generation
+        _state.value = ConnState.Connecting
+        scope.launch {
+            val outcome = runCatching { refresh!!() }.getOrDefault(TokenRefresh.Unreachable)
+            synchronized(lock) {
+                if (gen != generation || manualClose || parked) return@launch
+                _state.value = ConnState.Idle
+                log.i("ws_handshake_401_refresh_result", "outcome" to outcome.name)
+                when (outcome) {
+                    TokenRefresh.Refreshed -> {
+                        retriedAfterRefresh = true
+                        reconnectAttempts = 0
+                        openSocket()
+                    }
+                    TokenRefresh.Unreachable -> scheduleReconnect()
+                    TokenRefresh.Rejected -> endSession(SessionEndReason.Revoked)
+                    TokenRefresh.Expired -> endSession(SessionEndReason.Expired)
+                }
+            }
+        }
+    }
+
     private inner class Listener(private val gen: Long) : WebSocketListener() {
 
         /** 不是当前代的连接（被 park / disconnect / 新连接取代）：回调一律丢弃。 */
@@ -303,6 +351,7 @@ class IMSocketManager(
             probeJob?.cancel()
             probeJob = null
             reconnectAttempts = 0
+            retriedAfterRefresh = false
             _state.value = ConnState.Connected
             log.i("ws_connected", "host" to host)
             startPing()
@@ -349,10 +398,7 @@ class IMSocketManager(
             // 漏掉这一句时，过期看门狗会在重连成功后掐死新连接。
             cancelTimers()
             when (handshakeFailureFor(status)) {
-                HandshakeFailure.Revoked -> {
-                    log.w("ws_handshake_401_revoked")
-                    endSession(SessionEndReason.Revoked)
-                }
+                HandshakeFailure.Unauthorized -> onUnauthorized()
                 HandshakeFailure.Banned -> {
                     log.w("ws_handshake_403_banned")
                     endSession(SessionEndReason.Banned)

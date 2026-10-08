@@ -44,8 +44,24 @@ class WakeActionTest {
      * 「被踢下线」退化成静默自愈。这两条必须与可重试错误分开。
      */
     @Test
-    fun `握手 401 判为会话被吊销`() {
-        assertEquals(HandshakeFailure.Revoked, handshakeFailureFor(401))
+    fun `握手 401 判为未授权（过期或吊销，待续期分辨）`() {
+        assertEquals(HandshakeFailure.Unauthorized, handshakeFailureFor(401))
+    }
+
+    /** 2026-10-08 Pixel：token 过期的 401 被当吊销，本机清凭据、推送还在来。先续期才分得清。 */
+    @Test
+    fun `401 能续期就先续期`() {
+        assertEquals(UnauthorizedAction.Refresh, unauthorizedActionFor(canRefresh = true, retriedAfterRefresh = false))
+    }
+
+    @Test
+    fun `续期后的新 token 还 401 就按吊销处理，不死循环`() {
+        assertEquals(UnauthorizedAction.EndRevoked, unauthorizedActionFor(canRefresh = true, retriedAfterRefresh = true))
+    }
+
+    @Test
+    fun `没有续期能力时 401 按吊销处理`() {
+        assertEquals(UnauthorizedAction.EndRevoked, unauthorizedActionFor(canRefresh = false, retriedAfterRefresh = false))
     }
 
     @Test

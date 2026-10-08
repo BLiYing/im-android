@@ -6,7 +6,8 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
-- **10-08 接 im-rtc 2.2.0 Kit tokenProvider（已切 JitPack 正式版）**：`RtcCall` 登录交给 Kit（`IMCallKitConfig.tokenProvider` 包 `signToken`），删掉 `recoverEngine` / `placeAfterRecover` / 续票 / 票失效重登 / `tokenFetchFailed`；通话记录先 `IMCallKit.ensureReady`。`imrtc = "2.2.0"`（JitPack），mavenLocal 已注释回去。OPPO 实测：断网冷启动按 2/4/8 s 退避重试，开 Wi-Fi 约 4 s 内登上。test.sh 1498 绿。
+- **10-08 修「令牌过期被当成被踢」**：握手 401 先续期（`ws/WakeAction.kt` `unauthorizedActionFor`），续期被拒才回登录页（到寿给「登录已过期」）；`IMSocketManager.manualClose` 初值 true，`connect()` 前唤醒不连（冷启动不再抢在 restore 前拿过期 token 握手）；本机没登录时 FCM 新消息/来电/未接一律丢并 `FcmToken.delete()`。Pixel 实测：改坏 JWT 冷启动 → 续期 → 留在主界面；登录页收推送 → 丢弃 → 服务端 UNREGISTERED 删令牌。test.sh 1514 绿。
+- 10-08 接 im-rtc 2.2.0 Kit tokenProvider（JitPack 正式版）：`RtcCall` 登录交给 Kit，通话记录先 `IMCallKit.ensureReady`。
 **聊天选图器收尾（2026-10-07，已合入 main）**：`:media-picker` 被拒改同页空状态（无降级）、原图流式上传（≥8MB 私有副本可续传，杀进程后实测续传成功）、封面单次探测、压缩 ≤2 并发；今日在 OPPO 实测另修两处：①发送方视频被省电模式（「始终开启」）画成磨砂——磨砂只给接收侧；②竖拍视频待发气泡先画成横矩形再变竖——`PendingMediaBubble` 写死横向尺寸，现落行前用 `VideoProbe.info` / 图片 bounds 预探宽高写进待发行，待发与正式气泡共用 `rememberMediaDisplaySize`。待验证见根目录 `current_task.md` 下一步 0。
 
 ## 下一步
@@ -43,6 +44,7 @@
 - **`ChatScreen.kt` 的滚动时序整组在 `ui/screens/ChatScroll.kt`**，五条 effect（首屏定位 / 贴底 / 跟底 / 翻页保位 / 可见即读 + 滚到底续要更新）读写同一份 `ChatScrollMarks`，必须待在一起；**宫格绝不能 LazyColumn item 里塞 LazyVerticalGrid**（由外层逐行渲染，`data/MediaGrid.kt`），列数 = 3（改它先改 `../IMServer/docs/UI_SPEC.md`）。
 - **离线积压三条纪律**：①「有没有缺口」只问区间清单，不看 conv_seq 连不连号、不看同步游标；②清空位点 `clearedUpTo` 只增不减，会话快照整行重写必须保住它，服务端的搜索/日历/媒体结果一律滤 `conv_seq ≤ 位点`；③有缺口且离线时**不拿尾窗兜底**（可见即读会越过缺口把未读清掉），保持空窗并说「需要联网」。
 - **粘贴判据三条纪律**（`data/PasteImage.kt`）；**长按菜单原位预览里链接与图片都不可点**（别改成在 `Bubble` 里按 `onLongPress != null` 判）；**`IMCardSheet` 关闭途中也拦返回键**；**覆盖页触摸屏蔽层绝不能 consume**（`TouchShield.kt`）。
+- **握手 401 ≠ 被踢**：gateway 对过期 JWT 与吊销 sid 都回 401（正文 `unauthorized` / `session revoked`），本端一律先续期；续期接口对吊销 sid 回 100101 才算被踢。iOS/Web 每次连前先换票，没这条路。
 - **OkHttp 收到服务端关闭帧不会自己回帧**：不在 `onClosing` 里 `close(1000, null)`，踢下线要等 25s。
 - **会话列表离线首登是空白**；改密后的新续期凭据只出现一次（`NonCancellable` + 带发起时 uid）。
 - **应用内浏览器**：release 不放行明文 http，debug 整个放开，debug 真机看不出来；明文 HTTP 只对 `10.0.2.2`/`localhost`/`127.0.0.1` 放行。

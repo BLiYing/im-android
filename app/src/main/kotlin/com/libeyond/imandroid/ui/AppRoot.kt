@@ -99,6 +99,7 @@ fun AppRoot(client: IMClient) {
             endedNotice = when (reason) {
                 SessionEndReason.Revoked -> Str.s(R.string.login_revoked_notice)
                 SessionEndReason.Banned -> Str.s(R.string.err_200003)
+                SessionEndReason.Expired -> Str.s(R.string.common_login_expired)
             }
             phase = Phase.Login
         }

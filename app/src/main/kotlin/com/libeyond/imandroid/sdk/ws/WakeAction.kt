@@ -30,17 +30,38 @@ fun wakeActionFor(state: ConnState, manualClose: Boolean): WakeAction = when {
  * 与稳定 device_id，「被踢下线」退化成 ≤10min 的静默自愈——用户在另一台设备点的"踢下线"
  * 看起来生效了，其实对方过一会儿又连上来了。
  *
- * - **401**：本机 sid 已被吊销（被踢 / 已注销）。停重连 + 清会话 + 回登录页。
- * - **403**：账号被封（PROTOCOL §7）。同样停重连回登录页，但语义不同，要给不同文案。
+ * - **401**：服务端不认这枚 token——**可能只是过期了**（JWT 24h），也可能 sid 已被吊销
+ *   （gateway 两种都回 401，只是正文不同）。先续期再说，见 [unauthorizedActionFor]。
+ * - **403**：账号被封（PROTOCOL §7）。停重连回登录页，给封号文案。
  * - 其余：普通网络问题，照常退避重连。
  */
-enum class HandshakeFailure { Revoked, Banned, Retryable }
+enum class HandshakeFailure { Unauthorized, Banned, Retryable }
 
 fun handshakeFailureFor(httpStatus: Int): HandshakeFailure = when (httpStatus) {
-    401 -> HandshakeFailure.Revoked
+    401 -> HandshakeFailure.Unauthorized
     403 -> HandshakeFailure.Banned
     else -> HandshakeFailure.Retryable
 }
+
+/** 握手 401 之后续期的结果（由 `TokenSession.refreshNow` 映射过来）。 */
+enum class TokenRefresh { Refreshed, Unreachable, Rejected, Expired }
+
+/** 握手 401 之后该做什么。 */
+enum class UnauthorizedAction { Refresh, EndRevoked }
+
+/**
+ * 握手 401 → 先续期，**只有续期被服务端明确拒绝才算被踢**（与 `RestoreDecision` 判据二同一口径）。
+ *
+ * 2026-10-08 Pixel 实测：登录满 24h 后冷启动，网络唤醒抢在 restore 之前拿过期 token 连上来，
+ * 握手 401（正文 `unauthorized`）被当成「已被吊销」，本机清了凭据、提示「已在别处登录」——
+ * 服务端会话和 FCM 令牌却都还在，来电推送照样弹。iOS / Web 每次连之前都先换票，没有这条路。
+ *
+ * 续期拒绝吊销的 sid（device `RefreshSession` 查 revoked_at），所以真被踢的那条照样回登录页：
+ * - 没有续期能力（测试 / 未接线）→ 直接按吊销处理（旧行为）；
+ * - 这条连接本身就是**续期后**换的新 token 还 401 → 不再续，按吊销处理（防死循环）。
+ */
+fun unauthorizedActionFor(canRefresh: Boolean, retriedAfterRefresh: Boolean): UnauthorizedAction =
+    if (canRefresh && !retriedAfterRefresh) UnauthorizedAction.Refresh else UnauthorizedAction.EndRevoked
 
 /**
  * 指数退避：`base * 2^attempt`，封顶 `max`。与 Web 同参（1s 起、30s 封顶）。

@@ -33,4 +33,20 @@ object FcmToken {
             cont.resume(null, null)
         }
     }
+
+    /**
+     * 作废本机的 FCM token：服务端下次往它推会收到 UNREGISTERED，随即删掉那条登记（`push/service.go`
+     * outcomeDeleteToken）。用于「本机已登出、推送还在来」。下次登录连上时会取一枚新的再上报。
+     * 失败只记日志（同 [current]，没有 Firebase 配置时不崩）。
+     */
+    fun delete() {
+        try {
+            FirebaseMessaging.getInstance().deleteToken().addOnCompleteListener { task ->
+                if (task.isSuccessful) log.i("fcm_token_deleted")
+                else log.w("fcm_token_delete_failed", "err" to (task.exception?.javaClass?.simpleName ?: "unknown"))
+            }
+        } catch (e: Throwable) {
+            log.w("fcm_token_unavailable", "err" to e.javaClass.simpleName)
+        }
+    }
 }

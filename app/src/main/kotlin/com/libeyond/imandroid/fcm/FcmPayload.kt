@@ -111,6 +111,16 @@ object FcmPayload {
         return FcmCallNotice(callId, kind, data["media"].orEmpty())
     }
 
+    /**
+     * 本机**没登录**时这条推送该不该丢：会**弹出新东西**的（新消息、来电、未接）一律丢；
+     * 只是收起已有通知的（撤回 / 别处已读 / 来电已结束）照常处理。
+     *
+     * 本机登出了服务端却还在推，说明服务端那条会话和推送令牌没跟着走（2026-10-08 Pixel：
+     * 本机误判被踢只清了本地凭据）。登录页上弹出别人的来电 / 消息，既打扰又泄露内容。
+     */
+    fun dropWhenLoggedOut(content: FcmNotificationContent): Boolean =
+        !content.retract && !content.clear && content.call?.kind != FcmCallNotice.ENDED
+
     /** 联网取头像失败后，这么久之内只用本地缓存（见 `FcmMessagingService.loadAvatar`）。 */
     const val AVATAR_NETWORK_BACKOFF_MS = 60_000L
 

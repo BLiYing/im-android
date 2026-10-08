@@ -63,6 +63,16 @@ class FcmMessagingService : FirebaseMessagingService() {
             "fcm_message_received", "convId" to content.convId, "convSeq" to content.convSeq,
             "retract" to content.retract, "clear" to content.clear,
         )
+        val client = (application as? IMApp)?.client
+        if (client != null && !client.isLoggedIn && FcmPayload.dropWhenLoggedOut(content)) {
+            // 本机已登出还收到推送：不弹，并作废 token 让服务端别再推（见 dropWhenLoggedOut）。一个进程只作废一次。
+            log.w("fcm_dropped_logged_out", "call" to (content.call != null))
+            if (!tokenDeletedWhileLoggedOut) {
+                tokenDeletedWhileLoggedOut = true
+                FcmToken.delete()
+            }
+            return
+        }
         if (content.retract) {
             FcmNotifications.retract(content.convId, content.convSeq)
             return
@@ -118,5 +128,8 @@ class FcmMessagingService : FirebaseMessagingService() {
 
         /** 最近一次联网取头像失败的时间（进程内；FCM 服务实例每条消息可能不同，所以放这里）。 */
         @Volatile private var lastAvatarFailureMs = 0L
+
+        /** 本进程已为「登出后还收到推送」作废过一次 token（见 onMessageReceived）。 */
+        @Volatile private var tokenDeletedWhileLoggedOut = false
     }
 }
