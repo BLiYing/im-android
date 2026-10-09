@@ -25,8 +25,8 @@ enum class CaptionPlacement {
  */
 object BubbleCaption {
 
-    fun placementOf(contentType: String?, caption: String?, recalled: Boolean): CaptionPlacement = when {
-        recalled || caption.isNullOrBlank() || contentType == null -> CaptionPlacement.None
+    fun placementOf(contentType: String?, caption: String?): CaptionPlacement = when {
+        caption.isNullOrBlank() || contentType == null -> CaptionPlacement.None
         // 服务端只对 image/video/file 收图说（挂在别的类型上会被丢弃），脏数据也不画
         !contentTypeAllowsCaption(contentType) -> CaptionPlacement.None
         contentType == ContentType.FILE -> CaptionPlacement.UnderFile

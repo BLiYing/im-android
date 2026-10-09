@@ -421,6 +421,9 @@
         <item quantity="other">Selected %1$d</item>
     </plurals>
     <string name="chat_send_failed_tap_retry">Failed to send, tap to retry</string>
+    <string name="chat_reject_blocked">Message sent, but it was declined by the recipient</string>
+    <string name="chat_reject_too_large">This message is too large to send</string>
+    <string name="chat_reject_not_friend">Message sent, but it was declined by the recipient. Please send a friend request first.</string>
     <string name="chat_system_send_friend_request">Send friend request</string>
     <string name="chat_text_approx_chars">About %1$s characters</string>
     <string name="chat_text_collapse">Collapse</string>

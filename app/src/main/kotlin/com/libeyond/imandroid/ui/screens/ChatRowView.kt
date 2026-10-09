@@ -3,6 +3,8 @@ package com.libeyond.imandroid.ui.screens
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.R
 import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.CallRecord
@@ -106,6 +108,8 @@ internal fun ChatRowView(
     onCancelPending: (String) -> Unit = {},
     /** 点拒收行里的「发送好友申请」（200103 的恢复入口）。 */
     onAddFriend: () -> Unit = {},
+    /** 点自己撤回的文本旁的「重新编辑」：把原文填回输入框。 */
+    onReedit: (String) -> Unit = {},
     /** 点长文本气泡：返回 true = 已处理（展开/收起/开阅读页），不再走别的点击。 */
     onTapLongText: (MessageEntity) -> Boolean = { false },
     /** 点引用块跳到原消息（按 conv_seq）。 */
@@ -239,6 +243,23 @@ internal fun ChatRowView(
                 localName = localNameOf,
                 onTapUid = onOpenUser,
                 myUid = myUid,
+            )
+        } else if ((r.msg.recalledAt ?: 0) > 0) {
+            // 撤回墓碑（对齐 iOS：居中系统行，隐藏原气泡）；自己撤回的文本可「重新编辑」
+            val mine = r.msg.sender == myUid
+            val who = style.senderNameOf(r.msg).orEmpty()
+            val text = when {
+                mine -> stringResource(R.string.conv_list_recalled_self)
+                isGroup && who.isNotBlank() -> stringResource(R.string.conv_list_recalled_member, who)
+                isGroup -> stringResource(R.string.conv_list_recalled_unknown)
+                else -> stringResource(R.string.conv_list_recalled_peer)
+            }
+            val original = r.msg.content
+            RecallNote(
+                text = text,
+                onReedit = if (mine && r.msg.contentType == ContentType.TEXT && original.isNotEmpty()) {
+                    { onReedit(original) }
+                } else null,
             )
         } else {
             val m = r.msg

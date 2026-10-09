@@ -209,14 +209,13 @@ internal fun Bubble(
             if (showSenderName && !senderName.isNullOrBlank()) {
                 Box(besideAlpha) { SenderHeader(senderName, senderBadge) }
             }
-            val recalled = (msg?.recalledAt ?: 0) > 0
-            // 图/视频要贴着气泡边渲染（撤回墓碑是纯文字，不算）
-            val flushMedia = msg != null && !recalled &&
+            // 图/视频要贴着气泡边渲染
+            val flushMedia = msg != null &&
                 (msg.contentType == ContentType.IMAGE || msg.contentType == ContentType.VIDEO)
             // 「转发自 X」放在**气泡外上方**（与发送者昵称同一列），不进气泡内：
-            // 进气泡内会被当成正文的一部分被复制/引用走。撤回墓碑上不显。
+            // 进气泡内会被当成正文的一部分被复制/引用走。
             val fwd = msg?.forwardFrom
-            if (!fwd.isNullOrBlank() && !recalled) {
+            if (!fwd.isNullOrBlank()) {
                 Text(
                     text = stringResource(R.string.chat_bubble_forward_from, fwd),
                     color = c.textTertiary,
@@ -234,7 +233,7 @@ internal fun Bubble(
                     // 量的是**未缩放**的气泡本体（放在按压缩放之前），长按菜单以它为中心浮起
                     .onGloballyPositioned { bodyCoords[0] = it }
                     // 按住先缩一下（iOS 出菜单前的按压反馈），菜单预览从同一比例弹起
-                    .pressShrink(pressSource, enabled = onLongPress != null && !recalled)
+                    .pressShrink(pressSource, enabled = onLongPress != null)
                     .then(if (isCall && pressed) Modifier.alpha(0.7f) else Modifier)
                     .then(
                         // 长按预览浮起：阴影跟着气泡走，而不是整行（行是全宽的）
@@ -246,7 +245,7 @@ internal fun Bubble(
                     .background(if (mine) c.bubbleMe else c.bubbleThem)
                     .locateFlash()
                     .then(
-                        if (onLongPress != null && !recalled) {
+                        if (onLongPress != null) {
                             Modifier.combinedClickable(
                                 interactionSource = pressSource,
                                 indication = null,
@@ -294,7 +293,7 @@ internal fun Bubble(
                     // **调用方（`quoteSnapshotFor`）已经按三档优先级算好并做过 ReplySnapshots.canonical
                     // 还原**，这里不重复算一遍——重复一遍只会多一份容易与调用方脱节的实现。
                     val snap = quoteSnapshot
-                    if (!snap.isNullOrBlank() && !recalled) {
+                    if (!snap.isNullOrBlank()) {
                         QuoteBlock(
                             snapshot = snap,
                             thumb = quoteThumb,
@@ -310,11 +309,11 @@ internal fun Bubble(
                     }
                     val isMedia = msg != null && msg.contentType in MEDIA_TYPES
                     // 名片 / 聊天记录卡 / 通话记录的时间并进卡片脚注那一行，不在下面另起一行（iOS/Web 同）
-                    val isCard = !recalled && !isMedia &&
+                    val isCard = !isMedia &&
                         (msg?.contentType == ContentType.CONTACT || msg?.contentType == ContentType.CHAT_RECORD ||
                             (msg?.contentType ?: pendingType) == ContentType.CALL)
                     // 长文本三档（对齐 iOS/Web，阈值见 LongText）：只对已确认、未撤回的文本消息
-                    val tier = if (msg != null && msg.contentType == ContentType.TEXT && !recalled) LongText.tierOf(text) else TextTier.Short
+                    val tier = if (msg != null && msg.contentType == ContentType.TEXT) LongText.tierOf(text) else TextTier.Short
                     // 搜索命中词在折叠段之外时自动展开，免得命中了却看不见（iOS 不做，属体验改良）
                     val collapsedNow = tier == TextTier.Long && !textExpanded &&
                         !(searchHighlight.isNotBlank() && text.contains(searchHighlight, ignoreCase = true))
@@ -325,12 +324,6 @@ internal fun Bubble(
                         )
                     }
                     when {
-                        recalled -> Text(
-                            text = stringResource(R.string.conv_list_recalled_self),
-                            color = c.textTertiary,
-                            fontSize = appearance.chatFontSize,
-                        )
-
                         isMedia -> Box {
                             MediaContent(
                                 msg!!, host, useTls, isGroup = isGroup,
@@ -381,7 +374,7 @@ internal fun Bubble(
                         )
                         if (tier == TextTier.Long) LongTextAffordance(expanded = !collapsedNow)
                         // 译文：同一气泡、原文之后，不加标签与分隔线（iOS 同）；折叠态不画（展开后才出现）
-                        if (!translation.isNullOrBlank() && !recalled && !collapsedNow) {
+                        if (!translation.isNullOrBlank() && !collapsedNow) {
                             Text(translation, color = c.textSecondary, fontSize = 14.sp)
                         }
                         }
@@ -389,7 +382,7 @@ internal fun Bubble(
                     }
                     // 图说画不画、画在哪：**判据在 [BubbleCaption]**。此前挂在 `flushMedia` 上（只有图/视频），
                     // 文件文的图说于是整段不画——同一条消息 iOS/Web 有字、本端只剩文件卡（2026-09-15 用户报）。
-                    val capPlacement = BubbleCaption.placementOf(msg?.contentType, msg?.caption, recalled)
+                    val capPlacement = BubbleCaption.placementOf(msg?.contentType, msg?.caption)
                     if (capPlacement != CaptionPlacement.None) {
                         Text(
                             // 图说也参与命中（与后端 G4、im-web 的判据一致），所以也要高亮；
@@ -421,7 +414,7 @@ internal fun Bubble(
                     }
                     // 文本气泡里首个 URL 的富预览卡（iOS `IMLinkPreviewView`）。
                     // 只对**已确认的纯文本**出卡：待发消息还没落定、媒体气泡自己就有图。
-                    if (!recalled && loadLinkPreview != null && msg != null &&
+                    if (loadLinkPreview != null && msg != null &&
                         msg.contentType == ContentType.TEXT
                     ) {
                         val url = remember(text) { LinkDetect.firstUrl(text) }
@@ -435,7 +428,7 @@ internal fun Bubble(
             }
             // 语音转写面板：挂在气泡**外面**（这条消息列，气泡下方），不进气泡内——
             // 同 Web `msg-item` 的结构，不是 `VoiceBubbleBody` 的一部分。
-            if (msg != null && msg.convSeq > 0 && msg.contentType == ContentType.VOICE && !recalled) {
+            if (msg != null && msg.convSeq > 0 && msg.contentType == ContentType.VOICE) {
                 val transcriber = com.libeyond.imandroid.ui.voice.LocalVoiceTranscriber.current
                 // convSeq > 0 已由上面的守卫保证，playableId 在这个分支恒不为 null。
                 val mid = com.libeyond.imandroid.voice.VoiceRules.playableId(msg.convSeq, msg.clientMsgId)!!

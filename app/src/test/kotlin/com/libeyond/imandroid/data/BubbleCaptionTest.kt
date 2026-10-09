@@ -11,33 +11,27 @@ class BubbleCaptionTest {
 
     @Test
     fun `文件文的图说画在文件卡下方`() {
-        assertEquals(CaptionPlacement.UnderFile, BubbleCaption.placementOf("file", "看下这份报表", recalled = false))
+        assertEquals(CaptionPlacement.UnderFile, BubbleCaption.placementOf("file", "看下这份报表"))
     }
 
     @Test
     fun `图文与视频文的图说画在贴边媒体下方`() {
-        assertEquals(CaptionPlacement.UnderMedia, BubbleCaption.placementOf("image", "风景", recalled = false))
-        assertEquals(CaptionPlacement.UnderMedia, BubbleCaption.placementOf("video", "录屏", recalled = false))
+        assertEquals(CaptionPlacement.UnderMedia, BubbleCaption.placementOf("image", "风景"))
+        assertEquals(CaptionPlacement.UnderMedia, BubbleCaption.placementOf("video", "录屏"))
     }
 
     @Test
     fun `没有图说或只有空白就不画`() {
         listOf(null, "", "  \n").forEach { cap ->
-            assertEquals(CaptionPlacement.None, BubbleCaption.placementOf("file", cap, recalled = false))
-            assertEquals(CaptionPlacement.None, BubbleCaption.placementOf("image", cap, recalled = false))
+            assertEquals(CaptionPlacement.None, BubbleCaption.placementOf("file", cap))
+            assertEquals(CaptionPlacement.None, BubbleCaption.placementOf("image", cap))
         }
-    }
-
-    @Test
-    fun `撤回的墓碑不画图说——正文本就不随撤回下发`() {
-        assertEquals(CaptionPlacement.None, BubbleCaption.placementOf("file", "看下这份报表", recalled = true))
-        assertEquals(CaptionPlacement.None, BubbleCaption.placementOf("image", "风景", recalled = true))
     }
 
     @Test
     fun `服务端不收图说的类型即使带了也不画`() {
         listOf("text", "voice", "contact", "chat_record", "system", null).forEach { type ->
-            assertEquals(CaptionPlacement.None, BubbleCaption.placementOf(type, "脏数据", recalled = false))
+            assertEquals(CaptionPlacement.None, BubbleCaption.placementOf(type, "脏数据"))
         }
     }
 }

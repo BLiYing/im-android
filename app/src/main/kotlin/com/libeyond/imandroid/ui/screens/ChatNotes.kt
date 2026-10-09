@@ -3,6 +3,7 @@ package com.libeyond.imandroid.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -126,6 +127,40 @@ internal fun SystemNote(
                     annotated.getStringAnnotations(SYS_NAME_TAG, offset, offset)
                         .firstOrNull()?.let { onTapUid?.invoke(it.item) }
                 },
+            )
+        }
+    }
+}
+
+/**
+ * 撤回墓碑：居中胶囊「你/对方/XX撤回了一条消息」（与 iOS `IMSystemCell` 同形），不是气泡。
+ * 自己撤回的文本带「重新编辑」，贴在胶囊右侧（iOS `_reeditButton`），点了把原文填回输入框。
+ */
+@Composable
+internal fun RecallNote(text: String, onReedit: (() -> Unit)?) {
+    val c = IMTheme.colors
+    val appearance = IMTheme.appearance
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp, horizontal = 40.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .clip(RoundedCornerShape(11.dp))
+                .background(c.datePillBackground)
+                .locateFlash()
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+        ) {
+            Text(text, color = c.onMedia, fontSize = appearance.sysFontSize, textAlign = TextAlign.Center)
+        }
+        if (onReedit != null) {
+            Text(
+                stringResource(R.string.chat_message_reedit),
+                color = c.accent,
+                fontSize = appearance.sysFontSize,
+                modifier = Modifier.padding(start = 6.dp).clickable(onClick = onReedit),
             )
         }
     }

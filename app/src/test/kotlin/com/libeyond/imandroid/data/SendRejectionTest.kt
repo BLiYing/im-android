@@ -11,12 +11,13 @@ import org.junit.Test
 /** 拒收说明行：哪些码给说明（不给重发），哪个码给「发送好友申请」。 */
 class SendRejectionTest {
     @Test fun `明确拒收的码都有文案`() {
-        assertEquals(R.string.err_200103, SendRejection.noteRes(ErrCode.NOT_FRIEND))
+        assertEquals(R.string.chat_reject_not_friend, SendRejection.noteRes(ErrCode.NOT_FRIEND))
+        assertEquals(R.string.chat_reject_too_large, SendRejection.noteRes(ErrCode.MSG_TOO_LONG))
         assertEquals(R.string.err_300004, SendRejection.noteRes(ErrCode.ACCOUNT_MUTED))
         assertEquals(R.string.chat_input_disabled_mute_all, SendRejection.noteRes(ErrCode.GROUP_MUTED))
         assertEquals(R.string.chat_input_disabled_muted, SendRejection.noteRes(ErrCode.GROUP_MEMBER_MUTED))
         assertEquals(R.string.err_300203, SendRejection.noteRes(ErrCode.NOT_GROUP_MEMBER))
-        assertEquals(R.string.err_200102, SendRejection.noteRes(ErrCode.FRIEND_BLOCKED))
+        assertEquals(R.string.chat_reject_blocked, SendRejection.noteRes(ErrCode.FRIEND_BLOCKED))
     }
 
     @Test fun `超时网络等未知码不给说明，仍走重发`() {

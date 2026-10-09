@@ -272,6 +272,8 @@ fun ChatScreen(
     // 数法在 `UnreadBelow`（盖住就数已加载的，盖不住按 tip 减读位点），宿主经 [unreadBelowOf] 给；
     // 与未读分割线的 readSeq 不同：分割线冻结在进会话那一刻，这个随「可见即读」实时推进。
     var pendingReadSeq by remember(convId) { mutableStateOf(readSeq) }
+    // 「重新编辑」递增一次 = 请求输入框聚焦弹键盘
+    var reeditTick by remember(convId) { mutableStateOf(0) }
 
     // ➕ 面板与键盘**互斥**（微信/iOS 同款）：展开面板要收键盘，弹键盘要收面板——
     // 两个都占着底部空间，同时在场就会把消息列表挤没。
@@ -428,7 +430,12 @@ fun ChatScreen(
                     onToggleSelect = onToggleSelect, onLongPress = onLongPress, onOpenMedia = onOpenMedia,
                     onOpenUser = onOpenUser, onRetry = onRetry, onToggleUpload = onToggleUpload,
                     onCancelPending = onCancelPending, onTapLongText = onTapLongText,
-                    onAddFriend = onAddFriendFromNote, onJumpToSeq = onJumpToSeq,
+                    onAddFriend = onAddFriendFromNote,
+                    onReedit = { t ->
+                        onInputChange(TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length)))
+                        reeditTick++
+                    },
+                    onJumpToSeq = onJumpToSeq,
                     onOpenRecord = onOpenRecord, onCallBack = onCallBack,
                 )
             }
@@ -515,6 +522,7 @@ fun ChatScreen(
             above = composerAbove,
             extraSendable = extraSendable,
             lockedReason = composerLock,
+            focusTick = reeditTick,
             onSend = onSend,
             onPlus = {
                 attachOpen = !attachOpen

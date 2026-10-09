@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -88,6 +89,8 @@ internal fun Composer(
      * 非空 = 输入框、＋、🎙 全部禁用并以它作占位。**入口即拦**——只锁输入框的话，＋ 仍能点开相册一路走到上传才被拒。
      */
     lockedReason: String? = null,
+    /** 递增一次 = 请求输入框聚焦并弹键盘（撤回后「重新编辑」，对齐 iOS becomeFirstResponder）。 */
+    focusTick: Int = 0,
 ) {
     if (lockedReason != null) {
         LockedComposerBar(lockedReason)
@@ -95,7 +98,7 @@ internal fun Composer(
     }
     Column(Modifier.fillMaxWidth()) {
         above?.invoke()
-        ComposerBar(convId, input, onInputChange, onSend, onSendVoice, onToast, onPlus, onInputFocus, extraSendable)
+        ComposerBar(convId, input, onInputChange, onSend, onSendVoice, onToast, onPlus, onInputFocus, extraSendable, focusTick)
     }
 }
 
@@ -110,8 +113,14 @@ private fun ComposerBar(
     onPlus: () -> Unit,
     onInputFocus: () -> Unit,
     extraSendable: Boolean,
+    focusTick: Int,
 ) {
     val c = IMTheme.colors
+    val inputFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    androidx.compose.runtime.LaunchedEffect(focusTick) {
+        if (focusTick > 0) { inputFocus.requestFocus(); keyboard?.show() }
+    }
     val d = IMTheme.dimens
     // 正文有字 **或** 粘贴条上挂着图，就能发
     val canSend = input.text.isNotBlank() || extraSendable
@@ -199,7 +208,7 @@ private fun ComposerBar(
                             onValueChange = onInputChange,
                             textStyle = TextStyle(color = c.textPrimary, fontSize = 15.sp),
                             cursorBrush = SolidColor(c.accent),
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().focusRequester(inputFocus),
                         )
                     }
                 }
