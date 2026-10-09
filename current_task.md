@@ -6,6 +6,8 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+**被拒文案 / 撤回墓碑 / 发送失败红点 / ack 超时对齐 iOS（2026-10-09）**：被拒 200102/200103 微信式文案（`chat_reject_*`）、300001 说明行；撤回改居中胶囊 `RecallNote` + 重新编辑；失败红点统一 `ui/components/FailBadge.kt`（被拒收的不可点）；`SendAckTimeouts`：同 client_msg_id 每 5s 重发、3 次后判失败（本地码 `LocalSendError.ACK_TIMEOUT`=5002），判失败后不再自动补发、点红点重发。已 code-review；红点/超时待 OPPO 复测后提交。
+
 **通话被踢后现场重启（2026-10-09，未 commit）**：`RtcCall` 存 `Wanted`（start 入参快照），`onFatalKickedOut` 只 `teardown()`，`placeSingle/placeGroup/fetchCallHistory` 先 `restartIfStopped()`；`RtcRestartPolicy` 有单测。OPPO 真机已验「下线设备→重新登录→呼叫」「被拉黑→对方暂时无法被邀请」。设计见 `IMServer/docs/design/CALL_ACCESS_CONTROL_DESIGN.md`。
 
 - **10-08 修「令牌过期被当成被踢」**：握手 401 先续期（`ws/WakeAction.kt` `unauthorizedActionFor`），续期被拒才回登录页（到寿给「登录已过期」）；`IMSocketManager.manualClose` 初值 true，`connect()` 前唤醒不连（冷启动不再抢在 restore 前拿过期 token 握手）；本机没登录时 FCM 新消息/来电/未接一律丢并 `FcmToken.delete()`。/code-review 后补：401 处理全程持锁；续期结果只有鉴权码才结束会话（封号→封号文案、5xx→退避）；「续过一次」按连接代数记；FCM 作废失败可重试、登录后复位。Pixel × OPPO × iOS 模拟器两轮换密钥重启均续上。test.sh 1520 绿。

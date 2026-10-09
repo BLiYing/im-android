@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.db.SendState
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.sdk.protocol.ErrCode
@@ -116,6 +117,9 @@ suspend fun MessageService.resend(clientMsgId: String) {
         }
         return
     }
+    // transmit 从不改状态：ack 超时判成 Failed 的行（5002）点红点重发时必须先复位成 Sending，
+    // 否则红点一直在、`failIfStillSending` 也因「不是 Sending」永远不会再判这一轮
+    if (p.state != SendState.Sending.name) repo.markPendingSending(owner, clientMsgId)
     transmit(
         p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
         p.fileName, p.fileSize, p.caption, p.forwardFrom, p.groupId,

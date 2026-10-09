@@ -7,7 +7,7 @@ import com.libeyond.imandroid.sdk.protocol.ErrCode
 /**
  * 服务端**明确拒收**一条 `send_msg` 后，气泡下方那行小灰字（对齐 iOS `IMRejectNoteView` / `IMNoteCodeIsActionable`）。
  *
- * 这些消息**原样重发必然再被拒**，所以不给红 ❗ 重发入口，恢复入口是这行字本身：
+ * 这些消息**原样重发必然再被拒**：红 ❗ 照显（微信式、对齐 iOS）但**不可点**，恢复入口是这行字本身：
  * 目前只有非好友（200103）可自助恢复——「发送好友申请」。
  *
  * 文案是微信式「消息已发出，但被对方拒收了」（不用 `err_2001xx`：那是加好友场景的措辞），与 iOS / Web 同。
@@ -31,4 +31,13 @@ object SendRejection {
 
     /** 这条拒收是否带「发送好友申请」动作。 */
     fun isActionable(code: Int): Boolean = code == ErrCode.NOT_FRIEND
+}
+
+/**
+ * 客户端本地产生的发送失败码（**不来自服务端**，所以不放 `ErrCode`——那里逐条抄自后端 errcode.go）。
+ * 不在 [SendRejection] 表里 → 红点可点重发。
+ */
+object LocalSendError {
+    /** ack 重发耗尽仍无回应（断网 / 丢包）。同 iOS `5002`。 */
+    const val ACK_TIMEOUT = 5002
 }

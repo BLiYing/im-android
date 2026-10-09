@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.components.FailBadge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -71,6 +72,8 @@ internal fun PendingMediaBubble(
     failed: Boolean,
     progress: Int?,
     onRetry: () -> Unit,
+    /** 被服务端拒收：画不可点的红 ！（见 [Bubble] 的 rejected）。 */
+    rejected: Boolean = false,
     state: UploadState? = null,
     onToggle: () -> Unit = {},
     onCancel: () -> Unit = {},
@@ -89,6 +92,7 @@ internal fun PendingMediaBubble(
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (rejected) FailBadge(null)
         Box(
             modifier = Modifier
                 .width(boxW)
@@ -169,6 +173,8 @@ internal fun PendingFileBubble(
     failed: Boolean,
     progress: Int?,
     onRetry: () -> Unit,
+    /** 被服务端拒收：画不可点的红 ！（见 [Bubble] 的 rejected）。 */
+    rejected: Boolean = false,
     state: UploadState? = null,
     onToggle: () -> Unit = {},
     onCancel: () -> Unit = {},
@@ -179,6 +185,7 @@ internal fun PendingFileBubble(
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (rejected) FailBadge(null)
         Column(
             modifier = Modifier
                 .widthIn(max = 260.dp)
@@ -236,6 +243,8 @@ internal fun PendingVoiceBubble(
     failed: Boolean,
     progress: Int?,
     onRetry: () -> Unit,
+    /** 被服务端拒收：画不可点的红 ！（见 [Bubble] 的 rejected）。 */
+    rejected: Boolean = false,
 ) {
     val c = IMTheme.colors
     val player = LocalVoicePlayer.current
@@ -250,7 +259,7 @@ internal fun PendingVoiceBubble(
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (failed) RetryMark(onRetry)
+        if (failed) FailBadge(onRetry) else if (rejected) FailBadge(null)
         Column(
             modifier = Modifier
                 .width(width)
@@ -291,18 +300,4 @@ internal fun PendingVoiceBubble(
             }
         }
     }
-}
-
-/** 红❗在气泡左侧，点了重发——与文本失败气泡同一套语义。 */
-@Composable
-private fun RetryMark(onRetry: () -> Unit) {
-    Text(
-        "！",
-        color = IMTheme.colors.danger,
-        fontSize = 18.sp,
-        modifier = Modifier
-            .clip(CircleShape)
-            .clickable(onClick = onRetry)
-            .padding(horizontal = 6.dp),
-    )
 }

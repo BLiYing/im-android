@@ -100,11 +100,6 @@ internal data class AlbumTile(
      * `true/false` = 画圈，已勾 / 未勾。**逐格一个圈**，与 iOS `IMAlbumCell` / Web 一致。
      */
     val mark: Boolean? = null,
-    /**
-     * 待发件的真实状态是 Failed（**含被服务端拒收**那类——它们不画红叉，[failed] 为 false）。
-     * 只给长按菜单用：待发格要有「取消发送 / 删除」（iOS `alb.menuForItem` 把待发格也交给同一份菜单）。
-     */
-    val failedState: Boolean = false,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -279,8 +274,8 @@ private fun AlbumTileView(
     val sending = m.sending || m.failed
     // 待发格的长按菜单（取消发送 / 删除）：本格自己弹，不走聊天页的消息菜单（那条要 conv_seq）
     var pendingOpen by remember { mutableStateOf(false) }
-    val pendingActs = if (m.sending || m.failed || m.failedState) {
-        PendingMenu.actions(m.contentType, failed = m.failed || m.failedState, hasCopyText = false)
+    val pendingActs = if (m.sending || m.failed) {
+        PendingMenu.actions(m.contentType, failed = m.failed, hasCopyText = false)
     } else {
         emptyList()
     }
@@ -365,7 +360,7 @@ private fun AlbumTileView(
             val ring = AlbumLayout.ringSize(size.value).dp
             Box(Modifier.size(width, size), contentAlignment = Alignment.Center) {
                 if (m.failed) {
-                    // 失败：红❗（点击重发挂在格子上，与单条待发气泡同一套语义）
+                    // 失败（含被拒收）：格内红 ！。不可点——重发走长按菜单的「取消发送 / 删除」；气泡旁的圆形红点是单条消息的画法
                     Text("！", color = c.danger, fontSize = 22.sp)
                 } else if (m.upload != null) {
                     UploadControlDisc(

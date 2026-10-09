@@ -315,6 +315,10 @@ interface PendingMessageDao {
     @Query("UPDATE pending_message SET state = :state, errorCode = :code WHERE ownerUid = :owner AND clientMsgId = :cid")
     suspend fun markState(owner: String, cid: String, state: String, code: Int)
 
+    /** 原子「仍是 Sending 才判失败」：与服务端拒收（error 帧）并发时，不会用超时码盖掉具体拒收码。返回受影响行数。 */
+    @Query("UPDATE pending_message SET state = 'Failed', errorCode = :code WHERE ownerUid = :owner AND clientMsgId = :cid AND state = 'Sending'")
+    suspend fun failIfSending(owner: String, cid: String, code: Int): Int
+
     /** ack 到达后从待发表移除（真身已落进 message 表）。 */
     @Query("DELETE FROM pending_message WHERE ownerUid = :owner AND clientMsgId = :cid")
     suspend fun remove(owner: String, cid: String)

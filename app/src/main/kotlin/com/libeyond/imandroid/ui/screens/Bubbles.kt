@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.screens
 
+import com.libeyond.imandroid.ui.components.FailBadge
 import com.libeyond.imandroid.ui.components.unclippedBoundsInWindow
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -117,6 +118,8 @@ internal fun Bubble(
     delivered: Boolean = false,
     read: Boolean = false,
     onRetry: (() -> Unit)? = null,
+    /** 被服务端明确拒收（拉黑/非好友/禁言…）：画红点但不可点（重发必再被拒，恢复入口是下方说明行；对齐 iOS `_failBadge.tappable`）。 */
+    rejected: Boolean = false,
     /** 群聊里对方的消息要占一条 30dp 头像列（即使本条不画头像，也得占位）。 */
     reserveAvatarColumn: Boolean = false,
     /** 本条是否真的画头像（连续段的最后一条才画，见 [showsSenderAvatar]）。 */
@@ -174,12 +177,10 @@ internal fun Bubble(
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
         if (failed && onRetry != null) {
-            // 红❗点击重发。放气泡外侧，不遮正文。
-            Text(
-                text = "❗",
-                fontSize = 16.sp,
-                modifier = Modifier.clickable { onRetry() }.padding(end = 4.dp).then(besideAlpha),
-            )
+            // 红点点击重发。放气泡外侧，不遮正文；垂直居中于气泡（iOS `_failBadge.centerY = _bubble.centerY`）
+            FailBadge(onRetry, Modifier.align(Alignment.CenterVertically).then(besideAlpha))
+        } else if (rejected) {
+            FailBadge(null, Modifier.align(Alignment.CenterVertically).then(besideAlpha))
         }
         // —— 头像列（UI_SPEC §3：12 + 30 + 6 = iOS 的 _leading.constant 48）——
         // **底对齐气泡底**，不是顶对齐：多行气泡时头像贴在最后一行旁边，与 iOS/Web 一致。

@@ -140,7 +140,7 @@ internal fun ChatRowView(
             val firstSent = (r.members.first() as? AlbumMember.Sent)?.msg
             val albumMine = firstSent == null || firstSent.sender == myUid
             val albumShowName = showsSenderName(rows, i, myUid, isGroup)
-            // 一批图被服务端明确拒收（非好友/禁言…）：同单条待发——不给红 ❗，宫格下方给一行说明（SendRejection）
+            // 一批图被服务端明确拒收（非好友/禁言…）：同单条待发——宫格下方给一行说明（SendRejection）；红 ❗ 仍显示但不可点
             val albumRejectCode = r.members.asSequence().mapNotNull { (it as? AlbumMember.Sending)?.msg }
                 .firstOrNull { it.state == SendState.Failed.name && SendRejection.noteRes(it.errorCode) != null }?.errorCode
             Column {
@@ -174,9 +174,8 @@ internal fun ChatRowView(
                         upload = style.uploadStates[m.msg.clientMsgId],
                         onToggleUpload = { onToggleUpload(m.msg.clientMsgId) },
                         onCancelUpload = { onCancelPending(m.msg.clientMsgId) },
-                        failed = m.msg.state == SendState.Failed.name && SendRejection.noteRes(m.msg.errorCode) == null,
+                        failed = m.msg.state == SendState.Failed.name, // 含被拒收：格内红 ！，对齐 iOS 宫格
                         thumb = m.msg.thumb,
-                        failedState = m.msg.state == SendState.Failed.name,
                     )
                 }
             },
@@ -344,7 +343,7 @@ internal fun ChatRowView(
             val pct = uploadProgress[r.msg.clientMsgId]
             val ust = style.uploadStates[r.msg.clientMsgId]
             val cid = r.msg.clientMsgId
-            // 被服务端明确拒收（非好友/禁言…）：不给红 ❗（重发必再被拒），改在气泡下方给一行说明（SendRejection）
+            // 被服务端明确拒收（非好友/禁言…）：红点照显但不可点（重发必再被拒；对齐 iOS），恢复入口在气泡下方说明行（SendRejection）
             val rejectRes = if (r.msg.state == SendState.Failed.name) SendRejection.noteRes(r.msg.errorCode) else null
             val shownFailed = r.msg.state == SendState.Failed.name && rejectRes == null
             Column {
@@ -366,6 +365,7 @@ internal fun ChatRowView(
                     timestamp = r.msg.createdAt,
                     sending = r.msg.state == SendState.Sending.name,
                     failed = shownFailed,
+                    rejected = rejectRes != null,
                     progress = pct,
                     onRetry = { onRetry(r.msg.clientMsgId) },
                     mediaW = r.msg.mediaW,
@@ -381,6 +381,7 @@ internal fun ChatRowView(
                     timestamp = r.msg.createdAt,
                     sending = r.msg.state == SendState.Sending.name,
                     failed = shownFailed,
+                    rejected = rejectRes != null,
                     progress = pct,
                     onRetry = { onRetry(r.msg.clientMsgId) },
                 )
@@ -396,6 +397,7 @@ internal fun ChatRowView(
                     timestamp = r.msg.createdAt,
                     sending = r.msg.state == SendState.Sending.name,
                     failed = shownFailed,
+                    rejected = rejectRes != null,
                     progress = pct,
                     onRetry = { onRetry(r.msg.clientMsgId) },
                 )
@@ -412,6 +414,7 @@ internal fun ChatRowView(
                     senderName = null,
                     sending = r.msg.state == SendState.Sending.name,
                     failed = shownFailed,
+                    rejected = rejectRes != null,
                     onRetry = { onRetry(r.msg.clientMsgId) },
                 )
             }

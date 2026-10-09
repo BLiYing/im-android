@@ -32,6 +32,7 @@ import com.libeyond.imandroid.sdk.protocol.SyncRespData
 import com.libeyond.imandroid.sdk.protocol.WindowReqData
 import com.libeyond.imandroid.sdk.protocol.WindowRespData
 import com.libeyond.imandroid.sdk.ws.IMSocketManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -91,6 +92,41 @@ class MessageService(
     })
 
     internal val log = IMLog.tag("IM.Msg")
+
+    /** ack 超时：先同 id 重发（最多 3 次），仍无回应才判失败（见 [SendAckTimeouts]）。 */
+    private val ackTimeouts = SendAckTimeouts(
+        scope,
+        resend = { cid -> guardedTimer("resend", cid) { owner -> retransmit(owner, cid) } },
+        fail = { cid -> guardedTimer("fail", cid) { owner -> if (!media.isUploading(cid)) repo.failIfStillSending(owner, cid) } },
+    )
+
+    /** 计时协程里的库异常不能冒到 scope 变成未捕获崩溃；这条仍是 Sending，下次连接会补发。 */
+    private suspend fun guardedTimer(what: String, cid: String, block: suspend (owner: String) -> Unit) {
+        val owner = ownerProvider() ?: return
+        try {
+            block(owner)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.w("msg_ack_timer_$what", "cid" to cid, "err" to e.javaClass.simpleName)
+        }
+    }
+
+    /** 超时重发：只重发仍是 Sending、正文已是服务端地址（不是本地 uri）的那条；不重新 arm（否则重发次数永远清零）。 */
+    private suspend fun retransmit(owner: String, cid: String) {
+        val p = repo.inFlight(owner).firstOrNull { it.clientMsgId == cid } ?: return
+        if (isLocalUri(p.content) || media.isUploading(cid)) return
+        log.i("msg_ack_resend", "cid" to cid)
+        transmit(
+            p.clientMsgId, p.convId, p.to, p.contentType, p.content, p.replyToConvSeq,
+            p.fileName, p.fileSize, p.caption, p.forwardFrom, p.groupId,
+            p.mediaW, p.mediaH, p.duration, p.poster, p.thumb, p.waveform,
+            mentions = Mention.parseMentions(p.mentions),
+            mentionAll = Mention.mentionAllForResend(p.forwardFrom, p.mentionSpans),
+            mentionSpans = Mention.parseSpans(p.mentionSpans),
+            armTimeout = false,
+        )
+    }
 
     /**
      * 分片上传进度（clientMsgId → 百分比），UI 直接 collect。
@@ -168,7 +204,9 @@ class MessageService(
     private suspend fun dispatch(owner: String, type: String, data: JsonElement?) {
         when (type) {
             FrameType.ACK -> data?.let {
-                repo.onAck(owner, ProtocolJson.decodeFromJsonElement(AckData.serializer(), it))
+                val ack = ProtocolJson.decodeFromJsonElement(AckData.serializer(), it)
+                ackTimeouts.cancel(ack.clientMsgId)
+                repo.onAck(owner, ack)
             }
 
             FrameType.NEW_MSG -> data?.let {
@@ -303,6 +341,7 @@ class MessageService(
                 val e = ProtocolJson.decodeFromJsonElement(ErrorData.serializer(), it)
                 if (e.clientMsgId != null) {
                     // 带 client_msg_id = 对某条发送的拒绝，把那条标失败
+                    ackTimeouts.cancel(e.clientMsgId)
                     repo.onSendRejected(owner, e)
                 } else {
                     log.w("ws_error_frame", "code" to e.code)
@@ -410,6 +449,8 @@ class MessageService(
         mentions: List<String> = emptyList(),
         mentionAll: Boolean = false,
         mentionSpans: List<MentionSpan> = emptyList(),
+        /** false = 超时重发自己调用，不能重置计时（见 [SendAckTimeouts]）。 */
+        armTimeout: Boolean = true,
     ) {
         val payload = ProtocolJson.encodeToJsonElement(
             SendMsgData.serializer(),
@@ -438,9 +479,10 @@ class MessageService(
             ),
         )
         val sent = socket.send(FrameType.SEND_MSG, payload)
+        if (armTimeout) ackTimeouts.arm(clientMsgId)
         if (!sent) {
-            // 没发出去不标失败——它仍是「发送中」，等重连后由 resendInFlight 补发。
-            // 标失败会让用户看到红❗然后连接一恢复消息又自己发出去了，很怪。
+            // 没发出去不立刻标失败——它仍是「发送中」，短暂断线时重连后由 resendInFlight 补发（并重新 arm）。
+            // 但上面的 ack 超时仍在计：断网超过约 20s 仍未发出/未确认会判失败，转成红点由用户重发（与 iOS 一致）。
             log.i("msg_send_deferred_offline", "cid" to clientMsgId)
         }
     }

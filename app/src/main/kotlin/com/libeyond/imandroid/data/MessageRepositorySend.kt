@@ -217,3 +217,13 @@ suspend fun MessageRepository.onSendRejected(owner: String, err: ErrorData) {
     pending.markState(owner, cid, SendState.Failed.name, err.code)
     log.w("msg_send_rejected", "cid" to cid, "code" to err.code)
 }
+
+/**
+ * ack 超时到点（[SendAckTimeouts]）：这条待发行**仍是 Sending** 才判失败；ack 已到的行早已移出待发表。
+ * @return 是否真的判了失败
+ */
+suspend fun MessageRepository.failIfStillSending(owner: String, cid: String): Boolean {
+    if (pending.failIfSending(owner, cid, LocalSendError.ACK_TIMEOUT) == 0) return false
+    log.w("msg_ack_timeout", "cid" to cid)
+    return true
+}

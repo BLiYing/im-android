@@ -43,6 +43,8 @@ data class IMColors(
     // --- 线条 / 状态 ---
     val separator: Color,
     val danger: Color,
+    /** 压在 [danger] 实底上的前景（发送失败红点里的 "!"）。 */
+    val onDanger: Color,
     val dangerSoft: Color,
     val online: Color,
     val link: Color,
@@ -133,6 +135,7 @@ val LightIMColors = IMColors(
 
     separator = Color(0xFFE3E6EA),
     danger = Color(0xFFE5484D),
+    onDanger = Color(0xFFFFFFFF),
     dangerSoft = Color(0x1FE5484D),
     online = Color(0xFF1AAB5B),
     link = Color(0xFF2477D4),
@@ -194,6 +197,7 @@ val DarkIMColors = IMColors(
 
     separator = Color(0xFF454545),
     danger = Color(0xFFFF696E),
+    onDanger = Color(0xFFFFFFFF),
     dangerSoft = Color(0x1FFF696E),
     online = Color(0xFF42C77A),
     link = Color(0xFF66A9FF),
