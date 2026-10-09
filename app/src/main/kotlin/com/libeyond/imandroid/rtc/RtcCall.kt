@@ -44,7 +44,10 @@ import kotlinx.coroutines.launch
  *
  * - [start]：用户进入主界面（IM 已登录）时调用——建引擎、接 Kit；**登录由 Kit 负责**（`IMCallKitConfig.tokenProvider`，
  *   im-rtc 2.2.0）：Kit 取票登录、失败退避重试、拨号前补登录、续票、票失效被踢后重登，宿主不再自己 login。
- * - [stop]：退出 / 被踢 / 被封离开主界面时调用——销毁引擎、断开 im-rtc。**不停的话换账号会有两条连接，服务端踢掉其中一条。**
+ * - [stop]：退出登录 / 换账号时调用——销毁引擎、断开 im-rtc，并忘掉"想要在线的账号"。**不停的话换账号会有两条连接，服务端踢掉其中一条。**
+ *   被 im-rtc-server 踢下线（别处登录 / 配置被拒）不走 [stop]：引擎收掉，但 [wanted] 还记着，
+ *   下一次主动呼叫时 [restartIfStopped] 现场重启一次——此前停在永久的"通话服务未启动（请重新登录）"，
+ *   而重新登录救不了被踢。重启后仍登不上由 Kit 在拨号时给笼统提示。
  * - [placeSingle] / [placeGroup]：业务入口调用，界面全部由 Kit 接管。
  *
  * 票从哪来只在 [signToken] 一处（交给 Kit 的 tokenProvider 调）（调 IMServer `POST /api/v1/rtc/token` 代为向 im-rtc-server
@@ -64,6 +67,13 @@ object RtcCall : RtcHostBridge {
     private var deviceId: String = ""
     private var profileResolver: RtcProfileResolver? = null
     private var inviteProvider: com.imrtc.uikit.IMInviteMemberProvider? = null
+
+    /** [start] 的入参快照：被踢收掉引擎后凭它重启。只有 [stop]（退出登录 / 换账号）才清。 */
+    private class Wanted(
+        val context: Context, val uid: String, val deviceId: String, val rtcApi: RtcApi,
+        val profiles: RtcProfileResolver?, val invites: com.imrtc.uikit.IMInviteMemberProvider?, val config: RtcConfig,
+    )
+    private var wanted: Wanted? = null
 
     /** 每次 start/stop 加一：旧引擎迟到的回调（stale）一律不算数，别改动新一代的状态。 */
     private var generation = 0L
@@ -159,6 +169,7 @@ object RtcCall : RtcHostBridge {
     ) {
         if (engine != null && this.uid == uid && this.deviceId == deviceId) return
         teardown()
+        wanted = null // 换号 / 重启时先忘掉旧账号：新账号校验没过就 return 的话，不能留着旧账号参数被「现场重启」拉起来
         if (!config.isUsable) {
             log.w("rtc_disabled", "missing" to config.missing.joinToString(","))
             return
@@ -171,6 +182,8 @@ object RtcCall : RtcHostBridge {
         appContext = ctx
         this.uid = uid
         this.deviceId = deviceId
+        // 配置 / id 校验都过了、引擎真的要建了才记：校验没过就 return 的情况不能被当成「被踢后待恢复」。
+        wanted = Wanted(ctx, uid, deviceId, rtcApi, profiles, invites, config)
         val gen = generation
         val instance = IMCallEngine(
             IMCallEngine.Config(url = config.wsUrl, deviceId = deviceId),
@@ -220,7 +233,21 @@ object RtcCall : RtcHostBridge {
 
     /** 离开主界面调用（登出 / 回登录页）。幂等。Kit 停下时会登出 Engine、作废在途的取票。 */
     fun stop() {
+        wanted = null
         teardown()
+    }
+
+    /**
+     * 被服务端踢下线后引擎收掉了、账号还记着：用户这次要呼叫 / 查记录时现场重启一次。
+     * 由 [RtcRestartPolicy.shouldRestart] 判定（退出登录后不会重启）。
+     * **只挂在 [placeSingle] / [placeGroup]**（用户主动呼叫），不挂在 [fetchCallHistory] 这类被动页面：
+     * 打开「最近通话」就重登，会把顶掉自己的那台设备再顶回去，两台设备互相顶号。
+     */
+    private fun restartIfStopped() {
+        val w = wanted ?: return
+        if (!RtcRestartPolicy.shouldRestart(engineRunning = engine != null, wantedAccount = true)) return
+        log.i("rtc_restart_after_kick", "uid" to w.uid)
+        start(w.context, w.uid, w.deviceId, w.rtcApi, w.profiles, w.invites, w.config)
     }
 
     private fun teardown() {
@@ -243,6 +270,7 @@ object RtcCall : RtcHostBridge {
      */
     @Suppress("UNUSED_PARAMETER")
     fun placeSingle(peerUid: String, video: Boolean, onError: (String) -> Unit = {}): String? {
+        restartIfStopped()
         unavailableReason()?.let { return it }
         RtcIds.problem(Str.s(R.string.rtc_kind_peer_id), peerUid)?.let { return it }
         profileResolver?.groupId = ""
@@ -259,6 +287,7 @@ object RtcCall : RtcHostBridge {
      */
     @Suppress("UNUSED_PARAMETER")
     fun placeGroup(chatGroupId: String, calleeUids: List<String>, onError: (String) -> Unit = {}): String? {
+        restartIfStopped()
         unavailableReason()?.let { return it }
         RtcIds.problem(Str.s(R.string.rtc_kind_group_id), chatGroupId)?.let { return it }
         if (calleeUids.isEmpty()) return Str.s(R.string.rtc_error_no_callees)
@@ -346,7 +375,9 @@ object RtcCall : RtcHostBridge {
     override fun onRecord(plan: CallRecordPlan) { onCallRecord?.invoke(plan) }
 
     /** 别处登录 / 被吊销 / 参数被拒：换票救不了，也不自动重连，停下来等人看日志。 */
-    override fun onFatalKickedOut() { main.post { stop() } }
+    // 不是 stop()：账号还记着，下次呼叫时现场重启。post 到主线程之后再核一次代数：
+    // 排队期间若已登出 / 换号 / 重启出新引擎，这次收尾属于旧引擎，不能把健康的新引擎收掉。
+    override fun onFatalKickedOut(gen: Long) { main.post { if (!isStale(gen)) teardown() } }
 
     /**
      * 票的唯一来源：调 IMServer 代为向 im-rtc-server 换票，本端不需要也不该知道任何签名密钥。
@@ -383,3 +414,12 @@ object RtcCall : RtcHostBridge {
  */
 internal fun rtcTokenFrom(result: Result<RtcTokenResult>): String? =
     result.getOrNull()?.token?.takeIf { it.isNotEmpty() }
+
+/**
+ * 呼叫入口发现引擎没在跑时要不要现场重启（被踢收掉引擎、账号还记着）。
+ * 抽成纯对象是为了能单测——`RtcCall`（object）的类初始化碰 `Looper`，纯 JVM 单测下不能直接用（见 RtcCallTest 头注释）。
+ * 对端：iOS `IMRtcCallShouldRestart`。
+ */
+object RtcRestartPolicy {
+    fun shouldRestart(engineRunning: Boolean, wantedAccount: Boolean): Boolean = !engineRunning && wantedAccount
+}

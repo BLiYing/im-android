@@ -13,7 +13,8 @@ internal interface RtcHostBridge {
     fun onBegin()
     fun onEnd(callId: String)
     fun onRecord(plan: CallRecordPlan)
-    fun onFatalKickedOut()
+    /** [gen] 是收到事件时的引擎代数：主线程上真正收引擎前要再核一次，别误收掉期间重建出来的新引擎。 */
+    fun onFatalKickedOut(gen: Long)
 }
 
 /**
@@ -74,7 +75,7 @@ internal class RtcHostListener(
         when (reason) {
             // 票失效：Kit 自己取新票重登（tokenProvider，im-rtc 2.2.0），宿主不用管。
             IMKickedOutReason.AUTH_EXPIRED -> Unit
-            IMKickedOutReason.TAKEN_OVER, IMKickedOutReason.CONFIG_REJECTED -> host.onFatalKickedOut()
+            IMKickedOutReason.TAKEN_OVER, IMKickedOutReason.CONFIG_REJECTED -> host.onFatalKickedOut(gen)
         }
     }
 
