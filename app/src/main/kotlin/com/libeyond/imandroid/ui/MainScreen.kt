@@ -102,6 +102,12 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
         if (owner.isNotEmpty()) {
             runCatching { client.contacts.friends() }
                 .onSuccess { list -> knownFriends = list.associateBy { it.userId } }
+            // 好友事件（对方同意 / 拒绝 / 申请）到来就重拉：只在启动时拉一次的话，之后新加的好友
+            // 不在表里，资料页会先当陌生人（2026-10-10）。本机自己同意 / 删除走 onFriendsRefreshed 回灌。
+            client.friendEvents.collect {
+                runCatchingCancellable { client.contacts.friends() }
+                    .onSuccess { list -> knownFriends = list.associateBy { it.userId } }
+            }
         }
     }
 
@@ -313,7 +319,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                         ) { info ->
                             if (info != null) {
                                 Box(Modifier.fillMaxSize().blockPointerInput()) {
-                                    InfoPage(client, info, knownFriends, infoTab, infoGallery, infoApproval,
+                                    InfoPage(client, info, knownFriends, { l -> knownFriends = l.associateBy { it.userId } }, infoTab, infoGallery, infoApproval,
                                         onOpenChat = { stub -> infoForConv = null; switchTo(stub) },
                                         onArm = { arm -> infoForConv = null; chatArm = arm },
                                         onBack = { infoForConv = null },
@@ -423,6 +429,7 @@ private fun InfoPage(
     client: IMClient,
     conv: ConversationEntity,
     knownFriends: Map<String, FriendEntry>,
+    onFriendsRefreshed: (List<FriendEntry>) -> Unit,
     /** 先落在哪个页签；null = 各自默认。 */
     initialTab: com.libeyond.imandroid.data.DetailTab?,
     /** 这一趟只当会话媒体库用（收起头部与页签条）。 */
@@ -454,6 +461,7 @@ private fun InfoPage(
             client = client,
             conv = conv,
             knownFriends = knownFriends,
+            onFriendsRefreshed = onFriendsRefreshed,
             onSearchInChat = { onArm(ChatArm(openSearch = true)) },
             onLocateInChat = { seq -> onArm(ChatArm(locateSeq = seq)) },
             // 「名片」页签点开的资料页里「消息」/「搜索」要能换会话——此前没传，走空默认实现，点了没反应

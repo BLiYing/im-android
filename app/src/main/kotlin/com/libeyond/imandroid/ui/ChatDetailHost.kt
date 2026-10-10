@@ -28,6 +28,7 @@ import com.libeyond.imandroid.data.DetailTab
 import com.libeyond.imandroid.data.DetailTabs
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.MuteState
+import com.libeyond.imandroid.data.PeerRelation
 import com.libeyond.imandroid.data.PinnedAt
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
@@ -67,6 +68,8 @@ fun ChatDetailHost(
     conv: ConversationEntity,
     /** 本地好友表，进用户资料页时用来定型关系与备注（避免闪动）。 */
     knownFriends: Map<String, FriendEntry>,
+    /** 本页进页重拉到最新好友列表后回传，调用方据此更新自己那份 [knownFriends]（否则它只在启动时拉一次，越用越旧）。 */
+    onFriendsRefreshed: (List<FriendEntry>) -> Unit = {},
     /** 「搜索」pill：关掉本页、回聊天页开搜索态（本页盖在聊天页之上，只能这么绕）。 */
     onSearchInChat: () -> Unit = {},
     /** 归档长按「定位到聊天」：同上，关掉本页、把 conv_seq 交给聊天页。 */
@@ -112,9 +115,11 @@ fun ChatDetailHost(
     LaunchedEffect(conv.convId, conv.peerUid) {
         if (conv.peerUid.isNotEmpty()) {
             runCatching { client.contacts.friends() }
-                .onSuccess { list -> friend = list.firstOrNull { it.userId == conv.peerUid } }
+                .onSuccess { list -> friend = list.firstOrNull { it.userId == conv.peerUid }; onFriendsRefreshed(list) }
         }
     }
+    // 好友态 / 拉黑 / 用户名句柄都从同一份 `friend` 派生，别再单读 knownFriends（见 PeerRelation）
+    val rel = PeerRelation.of(friend)
     var remark by remember(conv.convId) { mutableStateOf(conv.peerRemark) }
     // 对端权威名片：进页拉一次，并回会话行（对方改了昵称 / 头像，信息页与会话列表都跟着新；
     // 与 IMProgram `loadPeerProfile`、im-web `loadPeerCard` 同口径）。单聊才有；自己 / 空 uid 不拉；
@@ -240,11 +245,10 @@ fun ChatDetailHost(
                 )
             }
             ChatDetailPage.Profile -> {
-                val f = knownFriends[conv.peerUid]
                 UserProfileHost(
                     client = client,
                     userId = conv.peerUid,
-                    knownRelation = f?.status.orEmpty(),
+                    knownRelation = friend?.status.orEmpty(),
                     seed = UserCard(
                         userId = conv.peerUid,
                         nickname = conv.title,
@@ -263,13 +267,13 @@ fun ChatDetailHost(
                 ChatDetailScreen(
                     conv = conv,
                     title = title,
-                    handle = knownFriends[conv.peerUid]?.handle.orEmpty(),
-                    isFriend = friend?.status == FriendEntry.ACCEPTED,
+                    handle = rel.handle,
+                    isFriend = rel.isFriend,
                     subtitle = headerSubtitle,
                     contacts = contacts,
                     tabs = tabs,
                     onCopyUsername = {
-                        val bare = knownFriends[conv.peerUid]?.handle.orEmpty().removePrefix("@")
+                        val bare = rel.handle.removePrefix("@")
                         if (bare.isEmpty()) toast = Str.s(R.string.chat_detail_no_username)
                         else {
                             clipboard.setText(androidx.compose.ui.text.AnnotatedString(bare)) // 裸句柄，可直接粘进搜索框
@@ -301,15 +305,15 @@ fun ChatDetailHost(
                     actions = DetailActions.pillsFor(
                         isGroup = false,
                         isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
-                        peerIsFriend = friend?.status == FriendEntry.ACCEPTED,
+                        peerIsFriend = rel.isFriend,
                         showsMessagePill = showsMessagePill,
                     ),
                     moreItems = DetailActions.moreFor(
                         isGroup = false,
                         isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
                         iAmOwner = false,
-                        peerBlocked = friend?.blocked == true,
-                        peerIsFriend = friend?.status == FriendEntry.ACCEPTED,
+                        peerBlocked = rel.blocked,
+                        peerIsFriend = rel.isFriend,
                     ),
                     onAction = { a ->
                         when (a) {
@@ -435,7 +439,7 @@ fun ChatDetailHost(
                             toast = Str.s(R.string.friend_delete_done)
                             // **不退页**：重拉关系后本页自然切成非好友视图，用户当场看得到关系已变
                             runCatching { client.contacts.friends() }
-                                .onSuccess { l -> friend = l.firstOrNull { it.userId == conv.peerUid } }
+                                .onSuccess { l -> friend = l.firstOrNull { it.userId == conv.peerUid }; onFriendsRefreshed(l) }
                         }
                         .onFailure { toast = it.userMessage(Str.s(R.string.net_fallback_delete_failed)) }
                 }
