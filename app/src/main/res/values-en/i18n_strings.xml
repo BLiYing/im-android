@@ -883,6 +883,8 @@
     <string name="friend_request_sending">Sending…</string>
     <string name="friend_request_sent">Friend request sent</string>
     <string name="friend_request_title">Add friend</string>
+    <string name="friend_requests_added">Added (%1$d)</string>
+    <string name="friend_requests_added_tag">Added</string>
     <string name="friend_requests_default_hello">Wants to be your friend</string>
     <string name="friend_requests_empty">No pending friend requests</string>
     <string name="friend_requests_incoming">Awaiting your response (%1$d)</string>

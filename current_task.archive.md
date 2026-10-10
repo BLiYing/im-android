@@ -2557,3 +2557,12 @@
 7. `docs/UI_PARITY_IOS.md` 剩余 🔴：水滴头部形变、「名片」页签、隐私页无障碍。
 8. 群成员头像图：首字母色块对但无头像缓存，要先做 `POST /users/batch` 解析器。
 9. 小尾巴（均不影响行为）：「刷新补名失败不重试」靠下次连接/刷新自愈；`resolveKind` 对畸形 convId 当群聊（测试已钉住）；`VoiceTranscriptStore.putText` 每次重写整份 FIFO 顺序表；`PendingVoiceBubble` 里多余的 `coerceAtLeast(160.dp)`；`applySync` 对全是 `msg_op`/墓碑的一页也调 `bumpConversationFromLatest`（白多一次索引 SELECT）。
+
+### 2026-10-09 归档：当前焦点（收口前快照）
+**被拒文案 / 撤回墓碑 / 发送失败红点 / ack 超时对齐 iOS（2026-10-09）**：被拒 200102/200103 微信式文案（`chat_reject_*`）、300001 说明行；撤回改居中胶囊 `RecallNote` + 重新编辑；失败红点统一 `ui/components/FailBadge.kt`（被拒收的不可点）；`SendAckTimeouts`：同 client_msg_id 每 5s 重发、3 次后判失败（本地码 `LocalSendError.ACK_TIMEOUT`=5002），判失败后不再自动补发、点红点重发。已 code-review；红点/超时待 OPPO 复测后提交。
+
+**通话被踢后现场重启（2026-10-09，未 commit）**：`RtcCall` 存 `Wanted`（start 入参快照），`onFatalKickedOut` 只 `teardown()`，`placeSingle/placeGroup/fetchCallHistory` 先 `restartIfStopped()`；`RtcRestartPolicy` 有单测。OPPO 真机已验「下线设备→重新登录→呼叫」「被拉黑→对方暂时无法被邀请」。设计见 `IMServer/docs/design/CALL_ACCESS_CONTROL_DESIGN.md`。
+
+- **10-08 修「令牌过期被当成被踢」**：握手 401 先续期（`ws/WakeAction.kt` `unauthorizedActionFor`），续期被拒才回登录页（到寿给「登录已过期」）；`IMSocketManager.manualClose` 初值 true，`connect()` 前唤醒不连（冷启动不再抢在 restore 前拿过期 token 握手）；本机没登录时 FCM 新消息/来电/未接一律丢并 `FcmToken.delete()`。/code-review 后补：401 处理全程持锁；续期结果只有鉴权码才结束会话（封号→封号文案、5xx→退避）；「续过一次」按连接代数记；FCM 作废失败可重试、登录后复位。Pixel × OPPO × iOS 模拟器两轮换密钥重启均续上。test.sh 1520 绿。
+- 10-08 接 im-rtc 2.2.0 Kit tokenProvider（JitPack 正式版）：`RtcCall` 登录交给 Kit，通话记录先 `IMCallKit.ensureReady`。
+**聊天选图器收尾（2026-10-07，已合入 main）**：`:media-picker` 被拒改同页空状态（无降级）、原图流式上传（≥8MB 私有副本可续传，杀进程后实测续传成功）、封面单次探测、压缩 ≤2 并发；今日在 OPPO 实测另修两处：①发送方视频被省电模式（「始终开启」）画成磨砂——磨砂只给接收侧；②竖拍视频待发气泡先画成横矩形再变竖——`PendingMediaBubble` 写死横向尺寸，现落行前用 `VideoProbe.info` / 图片 bounds 预探宽高写进待发行，待发与正式气泡共用 `rememberMediaDisplaySize`。待验证见根目录 `current_task.md` 下一步 0。

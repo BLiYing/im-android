@@ -56,6 +56,7 @@ import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.data.GlobalSearch
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.ui.components.TopBarCircleButton
+import com.libeyond.imandroid.ui.components.UnreadCapsule
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -255,27 +256,8 @@ private fun EntryRow(
         Spacer(Modifier.width(d.space3))
         Text(title, color = c.textPrimary, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
-        if (badge > 0) {
-            // 角标三端统一蓝（2026-09-15 用户要求，原为 danger 红）；高/最小宽与会话列表 UnreadBadge 同一令牌，
-            // 内容居中——个位数是正圆，两位数才拉成胶囊（此前只有 padding、没有最小宽与居中）。
-            Box(
-                modifier = Modifier
-                    .height(d.unreadBadgeHeight)
-                    .widthIn(min = d.unreadBadgeHeight)
-                    .clip(CircleShape)
-                    .background(c.unreadBadge)
-                    .padding(horizontal = 6.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = if (badge > 99) "99+" else badge.toString(),
-                    color = c.onAccent,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
+        // 角标三端统一蓝（2026-09-15 用户要求，原为 danger 红）；共用 UnreadCapsule（0 不画，>99 → 99+）
+        UnreadCapsule(badge)
     }
 }
 

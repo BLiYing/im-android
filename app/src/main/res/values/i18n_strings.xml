@@ -850,6 +850,8 @@
     <string name="friend_request_sending">发送中…</string>
     <string name="friend_request_sent">已发送好友申请</string>
     <string name="friend_request_title">添加好友</string>
+    <string name="friend_requests_added">已添加（%1$d）</string>
+    <string name="friend_requests_added_tag">已添加</string>
     <string name="friend_requests_default_hello">请求加你为好友</string>
     <string name="friend_requests_empty">没有待处理的好友申请</string>
     <string name="friend_requests_incoming">待我确认（%1$d）</string>

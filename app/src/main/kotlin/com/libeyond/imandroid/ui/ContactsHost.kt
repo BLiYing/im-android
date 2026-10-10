@@ -18,6 +18,7 @@ import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.data.FriendAction
+import com.libeyond.imandroid.data.recentAdded
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
@@ -41,6 +42,8 @@ fun ContactsHost(
     client: IMClient,
     onOpenChat: (ConversationEntity) -> Unit,
     bottomBar: @Composable () -> Unit,
+    /** 待我确认的数量变了就报给外壳，通讯录 Tab 角标用（口径只数 pending，见 NEW_FRIENDS_DESIGN §3）。 */
+    onPendingCount: (Int) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var page by remember { mutableStateOf(ContactsPage.List) }
@@ -51,6 +54,10 @@ fun ContactsHost(
     var groupsLoading by remember { mutableStateOf(false) }
     // 点好友先进**资料页**，不直接进聊天（三端统一的微信式口径）
     var profileOf by remember { mutableStateOf<FriendEntry?>(null) }
+    /** 资料页从哪一页进来的：返回落回那一页（从「新的朋友」进的要回「新的朋友」，不是通讯录首页）。 */
+    var profileOrigin by remember { mutableStateOf(ContactsPage.List) }
+    /** 正在同意 / 拒绝的申请方 userId：防连点（同一人同时发两次请求）。 */
+    var busyIds by remember { mutableStateOf(emptySet<String>()) }
     var toast by remember { mutableStateOf<String?>(null) }
     /** 通讯录搜索无结果时带进加好友页的初始关键词（点右上角「添加朋友」为空）。 */
     var addFriendQuery by remember { mutableStateOf("") }
@@ -127,6 +134,20 @@ fun ContactsHost(
     val accepted = remember(friends) { friends.filter { it.status == FriendEntry.ACCEPTED } }
     val pending = remember(friends) { friends.filter { it.status == FriendEntry.PENDING } }
     val requested = remember(friends) { friends.filter { it.status == FriendEntry.REQUESTED } }
+    val addedRecent = remember(friends) { recentAdded(friends, System.currentTimeMillis()) }
+    LaunchedEffect(pending.size) { onPendingCount(pending.size) }
+
+    /** 同意 / 拒绝：忙态防连点，失败给吐司（原先 runCatching 吞错，点了没反应）。 */
+    fun answerRequest(f: FriendEntry, call: suspend () -> Unit) {
+        if (f.userId in busyIds) return
+        busyIds = busyIds + f.userId
+        scope.launch {
+            runCatchingCancellable { call() }
+                .onFailure { toast = it.userMessage(Str.s(R.string.common_action_failed)) }
+            reload()
+            busyIds = busyIds - f.userId
+        }
+    }
 
     // 二级页的返回键回到通讯录列表，不退出 App。
     // **资料页自己带 BackHandler**（UserProfileHost 里），这里不能再截一层，否则要按两次。
@@ -135,7 +156,11 @@ fun ContactsHost(
         BackHandler { page = page.parent }
     }
 
-    PushTransition(targetState = page, depthOf = { it.depth }) { p ->
+    // 从「新的朋友」进的资料页比它深一层，才是 push（同深度会变成淡入淡出）
+    PushTransition(
+        targetState = page,
+        depthOf = { if (it == ContactsPage.Profile && profileOrigin == ContactsPage.NewFriends) 2 else it.depth },
+    ) { p ->
         when (p) {
             ContactsPage.List -> TabRoot(bottomBar) {
                 ContactsScreen(
@@ -173,7 +198,7 @@ fun ContactsHost(
                     },
                     onComingSoon = { name -> toast = Str.s(R.string.contacts_coming_soon, name) },
                     // **先进资料页，不直接进聊天**（微信式，三端统一：群成员行、通讯录行都是这个口径）
-                    onOpenFriend = { f -> profileOf = f; page = ContactsPage.Profile },
+                    onOpenFriend = { f -> profileOf = f; profileOrigin = ContactsPage.List; page = ContactsPage.Profile },
                 )
             }
 
@@ -204,7 +229,7 @@ fun ContactsHost(
                         avatarUrl = f.avatarUrl,
                         onOpenChat = onOpenChat,
                         // 信息页里改的备注不回调：退回时重拉好友表，列表那一行才不显编辑前的旧值
-                        onBack = { page = ContactsPage.List; scope.launch { reload() } },
+                        onBack = { page = profileOrigin; scope.launch { reload() } },
                     )
                 }
             }
@@ -212,8 +237,10 @@ fun ContactsHost(
             ContactsPage.NewFriends -> NewFriendsScreen(
                 pending = pending,
                 requested = requested,
-                onAccept = { f -> scope.launch { runCatching { client.contacts.accept(f.userId) }; reload() } },
-                onReject = { f -> scope.launch { runCatching { client.contacts.reject(f.userId) }; reload() } },
+                added = addedRecent,
+                onOpen = { f -> profileOf = f; profileOrigin = ContactsPage.NewFriends; page = ContactsPage.Profile },
+                onAccept = { f -> answerRequest(f) { client.contacts.accept(f.userId) } },
+                onReject = { f -> answerRequest(f) { client.contacts.reject(f.userId) } },
                 onBack = { page = ContactsPage.List },
             )
 

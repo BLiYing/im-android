@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -67,6 +68,7 @@ import com.libeyond.imandroid.ui.components.ProvideMenuSurface
 import com.libeyond.imandroid.ui.components.menuBackdrop
 import com.libeyond.imandroid.ui.components.rememberMenuSurface
 import com.libeyond.imandroid.ui.components.SheetItem
+import com.libeyond.imandroid.ui.components.UnreadCapsule
 import com.libeyond.imandroid.ui.components.rememberMuteTick
 import kotlinx.coroutines.launch
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -202,8 +204,12 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
 
     // 底部 Tab 栏由各 Tab 的**根页**自己画（[TabRoot]），二级页整屏铺满——判据 PushNav.showsTabBar。
     // 此前底栏画在这一层、各 Tab 的二级页在它上面的内容区里原地切换，于是一直挂着（2026-09-15 用户报）
+    // 通讯录 Tab 角标 = 待我确认的好友申请数。ContactsHost 只在该 Tab 内才在组合里，
+    // 所以这里自己持有计数：冷启动 / 好友帧先在此处拉一次（rememberContactsPending），
+    // 进了通讯录再由 ContactsHost 的最新值覆盖（同意 / 拒绝后立刻减）。
+    var contactsPending by rememberContactsPending(client, owner)
     val bottomBar: @Composable () -> Unit = {
-        BottomBar(current = tab, unread = tabUnread, onSelect = { tab = it })
+        BottomBar(current = tab, unread = tabUnread, contactsPending = contactsPending, onSelect = { tab = it })
     }
 
     // 应用内横幅（NOTIFICATIONS_P1_DESIGN §1.2）挂在这一层最上面——不是更外层的 AppRoot：
@@ -247,7 +253,10 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                 muteNow = muteTick,
                                 listState = chatsListState,
                             )
-                            Tab.Contacts -> ContactsHost(client = client, onOpenChat = { openConv = it }, bottomBar = bottomBar)
+                            Tab.Contacts -> ContactsHost(
+                                client = client, onOpenChat = { openConv = it }, bottomBar = bottomBar,
+                                onPendingCount = { contactsPending = it },
+                            )
                             Tab.Me -> MeHost(
                                 client = client, onLogout = onLogout, bottomBar = bottomBar,
                                 onOpenChat = { openConv = it },
@@ -490,7 +499,7 @@ private suspend fun settings(
 }
 
 @Composable
-private fun BottomBar(current: Tab, unread: Int, onSelect: (Tab) -> Unit) {
+private fun BottomBar(current: Tab, unread: Int, contactsPending: Int, onSelect: (Tab) -> Unit) {
     val c = IMTheme.colors
     Column {
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
@@ -514,6 +523,10 @@ private fun BottomBar(current: Tab, unread: Int, onSelect: (Tab) -> Unit) {
                             modifier = Modifier.size(22.dp),
                             colorFilter = ColorFilter.tint(if (selected) c.accent else c.textTertiary),
                         )
+                        if (t == Tab.Contacts) {
+                            // 同入口行的蓝色胶囊（0 隐藏，>99 → 99+）；挂在图标右上角并略外移
+                            UnreadCapsule(contactsPending, Modifier.align(Alignment.TopEnd).offset(x = 12.dp, y = (-6).dp))
+                        }
                         if (t == Tab.Chats && unread > 0) {
                             Box(
                                 Modifier.align(Alignment.TopEnd)

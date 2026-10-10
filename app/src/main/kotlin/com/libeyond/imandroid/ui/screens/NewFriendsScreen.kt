@@ -33,12 +33,15 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
  * 「新的朋友」（2026-09-05 三端统一的独立入口）。
- * 分「待我确认」/「已发出」两段。
+ * 分「待我确认」/「已发出」/「已添加」三段（空段整段不出现；已添加 = 最近 30 天内同意的，见 NEW_FRIENDS_DESIGN）。
+ * 已添加行**不放删除入口**（服务端只有「删好友关系」，没有「删申请记录」，见设计稿 §2）。
  */
 @Composable
 fun NewFriendsScreen(
     pending: List<FriendEntry>,
     requested: List<FriendEntry>,
+    added: List<FriendEntry>,
+    onOpen: (FriendEntry) -> Unit,
     onAccept: (FriendEntry) -> Unit,
     onReject: (FriendEntry) -> Unit,
     onBack: () -> Unit,
@@ -48,7 +51,7 @@ fun NewFriendsScreen(
     Column(Modifier.fillMaxSize().background(c.groupedBackground).systemBarsPadding()) {
         IMTopBar(title = stringResource(R.string.friend_requests_title), onLeft = onBack)
 
-        if (pending.isEmpty() && requested.isEmpty()) {
+        if (pending.isEmpty() && requested.isEmpty() && added.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.friend_requests_empty), color = c.textTertiary)
             }
@@ -65,7 +68,21 @@ fun NewFriendsScreen(
             if (requested.isNotEmpty()) {
                 item { Section(stringResource(R.string.friend_requests_outgoing, requested.size)) }
                 items(requested, key = { "r${it.userId}" }) { f ->
-                    RequestRow(f, showActions = false, onAccept = {}, onReject = {})
+                    RequestRow(
+                        f, showActions = false, onAccept = {}, onReject = {},
+                        tag = stringResource(R.string.friend_requests_waiting),
+                    )
+                }
+            }
+            if (added.isNotEmpty()) {
+                item { Section(stringResource(R.string.friend_requests_added, added.size)) }
+                items(added, key = { "a${it.userId}" }) { f ->
+                    RequestRow(
+                        f, showActions = false, onAccept = {}, onReject = {},
+                        tag = stringResource(R.string.friend_requests_added_tag),
+                        subtitle = f.handle,
+                        onClick = { onOpen(f) },
+                    )
                 }
             }
         }
@@ -88,11 +105,18 @@ private fun RequestRow(
     showActions: Boolean,
     onAccept: () -> Unit,
     onReject: () -> Unit,
+    /** 右侧纯文字标记（等待验证 / 已添加）；null = 不画。 */
+    tag: String? = null,
+    /** 非 null = 固定副标题（已添加行：@句柄，空则隐藏）；null = 沿用验证消息 / 句柄兜底。 */
+    subtitle: String? = null,
+    /** 非 null = 整行可点（已添加行进资料页）。 */
+    onClick: (() -> Unit)? = null,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Row(
         modifier = Modifier.fillMaxWidth().background(c.pageBackground)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
             .padding(horizontal = d.space4, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -101,11 +125,19 @@ private fun RequestRow(
         Column(Modifier.weight(1f)) {
             Text(f.displayName, color = c.textPrimary, style = MaterialTheme.typography.titleMedium)
             // 验证消息：给收件人看「他为什么加我」。**空了要隐藏整行**，不显示空白副标题。
-            if (f.hello.isNotBlank()) {
+            if (subtitle != null) {
+                if (subtitle.isNotEmpty()) {
+                    Text(subtitle, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                }
+            } else if (f.hello.isNotBlank()) {
                 Text(f.hello, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
             } else if (f.handle.isNotEmpty()) {
                 Text(f.handle, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
             }
+        }
+        if (tag != null) {
+            Spacer(Modifier.width(d.space3))
+            Text(tag, color = c.textTertiary, style = MaterialTheme.typography.bodyMedium)
         }
         if (showActions) {
             Box(
