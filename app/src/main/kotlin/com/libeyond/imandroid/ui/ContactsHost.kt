@@ -48,6 +48,8 @@ fun ContactsHost(
     val scope = rememberCoroutineScope()
     var page by remember { mutableStateOf(ContactsPage.List) }
     var friends by remember { mutableStateOf<List<FriendEntry>>(emptyList()) }
+    /** 网络好友表是否至少成功拉到过一次：没拉到前 pending 是空表的 0，不能拿去覆盖外壳已有的角标计数。 */
+    var friendsLoaded by remember { mutableStateOf(false) }
 
     // 「群聊」入口：我加入的群（GET /groups），**不是**会话列表的子集——没聊过的群也在这里
     var groups by remember { mutableStateOf<List<GroupInfo>>(emptyList()) }
@@ -85,6 +87,7 @@ fun ContactsHost(
     suspend fun reload() {
         try {
             friends = client.contacts.friends()
+            friendsLoaded = true
             // 成功才落库（整表覆盖，空也写；只存 accepted）；写失败只记日志，不影响界面
             runCatchingCancellable { client.roster.saveFriends(owner, friends) }
                 .onFailure { IMLog.tag("IM.Contacts").w("roster_save_failed", "err" to it.javaClass.simpleName) }
@@ -135,7 +138,7 @@ fun ContactsHost(
     val pending = remember(friends) { friends.filter { it.status == FriendEntry.PENDING } }
     val requested = remember(friends) { friends.filter { it.status == FriendEntry.REQUESTED } }
     val addedRecent = remember(friends) { recentAdded(friends, System.currentTimeMillis()) }
-    LaunchedEffect(pending.size) { onPendingCount(pending.size) }
+    LaunchedEffect(pending.size, friendsLoaded) { if (friendsLoaded) onPendingCount(pending.size) }
 
     /** 同意 / 拒绝：忙态防连点，失败给吐司（原先 runCatching 吞错，点了没反应）。 */
     fun answerRequest(f: FriendEntry, call: suspend () -> Unit) {
