@@ -31,4 +31,10 @@ class PeerRelationTest {
     @Test fun `无用户名时句柄为空串`() {
         assertEquals("", PeerRelation.of(entry(FriendEntry.ACCEPTED, username = "")).handle)
     }
+
+    @Test fun `关系是否定下来：表里有就用，没有要等重拉返回`() {
+        assertTrue(relationSettled(inKnownFriends = true, refreshed = false))
+        assertFalse(relationSettled(inKnownFriends = false, refreshed = false))
+        assertTrue(relationSettled(inKnownFriends = false, refreshed = true))
+    }
 }

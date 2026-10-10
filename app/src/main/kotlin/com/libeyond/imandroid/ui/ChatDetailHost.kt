@@ -30,6 +30,7 @@ import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.MuteState
 import com.libeyond.imandroid.data.PeerRelation
 import com.libeyond.imandroid.data.PinnedAt
+import com.libeyond.imandroid.data.relationSettled
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.MediaUrl
@@ -112,10 +113,14 @@ fun ChatDetailHost(
     // 好友关系是**异步校正**的：外层传进来那份可能是几分钟前的，而操作排的显隐全靠它
     // （非好友只显「加好友」）。进页重拉一次，别拿旧值摆一排必然 4xx 的按钮。
     var friend by remember(conv.convId) { mutableStateOf(knownFriends[conv.peerUid]) }
+    // 外层表里没有这个人（刚加的好友）时，重拉返回前不画操作排，免得先闪「加好友」（见 relationSettled）
+    var friendRefreshed by remember(conv.convId) { mutableStateOf(conv.peerUid.isEmpty()) }
+    val relationSettled = relationSettled(knownFriends.containsKey(conv.peerUid), friendRefreshed)
     LaunchedEffect(conv.convId, conv.peerUid) {
         if (conv.peerUid.isNotEmpty()) {
             runCatching { client.contacts.friends() }
                 .onSuccess { list -> friend = list.firstOrNull { it.userId == conv.peerUid }; onFriendsRefreshed(list) }
+            friendRefreshed = true
         }
     }
     // 好友态 / 拉黑 / 用户名句柄都从同一份 `friend` 派生，别再单读 knownFriends（见 PeerRelation）
@@ -302,7 +307,7 @@ fun ChatDetailHost(
                     // 页内弹窗编辑，不跳页（对齐 iOS `editRemark`；弹窗组件与用户资料页共用，见 RemarkEditDialog）
                     onSetRemark = { editingRemark = true },
                     onOpenProfile = { profile = true },
-                    actions = DetailActions.pillsFor(
+                    actions = if (!relationSettled) emptyList() else DetailActions.pillsFor(
                         isGroup = false,
                         isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
                         peerIsFriend = rel.isFriend,

@@ -19,3 +19,12 @@ data class PeerRelation(val isFriend: Boolean, val blocked: Boolean, val handle:
         )
     }
 }
+
+/**
+ * 好友关系「定下来了没」：外层好友表里有这个人（哪怕那份是旧的，只会旧在备注 / 拉黑，不会旧到不是好友）就先用着；
+ * 表里没有，要等进页重拉返回（成功或失败都算）才算定——此前这段空档里 `friend == null`，
+ * 操作排会先画一个「加好友」再变成「呼叫 / 视频 / 搜索」（刚加的好友不在启动时那份表里，2026-10-10 用户报）。
+ * 代价：真陌生人的「加好友」按钮晚出现约一次请求的时间——比好友被画成陌生人轻得多（同 iOS 取舍）。
+ */
+fun relationSettled(inKnownFriends: Boolean, refreshed: Boolean): Boolean = inKnownFriends || refreshed
+

@@ -262,6 +262,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                             Tab.Contacts -> ContactsHost(
                                 client = client, onOpenChat = { openConv = it }, bottomBar = bottomBar,
                                 onPendingCount = { contactsPending = it },
+                                onFriendsLoaded = { l -> knownFriends = l.associateBy { it.userId } },
                             )
                             Tab.Me -> MeHost(
                                 client = client, onLogout = onLogout, bottomBar = bottomBar,

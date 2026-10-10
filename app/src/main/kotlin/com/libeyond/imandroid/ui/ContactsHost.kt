@@ -44,6 +44,8 @@ fun ContactsHost(
     bottomBar: @Composable () -> Unit,
     /** 待我确认的数量变了就报给外壳，通讯录 Tab 角标用（口径只数 pending，见 NEW_FRIENDS_DESIGN §3）。 */
     onPendingCount: (Int) -> Unit = {},
+    /** 每次成功拉到好友表就回传：外壳的 knownFriends（资料页定型用）靠它保持新鲜，本机刚同意的好友才不会被当陌生人。 */
+    onFriendsLoaded: (List<FriendEntry>) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var page by remember { mutableStateOf(ContactsPage.List) }
@@ -88,6 +90,7 @@ fun ContactsHost(
         try {
             friends = client.contacts.friends()
             friendsLoaded = true
+            onFriendsLoaded(friends)
             // 成功才落库（整表覆盖，空也写；只存 accepted）；写失败只记日志，不影响界面
             runCatchingCancellable { client.roster.saveFriends(owner, friends) }
                 .onFailure { IMLog.tag("IM.Contacts").w("roster_save_failed", "err" to it.javaClass.simpleName) }
