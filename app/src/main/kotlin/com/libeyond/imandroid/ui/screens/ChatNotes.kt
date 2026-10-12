@@ -47,7 +47,9 @@ internal fun DaySeparator(ts: Long) {
             modifier = Modifier
                 .height(d.datePillHeight)
                 .clip(RoundedCornerShape(d.datePillHeight / 2))
-                .background(c.datePillBackground)
+                // 日期胶囊 = 当前外观主题强调色 α0.64（iOS `_datePill`、外观页预览同口径）。
+                // 曾用中性的 datePillBackground：换主题后聊天里的胶囊仍是固定绿/黑，与外观页预览对不上。
+                .background(c.accent.copy(alpha = 0.64f))
                 .padding(horizontal = d.space3),
             contentAlignment = Alignment.Center,
         ) {

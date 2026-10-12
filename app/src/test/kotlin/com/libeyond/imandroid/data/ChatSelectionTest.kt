@@ -156,4 +156,18 @@ class ChatSelectionTest {
         assertNull("撤回成墓碑的格不可勾，不画圈", ChatSelection.tileMark(sel, recalled))
         assertNull("未落库（conv_seq<=0）的格不画圈", ChatSelection.tileMark(sel, msg(0)))
     }
+
+    @Test
+    fun `宫格整组圈：全勾才为 true，部分勾 false，无可勾格 null；点它补满或全取消`() {
+        val a = msg(10); val b = msg(11); val dead = msg(12, recalled = 5L)
+        val members = listOf(a, b, dead)
+        assertEquals("没勾", false, ChatSelection.albumMark(emptyMap(), members))
+        assertEquals("勾一格", false, ChatSelection.albumMark(mapOf(10L to a), members))
+        assertEquals("可勾的全勾（墓碑不计）", true, ChatSelection.albumMark(mapOf(10L to a, 11L to b), members))
+        assertNull("一格都不可勾", ChatSelection.albumMark(emptyMap(), listOf(dead)))
+
+        assertEquals("补满：只翻未勾的", listOf(b), ChatSelection.albumToggleTargets(mapOf(10L to a), members))
+        assertEquals("没勾：全翻", listOf(a, b), ChatSelection.albumToggleTargets(emptyMap(), members))
+        assertEquals("全勾：全取消", listOf(a, b), ChatSelection.albumToggleTargets(mapOf(10L to a, 11L to b), members))
+    }
 }

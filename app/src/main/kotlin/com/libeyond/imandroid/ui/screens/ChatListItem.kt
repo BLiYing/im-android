@@ -113,8 +113,18 @@ internal fun ChatListItem(
         verticalAlignment = Alignment.CenterVertically,
     ) {
     if (selecting) {
+        // 宫格行：左侧整组圈（点 = 整组全选 / 全不选，同 iOS 系统编辑圈），各格右上角另有逐格圈
+        val albumMembers = (r0 as? ChatRow.Album)?.sent
+        val albumMark = albumMembers?.let { ChatSelection.albumMark(selection, it) }
         if (selMsg != null) {
             SelectionCheck(selected = selection.containsKey(selMsg.convSeq))
+        } else if (albumMark != null) {
+            SelectionCheck(
+                selected = albumMark,
+                modifier = Modifier.clickable {
+                    ChatSelection.albumToggleTargets(selection, albumMembers).forEach(onToggleSelect)
+                },
+            )
         } else {
             Spacer(Modifier.width(22.dp)) // 占位，让可勾与不可勾的行左缘对齐
         }

@@ -63,6 +63,26 @@ object ChatSelection {
         if (selection != null && selectable(msg)) selection.containsKey(msg.convSeq) else null
 
     /**
+     * 宫格行**左侧整组圈**的状态（同 iOS 系统编辑圈：点它 = 整组全选 / 全不选）：
+     * `null` = 组内一格都不可勾（不画圈，只占位）；`true` = 可勾的格全已勾；`false` = 否则。
+     * 逐格圈（[tileMark]）仍在各格右上角，两者并存。
+     */
+    fun albumMark(selection: Map<Long, MessageEntity>, members: List<MessageEntity>): Boolean? {
+        val ok = members.filter(::selectable)
+        if (ok.isEmpty()) return null
+        return ok.all { selection.containsKey(it.convSeq) }
+    }
+
+    /**
+     * 点整组圈要**翻转哪几格**：已全选 → 全部可勾格（取消）；否则只翻未勾的（补成全选）。
+     * 逐格走 [toggle]，到上限仍由它拒并吐司。
+     */
+    fun albumToggleTargets(selection: Map<Long, MessageEntity>, members: List<MessageEntity>): List<MessageEntity> {
+        val ok = members.filter(::selectable)
+        return if (ok.all { selection.containsKey(it.convSeq) }) ok else ok.filterNot { selection.containsKey(it.convSeq) }
+    }
+
+    /**
      * 勾选 / 取消勾选的**唯一写入口**。到上限就拒（返回 null），由调用方吐司说明——
      * **绝不静默吞掉这一下点击**。
      *
