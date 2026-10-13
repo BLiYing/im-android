@@ -51,6 +51,9 @@ import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.Ellipsis
 import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.OctagonX
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import com.composables.icons.lucide.X
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.MediaDownloader
@@ -122,6 +125,11 @@ internal fun MediaViewerScreen(
      * `null` = 不画胶囊——聊天记录页那条路的媒体不属于本会话，没有下载门控这回事。
      */
     downloads: MediaDownloader? = null,
+    /**
+     * 只要「失效复验 / 失效页」、不要「查看原视频」胶囊时传它（聊天记录页那条路：媒体不属于本会话，
+     * 没有下载门控，但服务端清理了照样要说「已失效」）。`downloads` 非空时以它为准。
+     */
+    expiry: MediaDownloader? = null,
     onSave: (url: String, isVideo: Boolean) -> Unit,
     /**
      * 「更多」里的外部动作（iOS `moreActions`），**按当前那一条现算**。
@@ -209,6 +217,16 @@ internal fun MediaViewerScreen(
     }
     val source = sourceOf(current, localOf, host, useTls)
 
+    // 服务端已清理的地址（下载器登记，含被动复验命中的）。只收这个集合，别读整张状态表（见上 readyUrls）。
+    val expiryHost = downloads ?: expiry
+    val expiredUrls by remember(expiryHost) {
+        expiryHost?.states?.map { m -> m.filterValues { it.phase == com.libeyond.imandroid.data.DownloadPhase.Expired }.keys }
+            ?.distinctUntilChanged() ?: flowOf(emptySet())
+    }.collectAsState(initial = emptySet())
+    /** 失效且本机没有原件（铁律：缓存过的照显）。 */
+    fun gone(vm: ViewerMedia) = vm.content in expiredUrls && localOf(vm) == null
+    val currentGone = gone(current)
+
     Box(
         Modifier
             .fillMaxSize()
@@ -224,6 +242,10 @@ internal fun MediaViewerScreen(
             },
         ) { page ->
             val item = pages[page]
+            if (gone(item)) {
+                // 终态：不发请求、不建播放器，只画失效说明（iOS `showExpiredOverlayForVideo:`）；单击仍切壳
+                ExpiredViewerPage(item.isVideo, toggleChrome)
+            } else
             // **只有当前这一页才建播放器**：ExoPlayer 一页一个实例，相邻页也建的话白占内存与解码器
             // （播不起来是不会的——`playWhenReady=false`，但没必要）。非当前页显封面。
             if (item.contentType == ContentType.VIDEO && page == state.currentPage) {
@@ -236,6 +258,7 @@ internal fun MediaViewerScreen(
                     controlsBottomPadding = VIDEO_BAR_BOTTOM,
                     onTap = toggleChrome,
                     chromeVisible = chromeVisible,
+                    onError = { if (localOf(item) == null) expiryHost?.verifyExpired(item.content, true) },
                 )
             } else if (item.contentType == ContentType.VIDEO) {
                 Box(Modifier.fillMaxSize().background(Color.Black).clickable(
@@ -260,6 +283,7 @@ internal fun MediaViewerScreen(
                     // （iOS `showThumbPlaceholder` 同）。没有 thumb 的老消息仍回落黑底。
                     placeholder = rememberFrostedPainter(item.thumb),
                     onTap = toggleChrome,
+                    onError = { if (localOf(item) == null) expiryHost?.verifyExpired(item.content, false) },
                 )
             }
         }
@@ -355,15 +379,16 @@ internal fun MediaViewerScreen(
                     ViewerMoreMenu(
                         open = moreOpen,
                         // 内置「下载」排最前、**不关查看器**（iOS `showMoreSheet` 同）
-                        items = listOf(
+                        items = (if (currentGone) emptyList() else listOf(
                             SheetItem(stringResource(R.string.common_download), icon = Lucide.Download) { onSave(source, current.isVideo) },
-                        ) + more,
+                        )) + more,
                         onDismiss = { moreOpen = false },
                     )
                 }
             }
             if (onOpenGallery != null) ViewerButton(Lucide.LayoutGrid, stringResource(R.string.favorites_category_media), onOpenGallery)
-            ViewerButton(Lucide.Download, stringResource(R.string.qr_card_save_to_album)) { onSave(source, current.isVideo) }
+            // 失效无字节可存：藏掉，别留一个点了只弹失败的死按钮（iOS `_downloadButton.hidden`）
+            if (!currentGone) ViewerButton(Lucide.Download, stringResource(R.string.qr_card_save_to_album)) { onSave(source, current.isVideo) }
         } }
     }
 }
@@ -463,6 +488,29 @@ private fun ViewerMoreMenu(open: Boolean, items: List<SheetItem>, onDismiss: () 
                     onDismiss()
                     item.onClick()
                 },
+            )
+        }
+    }
+}
+
+/** 查看器里的失效页：黑底 + ⊘ + 一行文案（iOS `expiredOverlayWithCaption:`）。单击切壳，与正常页一致。 */
+@Composable
+private fun ExpiredViewerPage(isVideo: Boolean, onTap: () -> Unit) {
+    Box(
+        Modifier.fillMaxSize().background(Color.Black).clickable(
+            interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap,
+        ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.foundation.Image(
+                Lucide.OctagonX, null, Modifier.size(40.dp),
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(if (isVideo) R.string.media_video_expired else R.string.media_image_expired),
+                color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium,
             )
         }
     }

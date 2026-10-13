@@ -56,6 +56,8 @@ internal fun ChatRecordLayer(
     useTls: Boolean,
     onOpenUser: (String) -> Unit,
     onSave: (url: String, isVideo: Boolean) -> Unit,
+    /** 失效复验 / 本地原件：记录里的媒体没有门控，但服务端清理后照样要说「已失效」。 */
+    downloads: com.libeyond.imandroid.data.MediaDownloader,
 ) {
     val top = nav.stack.lastOrNull() ?: return
     // 按层数换 key：往里压一层是一页新列表，不能沿用上一层的滚动位置
@@ -82,6 +84,8 @@ internal fun ChatRecordLayer(
             startSeq = (m.index + 1).toLong(),
             host = host,
             useTls = useTls,
+            localFileOf = { vm -> downloads.localFile(vm.content, vm.isVideo) },
+            expiry = downloads,
             onSave = onSave,
             onClose = { nav.closeViewer() },
         )

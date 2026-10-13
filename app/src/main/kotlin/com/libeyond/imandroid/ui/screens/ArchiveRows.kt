@@ -332,6 +332,7 @@ internal fun MediaTile(
             placeholder = frosted,
             error = frosted,
             fallback = frosted,
+            onError = { gate.onLoadError() },
             modifier = Modifier.fillMaxSize(),
         )
         // 门控层 = **聊天页相册宫格那一格的同一个组件**（压暗 + 裸字形 + 36dp 环 + 左上角一项角标；

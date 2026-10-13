@@ -4,6 +4,8 @@ import com.libeyond.imandroid.ui.voice.VoiceMiniPlayer
 import com.libeyond.imandroid.ui.voice.VoiceSource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.runtime.collectAsState
+import com.composables.icons.lucide.OctagonX
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -199,6 +201,10 @@ private fun RecordBody(item: CardContent.RecordItem, host: String, useTls: Boole
     when (item.contentType) {
         ContentType.IMAGE, ContentType.VIDEO -> {
             val isVideo = item.contentType == ContentType.VIDEO
+            // 服务端已清理 → ⊘（与聊天页同源：下载器的失效登记；本机有原件的不算）
+            val dl = com.libeyond.imandroid.ui.components.LocalMediaGate.current?.downloads
+            dl?.states?.collectAsState()?.value // 订阅：复验命中后这一格重组
+            val gone = dl?.stateOf(item.content, isVideo)?.phase == com.libeyond.imandroid.data.DownloadPhase.Expired
             Box(
                 Modifier.size(width = 200.dp, height = 140.dp).clip(RoundedCornerShape(8.dp)).background(c.subtleFill),
                 contentAlignment = Alignment.Center,
@@ -209,10 +215,21 @@ private fun RecordBody(item: CardContent.RecordItem, host: String, useTls: Boole
                         model = MediaUrl.absolute(item.content, host, useTls),
                         contentDescription = stringResource(R.string.common_image),
                         contentScale = ContentScale.Crop,
+                        onError = { dl?.verifyExpired(item.content, false) },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                if (isVideo) {
+                if (gone) {
+                    Box(Modifier.matchParentSize().background(c.overlay), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Image(Lucide.OctagonX, null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(c.onMedia))
+                            Text(
+                                stringResource(if (isVideo) R.string.media_video_expired else R.string.media_image_expired),
+                                color = c.onMedia, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                            )
+                        }
+                    }
+                } else if (isVideo) {
                     Box(
                         Modifier.size(40.dp).clip(CircleShape).background(c.overlay),
                         contentAlignment = Alignment.Center,

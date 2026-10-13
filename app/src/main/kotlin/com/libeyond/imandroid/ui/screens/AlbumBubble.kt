@@ -328,7 +328,12 @@ private fun AlbumTileView(
                 null
             } else if (m.contentType == ContentType.VIDEO && !ownUngated && gate?.ready != true) {
                 null // 看过但没下到本机的视频：只留磨砂，不按地址抽帧
-            } else if (ungated) MediaUrl.absolute(m.url, host, useTls) else gate?.model,
+            } else {
+                // **本机有原件就用本地那份**，不按地址去远端取：服务端清理后远端 404，而本机缓存照显是铁律；
+                // 先走远端地址的话，这一格会 404 → 退成磨砂图、复验又因为本机有原件而不标失效，卡在「既没图也没 ⊘」
+                // （2026-10-13 OPPO 实测：服务端删了图、本机有缓存的大格一直是磨砂）
+                gate?.model ?: if (ungated) MediaUrl.absolute(m.url, host, useTls) else null
+            },
             contentDescription = if (m.contentType == ContentType.VIDEO) {
                 stringResource(R.string.common_video)
             } else {
@@ -339,6 +344,7 @@ private fun AlbumTileView(
             placeholder = frosted,
             error = frosted,
             fallback = frosted,
+            onError = { gate?.onLoadError() },
             modifier = Modifier.size(width, size),
         )
         // 门控层：压暗 + 裸字形 + 36dp 环 + 左上角一项角标（iOS `IMAlbumTileView`），就绪不画。

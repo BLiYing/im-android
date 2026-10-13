@@ -51,6 +51,11 @@ data class GateInfo(
      * 与「自己发的」同一档：不画磨砂 + ↓、点了直接开查看器；「已失效」照旧不豁免。
      */
     val opened: Boolean = false,
+    /**
+     * 被动展示（按地址直接显示）加载失败的回调：去复验是不是服务端已清理。
+     * 命中 404 / 410 后下载器登记失效，状态流让本处重组出失效层（iOS `IMMediaExpiryRegistry.verify…`）。
+     */
+    val onLoadError: () -> Unit = {},
 ) {
     val ready: Boolean get() = state.phase == DownloadPhase.Ready
 }
@@ -110,7 +115,8 @@ fun rememberGate(
     val opened by androidx.compose.runtime.remember(url) { androidx.compose.runtime.derivedStateOf { url in openedSet.value } }
 
     val local = if (state.phase == DownloadPhase.Ready) env.downloads.localFile(url, isVideo) else null
-    return GateInfo(state, local, localFile = local, autoAllowed = auto, opened = opened, onTap = {
+    return GateInfo(state, local, localFile = local, autoAllowed = auto, opened = opened,
+        onLoadError = { env.downloads.verifyExpired(url, isVideo) }, onTap = {
         when (state.tapAction()) {
             DownloadTap.Start -> env.downloads.start(url, isVideo, sizeBytes)
             DownloadTap.Pause -> env.downloads.pause(url, isVideo)

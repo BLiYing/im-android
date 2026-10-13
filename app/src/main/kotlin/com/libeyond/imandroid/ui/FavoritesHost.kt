@@ -314,6 +314,7 @@ internal fun FavoritesHost(
                 nav = recordNav, host = client.host, useTls = useTls,
                 onOpenUser = { uid -> if (uid != owner) profileUid = uid },
                 onSave = saveMedia,
+                downloads = client.downloads,
             )
         }
     }

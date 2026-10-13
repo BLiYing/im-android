@@ -56,6 +56,8 @@ class MediaDownloaderTest {
                 } finally {
                     slowDone.set(true)
                 }
+                "/uploads/gone.jpg" -> out.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                "/uploads/busy.jpg" -> out.write("HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
                 // 先给一块、再长时间不给：客户端必然停在阻塞读上，暂停就落在「读返回之前」
                 "/uploads/stall.bin" -> {
                     out.head(STALL_CHUNKS.toLong() * CHUNK)
@@ -121,6 +123,41 @@ class MediaDownloaderTest {
         cache.fileFor(url).delete() // 系统清理 / 在文件管理器里删掉
         assertEquals(DownloadPhase.NotStarted, d.stateOf(url).phase)
         assertNull(d.localFile(url))
+    }
+
+    @Test
+    fun `被动复验：404 标失效并写进状态表，断连与 5xx 不标`() {
+        val d = downloader(MediaCache(tmp()))
+        d.verifyExpired("/uploads/busy.jpg")
+        d.verifyExpired("/uploads/unknown.jpg") // 服务端直接断连
+        Thread.sleep(500)
+        assertEquals(DownloadPhase.NotStarted, d.stateOf("/uploads/busy.jpg").phase)
+        assertEquals(DownloadPhase.NotStarted, d.stateOf("/uploads/unknown.jpg").phase)
+
+        d.verifyExpired("/uploads/gone.jpg")
+        assertTrue(waitUntil { d.stateOf("/uploads/gone.jpg").phase == DownloadPhase.Expired })
+        assertEquals(DownloadPhase.Expired, d.states.value["/uploads/gone.jpg"]?.phase) // 界面靠状态流重组
+        d.start("/uploads/gone.jpg") // 失效是终态：不再回源
+        assertEquals(DownloadPhase.Expired, d.stateOf("/uploads/gone.jpg").phase)
+    }
+
+    @Test
+    fun `失效标记不覆盖本机已有原件（铁律：缓存过的照显）`() {
+        val d = downloader(MediaCache(tmp()))
+        val url = "/uploads/small.jpg"
+        d.start(url)
+        assertTrue(waitUntil { d.stateOf(url).phase == DownloadPhase.Ready })
+        assertFalse(d.markExpired(url))
+        assertEquals(DownloadPhase.Ready, d.stateOf(url).phase)
+        assertTrue(d.markExpired("/uploads/never.jpg"))
+    }
+
+    @Test
+    fun `清缓存不清失效登记，服务端删掉的事实不因本机清理而改变`() {
+        val d = downloader(MediaCache(tmp()))
+        d.markExpired("/uploads/gone.jpg")
+        d.clearAll()
+        assertEquals(DownloadPhase.Expired, d.stateOf("/uploads/gone.jpg").phase)
     }
 
     @Test

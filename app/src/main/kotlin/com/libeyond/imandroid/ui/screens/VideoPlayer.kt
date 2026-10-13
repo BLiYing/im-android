@@ -108,8 +108,11 @@ internal fun VideoPlayer(
     onTap: (() -> Unit)? = null,
     /** 壳是否显示：隐藏时中央钮与倍速一起藏起来，**进度条 + 时间常驻**（iOS `setAuxControlsHidden:`）。 */
     chromeVisible: Boolean = true,
+    /** 播放出错（404 / 断网 / 解不了都会到这）。查看器据此复验「服务端是否已清理」。 */
+    onError: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    val latestOnError by androidx.compose.runtime.rememberUpdatedState(onError)
     val c = IMTheme.colors
     val context = LocalContext.current
     val log = remember { com.libeyond.imandroid.sdk.logging.IMLog.tag("IM.Video") }
@@ -166,6 +169,7 @@ internal fun VideoPlayer(
                 // 解不了的编码（本端不转码，HEVC 在部分设备上放不了）、文件已被清理都会到这
                 failed = true
                 playing = false
+                latestOnError?.invoke()
             }
         }
         // **挂监听前先读一次当前状态**：`prepare()` 是在组合期（remember 里）调的，

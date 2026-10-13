@@ -82,6 +82,10 @@ internal object MediaSaver {
                 }
                 log.i("media_saved", "video" to isVideo)
                 Str.s(R.string.qr_card_saved)
+            } catch (e: MediaGoneException) {
+                runCatching { resolver.delete(target, null, null) }
+                log.i("media_save_gone")
+                Str.s(R.string.chat_media_file_expired_cant_save)
             } catch (e: Exception) {
                 // **失败必须把占位行删掉**：不删就在相册里留一条 0 字节、点开是黑屏的条目，
                 // 用户不会认为是「保存失败」，只会认为「这个 App 存出来的东西是坏的」。
@@ -117,8 +121,13 @@ internal object MediaSaver {
         val code = conn.responseCode
         if (code !in 200..299) {
             conn.disconnect()
+            // 服务端已清理（404/410）：与其它失败区分开，用户据此知道「不是网络问题、重试没用」
+            if (com.libeyond.imandroid.data.ExpiryProbe.isGone(code)) throw MediaGoneException()
             throw IllegalStateException("HTTP $code")
         }
         return conn.inputStream
     }
 }
+
+/** 保存 / 复制时服务端回 404 / 410：文件已被清理。 */
+internal class MediaGoneException : IllegalStateException("media gone")

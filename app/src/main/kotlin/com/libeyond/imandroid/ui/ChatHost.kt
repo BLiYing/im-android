@@ -493,6 +493,7 @@ fun ChatHost(
         useTls = com.libeyond.imandroid.BuildConfig.USE_TLS,
         onOpenUser = { uid -> openUser = uid },
         onSave = saveMedia,
+        downloads = client.downloads,
     )
 
     // —— 媒体查看器（盖在最上层：它比转发/选图更"临时"，用户按返回就该先关它）——

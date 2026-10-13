@@ -115,8 +115,53 @@ class MediaDownloader(
         }
     }
 
-    /** 本会话内已知失效的地址——不再回源（iOS `IMMediaExpiryRegistry` 的内存态那半）。 */
-    private val expired = HashSet<String>()
+    /**
+     * 本会话内已知失效的地址——不再回源（iOS `IMMediaExpiryRegistry` 的内存态那半）。
+     * **必须并发安全**：下载协程在 IO 线程写，`stateOf` 在主线程读。
+     */
+    private val expired: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** 在途复验去重：同一地址不并发多次 ranged-GET（滚动 / 多面同时 404 不打成探测风暴）。 */
+    private val verifying: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /**
+     * 登记「服务端已清理」。**铁律：本机已有原件的不标**（缓存过的照显，与 iOS 一致）。
+     * 同时写进状态表，所有订阅 [states] 的格子 / 气泡 / 查看器即刻重组出失效层。
+     * @return 登记后该地址是否处于失效态
+     */
+    fun markExpired(url: String, isVideo: Boolean = false): Boolean {
+        if (url.isBlank() || cache.isReady(url, isVideo)) return false
+        if (!expired.add(url)) return true
+        put(url, DownloadState(DownloadPhase.Expired))
+        log.i("media_expired", "via" to "passive")
+        return true
+    }
+
+    /**
+     * 被动展示路径（气泡 / 宫格 / 查看器直接按地址显示）加载失败后的**复验**（iOS `verifyExpiredForURL:`）：
+     * ranged-GET `bytes=0-0` 只探状态码，**仅 404 / 410 才标失效**；断网 / 超时 / 5xx 不标，保留可重载。
+     */
+    fun verifyExpired(url: String, isVideo: Boolean = false) {
+        if (url.isBlank() || url in expired || cache.isReady(url, isVideo)) return
+        if (!verifying.add(url)) return
+        scope.launch(Dispatchers.IO) {
+            try {
+                val req = Request.Builder()
+                    .url(absolute(url))
+                    .header("Range", "bytes=0-0")
+                    .apply { tokenProvider()?.let { header("Authorization", "Bearer $it") } }
+                    .get()
+                    .build()
+                ok.newCall(req).execute().use { resp ->
+                    if (ExpiryProbe.isGone(resp.code)) markExpired(url, isVideo)
+                }
+            } catch (e: IOException) {
+                // 网络错：不标失效
+            } finally {
+                verifying.remove(url)
+            }
+        }
+    }
 
     /** 某条媒体此刻的状态。本地已有 → Ready；已知失效 → Expired；否则看有没有在途记录。 */
     fun stateOf(url: String, isVideo: Boolean = false): DownloadState {
@@ -214,7 +259,7 @@ class MediaDownloader(
                     .get()
                     .build()
                 ok.newCall(req).execute().use { resp ->
-                    if (resp.code == 404 || resp.code == 410) {
+                    if (ExpiryProbe.isGone(resp.code)) {
                         // 服务端已清理 —— 终态，不给重试
                         expired += url
                         report(DownloadState(DownloadPhase.Expired))
@@ -267,4 +312,9 @@ class MediaDownloader(
         /** 「看过」登记的条数上限（与 Web `saveOptedIn` 的末 500 条同口径）。 */
         const val MAX_OPENED = 500
     }
+}
+
+/** 「服务端已清理」的状态码判据（下载路径与被动复验共用一份）。 */
+object ExpiryProbe {
+    fun isGone(code: Int): Boolean = code == 404 || code == 410
 }

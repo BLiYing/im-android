@@ -186,6 +186,8 @@ private fun ImageContent(
             placeholder = frosted,
             error = frosted,
             fallback = frosted,
+            // 按地址直显时 404 → 复验并登记失效，画 ⊘（此前静默退回磨砂图，点开是空查看器）
+            onError = { gate.onLoadError() },
             modifier = Modifier.fillMaxSize(),
         )
         // 自己发的不画门控层——它表达的是"要不要下载"；**失效那一档除外**（见上）
@@ -254,6 +256,8 @@ private fun VideoContent(
                 // 封面还在下载 / 下不动时，先给内嵌缩略的磨砂版（M4-7）；**自己发的不给**（理由见 localCover）
                 placeholder = if (mine) null else frosted,
                 error = if (mine) null else frosted,
+                // 视频被清理时封面通常一并没了：拿视频地址去复验
+                onError = { gate.onLoadError() },
                 modifier = Modifier.fillMaxSize(),
             )
         } else if (frosted != null) {

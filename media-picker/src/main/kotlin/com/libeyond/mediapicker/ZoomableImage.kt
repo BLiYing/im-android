@@ -55,6 +55,8 @@ fun ZoomableImage(
      * 沉浸态）。`null` = 不监听单击，双击放大不用等单击超时。
      */
     onTap: (() -> Unit)? = null,
+    /** 加载失败（404 / 断网都会到这）。查看器据此去复验「服务端是否已清理」。 */
+    onError: (() -> Unit)? = null,
 ) {
     val latestTap by rememberUpdatedState(onTap)
     var scale by remember(model) { mutableFloatStateOf(1f) }
@@ -132,6 +134,7 @@ fun ZoomableImage(
             placeholder = placeholder,
             error = placeholder,
             fallback = placeholder,
+            onError = onError?.let { cb -> { _: coil.compose.AsyncImagePainter.State.Error -> cb() } },
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer(
