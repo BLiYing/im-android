@@ -308,6 +308,8 @@ class MessageService(
             FrameType.GROUP -> data?.let { el ->
                 val d = ProtocolJson.decodeFromJsonElement(GroupEventData.serializer(), el)
                 log.i("group_event", "event" to d.event)
+                // 可见下界 = 我的入群位点 × 群设置：退群再邀请 / 群主翻开关都会变，陈旧缓存会让会话翻不上去（只在重连才清不够）
+                if (d.changesMyHistoryFloor(owner)) historyFloors.remove(d.convId)
                 _groupEvents.tryEmit(d)
                 // 新入群申请 / 我被移出 / 群解散：会话列表要跟着变（待审红字、会话消失）
                 if (d.goneForMe(owner)) {

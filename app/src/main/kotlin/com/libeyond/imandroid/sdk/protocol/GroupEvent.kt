@@ -29,7 +29,24 @@ data class GroupEventData(
     /** 本群对我已不可用：被移出、自己退群或解散——页面该退出、会话该消失。 */
     fun goneForMe(myUid: String?): Boolean = dissolved || removedMe(myUid) || leftMe(myUid)
 
+    /**
+     * 这帧会不会改变**我**的可见下界（入群位点 × 群设置）：会 → 该会话缓存的下界必须丢。
+     * 不会的（改群资料 / 公告 / 角色 / 转让 / 单人禁言、以及别人被邀请·退群·移出）不动它，白丢只是多问一次服务端。
+     * 反向写：只列「确定不影响」的，未知事件一律按「会影响」处理，宁可多丢。
+     */
+    fun changesMyHistoryFloor(myUid: String?): Boolean = when (event) {
+        PROFILE, ANNOUNCEMENT, ROLE, TRANSFER, MEMBER_MUTE -> false
+        INVITE, LEAVE, REMOVE -> myUid != null && target == myUid || target.isEmpty()
+        else -> true
+    }
+
     companion object {
+        const val PROFILE = "profile"
+        const val ANNOUNCEMENT = "announcement"
+        const val ROLE = "role"
+        const val TRANSFER = "transfer"
+        const val MEMBER_MUTE = "member_mute"
+        const val INVITE = "invite"
         const val LEAVE = "leave"
         const val REMOVE = "remove"
         const val DISSOLVE = "dissolve"

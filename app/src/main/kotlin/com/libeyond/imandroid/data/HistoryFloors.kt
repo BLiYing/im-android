@@ -23,4 +23,12 @@ class HistoryFloors {
     }
 
     fun clear() = floors.clear()
+
+    /**
+     * 只丢一个会话的下界：该群的 group 帧（退群 / 被邀请 / 群设置变更）一到就调。
+     * [note] 只往小里收，旧下界不会自己抬起来；退群再被邀请后若还留着，就会一直认为「到顶了」、翻不出历史。
+     */
+    fun remove(convId: String) {
+        if (convId.isNotEmpty()) floors.remove(convId)
+    }
 }

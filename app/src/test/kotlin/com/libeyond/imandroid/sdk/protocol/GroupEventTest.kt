@@ -56,4 +56,21 @@ class GroupEventTest {
         assertEquals(3, s.pendingCount)
         assertEquals(0, ProtocolJson.decodeFromString(ConversationSummary.serializer(), """{"conv_id":"g_2"}""").pendingCount)
     }
+
+    @Test
+    fun `只有影响我入群位点或开关的帧才丢可见下界`() {
+        // 群设置 / 解散 / 未知事件：一律丢
+        assertTrue(parse("""{"event":"settings","conv_id":"g_1","from":"1001"}""").changesMyHistoryFloor("1002"))
+        assertTrue(parse("""{"event":"dissolve","conv_id":"g_1"}""").changesMyHistoryFloor("1002"))
+        assertTrue(parse("""{"event":"brand_new","conv_id":"g_1"}""").changesMyHistoryFloor("1002"))
+        // 轮到我被邀请 / 退群 / 移出：丢；别人的：不丢
+        for (ev in listOf("invite", "leave", "remove")) {
+            assertTrue(parse("""{"event":"$ev","conv_id":"g_1","target":"1002"}""").changesMyHistoryFloor("1002"))
+            assertFalse(parse("""{"event":"$ev","conv_id":"g_1","target":"1003"}""").changesMyHistoryFloor("1002"))
+        }
+        // 资料 / 公告 / 角色 / 转让 / 单人禁言：不影响
+        for (ev in listOf("profile", "announcement", "role", "transfer", "member_mute")) {
+            assertFalse(parse("""{"event":"$ev","conv_id":"g_1","target":"1002"}""").changesMyHistoryFloor("1002"))
+        }
+    }
 }
