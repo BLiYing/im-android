@@ -53,7 +53,9 @@ object IncomingRule {
      * 此前只排除了自己发的，群里改名/公告/禁言一次就让全体成员红点 +1、进会话还插一条"未读消息"分割线
      * （2026-09-27 真机发现；下次拉会话列表服务端值又把它纠回 0，所以表现为红点忽有忽无）。
      * 系统通知单聊（777000，`content_type=text`）照常计未读，服务端也计。
+     * 发送者为空（单聊「已成为好友」系统消息）同样不计——`from.isNotEmpty()` 兜底，
+     * 万一服务端哪天给 system 以外的类型也留空发送者，也不会凭空多出红点。
      */
     fun countsAsUnread(from: String, contentType: String, owner: String): Boolean =
-        from != owner && contentType != ContentType.SYSTEM
+        from.isNotEmpty() && from != owner && contentType != ContentType.SYSTEM
 }

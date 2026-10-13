@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import com.libeyond.imandroid.data.ContactCardSend
 import com.libeyond.imandroid.data.createMediaPending
 import com.libeyond.imandroid.data.attachMediaThumb
 import com.libeyond.imandroid.data.markMediaFailed
@@ -367,6 +368,16 @@ internal class MediaSendFlow(
             waveform = waveform,
             pendingId = pendingId,
         )
+    }
+
+    /**
+     * 一次发多张名片（确认 sheet 点「发送」后）：**每张是独立消息**，按勾选顺序逐条乐观回显发出，
+     * 失败那条独立显红、其余不受影响（iOS `sendContactCards:`）。不出吐司——气泡本身就是反馈。
+     */
+    suspend fun sendContactCards(friends: List<FriendEntry>, onToast: (String) -> Unit) {
+        val byId = friends.associateBy { it.userId }
+        ContactCardSend.normalize(friends.map { it.userId }).mapNotNull(byId::get)
+            .forEach { sendContactCard(it, onToast) }
     }
 
     /** 发个人名片（➕ 面板「个人名片」）。

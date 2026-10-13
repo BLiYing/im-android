@@ -3,14 +3,17 @@ package com.libeyond.imandroid.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.ui.components.blockPointerInput
-import com.libeyond.imandroid.ui.screens.FriendPickerScreen
+import com.libeyond.imandroid.ui.screens.ContactCardConfirmSheet
 import com.libeyond.mediapicker.MediaPickerHost
 import com.libeyond.mediapicker.PickedMedia
 
@@ -38,11 +41,14 @@ internal fun ChatPickerLayers(
     onOpenChat: (ConversationEntity) -> Unit = {},
     /** 选联系人发名片中（null = 不在选）。 */
     pickingFriend: List<FriendEntry>?,
+    /** 确认 sheet 标题里的目标会话名（「发送名片给「X」」）。 */
+    convTitle: String,
     /** 选图中（自建相册页；无权限时它自己显示「去设置」空状态）。 */
     picking: Boolean,
     onCloseUser: () -> Unit,
     onCancelFriendPicker: () -> Unit,
-    onPickFriend: (FriendEntry) -> Unit,
+    /** 确认发送：按勾选顺序逐张发出。 */
+    onSendContactCards: (List<FriendEntry>) -> Unit,
     onPicked: (List<PickedMedia>, Boolean) -> Unit,
     onDismissPicker: () -> Unit,
     /** 「从收藏发送」选择页开着。 */
@@ -68,12 +74,23 @@ internal fun ChatPickerLayers(
         )
     }
 
-    // —— 选联系人发名片（覆盖在聊天页之上）——
+    // —— 选联系人发名片（覆盖在聊天页之上）：多选页 → 收起选人页 → 二次确认 sheet（iOS 同序）——
+    // 确认中的名单放本层：选人页一收起 `pickingFriend` 就清空，宿主那份状态撑不到 sheet 上
+    var confirming by remember { mutableStateOf<List<FriendEntry>?>(null) }
     pickingFriend?.let { list ->
-        FriendPickerScreen(
+        ContactCardPicker(
             friends = list,
             onCancel = onCancelFriendPicker,
-            onPick = onPickFriend,
+            onConfirm = { picked -> confirming = picked; onCancelFriendPicker() },
+        )
+    }
+    confirming?.let { picked ->
+        ContactCardConfirmSheet(
+            friends = picked,
+            to = convTitle,
+            // 先清状态再发：同帧内的二次点击读到 null，不会把一批名片发两遍
+            onSend = { if (confirming != null) { confirming = null; onSendContactCards(picked) } },
+            onCancel = { confirming = null },
         )
     }
 

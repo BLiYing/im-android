@@ -6,6 +6,11 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **好友成立系统消息 + 收藏页紧凑行 + 发名片多选确认 + 会话列表时间锚点（2026-10-13，未 commit，待真机目测）**：
+  - `friend_accepted`：`SysEvents.GROUP` 加无参表项，聊天页居中灰字与会话列表预览共用；`IncomingRule.countsAsUnread` 对空 sender 兜底，`ChatJumpButton` 的 ↓N 改走同一判据（此前把 system 当对方消息计数）。
+  - 收藏页（`FavoriteRows.kt`，尺寸常量 `FavoriteRowMetrics` 取自 iOS）：文本/记录 92、文件 92、语音 108、名片 82（头像 44 + 名字 + 时间 + @句柄 + 「由X分享」）；分隔线缩进统一 16dp（`ArchiveSeparatorInset`，同时作用于详情页文件/链接/语音行）。
+  - 发名片：`ContactCardPicker`（`PickListScreen` 多选上限 9）→ `ContactCardConfirmSheet`（标题 / 首张预览卡 / 摘要 / 发送·取消）→ `MediaSendFlow.sendContactCards` 逐张发；判据 `ContactCardSend`。`FriendPickerScreen` 已删。
+  - 会话列表：时间挂名称行右端、角标/圆点挂预览行右端（各自独立锚定，`UnreadMark.shown`）。
 - **群通知两行 + 相册合并（2026-10-13，已 OPPO 真机验证）**：`FcmNotifications.post` 群聊按一对一 MessagingStyle 画（不设 conversationTitle / isGroupConversation），标题=群名、正文=`发送人: 内容`；`ConversationLines` 同发送人同 `album_id` 合成一行、后到成员不再重响（`FcmPayload.albumId`）。
 **详情页用户名缺失 / 先闪「添加好友」（2026-10-10，已修，OPPO 已装待目测）**：根因 = `MainScreen.knownFriends` 只在启动拉一次，启动后才加的好友不在表里；详情页按钮读进页重拉的 `friend`（闪一下就对），用户名行却读旧 `knownFriends`（一直空）。修：`data/PeerRelation.kt` 把好友态/拉黑/句柄从同一份 `friend` 派生（`PeerRelationTest`，变异验红）；`ChatDetailHost` 新增 `onFriendsRefreshed` 回灌；`MainScreen` 订阅 `friendEvents` 重拉 `knownFriends`；资料页分支 `knownRelation` 改读 `friend`。iOS 不需要改（`IMFriendStateStore` 每次拉列表都刷新）。已跑 `/code-review --fix`；OPPO 实测通过（启动后才加的好友：进详情页不再先闪「添加好友」，用户名正常）。补丁：`relationSettled`（表里没有该好友时重拉返回前不画操作排）+ `ContactsHost.onFriendsLoaded` 回灌 knownFriends。
 **「新的朋友」补「已添加」段 + 通讯录 Tab 角标（2026-10-09，未 commit，设计 `IMServer/docs/design/NEW_FRIENDS_DESIGN.md`）**：
@@ -30,7 +35,7 @@
    - 根因：`ui/components/PushTransition.kt` 要退场页按冻结的 `state` 渲染，而这些 host 是「关闭即把数据变量置空」，退场时数据已没，半路变白。改法 = 「是否打开」与「显示什么数据」拆两个变量，关闭只翻布尔（参照 `ChatDetailHost` 的 `viewingOpen`/`viewingData`）。
    - 余 8 支未动（Pick/Bans/Admins/JoinRequests/MemberProfile/MemberSearch/Manage/Qr），逐支来；**全部改完才把 9 支统一进一个 `PushTransition(page, depthOf)`**。`GroupInfoHost.kt` 现 596/600（已拆出 `GroupInfoDialogs/Live/Settings/Placeholder.kt`，贴线），**动它之前先拆文件**。
    - `ChatHost` 覆盖层栈（`ChatOverlays.kt`，`ChatRecord` 可嵌套压栈）范围最大且是产品判断，**动手前先问用户**。
-3. 卡片弹层推广：@提及（`MentionPanel`）、选文件、日期跳转（现为 `AlertDialog`）、选联系人发名片仍是整屏/底部面板，逐个换 `IMCardSheet`（已读详情已换）。
+3. 卡片弹层推广：@提及（`MentionPanel`）、选文件、日期跳转（现为 `AlertDialog`）、选联系人发名片（选人页仍整屏，确认 sheet 是半高底部卡片、无下拉手势），逐个换 `IMCardSheet`（已读详情已换）。
 4. 收藏剩余：来源名到群昵称级；收藏页长按菜单是否已覆盖举报、翻译待核（聊天侧已做）。
 5. 宫格：「五道防跳版闸」是否齐全待核（布局已按 `IMAlbumRowPattern` 对齐）。
 6. `docs/UI_PARITY_IOS.md` 剩余 🔴：水滴头部形变、隐私页无障碍。
@@ -46,7 +51,7 @@
 - **群资料页有本地快照**（`data/GroupInfoCache.kt`，`filesDir/group_info/<uid>_<convId>.json`，剔成员表）：进页先画快照、网络回来覆盖；没快照退 `GroupInfoPlaceholder`（只画顶栏 + 头像 + 群名，**不画任何依赖角色/开关/人数的入口**，默认值会让权限判定放开）。拉不到有「点击重试」。
 - **登录被顶（账号在别处登录）后应用不会立刻回登录页**：群资料等页面请求全 401，页面停着；重启才见「你的账号已在别处登录」。未修，属登录失效反馈问题。
 
-- **体量贴线**（硬闸 600，WARN 线 480）：`GroupInfoHost.kt` 596、`ChatHost.kt` 589（**只差 11 行**）、`MessageRepository.kt` 580、`ChatScreen.kt` 532、`MessageService.kt` 506 都很近；动它们之前先拆文件，新增一律放新文件。`Daos.kt` 别再加。
+- **体量贴线**（硬闸 600，WARN 线 480）：`GroupInfoHost.kt` 596、`ChatHost.kt` 598（**只差 2 行**）、`MessageRepository.kt` 580、`ChatScreen.kt` 532、`MessageService.kt` 506 都很近；动它们之前先拆文件，新增一律放新文件。`Daos.kt` 别再加。
 - **合并转发记录里的名片 →「发消息」换不了会话**（未修）：`ChatHost` 绑死单一 `convId`，点了只关资料层退回记录页。
 - **`FavoritesHost`/`ChatPickerLayers`/`QrRouteHost` 进 `UserProfileHost` 没接 `onRemarkChanged`**（缓行，按 `ContactsHost` 同一套本机状态覆盖补即可）。
 - **App Links 系统级深链接：明确暂不做**（2026-09-22 拍板）：需要固定公网 HTTPS 域名放 `assetlinks.json`；三端联动，等有部署域名再评估。**改原生 Material 风格：暂缓**（见 `docs/design/MATERIAL_DESIGN_EVAL.md`），别顺手改配色/图标/弹层。

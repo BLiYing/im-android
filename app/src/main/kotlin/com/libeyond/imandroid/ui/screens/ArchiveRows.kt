@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,6 +41,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -151,6 +153,10 @@ internal fun VoiceRow(
     onLongPress: ((Rect) -> Unit)? = null,
     /** 行尾槽（「从收藏发送」的勾选框，见 [PickCheckButton]）；null 不画。 */
     trailing: (@Composable () -> Unit)? = null,
+    /** 固定行高下限（收藏页对齐 iOS 的 108pt）；[Dp.Unspecified] = 按内容。 */
+    minHeight: Dp = Dp.Unspecified,
+    /** 分隔线左缩进：详情页保持原值（16），收藏页传 [ArchiveSeparatorInset]（同 iOS 表格默认）。 */
+    separatorInset: Dp = 16.dp,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -158,7 +164,8 @@ internal fun VoiceRow(
         Row(
             Modifier.fillMaxWidth().background(LocalArchiveRowBg.current ?: c.surface)
                 .archiveItemGestures(onClick = {}, onLongPress = onLongPress)
-                .padding(horizontal = d.space4, vertical = 10.dp),
+                .minRowHeight(minHeight)
+                .padding(horizontal = d.space4, vertical = rowVerticalPad(minHeight, 10.dp)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -183,7 +190,7 @@ internal fun VoiceRow(
             }
             trailing?.invoke()
         }
-        Box(Modifier.fillMaxWidth().padding(start = d.space4).height(0.5.dp).background(c.separator))
+        Box(Modifier.fillMaxWidth().padding(start = separatorInset).height(0.5.dp).background(c.separator))
     }
 }
 
@@ -198,6 +205,8 @@ internal fun LinkRow(
     onLongPress: ((Rect) -> Unit)? = null,
     /** 行尾槽（「从收藏发送」的勾选框）；null 不画。 */
     trailing: (@Composable () -> Unit)? = null,
+    /** 分隔线左缩进：详情页保持原值（68），收藏页传 [ArchiveSeparatorInset]。 */
+    separatorInset: Dp = 68.dp,
     onClick: () -> Unit,
 ) {
     val c = IMTheme.colors
@@ -239,7 +248,7 @@ internal fun LinkRow(
             }
             trailing?.invoke()
         }
-        Box(Modifier.fillMaxWidth().padding(start = 68.dp).height(0.5.dp).background(c.separator))
+        Box(Modifier.fillMaxWidth().padding(start = separatorInset).height(0.5.dp).background(c.separator))
     }
 }
 
@@ -386,6 +395,10 @@ internal fun FileRow(
     onLongPress: ((Rect) -> Unit)? = null,
     /** 行尾槽（「从收藏发送」的勾选框）；null 不画。 */
     trailing: (@Composable () -> Unit)? = null,
+    /** 固定行高下限（收藏页对齐 iOS 的 92pt）；[Dp.Unspecified] = 按内容。 */
+    minHeight: Dp = Dp.Unspecified,
+    /** 分隔线左缩进：详情页保持原值（68），收藏页传 [ArchiveSeparatorInset]。 */
+    separatorInset: Dp = 68.dp,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -401,7 +414,8 @@ internal fun FileRow(
                     onClick = { if (gate.ready) onOpen(item) else gate.onTap() },
                     onLongPress = onLongPress,
                 )
-                .padding(horizontal = d.space4, vertical = 12.dp),
+                .minRowHeight(minHeight)
+                .padding(horizontal = d.space4, vertical = rowVerticalPad(minHeight, 12.dp)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             FileGateSlot(gate.state, item.fileSize, name, side = 36.dp)
@@ -431,9 +445,23 @@ internal fun FileRow(
             }
             trailing?.invoke()
         }
-        Box(Modifier.fillMaxWidth().padding(start = 68.dp).height(0.5.dp).background(c.separator))
+        Box(Modifier.fillMaxWidth().padding(start = separatorInset).height(0.5.dp).background(c.separator))
     }
 }
+
+/**
+ * 收藏页各行底部分隔线的左缩进：16dp = iOS `UITableView` 默认 `separatorInset.left`
+ * （收藏页各 cell 没设自定义值）。**只收藏页传它**——详情页的文件/链接/语音行保持各自原缩进，不随收藏页变。
+ */
+internal val ArchiveSeparatorInset = 16.dp
+
+/** [minHeight] 指定时给行一个高度下限；未指定不加约束。 */
+private fun Modifier.minRowHeight(minHeight: Dp): Modifier =
+    if (minHeight == Dp.Unspecified) this else this.heightIn(min = minHeight)
+
+/** 固定行高档（收藏页）内容垂直居中、上下只留 8dp 呼吸（iOS `stack.top >= 8 / bottom <= -8`）。 */
+private fun rowVerticalPad(minHeight: Dp, default: Dp): Dp =
+    if (minHeight == Dp.Unspecified) default else 8.dp
 
 /**
  * 「来自X」一行（收藏页的文件 / 语音 / 链接 / 文本行共用）。**独占一行、强调色**——

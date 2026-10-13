@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -24,21 +23,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Quote
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.FavoriteCategory
 import com.libeyond.imandroid.data.FavoritePick
@@ -46,7 +41,6 @@ import com.libeyond.imandroid.data.Favorites
 import com.libeyond.imandroid.sdk.api.Favorite
 import com.libeyond.imandroid.ui.components.IMSearchField
 import com.libeyond.imandroid.ui.components.IMTopBar
-import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -230,6 +224,7 @@ private fun LazyListScope.favoriteItems(
                 item = Favorites.toConvMediaItem(f), isGroup = Favorites.fromGroup(f),
                 onOpen = { onOpen(f) }, source = sourceNameOf(f),
                 onLongPress = longPressOf(f), trailing = check(f),
+                minHeight = FavoriteRowMetrics.FILE_ROW_HEIGHT, separatorInset = ArchiveSeparatorInset,
             )
         }
         FavoriteCategory.Voice -> items(shown, key = { it.id }) { f ->
@@ -238,120 +233,25 @@ private fun LazyListScope.favoriteItems(
                 item = Favorites.toConvMediaItem(f), playId = "fav:${f.id}", convId = f.sourceConvId,
                 waveform = f.waveform.ifBlank { null },
                 source = sourceNameOf(f), onLongPress = longPressOf(f), trailing = check(f),
+                minHeight = FavoriteRowMetrics.VOICE_ROW_HEIGHT, separatorInset = ArchiveSeparatorInset,
             )
         }
         FavoriteCategory.Links -> items(shown, key = { it.id }) { f ->
             LinkRow(
                 text = f.content, timestamp = f.createdAt, url = Favorites.linkUrl(f),
                 source = sourceNameOf(f), onLongPress = longPressOf(f), trailing = check(f),
+                separatorInset = ArchiveSeparatorInset,
             ) { onOpen(f) }
         }
         FavoriteCategory.Text -> items(shown, key = { it.id }) { f ->
             TextFavoriteRow(f, sourceNameOf(f), onClick = { onOpen(f) }, onLongPress = longPressOf(f), trailing = check(f))
         }
-        FavoriteCategory.Record, FavoriteCategory.Contact -> items(shown, key = { it.id }) { f ->
-            CardFavoriteRow(
-                f, kind, sourceNameOf(f),
-                onClick = { onOpen(f) }, onLongPress = longPressOf(f), trailing = check(f),
-            )
+        FavoriteCategory.Record -> items(shown, key = { it.id }) { f ->
+            RecordFavoriteRow(f, sourceNameOf(f), onClick = { onOpen(f) }, onLongPress = longPressOf(f), trailing = check(f))
         }
-    }
-}
-
-/**
- * 文本收藏一行：左 36dp 淡主色底 + 引号图标、正文最多 3 行、时间、来自X（iOS `IMFavoriteRowCell` 文本类）。
- * 点开是全文阅读页（FAVORITES_DESIGN §5.6），复制走长按。
- */
-@Composable
-private fun TextFavoriteRow(
-    f: Favorite,
-    source: String,
-    onClick: () -> Unit,
-    onLongPress: ((Rect) -> Unit)?,
-    trailing: (@Composable () -> Unit)?,
-) {
-    val c = IMTheme.colors
-    val d = IMTheme.dimens
-    Column {
-        Row(
-            Modifier.fillMaxWidth().background(c.surface)
-                .archiveItemGestures(onClick = onClick, onLongPress = onLongPress)
-                .padding(horizontal = d.space4, vertical = 12.dp),
-        ) {
-            Box(
-                Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(c.accentSoft),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    Lucide.Quote, stringResource(R.string.favorites_category_text),
-                    Modifier.size(18.dp), colorFilter = ColorFilter.tint(c.accent),
-                )
-            }
-            Spacer(Modifier.width(d.space3))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    f.content, color = c.textPrimary, style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 3, overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    TimeFormat.fileDateTime(f.createdAt),
-                    color = c.textTertiary, style = MaterialTheme.typography.bodySmall,
-                )
-                SourceLine(source)
-            }
-            trailing?.invoke()
+        FavoriteCategory.Contact -> items(shown, key = { it.id }) { f ->
+            ContactFavoriteRow(f, sourceNameOf(f), onClick = { onOpen(f) }, onLongPress = longPressOf(f), trailing = check(f))
         }
-        Box(Modifier.fillMaxWidth().padding(start = 68.dp).height(0.5.dp).background(c.separator))
-    }
-}
-
-/**
- * 名片 / 聊天记录收藏一行：**卡片本体就是聊天页气泡里那一张**（[ContactCardContent] /
- * [ChatRecordCardContent]），下面加时间与来自X。各画一版的话，名片卡在两处长得不一样是迟早的事。
- */
-@Composable
-private fun CardFavoriteRow(
-    f: Favorite,
-    kind: FavoriteCategory,
-    source: String,
-    onClick: () -> Unit,
-    onLongPress: ((Rect) -> Unit)?,
-    trailing: (@Composable () -> Unit)?,
-) {
-    val c = IMTheme.colors
-    val d = IMTheme.dimens
-    val screenW = LocalConfiguration.current.screenWidthDp
-    // 有勾选框时卡片让出 36dp，不然卡片把勾选框挤出屏
-    val slot = if (trailing != null) 36 else 0
-    val cardW = remember(screenW, slot) { (screenW - 2 * 16 - 2 * 12 - slot).coerceAtLeast(200).dp }
-    Column {
-        Row(
-            Modifier.fillMaxWidth().background(c.surface)
-                .archiveItemGestures(onClick = onClick, onLongPress = onLongPress)
-                .padding(horizontal = d.space4, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Box(
-                    Modifier.clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
-                        .background(c.bubbleThem).padding(horizontal = 12.dp, vertical = 8.dp),
-                ) {
-                    if (kind == FavoriteCategory.Contact) {
-                        ContactCardContent(f.content, width = cardW)
-                    } else {
-                        ChatRecordCardContent(f.content, width = cardW)
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    TimeFormat.fileDateTime(f.createdAt),
-                    color = c.textTertiary, style = MaterialTheme.typography.bodySmall,
-                )
-                SourceLine(source)
-            }
-            trailing?.invoke()
-        }
-        Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
     }
 }
 

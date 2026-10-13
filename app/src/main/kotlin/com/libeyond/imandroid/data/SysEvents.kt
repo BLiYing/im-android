@@ -53,6 +53,9 @@ object SysEvents {
         "mute_all_off" to GroupEvent(R.string.sys_group_mute_all_off, emptyList(), emptyList()),
         "mute_member" to GroupEvent(R.string.sys_group_mute_member, listOf("actor", "target"), listOf("actor", "target")),
         "unmute_member" to GroupEvent(R.string.sys_group_unmute_member, listOf("actor", "target"), listOf("actor", "target")),
+        // 单聊「你们已成为好友」（sender 为空、无参数、无人名段）：与群事件同一条无参渲染路径，
+        // 聊天页走 [groupSegments]、会话列表预览走 [groupText]（lastContentType=system）
+        "friend_accepted" to GroupEvent(R.string.sys_friend_accepted, emptyList(), emptyList()),
     )
 
     private val ARGS_SERIALIZER = MapSerializer(String.serializer(), String.serializer())

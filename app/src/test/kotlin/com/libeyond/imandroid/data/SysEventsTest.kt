@@ -156,4 +156,54 @@ class SysEventsTest {
         // 不认识的事件回退烤好的中文
         assertEquals("张三 将 李四 移出群聊", ConversationPreview.of(group.copy(lastSysEvent = "future"), "me") { null })
     }
+
+    // ——— friend_accepted：单聊「你们已成为好友」，sender 为空、无参数、无人名段 ———
+
+    private val friendConv = ConversationEntity(
+        ownerUid = "me", convId = "u_a_u_b", isGroup = false, peerUid = "u_b",
+        lastContent = "你们已成为好友，现在可以开始聊天了", lastContentType = ContentType.SYSTEM,
+        lastFrom = "", lastSysEvent = "friend_accepted",
+    )
+
+    @Test
+    fun `friend_accepted 单聊系统消息按语言渲染，不带人名`() {
+        assertEquals("你们已成为好友，现在可以开始聊天了", SysEvents.groupText("friend_accepted", null, null))
+        english()
+        val segs = SysEvents.groupSegments("friend_accepted", null, null)!!
+        assertEquals("You are now friends. You can start chatting.", segs.joinToString("") { it.text })
+        assertEquals(0, segs.count(SysSegments::isName))
+    }
+
+    @Test
+    fun `friend_accepted 会话列表预览本地化且不加发送者前缀`() {
+        assertEquals("你们已成为好友，现在可以开始聊天了", ConversationPreview.of(friendConv, "me") { null })
+        english()
+        assertEquals("You are now friends. You can start chatting.", ConversationPreview.of(friendConv, "me") { null })
+        // 同一行若被当成群也不加前缀（system 一律无前缀）
+        assertEquals(
+            "You are now friends. You can start chatting.",
+            ConversationPreview.of(friendConv.copy(isGroup = true), "me") { "x" },
+        )
+    }
+
+    @Test
+    fun `friend_accepted 入库不计未读，sender 为空不崩`() {
+        val row = MessageData(
+            convId = "u_a_u_b", convSeq = 1, contentType = ContentType.SYSTEM,
+            content = "你们已成为好友，现在可以开始聊天了", sysEvent = "friend_accepted",
+        ).toEntity("me")
+        assertEquals("", row.sender)
+        assertEquals("friend_accepted", row.sysEvent)
+        assertEquals(false, IncomingRule.countsAsUnread(row.sender, row.contentType, "me"))
+        assertEquals(IncomingKind.Message, IncomingRule.kindOf(row.contentType, null))
+    }
+
+    @Test
+    fun `friend_accepted 不认识的老客户端回退 content`() {
+        assertNull(SysEvents.groupSegments("friend_accepted_v2", null, null))
+        assertEquals(
+            "你们已成为好友，现在可以开始聊天了",
+            ConversationPreview.of(friendConv.copy(lastSysEvent = "friend_accepted_v2"), "me") { null },
+        )
+    }
 }

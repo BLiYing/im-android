@@ -528,13 +528,11 @@ fun ChatHost(
         memberAvatars = memberAvatars,
         onOpenChat = onOpenChat,
         pickingFriend = pickingFriend,
+        convTitle = snapshotTitle,
         picking = picking,
         onCloseUser = { openUser = null },
         onCancelFriendPicker = { pickingFriend = null },
-        onPickFriend = { f ->
-            pickingFriend = null
-            scope.launch { mediaSend.sendContactCard(f) { toast = it } }
-        },
+        onSendContactCards = { fs -> scope.launch { mediaSend.sendContactCards(fs) { toast = it } } },
         onPicked = { items, sendOriginal ->
             picking = false
             scope.launch { mediaSend.send(items, sendOriginal) { toast = it } }

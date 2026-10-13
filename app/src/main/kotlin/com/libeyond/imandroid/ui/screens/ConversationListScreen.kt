@@ -232,86 +232,92 @@ private fun ConversationRow(
         }
         Spacer(Modifier.width(d.space3))
 
+        // 右侧「时间」与「未读角标」**各自独立锚定**（iOS `_deliveryTimeStack.centerY = _nameStateStack.centerY`、
+        // `_badge/_dot.centerY = _last.centerY`）：时间落在名称行右端、角标落在预览行右端。
+        // 此前两者叠成一个整体垂直居中的 Column，有角标时整体比无角标高 20+6dp，居中后时间 y 漂 ~10dp。
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        color = c.textPrimary,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    // 置顶图标与免打扰铃铛**同款**：14dp 次要色矢量（iOS `pin.fill` / `bell.slash.fill` 同 tintColor）
+                    if (conv.pinnedAt > 0) {
+                        Spacer(Modifier.width(4.dp))
+                        androidx.compose.foundation.Image(
+                            Lucide.Pin, null, Modifier.size(14.dp),
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.textSecondary),
+                        )
+                    }
+                    // 免打扰铃铛：名称 → 置顶 → 免打扰，状态图标紧跟名称（对齐 iOS `_nameStateStack`，
+                    // 14dp 次要色 bell.slash.fill）；定时免打扰到期后跟着消失，判据同未读徽标。
+                    if (MuteState.isMutedNow(conv.muted, conv.muteUntil, nowMs)) {
+                        Spacer(Modifier.width(4.dp))
+                        androidx.compose.foundation.Image(
+                            Lucide.BellOff, null, Modifier.size(14.dp),
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.textSecondary),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(d.space2))
                 Text(
-                    text = title,
-                    color = c.textPrimary,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
+                    text = TimeFormat.conversationTime(conv.lastTimestamp),
+                    color = c.textTertiary,
+                    style = MaterialTheme.typography.labelSmall,
                 )
-                // 置顶图标与免打扰铃铛**同款**：14dp 次要色矢量（iOS `pin.fill` / `bell.slash.fill` 同 tintColor）
-                if (conv.pinnedAt > 0) {
-                    Spacer(Modifier.width(4.dp))
-                    androidx.compose.foundation.Image(
-                        Lucide.Pin, null, Modifier.size(14.dp),
-                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.textSecondary),
-                    )
-                }
-                // 免打扰铃铛：名称 → 置顶 → 免打扰，状态图标紧跟名称（对齐 iOS `_nameStateStack`，
-                // 14dp 次要色 bell.slash.fill）；定时免打扰到期后跟着消失，判据同未读徽标。
-                if (MuteState.isMutedNow(conv.muted, conv.muteUntil, nowMs)) {
-                    Spacer(Modifier.width(4.dp))
-                    androidx.compose.foundation.Image(
-                        Lucide.BellOff, null, Modifier.size(14.dp),
-                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(c.textSecondary),
-                    )
-                }
             }
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 群里有人 @我：红字前缀，且**穿透免打扰**
-                if (conv.mentionUnread) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    // 群里有人 @我：红字前缀，且**穿透免打扰**
+                    if (conv.mentionUnread) {
+                        Text(
+                            text = stringResource(R.string.conv_list_mention_tag) + " ",
+                            color = c.danger,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    // 群「待审入群申请」红字前缀（G3，仅群主/管理员）：进群管理才发现太深，顶到会话列表
+                    if (conv.isGroup && pendingCount > 0) {
+                        Text(
+                            text = stringResource(R.string.conv_list_pending_tag, pendingCount) + " ",
+                            color = c.danger,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    // 单聊已读双勾：只有「我发的、对方已读」才画蓝双勾图标，未读灰单勾图标——与聊天页气泡同一表意
+                    // （对齐 iOS `showCheck`）。群聊没有对端已读位点这个概念，恒不画。
+                    if (!conv.isGroup && conv.lastFrom == myUid && !conv.lastRecalled && conv.lastContent.isNotBlank()) {
+                        val read = conv.peerReadSeq >= conv.lastConvSeq
+                        ReadTickIcon(
+                            read, if (read) c.checkRead else c.textSecondary,
+                            MaterialTheme.typography.bodyMedium.fontSize,
+                        )
+                        Spacer(Modifier.width(3.dp))
+                    }
                     Text(
-                        text = stringResource(R.string.conv_list_mention_tag) + " ",
-                        color = c.danger,
+                        text = preview,
+                        // 被叫侧「未接来电」整行预览标红（danger，不随主题变）；撤回态不再是通话消息，不标红
+                        color = if (!conv.lastRecalled && conv.lastContentType == ContentType.CALL && CallRecord.isMissedPreview(conv.lastContent)) {
+                            c.danger
+                        } else {
+                            c.textSecondary
+                        },
                         style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                // 群「待审入群申请」红字前缀（G3，仅群主/管理员）：进群管理才发现太深，顶到会话列表
-                if (conv.isGroup && pendingCount > 0) {
-                    Text(
-                        text = stringResource(R.string.conv_list_pending_tag, pendingCount) + " ",
-                        color = c.danger,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+                if (UnreadMark.shown(conv)) {
+                    Spacer(Modifier.width(d.space2))
+                    UnreadBadge(conv, nowMs)
                 }
-                // 单聊已读双勾：只有「我发的、对方已读」才画蓝双勾图标，未读灰单勾图标——与聊天页气泡同一表意
-                // （对齐 iOS `showCheck`）。群聊没有对端已读位点这个概念，恒不画。
-                if (!conv.isGroup && conv.lastFrom == myUid && !conv.lastRecalled && conv.lastContent.isNotBlank()) {
-                    val read = conv.peerReadSeq >= conv.lastConvSeq
-                    ReadTickIcon(
-                        read, if (read) c.checkRead else c.textSecondary,
-                        MaterialTheme.typography.bodyMedium.fontSize,
-                    )
-                    Spacer(Modifier.width(3.dp))
-                }
-                Text(
-                    text = preview,
-                    // 被叫侧「未接来电」整行预览标红（danger，不随主题变）；撤回态不再是通话消息，不标红
-                    color = if (!conv.lastRecalled && conv.lastContentType == ContentType.CALL && CallRecord.isMissedPreview(conv.lastContent)) {
-                        c.danger
-                    } else {
-                        c.textSecondary
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
-        }
-
-        Spacer(Modifier.width(d.space2))
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = TimeFormat.conversationTime(conv.lastTimestamp),
-                color = c.textTertiary,
-                style = MaterialTheme.typography.labelSmall,
-            )
-            Spacer(Modifier.height(6.dp))
-            UnreadBadge(conv, nowMs)
         }
     }
     Box(
@@ -364,8 +370,13 @@ private fun UnreadBadge(conv: ConversationEntity, nowMs: Long) {
         )
         // 免打扰的铃铛不在这里：iOS 把它放在**名称行**、紧跟置顶图标（`_nameStateStack`），
         // 这一格只给未读徽标（灰色表示免打扰）。此前把 🔕 画在时间下方，位置与 iOS 不符。
-        else -> Spacer(Modifier.height(1.dp))
+        else -> Unit
     }
+}
+
+/** 预览行右端有没有未读标记（数字徽标 / 标未读圆点）；没有就连间距都不占，预览得到整行宽。 */
+internal object UnreadMark {
+    fun shown(conv: ConversationEntity): Boolean = conv.unread > 0 || conv.markedUnread
 }
 
 @Composable

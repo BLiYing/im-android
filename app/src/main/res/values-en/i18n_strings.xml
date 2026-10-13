@@ -1792,6 +1792,7 @@
     <string name="storage_reset_confirm_message">Restore to factory defaults (Medium for cellular, High for Wi-Fi).</string>
     <string name="storage_row_reset">Reset auto-download settings</string>
     <string name="storage_row_usage">Storage usage</string>
+    <string name="sys_friend_accepted">You are now friends. You can start chatting.</string>
     <string name="sys_group_announcement">%1$s posted an announcement</string>
     <string name="sys_group_avatar">%1$s updated the group photo</string>
     <string name="sys_group_create">%1$s created the group \"%2$s\"</string>

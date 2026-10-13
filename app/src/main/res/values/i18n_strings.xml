@@ -1748,6 +1748,7 @@
     <string name="storage_reset_confirm_message">恢复为出厂默认（移动数据中档、Wi-Fi 高档）。</string>
     <string name="storage_row_reset">重置自动下载设置</string>
     <string name="storage_row_usage">存储用量</string>
+    <string name="sys_friend_accepted">你们已成为好友，现在可以开始聊天了</string>
     <string name="sys_group_announcement">%1$s 发布了群公告</string>
     <string name="sys_group_avatar">%1$s 更新了群头像</string>
     <string name="sys_group_create">%1$s 创建了群聊「%2$s」</string>

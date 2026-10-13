@@ -29,6 +29,7 @@ import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ChatEntry
+import com.libeyond.imandroid.data.IncomingRule
 import com.libeyond.imandroid.data.ChatScroll
 import com.libeyond.imandroid.ui.theme.IMTheme
 import kotlinx.coroutines.launch
@@ -56,7 +57,7 @@ internal fun BoxScope.JumpToLatestButton(
         val scope = rememberCoroutineScope()
         // 已加载窗口内、已滚入位点之下的对端消息数（见上面 pendingReadSeq 的注释）
         val loadedBelow = remember(rows, pendingReadSeq, myUid) {
-            rows.count { r -> (r as? ChatRow.Confirmed)?.msg?.let { it.convSeq > pendingReadSeq && it.sender != myUid } == true }
+            rows.count { r -> (r as? ChatRow.Confirmed)?.msg?.let { it.convSeq > pendingReadSeq && IncomingRule.countsAsUnread(it.sender, it.contentType, myUid) } == true }
         }
         val unreadBelow = unreadBelowOf(pendingReadSeq, loadedBelow)
         Box(modifier = Modifier.align(Alignment.BottomEnd).padding(end = d.space4, bottom = d.space3)) {

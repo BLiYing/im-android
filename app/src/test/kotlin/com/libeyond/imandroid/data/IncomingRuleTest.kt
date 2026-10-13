@@ -63,5 +63,7 @@ class IncomingRuleTest {
         assertEquals(false, IncomingRule.countsAsUnread("me", ContentType.TEXT, "me"))
         assertEquals(true, IncomingRule.countsAsUnread("u2", ContentType.TEXT, "me"))
         assertEquals(true, IncomingRule.countsAsUnread(DetailActions.SYSTEM_UID, ContentType.TEXT, "me"))
+        // 发送者为空的非 system 消息（防御）也不计
+        assertEquals(false, IncomingRule.countsAsUnread("", ContentType.TEXT, "me"))
     }
 }
