@@ -656,8 +656,8 @@
     <string name="conv_list_empty_find_contacts">No chats yet. Find someone in Contacts to start one.</string>
     <string name="conv_list_mention_tag">[Someone mentioned you]</string>
     <string name="conv_list_no_message">(No messages)</string>
-    <string name="conv_list_pending_badge">Pending %1$s</string>
-    <string name="conv_list_pending_tag">[%1$d pending]</string>
+    <string name="conv_list_pending_badge">Join requests %1$s</string>
+    <string name="conv_list_pending_tag">[Join requests %1$d]</string>
     <string name="conv_list_recalled_member">%1$s recalled a message</string>
     <string name="conv_list_recalled_peer">The other person recalled a message</string>
     <string name="conv_list_recalled_self">You recalled a message</string>

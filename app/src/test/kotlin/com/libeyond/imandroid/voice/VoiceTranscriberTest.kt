@@ -4,6 +4,7 @@ import com.libeyond.imandroid.sdk.protocol.VoiceTranscriptData
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -157,6 +158,19 @@ class VoiceTranscriberTest {
         api.throwing = RuntimeException("network down")
         t.toggle("c1", 5, content)
         assertFalse(t.isExpanded(5))
+    }
+
+    @Test
+    fun `服务端未启用识别引擎时 toast 给专用文案`() {
+        val (t, api, content) = transcriber()
+        api.throwing = com.libeyond.imandroid.sdk.http.ApiException(
+            com.libeyond.imandroid.sdk.protocol.ErrCode.TRANSCRIBE_DISABLED, "transcribe disabled",
+        )
+        val got = mutableListOf<String>()
+        val job = kotlinx.coroutines.CoroutineScope(Dispatchers.Unconfined).launch { t.errors.collect { got.add(it) } }
+        t.toggle("c1", 5, content)
+        assertEquals(listOf(com.libeyond.imandroid.i18n.Str.s(com.libeyond.imandroid.R.string.err_500101)), got)
+        job.cancel()
     }
 
     @Test

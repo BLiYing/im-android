@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -228,6 +227,8 @@ internal fun Bubble(
             val isCall = (msg?.contentType ?: pendingType) == ContentType.CALL
             val pressSource = remember { MutableInteractionSource() }
             val pressed by pressSource.collectIsPressedAsState()
+            // 有尾的气泡才切直角（图/视频是媒体本身，四角全圆）：对齐 iOS applyBubbleDirectionStyle
+            val shape = bubbleShape(appearance.bubbleRadius, mine, hasTail = !flushMedia)
             Box(
                 modifier = Modifier
                     .widthIn(max = bubbleMax)
@@ -239,10 +240,10 @@ internal fun Bubble(
                     .then(
                         // 长按预览浮起：阴影跟着气泡走，而不是整行（行是全宽的）
                         if (com.libeyond.imandroid.ui.components.LocalMenuPreviewLift.current) {
-                            Modifier.shadow(12.dp, RoundedCornerShape(appearance.bubbleRadius))
+                            Modifier.shadow(12.dp, shape)
                         } else Modifier,
                     )
-                    .clip(RoundedCornerShape(appearance.bubbleRadius))
+                    .clip(shape)
                     .background(if (mine) c.bubbleMe else c.bubbleThem)
                     .locateFlash()
                     .then(

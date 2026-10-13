@@ -39,6 +39,9 @@ object ErrorText {
         ErrCode.GROUP_JOIN_COOLDOWN -> R.string.err_300211
         ErrCode.GROUP_ADMIN_LIMIT -> R.string.err_300213
         ErrCode.GROUP_INVITE_REVOKED -> R.string.qr_action_admin_only_note
+        ErrCode.TRANSCRIBE_DISABLED -> R.string.err_500101
+        ErrCode.TRANSCRIBE_FAILED -> R.string.err_500102
+        ErrCode.TRANSCRIBE_BUSY -> R.string.err_500103
         ErrCode.RATE_LIMITED -> R.string.err_100002
         else -> null
     }

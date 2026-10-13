@@ -635,8 +635,8 @@
     <string name="conv_list_empty_find_contacts">还没有会话，去「通讯录」找人发起一个吧</string>
     <string name="conv_list_mention_tag">[有人\@我]</string>
     <string name="conv_list_no_message">（无消息）</string>
-    <string name="conv_list_pending_badge">待审 %1$s</string>
-    <string name="conv_list_pending_tag">[%1$d 待审]</string>
+    <string name="conv_list_pending_badge">入群申请 %1$s</string>
+    <string name="conv_list_pending_tag">[入群申请 %1$d]</string>
     <string name="conv_list_recalled_member">%1$s撤回了一条消息</string>
     <string name="conv_list_recalled_peer">对方撤回了一条消息</string>
     <string name="conv_list_recalled_self">你撤回了一条消息</string>

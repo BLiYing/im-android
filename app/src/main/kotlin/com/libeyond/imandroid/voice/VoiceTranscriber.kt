@@ -1,7 +1,9 @@
 package com.libeyond.imandroid.voice
 
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.ErrorText
 import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.protocol.VoiceTranscriptData
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -59,7 +61,10 @@ class VoiceTranscriber(
     val state: StateFlow<Map<String, VoiceTranscript>> = _state
 
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    /** 失败 toast——REST 失败与 WS `status=failed` 共用同一条文案（[R.string.chat_voice_transcribe_failed_retry]）。 */
+    /**
+     * 失败 toast——WS `status=failed` 与无业务码的 REST 失败共用通用文案（[R.string.chat_voice_transcribe_failed_retry]）；
+     * REST 带转写业务码（未启用 / 队列满）时给专用文案，见 [failureText]。
+     */
     val errors: SharedFlow<String> = _errors.asSharedFlow()
 
     /** 长按菜单该显「转文字」还是「取消转文字」：这条的面板当前是不是展开着。 */
@@ -92,7 +97,7 @@ class VoiceTranscriber(
             } catch (e: Exception) {
                 if (!store.isCollapsed(mid)) {
                     _state.update { it - mid }
-                    _errors.tryEmit(Str.s(R.string.chat_voice_transcribe_failed_retry))
+                    _errors.tryEmit(failureText(e))
                 }
             }
         }
@@ -124,6 +129,15 @@ class VoiceTranscriber(
             _errors.tryEmit(Str.s(R.string.chat_voice_transcribe_failed_retry))
         }
         // pending 或空 status：维持「识别中…」（_state 已经是 Loading，不用动）
+    }
+
+    /**
+     * REST 失败的文案：有业务码的按码给（未启用 / 队列满，重试对前者没有意义——对齐 iOS `IMFriendlyMessageForCode`），
+     * 其余（断网、超时、识别失败）仍是通用「请稍后重试」。
+     */
+    private fun failureText(e: Exception): String {
+        val res = (e as? ApiException)?.let { ErrorText.friendlyRes(it.code) }
+        return Str.s(res ?: R.string.chat_voice_transcribe_failed_retry)
     }
 
     private fun midOf(convSeq: Long): String? = VoiceRules.playableId(convSeq, "")

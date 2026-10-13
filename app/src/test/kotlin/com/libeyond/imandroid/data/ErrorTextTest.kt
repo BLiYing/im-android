@@ -23,5 +23,11 @@ class ErrorTextTest {
         assertNull(ErrorText.friendlyRes(ErrCode.GROUP_JOIN_PENDING)) // UI 走待审批分支
     }
 
+    @Test fun `语音转文字三个码走专用文案`() {
+        assertEquals(R.string.err_500101, ErrorText.friendlyRes(ErrCode.TRANSCRIBE_DISABLED))
+        assertEquals(R.string.err_500102, ErrorText.friendlyRes(ErrCode.TRANSCRIBE_FAILED))
+        assertEquals(R.string.err_500103, ErrorText.friendlyRes(ErrCode.TRANSCRIBE_BUSY))
+    }
+
     @Test fun `未收录的码返回 null 回退服务端原文`() = assertNull(ErrorText.friendlyRes(999999))
 }

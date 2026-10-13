@@ -189,7 +189,8 @@ internal fun PendingFileBubble(
         Column(
             modifier = Modifier
                 .widthIn(max = 260.dp)
-                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
+                // 与发出后的正式气泡同一份轮廓（右下直角），ack 前后不跳形状
+                .clip(bubbleShape(IMTheme.appearance.bubbleRadius, mine = true, hasTail = true))
                 .background(c.bubbleMe)
                 .padding(10.dp),
         ) {
@@ -263,7 +264,7 @@ internal fun PendingVoiceBubble(
         Column(
             modifier = Modifier
                 .width(width)
-                .clip(RoundedCornerShape(IMTheme.appearance.bubbleRadius))
+                .clip(bubbleShape(IMTheme.appearance.bubbleRadius, mine = true, hasTail = true))
                 .background(c.bubbleMe)
                 .padding(horizontal = 10.dp, vertical = 8.dp)
                 .passThroughTap {

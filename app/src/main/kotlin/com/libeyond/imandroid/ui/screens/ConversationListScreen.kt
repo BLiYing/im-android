@@ -88,7 +88,7 @@ fun ConversationListScreen(
     /** 对端在线态（仅单聊；群聊调用方不必关心）——同 iOS `peerPresence.isOnline`，快照来自
      * 会话列表接口，此后靠 presence 帧增量更新（`data/Presence.kt`）。 */
     onlineOf: (String) -> Boolean,
-    /** 群待审入群申请数（仅群主/管理员有，其余 0）：预览前红字「[N 待审]」前缀（iOS `pendingCount`）。 */
+    /** 群待审入群申请数（仅群主/管理员有，其余 0）：有待审时整行只显红字「[入群申请 N]」、不接上一条预览（iOS `pendingCount`）。 */
     pendingOf: (String) -> Int = { 0 },
     onOpen: (ConversationEntity) -> Unit,
     /** 长按一行，带上它在窗口坐标系里的矩形——菜单要贴着这一行弹（对齐 iOS UIContextMenu）。 */
@@ -282,12 +282,16 @@ private fun ConversationRow(
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
-                    // 群「待审入群申请」红字前缀（G3，仅群主/管理员）：进群管理才发现太深，顶到会话列表
-                    if (conv.isGroup && pendingCount > 0) {
+                    // 群「待审入群申请」（G3，仅群主/管理员）：有待审时整行只显红字提示（可带 [有人@我]），
+                    // 不再接上一条消息——待审是「当前待办」，上一条是「历史」，拼在一起读不通。
+                    // 审批清零后 pendingCount=0，自然回到最后一条消息预览（对齐 iOS cell / Web convlast）。
+                    val pendingOnly = conv.isGroup && pendingCount > 0
+                    if (pendingOnly) {
                         Text(
-                            text = stringResource(R.string.conv_list_pending_tag, pendingCount) + " ",
+                            text = stringResource(R.string.conv_list_pending_tag, pendingCount),
                             color = c.danger,
                             style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
                         )
                     }
                     // 单聊已读双勾：只有「我发的、对方已读」才画蓝双勾图标，未读灰单勾图标——与聊天页气泡同一表意
@@ -300,18 +304,20 @@ private fun ConversationRow(
                         )
                         Spacer(Modifier.width(3.dp))
                     }
-                    Text(
-                        text = preview,
-                        // 被叫侧「未接来电」整行预览标红（danger，不随主题变）；撤回态不再是通话消息，不标红
-                        color = if (!conv.lastRecalled && conv.lastContentType == ContentType.CALL && CallRecord.isMissedPreview(conv.lastContent)) {
-                            c.danger
-                        } else {
-                            c.textSecondary
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    if (!pendingOnly) {
+                        Text(
+                            text = preview,
+                            // 被叫侧「未接来电」整行预览标红（danger，不随主题变）；撤回态不再是通话消息，不标红
+                            color = if (!conv.lastRecalled && conv.lastContentType == ContentType.CALL && CallRecord.isMissedPreview(conv.lastContent)) {
+                                c.danger
+                            } else {
+                                c.textSecondary
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 if (UnreadMark.shown(conv)) {
                     Spacer(Modifier.width(d.space2))

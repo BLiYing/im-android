@@ -78,6 +78,14 @@ object ErrCode {
     const val FILE_TOO_LARGE = 500001
     const val FILE_TYPE_INVALID = 500002
 
+    // --- 语音转文字 5001xx（VOICE_TRANSCRIBE_DESIGN §3.3）---
+    /** 服务端没配识别引擎。重试无意义，要明说。 */
+    const val TRANSCRIBE_DISABLED = 500101
+    /** 预留码，REST 当前不返回（真失败走 WS `voice_transcript` 的 `status=failed`）。 */
+    const val TRANSCRIBE_FAILED = 500102
+    /** 识别队列已满，稍后重试。 */
+    const val TRANSCRIBE_BUSY = 500103
+
     /** token 失效的两种码——重连/续期逻辑按这两个判，别 parse 文案。 */
     fun isAuthExpired(code: Int): Boolean = code == TOKEN_INVALID || code == TOKEN_EXPIRED
 }

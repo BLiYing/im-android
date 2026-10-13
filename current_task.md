@@ -6,6 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **气泡尾角 + 会话列表待审行 + 转文字业务码文案（2026-10-13，未 commit，待真机目测）**：有尾气泡自己右下/对方左下直角（`BubbleShape.kt`，待发文件/语音气泡同轮廓）；群待审时预览行只显红字「[入群申请 N]」不接上一条消息（对齐 iOS/Web）；转文字 REST 失败按业务码给专用文案（`ErrorText` 增 5001xx）。已知差异：`AppearancePreview` 的气泡预览仍是四角全圆，未跟尾角。
 - **好友成立系统消息 + 收藏页紧凑行 + 发名片多选确认 + 会话列表时间锚点（2026-10-13，未 commit，待真机目测）**：
   - `friend_accepted`：`SysEvents.GROUP` 加无参表项，聊天页居中灰字与会话列表预览共用；`IncomingRule.countsAsUnread` 对空 sender 兜底，`ChatJumpButton` 的 ↓N 改走同一判据（此前把 system 当对方消息计数）。
   - 收藏页（`FavoriteRows.kt`，尺寸常量 `FavoriteRowMetrics` 取自 iOS）：文本/记录 92、文件 92、语音 108、名片 82（头像 44 + 名字 + 时间 + @句柄 + 「由X分享」）；分隔线缩进统一 16dp（`ArchiveSeparatorInset`，同时作用于详情页文件/链接/语音行）。
