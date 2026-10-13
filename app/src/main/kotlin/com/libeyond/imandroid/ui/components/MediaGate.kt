@@ -46,6 +46,11 @@ data class GateInfo(
      * （见 [DownloadPolicy.archiveTileUngated]）。
      */
     val autoAllowed: Boolean = true,
+    /**
+     * 用户已在查看器里看过这一条（[MediaDownloader.opened]）。**调用方据此豁免门控**——
+     * 与「自己发的」同一档：不画磨砂 + ↓、点了直接开查看器；「已失效」照旧不豁免。
+     */
+    val opened: Boolean = false,
 ) {
     val ready: Boolean get() = state.phase == DownloadPhase.Ready
 }
@@ -100,8 +105,12 @@ fun rememberGate(
         if (auto) env.downloads.start(url, isVideo, sizeBytes)
     }
 
+    // 只订阅「这一条在不在集合里」的结论：别的媒体被看过不该让这一格重组
+    val openedSet = env.downloads.opened.collectAsState()
+    val opened by androidx.compose.runtime.remember(url) { androidx.compose.runtime.derivedStateOf { url in openedSet.value } }
+
     val local = if (state.phase == DownloadPhase.Ready) env.downloads.localFile(url, isVideo) else null
-    return GateInfo(state, local, localFile = local, autoAllowed = auto, onTap = {
+    return GateInfo(state, local, localFile = local, autoAllowed = auto, opened = opened, onTap = {
         when (state.tapAction()) {
             DownloadTap.Start -> env.downloads.start(url, isVideo, sizeBytes)
             DownloadTap.Pause -> env.downloads.pause(url, isVideo)

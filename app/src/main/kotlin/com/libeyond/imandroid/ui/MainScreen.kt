@@ -206,6 +206,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
     // 叠在最外层（同 InAppBannerHost 这一层），不是 ConversationMenu 自己的子状态——两个弹层不能
     // 同时占用同一份 anchor 坐标系（时长菜单是居中的底部弹层，不用贴着长按的那一行）。
     var muteSheetFor by remember { mutableStateOf<ConversationEntity?>(null) }
+    // 会话列表操作（置顶/免打扰/标未读/删除）失败的一次性提示。此前失败是静默的：点了没反应、也不说为什么。
+    var listToast by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     // 底部 Tab 栏由各 Tab 的**根页**自己画（[TabRoot]），二级页整屏铺满——判据 PushNav.showsTabBar。
@@ -276,6 +278,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                             ConversationMenu(
                                 client, target, menuAnchor, scope, muteTick,
                                 onRequestMuteSheet = { conv -> menuFor = null; muteSheetFor = conv },
+                                onToast = { listToast = it },
                                 onDismiss = { menuFor = null },
                             )
                         }
@@ -335,6 +338,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
         }
         // 提示条是铺满全屏的 Box，必须画在内容之后（最上层），否则被盖住看不见
         GroupEventsEffect(client, openConv?.convId) { infoForConv = null; openConv = null }
+        listToast?.let { com.libeyond.imandroid.ui.components.IMToast(it) { listToast = null } }
         InAppBannerHost(
             onOpen = { convId ->
                 val conv = conversationsById[convId]
@@ -351,7 +355,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                 onUnmute = {},
                 onSelect = { d ->
                     scope.launch {
-                        runCatching { settings(client, conv, muted = true, muteUntil = d.muteUntil()) }
+                        runCatchingCancellable { settings(client, conv, muted = true, muteUntil = d.muteUntil()) }
+                            .onFailure { listToast = it.userMessage(com.libeyond.imandroid.i18n.Str.s(R.string.conv_error_settings_failed)) }
                         client.messages.refreshConversations()
                     }
                     muteSheetFor = null
@@ -381,6 +386,8 @@ private fun ConversationMenu(
     /** 点了「免打扰」（且当前未免打扰）：交给调用方弹时长菜单，不在这里直接置 muted=true
      *  （§4.1：未免打扰时这一项要先选时长，已免打扰时这一项本身就是「取消免打扰」，直接生效）。 */
     onRequestMuteSheet: (ConversationEntity) -> Unit,
+    /** 操作失败的提示（离线时尤其需要：不然点了没反应）。 */
+    onToast: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val mutedNow = MuteState.isMutedNow(target.muted, target.muteUntil, nowMs)
@@ -397,8 +404,13 @@ private fun ConversationMenu(
                     if (a == ConversationAction.Mute) {
                         onRequestMuteSheet(target)
                     } else {
+                        val failRes = when (a) {
+                            ConversationAction.Pin, ConversationAction.Unpin -> R.string.conv_error_pin_failed
+                            ConversationAction.Delete -> R.string.conv_error_delete_failed
+                            else -> R.string.conv_error_settings_failed
+                        }
                         scope.launch {
-                            runCatching {
+                            runCatchingCancellable {
                                 when (a) {
                                     ConversationAction.Pin -> settings(client, target, pinnedAt = System.currentTimeMillis())
                                     ConversationAction.Unpin -> settings(client, target, pinnedAt = 0)
@@ -408,7 +420,7 @@ private fun ConversationMenu(
                                     ConversationAction.Delete -> client.messages.deleteConversation(target.convId)
                                     ConversationAction.Mute -> Unit // 上面已分流，走不到这里
                                 }
-                            }
+                            }.onFailure { onToast(it.userMessage(com.libeyond.imandroid.i18n.Str.s(failRes))) }
                             client.messages.refreshConversations()
                         }
                     }

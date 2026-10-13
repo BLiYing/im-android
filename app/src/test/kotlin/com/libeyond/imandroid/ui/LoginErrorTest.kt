@@ -29,7 +29,7 @@ class LoginErrorTest {
     /** resId 对应值照抄 `values/i18n_strings.xml` 当前内容；文案表改了这里要跟着改，否则测试会撒谎。 */
     private val strings = LoginError.Strings { resId, args ->
         when (resId) {
-            R.string.net_error_unreachable -> "无法连接服务器，请确认后端已启动、地址端口正确"
+            R.string.net_error_unreachable -> "网络不给力，请检查网络后重试"
             R.string.err_200001 -> "用户不存在"
             R.string.err_200003 -> "账号已被封禁"
             R.string.err_200004 -> "用户名已被注册"
@@ -54,11 +54,11 @@ class LoginErrorTest {
     fun `普通连不上仍然提示查地址`() {
         // 真连不上时「查地址」是对的建议，别为了修上一条把这条也改坏
         assertEquals(
-            "无法连接服务器，请确认后端已启动、地址端口正确",
+            "网络不给力，请检查网络后重试",
             LoginError.friendly(transport(IOException("timeout")), strings),
         )
         assertEquals(
-            "无法连接服务器，请确认后端已启动、地址端口正确",
+            "网络不给力，请检查网络后重试",
             LoginError.friendly(transport(null), strings),
         )
     }

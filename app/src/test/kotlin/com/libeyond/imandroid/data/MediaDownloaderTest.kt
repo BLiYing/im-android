@@ -77,12 +77,26 @@ class MediaDownloaderTest {
 
     private fun tmp() = File(System.getProperty("java.io.tmpdir"), "md-" + System.nanoTime())
 
-    private fun downloader(cache: MediaCache) = MediaDownloader(
+    private fun downloader(
+        cache: MediaCache,
+        persistence: ViewedMediaPersistence? = null,
+        owner: () -> String = { "" },
+    ) = MediaDownloader(
         scope = scope,
         cache = cache,
         absolute = { "http://127.0.0.1:${server.port}$it" },
         tokenProvider = { null },
+        viewedPersistence = persistence,
+        ownerProvider = owner,
     )
+
+    /** 内存版落盘：模拟「重启后新建下载器、读到同一份」。 */
+    private class FakeViewedPersistence : ViewedMediaPersistence {
+        val store = HashMap<String, List<String>>()
+        override fun load(owner: String) = store[owner].orEmpty()
+        override fun save(owner: String, urls: List<String>) { store[owner] = urls }
+        override fun clear(owner: String) { store.remove(owner) }
+    }
 
     private fun waitUntil(timeoutMs: Long = 5_000, cond: () -> Boolean): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
@@ -120,6 +134,71 @@ class MediaDownloaderTest {
         assertTrue(d.states.value.isEmpty())
         assertEquals(0L, d.cachedBytes())
         assertEquals(DownloadPhase.NotStarted, d.stateOf(url).phase)
+    }
+
+    @Test
+    fun `查看器看过的登记进 opened，空地址与未登录不登记，看过不等于已下载`() {
+        val p = FakeViewedPersistence()
+        val d = downloader(MediaCache(tmp()), p) { "u1" }
+        d.markOpened("/uploads/a.jpg")
+        d.markOpened("/uploads/a.jpg") // 幂等
+        d.markOpened("")
+        assertEquals(setOf("/uploads/a.jpg"), d.opened.value)
+        assertEquals(listOf("/uploads/a.jpg"), p.store["u1"])
+        assertEquals(DownloadPhase.NotStarted, d.stateOf("/uploads/a.jpg").phase)
+
+        val anon = downloader(MediaCache(tmp()), FakeViewedPersistence()) { "" }
+        anon.markOpened("/uploads/b.jpg")
+        assertTrue(anon.opened.value.isEmpty())
+    }
+
+    @Test
+    fun `看过的登记重启后仍在，按账号隔离，换号与退出得到各自的集合`() {
+        val p = FakeViewedPersistence()
+        var owner = "u1"
+        val d = downloader(MediaCache(tmp()), p) { owner }
+        d.markOpened("/uploads/a.jpg")
+
+        // 「重启」：同一份落盘、新建下载器
+        assertEquals(setOf("/uploads/a.jpg"), downloader(MediaCache(tmp()), p) { "u1" }.opened.value)
+
+        owner = "u2" // 换号：不沿用上一个人的
+        d.syncOpenedOwner()
+        assertTrue(d.opened.value.isEmpty())
+        d.markOpened("/uploads/c.jpg")
+        assertEquals(listOf("/uploads/a.jpg"), p.store["u1"])
+        assertEquals(listOf("/uploads/c.jpg"), p.store["u2"])
+
+        owner = "" // 退出登录
+        d.syncOpenedOwner()
+        assertTrue(d.opened.value.isEmpty())
+        owner = "u1" // 再登回 u1：自己的回来了
+        d.syncOpenedOwner()
+        assertEquals(setOf("/uploads/a.jpg"), d.opened.value)
+    }
+
+    @Test
+    fun `看过的登记末 500 条封顶，丢最旧的`() {
+        val p = FakeViewedPersistence()
+        val d = downloader(MediaCache(tmp()), p) { "u1" }
+        repeat(MediaDownloader.MAX_OPENED + 2) { d.markOpened("/uploads/$it.jpg") }
+        assertEquals(MediaDownloader.MAX_OPENED, d.opened.value.size)
+        assertFalse("/uploads/0.jpg" in d.opened.value)
+        assertFalse("/uploads/1.jpg" in d.opened.value)
+        assertTrue("/uploads/2.jpg" in d.opened.value)
+        assertTrue("/uploads/${MediaDownloader.MAX_OPENED + 1}.jpg" in d.opened.value)
+        assertEquals(MediaDownloader.MAX_OPENED, p.store["u1"]?.size)
+    }
+
+    @Test
+    fun `清缓存把看过的登记连落盘一起清`() {
+        val p = FakeViewedPersistence()
+        val d = downloader(MediaCache(tmp()), p) { "u1" }
+        d.markOpened("/uploads/a.jpg")
+        d.clearAll()
+        assertTrue(d.opened.value.isEmpty())
+        assertNull(p.store["u1"])
+        assertTrue(downloader(MediaCache(tmp()), p) { "u1" }.opened.value.isEmpty()) // 重启也不回来
     }
 
     @Test

@@ -285,7 +285,8 @@ internal fun MediaTile(
     // 哪几格绕过门控直接显示：自己发的 / 图片且策略放行（判据与理由见 archiveTileUngated）
     val ungated = DownloadPolicy.archiveTileUngated(
         isVideo = isVideo,
-        mine = myUid.isNotEmpty() && item.sender == myUid,
+        // 在查看器里看过的与自己发的同一档（[GateInfo.opened]）：视频格画的是封面，放行不会去拉视频本体
+        mine = (myUid.isNotEmpty() && item.sender == myUid) || gate.opened,
         phase = gate.state.phase,
         imageAutoAllowed = gate.autoAllowed,
     )

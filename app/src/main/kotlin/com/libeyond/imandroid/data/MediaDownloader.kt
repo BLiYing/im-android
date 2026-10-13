@@ -38,6 +38,10 @@ class MediaDownloader(
     /** 相对地址 → 绝对地址（带当前 host）。 */
     private val absolute: (String) -> String,
     private val tokenProvider: () -> String?,
+    /** 「看过」登记的落盘；`null` = 只在内存（单测 / 预览）。 */
+    private val viewedPersistence: ViewedMediaPersistence? = null,
+    /** 当前账号 uid（「看过」按账号隔离）。空 = 未登录，不记。 */
+    private val ownerProvider: () -> String = { "" },
 ) {
     private val log = IMLog.tag("IM.Download")
 
@@ -64,6 +68,52 @@ class MediaDownloader(
 
     /** `start` 的临界区：判"在不在途"与"起任务"必须是一步，否则两次调用会各起一个。 */
     private val startLock = Any()
+
+    private val _opened = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * 用户**在查看器里主动看过**的媒体地址（对齐 Web `mediaOptedIn` / iOS `IMViewedMediaStore`：点开查看器 = 允许拉原件）。
+     * 门控据此不再把它显示成磨砂 + ↓——看都看过了，返回聊天页还要再点一次下载没有意义。
+     *
+     * **按账号落盘、重启仍在**，末 [MAX_OPENED] 条封顶（与 Web `saveOptedIn` 同口径）；纯本机状态，不进账号级设置。
+     * 看过 ≠ 已下载：不影响下载态。**清缓存时一并清**（[clearAll]）。
+     */
+    val opened: StateFlow<Set<String>> = _opened
+
+    private val openedLock = Any()
+
+    /** 当前 [_opened] 属于哪个账号；与 [ownerProvider] 不一致就按新账号重载（登录 / 退出 / 换号）。 */
+    private var openedOwner: String? = null
+
+    init {
+        syncOpenedOwner()
+    }
+
+    /** 账号变了就换成该账号的登记（退出登录得到空集，不让下一个账号沿用上一个人的）。幂等、便宜。 */
+    fun syncOpenedOwner() {
+        val owner = ownerProvider()
+        synchronized(openedLock) {
+            if (owner == openedOwner) return
+            openedOwner = owner
+            _opened.value = viewedPersistence?.load(owner).orEmpty().takeLast(MAX_OPENED).toCollection(LinkedHashSet())
+        }
+    }
+
+    /** 查看器每显示一页就登记一次；幂等。未登录（空账号）不记。 */
+    fun markOpened(url: String) {
+        if (url.isBlank()) return
+        syncOpenedOwner()
+        synchronized(openedLock) {
+            val owner = openedOwner.orEmpty()
+            if (owner.isEmpty()) return
+            val cur = _opened.value
+            if (url in cur) return
+            val next = LinkedHashSet(cur).apply { add(url) }
+            while (next.size > MAX_OPENED) next.remove(next.first()) // 丢最旧的
+            _opened.value = next
+            viewedPersistence?.save(owner, next.toList())
+        }
+    }
 
     /** 本会话内已知失效的地址——不再回源（iOS `IMMediaExpiryRegistry` 的内存态那半）。 */
     private val expired = HashSet<String>()
@@ -128,6 +178,11 @@ class MediaDownloader(
         val freed = cache.totalBytes()
         cache.clear()
         _states.value = emptyMap()
+        // 清缓存 = 回到「没看过」，门控按策略重判（与已下载状态一起复位；落盘的那份也要清，否则重启又回来）
+        synchronized(openedLock) {
+            openedOwner?.let { viewedPersistence?.clear(it) }
+            _opened.value = emptySet()
+        }
         // 破坏性且不可撤销：不留痕就答不上「我的图片怎么全没了 / 怎么又重下了一遍」（iOS 同一行日志）
         log.i("media_cache_cleared", "bytes" to freed, "cancelled" to cancelled)
         freed
@@ -206,5 +261,10 @@ class MediaDownloader(
             // 只除名自己：暂停后立刻重下时，新任务已登记在同一个 url 上，不能被旧任务的 finally 顺手删掉
             if (me != null) jobs.remove(url, me)
         }
+    }
+
+    companion object {
+        /** 「看过」登记的条数上限（与 Web `saveOptedIn` 的末 500 条同口径）。 */
+        const val MAX_OPENED = 500
     }
 }

@@ -142,6 +142,8 @@ class IMClient(context: Context) {
         cache = mediaCache,
         absolute = { url -> com.libeyond.imandroid.data.MediaUrl.absolute(url, http.host, http.useTls) },
         tokenProvider = { session.token },
+        viewedPersistence = com.libeyond.imandroid.data.PrefsViewedMediaPersistence(context),
+        ownerProvider = { session.uid.orEmpty() },
     )
 
     /**
@@ -426,6 +428,7 @@ class IMClient(context: Context) {
         val r = auth.login(username, password)
         tokens.adopt(r.token, r.uid, r.refreshToken, username)
         log.i("login_ok", "uid" to r.uid)
+        downloads.syncOpenedOwner() // 「看过」登记按账号换成这个账号的
         socket.connect()
     }
 
@@ -474,6 +477,7 @@ class IMClient(context: Context) {
     suspend fun logout() {
         socket.disconnect()
         tokens.logout()
+        downloads.syncOpenedOwner() // 退出后「看过」回空集，下一个账号不沿用上一个人的
         downloadSettingsStore.forget()
         accountNotifySettingsStore.forget()
         // 不调 fcmTokenStore 的服务端 delete：会话正常退出登录时服务端按会话联删令牌（父任务简报

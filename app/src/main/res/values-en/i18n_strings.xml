@@ -1234,7 +1234,7 @@
     <string name="net_error_ack_timeout">Timed out waiting for the server</string>
     <string name="net_error_avatar_upload_failed">Couldn\'t upload the avatar</string>
     <string name="net_error_bad_response">Unexpected server response (HTTP %1$s)</string>
-    <string name="net_error_cannot_connect">Can\'t connect to the server. Check that the backend is running.</string>
+    <string name="net_error_cannot_connect">Connection failed. Check your network and try again.</string>
     <string name="net_error_connection_closed">Connection closed</string>
     <string name="net_error_file_empty">The file is empty or unreadable</string>
     <string name="net_error_file_read_failed">Couldn’t read the local file</string>
@@ -1242,12 +1242,12 @@
     <string name="net_error_file_write_failed">Couldn’t write the local file</string>
     <string name="net_error_generic">Network error</string>
     <string name="net_error_invalid_server">Invalid server address</string>
-    <string name="net_error_no_response">The server isn’t responding. Check that the backend is running.</string>
+    <string name="net_error_no_response">No response right now. Please try again later.</string>
     <string name="net_error_offline">No network connection. Check your network.</string>
     <string name="net_error_renew_failed">Couldn\'t renew the session</string>
     <string name="net_error_send_cancelled">Sending cancelled</string>
     <string name="net_error_serialize_failed">Couldn’t encode the message</string>
-    <string name="net_error_unreachable">Can’t reach the server. Check that the backend is running and the address and port are correct.</string>
+    <string name="net_error_unreachable">Network unavailable. Check your connection and try again.</string>
     <string name="net_error_upload_bad_response">Unexpected upload response</string>
     <string name="net_error_upload_cancelled">Sending cancelled</string>
     <string name="net_error_upload_failed">Upload failed</string>

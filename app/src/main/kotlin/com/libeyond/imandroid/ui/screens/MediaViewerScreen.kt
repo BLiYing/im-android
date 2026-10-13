@@ -162,6 +162,12 @@ internal fun MediaViewerScreen(
     LaunchedEffect(state.currentPage) {
         pages.getOrNull(state.currentPage)?.let { anchorSeq = it.convSeq }
     }
+    // 看过即解门控：当前页显示出来就登记（对齐 Web `optInMedia`）。返回聊天页 / 详情宫格时，
+    // 这条不该还是磨砂 + ↓——用户已经亲眼看过、再要一次「点下载」没有意义。
+    // 只登记**当前页**：预渲染的相邻页用户还没看到。
+    LaunchedEffect(state.currentPage, pages) {
+        pages.getOrNull(state.currentPage)?.let { downloads?.markOpened(it.content) }
+    }
     LaunchedEffect(pages) {
         val i = MediaTimeline.indexOf(pages, anchorSeq)
         if (i >= 0 && i != state.currentPage) state.scrollToPage(i)

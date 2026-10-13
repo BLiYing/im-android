@@ -166,7 +166,8 @@ private fun ImageContent(
     // ⚠️ **但「已失效」不在豁免之列**（2026-09-17 `/code-review` 抓出）：服务端清理过的媒体
     // 自己发的那条同样会失效，豁免掉的话它会**装作一切正常**——图渲染不出来却没有任何说明，
     // 点一下还打开一个空查看器。失效是终态，必须照常画失效层（[ungated] 只豁免"没下载"这一档）。
-    val ungated = mine && gate.state.phase != DownloadPhase.Expired
+    // 看过的（[GateInfo.opened]）与自己发的同一档：返回聊天页不该再要一次「点下载」
+    val ungated = (mine || gate.opened) && gate.state.phase != DownloadPhase.Expired
     val model = gate.model
         ?: if (ungated) MediaUrl.absolute(msg.content, host, useTls).takeIf { it.isNotBlank() } else null
     Box(
@@ -210,8 +211,8 @@ private fun VideoContent(
     val c = IMTheme.colors
     // 门控态只显磨砂 thumb（不拉封面，对齐 iOS）；下完 / 自己发的才画封面。
     val gate = rememberGate(msg.content, msg.contentType, msg.fileSize ?: 0L, isGroup)
-    // 自己发的豁免门控，但**失效不豁免**（理由同 [ImageContent] 的 `ungated`）
-    val ungated = mine && gate.state.phase != DownloadPhase.Expired
+    // 自己发的 / 在查看器里看过的豁免门控，但**失效不豁免**（理由同 [ImageContent] 的 `ungated`）
+    val ungated = (mine || gate.opened) && gate.state.phase != DownloadPhase.Expired
     Box(
         modifier = Modifier.size(rememberMediaDisplaySize(msg)).clip(shape).background(c.subtleFill)
             .mediaTap(gate, msg, onOpenMedia, openAnyway = ungated),
@@ -236,7 +237,7 @@ private fun VideoContent(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
-        } else if (gatedNow || (!preload && !ungated && frosted != null)) {
+        } else if (gatedNow || (!preload && !(mine && gate.state.phase != DownloadPhase.Expired) && frosted != null)) {
             // **未下载（门控态）一律只显内嵌 thumb 的磨砂图**，不拉封面——与 iOS `IMImageCell`（gated：thumb 优先、
             // 无 thumb 留中性底、「绝不为占位联网」）和图片气泡同口径。此前有 poster 就直接画清晰封面，
             // 自动下载关着时视频看着已经「下好了」，磨砂占位成了死代码（2026-10-03 用户报，iOS 早年同一个坑）。

@@ -283,8 +283,11 @@ private fun AlbumTileView(
     // 待发那格、以及自己发的那几格都不门控；**但「已失效」不豁免**
     // （2026-09-17 `/code-review` 抓出，同 `MediaBubbles.ImageContent` 的 `ungated`）：
     // 豁免掉的话失效的格子会装作正常、点进去是空查看器，而不是显示 ⊘。
-    val ungated = gate == null ||
-        (mine && gate.state.phase != com.libeyond.imandroid.data.DownloadPhase.Expired)
+    val notExpired = gate != null && gate.state.phase != com.libeyond.imandroid.data.DownloadPhase.Expired
+    val ownUngated = gate == null || (mine && notExpired)
+    // 在查看器里看过的（[GateInfo.opened]）：与自己发的同样不再画磨砂 + ↓。
+    // 但**视频格不因此按地址去解帧**（见下面的 model）：看过 ≠ 已在本机，远端整段视频抽帧是白拉流量
+    val ungated = ownUngated || (gate?.opened == true && notExpired)
     val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     Box(
@@ -321,8 +324,10 @@ private fun AlbumTileView(
             // 不用等上传完；自己发的那几格（gate 为 null）同样按地址直出。
             // 省电模式（§4.3，只管接收侧预览）：收到的视频格不走 VideoFrameDecoder 解帧、只显磨砂 thumb；
             // 待发格与**自己发的格（ungated）**不动；图片格不受影响
-            model = if (m.contentType == ContentType.VIDEO && !sending && !ungated && !com.libeyond.imandroid.ui.theme.LocalPowerSave.current.videoPreload) {
+            model = if (m.contentType == ContentType.VIDEO && !sending && !ownUngated && !com.libeyond.imandroid.ui.theme.LocalPowerSave.current.videoPreload) {
                 null
+            } else if (m.contentType == ContentType.VIDEO && !ownUngated && gate?.ready != true) {
+                null // 看过但没下到本机的视频：只留磨砂，不按地址抽帧
             } else if (ungated) MediaUrl.absolute(m.url, host, useTls) else gate?.model,
             contentDescription = if (m.contentType == ContentType.VIDEO) {
                 stringResource(R.string.common_video)
