@@ -197,6 +197,8 @@ fun ChatDetailHost(
     // 语音页签的波形：服务端归档接口不回带，从本地消息表按 conv_seq 兜底（见 rememberVoiceWaveforms）
     val voiceWaveforms = rememberVoiceWaveforms(client, conv.convId, active = tab == DetailTab.Voice)
 
+    // 详情页列表的滚动态放在宿主：查看器打开时 Detail 页离开组合，页内的会丢（返回后媒体宫格回到第一行）
+    val detailListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val page = ChatDetailNav.current(mediaOpen = viewingOpen, profileOpen = profile)
     // 返回键一处派发（同 GroupInfoHost；理由见 ChatDetailPage 的注释）
     BackHandler {
@@ -270,6 +272,7 @@ fun ChatDetailHost(
             ChatDetailPage.Detail -> com.libeyond.imandroid.ui.components.ProvideMenuSurface(menuSurface) {
                 Box(Modifier.fillMaxSize().menuBackdrop(menuSurface.backdrop)) {
                 ChatDetailScreen(
+                    listState = detailListState,
                     conv = conv,
                     title = title,
                     handle = rel.handle,

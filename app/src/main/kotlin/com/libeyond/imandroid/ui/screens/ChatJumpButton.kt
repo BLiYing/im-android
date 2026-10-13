@@ -15,7 +15,12 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,7 +33,6 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.R
-import com.libeyond.imandroid.data.ChatEntry
 import com.libeyond.imandroid.data.IncomingRule
 import com.libeyond.imandroid.data.ChatScroll
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -51,8 +55,18 @@ internal fun BoxScope.JumpToLatestButton(
     val c = IMTheme.colors
     val d = IMTheme.dimens
     // ↓ 悬浮跳转：离底较远、**或窗口停在历史**时出现
-    val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-    val awayFromBottom = rows.isNotEmpty() && lastVisible in 0 until (rows.size - 1 - ChatEntry.NEAR_BOTTOM_SLACK)
+    // 判据按**像素**（距底 ≥ 80dp，iOS `isNearBottom` 同口径），不按行数：图片 / 相册 / 卡片行动辄 300dp，
+    // 按「最后 3 行都滑出」算要滑过一整屏才出现。贴底动作的保质期内不亮（iOS `scrollToBottomGuardUntil`），
+    // 免得贴底动画途中闪一下。最后一行不在视口里时距离为 null，按「远」算。
+    val thresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { ChatScroll.NEAR_BOTTOM_DP.dp.toPx() }
+    // **先读布局再判保质期**：短路在前的话，保质期内这次组合没读过 layoutInfo，就没订阅滚动，
+    // 保质期过后滚多远按钮都不亮（2026-10-13 OPPO 实测：点 ↓ 回底后再上滑，按钮不出现）。
+    val far = !ChatScroll.isNearBottom(listState.layoutInfo.distanceToBottomPx(), thresholdPx)
+    // 保质期到点补一次重组（它是普通 var，不会自己触发）
+    var guardTick by remember { mutableIntStateOf(0) }
+    val guardLeft = marks.stickUntil - SystemClock.uptimeMillis()
+    if (guardLeft > 0) LaunchedEffect(marks.stickUntil) { delay(guardLeft); guardTick++ }
+    val awayFromBottom = guardTick >= 0 && rows.isNotEmpty() && guardLeft <= 0 && far
     if (showsJumpToLatest(awayFromBottom)) {
         val scope = rememberCoroutineScope()
         // 已加载窗口内、已滚入位点之下的对端消息数（见上面 pendingReadSeq 的注释）

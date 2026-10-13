@@ -58,6 +58,11 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  */
 @Composable
 internal fun ChatDetailScreen(
+    /**
+     * 列表滚动态由宿主持有：进查看器时本页整页离开组合（PushTransition），页内自己 remember 的会丢，
+     * 返回后媒体宫格回到第一行。iOS 的 push/pop 天然保住。
+     */
+    listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
     conv: ConversationEntity,
     title: String,
     handle: String,
@@ -150,8 +155,9 @@ internal fun ChatDetailScreen(
         // 合在一起时头像 + 操作排 + 两张卡 + 页签条是同一个 item，往回滚到它露出一个像素，
         // 整块就得在同一帧里重新组合、测量——那一帧正好卡在手指下。拆开后每次只进来一小块。
         LazyColumn(
+            state = listState,
             // 页签内容区左右横滑切页签（对齐 iOS swipeToNextTab:/swipeToPrevTab:）；会话媒体库页没有页签条
-            Modifier.fillMaxSize().swipeToSwitchTab(if (galleryOnly) emptyList() else tabs, tab, onTabChange),
+            modifier = Modifier.fillMaxSize().swipeToSwitchTab(if (galleryOnly) emptyList() else tabs, tab, onTabChange),
         ) {
             if (!galleryOnly) item(key = "header") {
                 // —— 大头像头部（对齐 iOS 的 300pt tableHeaderView）——

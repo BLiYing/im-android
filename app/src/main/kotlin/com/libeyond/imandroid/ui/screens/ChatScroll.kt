@@ -79,7 +79,7 @@ internal class ChatScrollMarks {
 }
 
 /** 列表底边还差多少像素到内容底；最后一行不可见时 null。坐标口径见 [ChatScroll.distanceToBottomPx]。 */
-private fun LazyListLayoutInfo.distanceToBottomPx(): Int? {
+internal fun LazyListLayoutInfo.distanceToBottomPx(): Int? {
     val last = visibleItemsInfo.lastOrNull()
     return ChatScroll.distanceToBottomPx(
         totalRows = totalItemsCount,
