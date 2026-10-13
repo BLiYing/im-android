@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -217,40 +218,53 @@ private fun LazyListScope.favoriteItems(
                 onLongPressItem = onLongPress?.let { cb -> { item, r -> byId[item.convSeq]?.let { cb(it, r) } } },
                 pickedOf = pick?.let { p -> { item -> item.convSeq in p.picked } },
                 onTogglePick = { item -> byId[item.convSeq]?.let { pick?.onToggle?.invoke(it) } },
+                inset = true,
             )
         }
-        FavoriteCategory.Files -> items(shown, key = { it.id }) { f ->
-            FileRow(
-                item = Favorites.toConvMediaItem(f), isGroup = Favorites.fromGroup(f),
-                onOpen = { onOpen(f) }, source = sourceNameOf(f),
-                onLongPress = longPressOf(f), trailing = check(f),
-                minHeight = FavoriteRowMetrics.FILE_ROW_HEIGHT, separatorInset = ArchiveSeparatorInset,
-            )
+        FavoriteCategory.Files -> itemsIndexed(shown, key = { _, it -> it.id }) { i, f ->
+            ArchiveCardRow(i, shown.size) {
+                FileRow(
+                    item = Favorites.toConvMediaItem(f), isGroup = Favorites.fromGroup(f),
+                    onOpen = { onOpen(f) }, source = sourceNameOf(f),
+                    onLongPress = longPressOf(f), trailing = check(f),
+                    minHeight = FavoriteRowMetrics.FILE_ROW_HEIGHT, separatorInset = ArchiveSeparatorInset,
+                )
+            }
         }
-        FavoriteCategory.Voice -> items(shown, key = { it.id }) { f ->
-            // 收藏快照自带波形（`im_favorite.waveform`），不用像详情页那样从本地消息表兜底
-            VoiceRow(
-                item = Favorites.toConvMediaItem(f), playId = "fav:${f.id}", convId = f.sourceConvId,
-                waveform = f.waveform.ifBlank { null },
-                source = sourceNameOf(f), onLongPress = longPressOf(f), trailing = check(f),
-                minHeight = FavoriteRowMetrics.VOICE_ROW_HEIGHT, separatorInset = ArchiveSeparatorInset,
-            )
+        FavoriteCategory.Voice -> itemsIndexed(shown, key = { _, it -> it.id }) { i, f ->
+            ArchiveCardRow(i, shown.size) {
+                // 收藏快照自带波形（`im_favorite.waveform`），不用像详情页那样从本地消息表兜底
+                VoiceRow(
+                    item = Favorites.toConvMediaItem(f), playId = "fav:${f.id}", convId = f.sourceConvId,
+                    waveform = f.waveform.ifBlank { null },
+                    source = sourceNameOf(f), onLongPress = longPressOf(f), trailing = check(f),
+                    minHeight = FavoriteRowMetrics.VOICE_ROW_HEIGHT, separatorInset = ArchiveSeparatorInset,
+                )
+            }
         }
-        FavoriteCategory.Links -> items(shown, key = { it.id }) { f ->
-            LinkRow(
-                text = f.content, timestamp = f.createdAt, url = Favorites.linkUrl(f),
-                source = sourceNameOf(f), onLongPress = longPressOf(f), trailing = check(f),
-                separatorInset = ArchiveSeparatorInset,
-            ) { onOpen(f) }
+        FavoriteCategory.Links -> itemsIndexed(shown, key = { _, it -> it.id }) { i, f ->
+            ArchiveCardRow(i, shown.size) {
+                LinkRow(
+                    text = f.content, timestamp = f.createdAt, url = Favorites.linkUrl(f),
+                    source = sourceNameOf(f), onLongPress = longPressOf(f), trailing = check(f),
+                    separatorInset = ArchiveSeparatorInset,
+                ) { onOpen(f) }
+            }
         }
-        FavoriteCategory.Text -> items(shown, key = { it.id }) { f ->
-            TextFavoriteRow(f, sourceNameOf(f), onClick = { onOpen(f) }, onLongPress = longPressOf(f), trailing = check(f))
+        FavoriteCategory.Text -> itemsIndexed(shown, key = { _, it -> it.id }) { i, f ->
+            ArchiveCardRow(i, shown.size) {
+                TextFavoriteRow(f, sourceNameOf(f), onClick = { onOpen(f) }, onLongPress = longPressOf(f), trailing = check(f))
+            }
         }
-        FavoriteCategory.Record -> items(shown, key = { it.id }) { f ->
-            RecordFavoriteRow(f, sourceNameOf(f), onClick = { onOpen(f) }, onLongPress = longPressOf(f), trailing = check(f))
+        FavoriteCategory.Record -> itemsIndexed(shown, key = { _, it -> it.id }) { i, f ->
+            ArchiveCardRow(i, shown.size) {
+                RecordFavoriteRow(f, sourceNameOf(f), onClick = { onOpen(f) }, onLongPress = longPressOf(f), trailing = check(f))
+            }
         }
-        FavoriteCategory.Contact -> items(shown, key = { it.id }) { f ->
-            ContactFavoriteRow(f, sourceNameOf(f), onClick = { onOpen(f) }, onLongPress = longPressOf(f), trailing = check(f))
+        FavoriteCategory.Contact -> itemsIndexed(shown, key = { _, it -> it.id }) { i, f ->
+            ArchiveCardRow(i, shown.size) {
+                ContactFavoriteRow(f, sourceNameOf(f), onClick = { onOpen(f) }, onLongPress = longPressOf(f), trailing = check(f))
+            }
         }
     }
 }

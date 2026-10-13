@@ -105,7 +105,7 @@ internal fun GlyphFavoriteRow(
     val m = FavoriteRowMetrics
     Column {
         Row(
-            Modifier.fillMaxWidth().background(c.surface)
+            Modifier.fillMaxWidth().background(LocalArchiveRowBg.current ?: c.surface)
                 .archiveItemGestures(onClick = onClick, onLongPress = onLongPress)
                 .heightIn(min = m.TEXT_ROW_HEIGHT)
                 .padding(horizontal = m.H_PADDING, vertical = 8.dp),
@@ -184,7 +184,7 @@ internal fun ContactFavoriteRow(
     val card = CardContent.parseContact(f.content)
     Column {
         Row(
-            Modifier.fillMaxWidth().background(c.surface)
+            Modifier.fillMaxWidth().background(LocalArchiveRowBg.current ?: c.surface)
                 .archiveItemGestures(onClick = onClick, onLongPress = onLongPress)
                 .heightIn(min = m.CONTACT_ROW_HEIGHT)
                 .padding(horizontal = m.H_PADDING, vertical = 8.dp),

@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyListScope
@@ -135,7 +136,7 @@ internal fun MediaSeg(label: String, on: Boolean, onClick: () -> Unit) {
  * 圆角 [radiusCard]、**只有首尾行带圆角**。此前归档行（文件 / 语音 / 链接 / 名片 / 媒体宫格）与成员行都是整屏宽，
  * 左右间距为 0，与上面的设置卡对不齐。
  *
- * 行自己的底色走 [LocalArchiveRowBg]：卡里用 cardBackground（iOS cell 底色），收藏页等没包卡的地方仍是 surface。
+ * 行自己的底色走 [LocalArchiveRowBg]：卡里用 cardBackground（iOS cell 底色），没包卡的地方（媒体库）仍是 surface。
  */
 @Composable
 internal fun ArchiveCardRow(index: Int, count: Int, content: @Composable () -> Unit) {
@@ -146,7 +147,20 @@ internal fun ArchiveCardRow(index: Int, count: Int, content: @Composable () -> U
         bottomStart = if (index == count - 1) r else 0.dp, bottomEnd = if (index == count - 1) r else 0.dp,
     )
     CompositionLocalProvider(LocalArchiveRowBg provides IMTheme.colors.cardBackground) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = d.space4).clip(shape).background(IMTheme.colors.cardBackground)) {
+        // 末行裁掉底部 0.5dp：各行自带的分隔线落在这一格，iOS 分组卡最后一行没有分隔线
+        val trimSeparator = if (index == count - 1) {
+            Modifier.layout { m, cs ->
+                val p = m.measure(cs)
+                layout(p.width, (p.height - 0.5.dp.roundToPx()).coerceAtLeast(0)) { p.place(0, 0) }
+            }
+        } else {
+            Modifier
+        }
+        Box(
+            // 顺序有讲究：clip / background 在外、trim 在内，裁剪边界才是修剪后的高度
+            Modifier.fillMaxWidth().padding(horizontal = d.space4)
+                .clip(shape).background(IMTheme.colors.cardBackground).then(trimSeparator),
+        ) {
             content()
         }
     }
@@ -326,7 +340,7 @@ internal fun LazyListScope.mediaGrid(
     /** 「从收藏发送」：这一格勾没勾；null = 不在选择模式（详情页、媒体库、收藏浏览），不画勾选框。 */
     pickedOf: ((ConvMediaItem) -> Boolean)? = null,
     onTogglePick: (ConvMediaItem) -> Unit = {},
-    /** 详情页 / 群资料的页签内容：套 [ArchiveCardRow] 的左右边距与首尾圆角（对齐 iOS InsetGrouped）；收藏页 / 媒体库不套。 */
+    /** 详情页 / 群资料 / 收藏页的页签内容：套 [ArchiveCardRow] 的左右边距与首尾圆角（对齐 iOS InsetGrouped）；媒体库不套。 */
     inset: Boolean = false,
 ) {
     val rows = MediaGrid.rows(archive)
