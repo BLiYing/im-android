@@ -1436,6 +1436,9 @@
     <string name="presence_recently">最近在线</string>
     <string name="presence_today_at">今天 %1$s 在线</string>
     <string name="presence_yesterday_at">昨天 %1$s 在线</string>
+    <string name="preview_album_images">[%1$d张图片]</string>
+    <string name="preview_album_media">[%1$d个图片/视频]</string>
+    <string name="preview_album_videos">[%1$d个视频]</string>
     <string name="preview_chat_record">[聊天记录]</string>
     <string name="preview_empty_message">（空消息）</string>
     <string name="preview_file">[文件]</string>

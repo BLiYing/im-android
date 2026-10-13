@@ -42,6 +42,7 @@ object FcmNotifications {
     private const val EXTRA_SENDERS = "im_line_senders"
     private const val EXTRA_TEXTS = "im_line_texts"
     private const val EXTRA_TIMES = "im_line_times"
+    private const val EXTRA_ALBUMS = "im_line_albums"
     private const val EXTRA_ALL_SEQS = "im_all_seqs"
     private const val EXTRA_TITLE = "im_conv_title"
     private const val EXTRA_GROUP = "im_conv_group"
@@ -74,7 +75,9 @@ object FcmNotifications {
             val meta = Meta(content.title, content.isGroup)
             val icon = avatar ?: shown?.let { iconOf(ctx, it.notification) }
                 ?: fcmAvatarPlaceholder(content.placeholderName, content.placeholderSeed, FCM_AVATAR_PX)
-            post(ctx, nm, content.convId, meta, after, icon, alert = true)
+            // 相册后到的成员只是把那一行改成「[N 张图片]」，不再响铃 / 弹横幅（服务端对 iOS 同样不带提示音）。
+            val albumUpdate = line.albumId.isNotEmpty() && before.lines.any { it.albumId == line.albumId }
+            post(ctx, nm, content.convId, meta, after, icon, alert = !albumUpdate)
         }.onFailure { log.w("fcm_notify_failed", "err" to it.javaClass.simpleName) }
     }
 
@@ -139,7 +142,7 @@ object FcmNotifications {
 
     private fun linesOf(extras: Bundle): ConversationLines? = ConversationLines.fromArrays(
         extras.getLongArray(EXTRA_SEQS), extras.getStringArray(EXTRA_SENDERS), extras.getStringArray(EXTRA_TEXTS),
-        extras.getLongArray(EXTRA_TIMES), extras.getLongArray(EXTRA_ALL_SEQS),
+        extras.getLongArray(EXTRA_TIMES), extras.getLongArray(EXTRA_ALL_SEQS), extras.getStringArray(EXTRA_ALBUMS),
     )
 
     private fun extrasOf(state: ConversationLines, meta: Meta) = Bundle().apply {
@@ -147,6 +150,7 @@ object FcmNotifications {
         putStringArray(EXTRA_SENDERS, state.lineSenders)
         putStringArray(EXTRA_TEXTS, state.lineTexts)
         putLongArray(EXTRA_TIMES, state.lineTimes)
+        putStringArray(EXTRA_ALBUMS, state.lineAlbums)
         putLongArray(EXTRA_ALL_SEQS, state.allSeqs)
         putString(EXTRA_TITLE, meta.title)
         putBoolean(EXTRA_GROUP, meta.isGroup)
@@ -166,12 +170,16 @@ object FcmNotifications {
         // 私聊只有对方一个人，本来就该是同一张。[avatar] 本身不可空：两个调用方都走到「取不到就画占位图」
         // 的兜底链末尾才来这里，总有图可用。
         val lineIcon = IconCompat.createWithBitmap(avatar)
+        // **群聊按「一对一」样式画（2026-10-13）**：每行 Person 名 = 群名、正文 = 「发送人: 内容」，不设
+        // conversationTitle、不标 isGroupConversation。设了的话 Android 11+ / ColorOS 会把群名拼在应用名后面
+        // （「应用名 · 群名」），发送人与内容再各占一行；这样标题行 = 群名、正文行 = 「发送人: 内容」，
+        // 同 iOS 通知与桌面端（标题群名 + 「发送人: 内容」）。
         val style = NotificationCompat.MessagingStyle(Person.Builder().setName(Str.s(R.string.common_me)).build())
-        if (meta.isGroup) style.setConversationTitle(title).setGroupConversation(true)
         state.lines.forEach { line ->
-            // 单聊每行的发送人就是对方；群聊老服务端没给发送人时，正文本身带着「名字: 」，发送人用群名占位
-            val person = Person.Builder().setName(line.sender.ifBlank { title }).setIcon(lineIcon)
-            style.addMessage(line.text, line.time, person.build())
+            // 单聊每行的发送人就是对方；群聊的 Person 统一用群名（老服务端没给发送人时，正文本身带着「名字: 」）
+            val personName = if (meta.isGroup) title else line.sender.ifBlank { title }
+            val person = Person.Builder().setName(personName).setIcon(lineIcon)
+            style.addMessage(lineText(line, meta.isGroup), line.time, person.build())
         }
         val latest = state.lines.last()
         // 锁屏隐藏内容时系统显示这个版本：只说有几条，不露发送人与内容。
@@ -183,7 +191,7 @@ object FcmNotifications {
         val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
-            .setContentText(if (meta.isGroup && latest.sender.isNotBlank()) "${latest.sender}: ${latest.text}" else latest.text)
+            .setContentText(lineText(latest, meta.isGroup))
             .setStyle(style)
             .setNumber(state.total)
             .setPublicVersion(publicVersion)
@@ -198,6 +206,10 @@ object FcmNotifications {
         // 用 (tag=convId, id 固定) 标识通知：字符串 tag 不会像 32 位 hashCode 那样让两个会话互相覆盖。
         nm.notify(convId, NOTIFICATION_ID, builder.build())
     }
+
+    /** 一行在通知里显示的正文：群聊 =「发送人: 内容」（没有发送人 = 老服务端，正文自带前缀），单聊 = 内容。 */
+    private fun lineText(line: ConversationLine, isGroup: Boolean): String =
+        if (isGroup && line.sender.isNotBlank()) "${line.sender}: ${line.text}" else line.text
 
     private fun contentIntent(ctx: Context, convId: String, title: String): PendingIntent {
         val intent = Intent(ctx, MainActivity::class.java).apply {

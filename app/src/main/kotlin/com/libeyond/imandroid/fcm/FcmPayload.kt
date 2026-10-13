@@ -12,6 +12,7 @@ package com.libeyond.imandroid.fcm
  *   此时 [title]/[body] 是给不认识该类型的旧版本看的替换文案，本版本不展示。
  * @param clear 这不是新消息，而是「本人在别的设备上把这个会话读到了 [convSeq]」（服务端 `type=clear`，
  *   PUSH_M5_DESIGN §3.5）：取消该会话里 seq ≤ 它的通知，不展示。
+ * @param albumId 非空表示这条是相册（宫格）的成员（服务端 `album_id`）：通知里同相册只占一行，后到的替换前一行。
  * @param call 非 null 表示这是一条通话提醒（服务端 `type=call`，PUSH_M5_DESIGN §3.8），交给 [CallNotifications]。
  */
 data class FcmNotificationContent(
@@ -27,6 +28,7 @@ data class FcmNotificationContent(
     val groupAvatar: String? = null,
     val senderName: String? = null,
     val bareBody: String? = null,
+    val albumId: String? = null,
     val call: FcmCallNotice? = null,
 ) {
     /**
@@ -51,10 +53,10 @@ data class FcmNotificationContent(
         val seq = convSeq?.takeIf { it > 0 } ?: return null
         return if (isGroup) {
             val bare = bareBody
-            if (bare != null) ConversationLine(seq, senderName.orEmpty(), bare, nowMs)
-            else ConversationLine(seq, "", body, nowMs)
+            if (bare != null) ConversationLine(seq, senderName.orEmpty(), bare, nowMs, albumId.orEmpty())
+            else ConversationLine(seq, "", body, nowMs, albumId.orEmpty())
         } else {
-            ConversationLine(seq, title, body, nowMs)
+            ConversationLine(seq, title, body, nowMs, albumId.orEmpty())
         }
     }
 }
@@ -98,6 +100,7 @@ object FcmPayload {
             groupAvatar = data["group_avatar"]?.takeIf { it.isNotBlank() },
             senderName = data["sender_name"]?.takeIf { it.isNotBlank() },
             bareBody = data["bare_body"]?.takeIf { it.isNotBlank() },
+            albumId = data["album_id"]?.takeIf { it.isNotBlank() },
             call = callOf(data),
         )
     }

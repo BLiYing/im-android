@@ -1474,6 +1474,9 @@
     <string name="presence_recently">Recently online</string>
     <string name="presence_today_at">Last seen today at %1$s</string>
     <string name="presence_yesterday_at">Last seen yesterday at %1$s</string>
+    <string name="preview_album_images">[%1$d photos]</string>
+    <string name="preview_album_media">[%1$d photos/videos]</string>
+    <string name="preview_album_videos">[%1$d videos]</string>
     <string name="preview_chat_record">[Chat history]</string>
     <string name="preview_empty_message">(Empty message)</string>
     <string name="preview_file">[File]</string>

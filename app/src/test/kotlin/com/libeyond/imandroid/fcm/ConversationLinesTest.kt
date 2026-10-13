@@ -102,4 +102,40 @@ class ConversationLinesTest {
         val s = linesOf(1, 2)
         assertEquals(2, ConversationLines.fromArrays(s.lineSeqs, s.lineSenders, s.lineTexts, s.lineTimes, null)?.total)
     }
+
+    private fun albumLine(seq: Long, text: String, sender: String = "小明") =
+        ConversationLine(seq, sender, text, seq * 1000, albumId = "alb1")
+
+    @Test
+    fun `同一相册的成员合成一行——文案取最新、条数按张数`() {
+        val s = (1L..9L).fold(ConversationLines.EMPTY) { acc, n ->
+            acc.append(albumLine(n, if (n == 1L) "[图片]" else "[${n}张图片]"))
+        }
+        assertEquals(1, s.lines.size)
+        assertEquals("[9张图片]", s.lines.single().text)
+        assertEquals(9L, s.lines.single().seq)
+        assertEquals(9, s.total)
+    }
+
+    @Test
+    fun `相册与别的消息并存——不同相册、不同发送人各占一行`() {
+        val s = ConversationLines.EMPTY
+            .append(albumLine(1, "[图片]"))
+            .append(line(2))
+            .append(albumLine(3, "[2张图片]"))
+            .append(albumLine(4, "[图片]", sender = "小红"))
+        assertEquals(listOf(2L, 3L, 4L), s.lines.map { it.seq })
+        assertEquals(4, s.total)
+    }
+
+    @Test
+    fun `相册 id 数组存取往返，旧通知缺这一项时当不是相册`() {
+        val s = ConversationLines.EMPTY.append(albumLine(1, "[图片]")).append(line(2))
+        val back = ConversationLines.fromArrays(
+            s.lineSeqs, s.lineSenders, s.lineTexts, s.lineTimes, s.allSeqs, s.lineAlbums,
+        )
+        assertEquals(s, back)
+        val legacy = ConversationLines.fromArrays(s.lineSeqs, s.lineSenders, s.lineTexts, s.lineTimes, s.allSeqs)
+        assertTrue(legacy!!.lines.all { it.albumId.isEmpty() })
+    }
 }

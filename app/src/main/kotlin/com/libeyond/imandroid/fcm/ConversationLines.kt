@@ -1,7 +1,13 @@
 package com.libeyond.imandroid.fcm
 
-/** 一个会话那条通知里的一行：哪条消息、谁发的、说了什么、什么时候。 */
-data class ConversationLine(val seq: Long, val sender: String, val text: String, val time: Long)
+/**
+ * 一个会话那条通知里的一行：哪条消息、谁发的、说了什么、什么时候。
+ * [albumId] 非空表示这是相册（宫格）的成员：同相册后到的成员**替换**这一行而不是另起一行（[ConversationLines.append]），
+ * 文案是服务端算好的「[N 张图片]」。
+ */
+data class ConversationLine(
+    val seq: Long, val sender: String, val text: String, val time: Long, val albumId: String = "",
+)
 
 /**
  * 一个会话那条通知的内容（PUSH_M5_DESIGN §3.7）：同主流 Android IM（WhatsApp / Telegram），
@@ -20,11 +26,17 @@ data class ConversationLines(val lines: List<ConversationLine>, val seqs: List<L
     val isEmpty: Boolean get() = seqs.isEmpty()
     val total: Int get() = seqs.size
 
-    /** 新来一条。同一条（seq 相同，FCM 偶有重投）不重复计。 */
+    /**
+     * 新来一条。同一条（seq 相同，FCM 偶有重投）不重复计。同发送人、同相册的成员合成一行：
+     * 九宫格逐条转发 9 张，通知里只有一行「[9张图片]」，不会排满 [MAX_LINES] 行「[图片]」；条数照样按 9 条计。
+     */
     fun append(line: ConversationLine): ConversationLines {
         if (line.seq in seqs) return this
+        val same = if (line.albumId.isEmpty()) -1
+        else lines.indexOfFirst { it.albumId == line.albumId && it.sender == line.sender }
+        val merged = if (same >= 0) lines.toMutableList().also { it[same] = line } else lines + line
         return ConversationLines(
-            (lines + line).sortedBy { it.seq }.takeLast(MAX_LINES),
+            merged.sortedBy { it.seq }.takeLast(MAX_LINES),
             (seqs + line.seq).sorted().takeLast(MAX_TRACKED),
         )
     }
@@ -46,6 +58,7 @@ data class ConversationLines(val lines: List<ConversationLine>, val seqs: List<L
     val lineSenders: Array<String> get() = lines.map { it.sender }.toTypedArray()
     val lineTexts: Array<String> get() = lines.map { it.text }.toTypedArray()
     val lineTimes: LongArray get() = lines.map { it.time }.toLongArray()
+    val lineAlbums: Array<String> get() = lines.map { it.albumId }.toTypedArray()
     val allSeqs: LongArray get() = seqs.toLongArray()
 
     companion object {
@@ -62,10 +75,15 @@ data class ConversationLines(val lines: List<ConversationLine>, val seqs: List<L
          */
         fun fromArrays(
             lineSeqs: LongArray?, senders: Array<String>?, texts: Array<String>?, times: LongArray?, allSeqs: LongArray?,
+            albums: Array<String>? = null,
         ): ConversationLines? {
             if (lineSeqs == null || senders == null || texts == null || times == null) return null
             if (senders.size != lineSeqs.size || texts.size != lineSeqs.size || times.size != lineSeqs.size) return null
-            val lines = lineSeqs.indices.map { ConversationLine(lineSeqs[it], senders[it], texts[it], times[it]) }
+            // 相册 id 数组是后加的：缺失 / 长度对不上（旧版本发的通知）当都不是相册成员，不影响其余几行。
+            val albumIds = albums?.takeIf { it.size == lineSeqs.size }
+            val lines = lineSeqs.indices.map {
+                ConversationLine(lineSeqs[it], senders[it], texts[it], times[it], albumIds?.get(it).orEmpty())
+            }
             val seqs = (allSeqs?.toList() ?: emptyList()).union(lineSeqs.toList()).sorted()
             return ConversationLines(lines, seqs)
         }

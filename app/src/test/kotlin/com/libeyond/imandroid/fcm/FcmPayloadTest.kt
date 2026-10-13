@@ -164,4 +164,14 @@ class FcmPayloadTest {
         assertEquals(false, FcmPayload.avatarNetworkAllowed(lastFailureMs = 1_000, nowMs = 1_000 + 59_999))
         assertEquals(true, FcmPayload.avatarNetworkAllowed(lastFailureMs = 1_000, nowMs = 1_000 + 60_000))
     }
+
+    @Test
+    fun `album_id 解析进行里，空白当没有`() {
+        val base = mapOf("conv_id" to "g_1", "conv_seq" to "7", "title" to "群", "body" to "小明: [2张图片]",
+            "bare_body" to "[2张图片]", "sender_name" to "小明")
+        val c = FcmPayload.parse(base + ("album_id" to "alb1"))!!
+        assertEquals("alb1", c.albumId)
+        assertEquals("alb1", c.toLine(0)!!.albumId)
+        assertEquals(null, FcmPayload.parse(base + ("album_id" to " "))!!.albumId)
+    }
 }

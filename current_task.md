@@ -6,6 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **群通知两行 + 相册合并（2026-10-13，已 OPPO 真机验证）**：`FcmNotifications.post` 群聊按一对一 MessagingStyle 画（不设 conversationTitle / isGroupConversation），标题=群名、正文=`发送人: 内容`；`ConversationLines` 同发送人同 `album_id` 合成一行、后到成员不再重响（`FcmPayload.albumId`）。
 **详情页用户名缺失 / 先闪「添加好友」（2026-10-10，已修，OPPO 已装待目测）**：根因 = `MainScreen.knownFriends` 只在启动拉一次，启动后才加的好友不在表里；详情页按钮读进页重拉的 `friend`（闪一下就对），用户名行却读旧 `knownFriends`（一直空）。修：`data/PeerRelation.kt` 把好友态/拉黑/句柄从同一份 `friend` 派生（`PeerRelationTest`，变异验红）；`ChatDetailHost` 新增 `onFriendsRefreshed` 回灌；`MainScreen` 订阅 `friendEvents` 重拉 `knownFriends`；资料页分支 `knownRelation` 改读 `friend`。iOS 不需要改（`IMFriendStateStore` 每次拉列表都刷新）。已跑 `/code-review --fix`；OPPO 实测通过（启动后才加的好友：进详情页不再先闪「添加好友」，用户名正常）。补丁：`relationSettled`（表里没有该好友时重拉返回前不画操作排）+ `ContactsHost.onFriendsLoaded` 回灌 knownFriends。
 **「新的朋友」补「已添加」段 + 通讯录 Tab 角标（2026-10-09，未 commit，设计 `IMServer/docs/design/NEW_FRIENDS_DESIGN.md`）**：
 - `NewFriendsScreen` 三段（待我确认 / 已发出 / 已添加），已发出行补「等待验证」、已添加行右侧「已添加」、点行进资料页；无删除入口。段数据 `data/RecentAdded.kt` `recentAdded()`（`RECENT_ADDED_DAYS`=30 / `RECENT_ADDED_MAX`=50，`RecentAddedTest`）。
