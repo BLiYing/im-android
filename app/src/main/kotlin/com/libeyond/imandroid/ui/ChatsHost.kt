@@ -15,7 +15,9 @@ import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.ScanQrCode
+import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.UserPlus
 import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.sdk.ws.ConnState
@@ -96,7 +98,7 @@ fun ChatsHost(
     var page by remember { mutableStateOf(ChatsPage.List) }
     // 聊天文件夹：整表快照（Tab 条 / 编辑页共用）+ 长按 Tab 的菜单 / 删除确认 / 去编辑的目标
     val folderSnap by client.chatFolderStore.state.collectAsState()
-    var folderMenuFor by remember { mutableStateOf<com.libeyond.imandroid.data.ChatFolder?>(null) }
+    var folderMenuFor by remember { mutableStateOf<Pair<com.libeyond.imandroid.data.ChatFolder, Rect>?>(null) }
     var folderDeleteFor by remember { mutableStateOf<com.libeyond.imandroid.data.ChatFolder?>(null) }
     var folderEditId by remember { mutableStateOf<String?>(null) }
     val folderScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -137,7 +139,7 @@ fun ChatsHost(
                     folders = folderSnap.folders,
                     selectedFolderId = selectedFolderId,
                     onSelectFolder = onSelectFolder,
-                    onFolderLongPress = { folderMenuFor = it },
+                    onFolderLongPress = { f, r -> folderMenuFor = f to r },
                     scrollMemory = scrollMemory,
                 )
             }
@@ -195,12 +197,16 @@ fun ChatsHost(
     }
 
     // 长按文件夹 Tab：编辑 / 删除（「全部」不触发）
-    folderMenuFor?.let { f ->
-        com.libeyond.imandroid.ui.components.ActionSheet(
-            title = f.name,
+    folderMenuFor?.let { (f, anchor) ->
+        // 与 iOS IMPopoverCard / Web 右键菜单一致：贴在被长按的 Tab 正下方，左缘与 Tab 对齐（不再是底部 ActionSheet）
+        MessageContextMenu(
+            anchor = anchor,
+            mine = false,
+            popover = true,
+            alignToAnchor = true,
             items = listOf(
-                SheetItem(stringResource(R.string.folder_tab_menu_edit)) { folderEditId = f.id; page = ChatsPage.FolderEdit },
-                SheetItem(stringResource(R.string.folder_tab_menu_delete), destructive = true) { folderDeleteFor = f },
+                SheetItem(stringResource(R.string.folder_tab_menu_edit), icon = Lucide.Pencil) { folderEditId = f.id; page = ChatsPage.FolderEdit },
+                SheetItem(stringResource(R.string.folder_tab_menu_delete), icon = Lucide.Trash2, destructive = true) { folderDeleteFor = f },
             ),
             onDismiss = { folderMenuFor = null },
         )

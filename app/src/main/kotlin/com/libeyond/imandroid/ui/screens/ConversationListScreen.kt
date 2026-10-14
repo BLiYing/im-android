@@ -112,7 +112,7 @@ fun ConversationListScreen(
     selectedFolderId: String? = null,
     onSelectFolder: (String?) -> Unit = {},
     /** 长按文件夹 Tab（「全部」不触发）。 */
-    onFolderLongPress: (ChatFolder) -> Unit = {},
+    onFolderLongPress: (ChatFolder, Rect) -> Unit = { _, _ -> },
     /** 每个 Tab 记住自己的滚动位置；由外壳持有。 */
     scrollMemory: FolderScrollMemory = remember { FolderScrollMemory() },
 ) {

@@ -24,7 +24,7 @@ import kotlin.math.abs
  * 本函数只管数据映射——与 iOS `IMChatFolderTabsView` 同职责。
  *
  * @param selectedId 当前文件夹 id；null = 「全部」。
- * @param onLongPress 长按某个**文件夹** Tab（「全部」不触发）。
+ * @param onLongPress 长按某个**文件夹** Tab（「全部」不触发），带该 Tab 在窗口内的矩形（菜单贴在其下方）。
  */
 @Composable
 internal fun ChatFolderTabStrip(
@@ -33,7 +33,7 @@ internal fun ChatFolderTabStrip(
     nowMs: Long,
     selectedId: String?,
     onSelect: (String?) -> Unit,
-    onLongPress: (ChatFolder) -> Unit,
+    onLongPress: (ChatFolder, androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
     val all = stringResource(R.string.folder_tab_all)
     val titles = listOf(all) + folders.map { it.name }
@@ -46,7 +46,7 @@ internal fun ChatFolderTabStrip(
         titles = titles,
         selected = ChatFolderLogic.tabIndex(selectedId, folders),
         badges = badges,
-        onLongPress = { i -> if (i > 0) folders.getOrNull(i - 1)?.let(onLongPress) },
+        onLongPress = { i, r -> if (i > 0) folders.getOrNull(i - 1)?.let { onLongPress(it, r) } },
         // 上下留白由外层定：搜索框底部已有 space2，条下方补同样的 space2 → 搜索框↔Tab 与 Tab↔首行间距相等
         verticalPadding = 0.dp,
         onSelect = { i -> onSelect(if (i <= 0) null else folders.getOrNull(i - 1)?.id) },

@@ -88,6 +88,8 @@ fun MessageContextMenu(
     focus: Rect? = null,
     preview: (@Composable () -> Unit)? = null,
     popover: Boolean = false,
+    /** 菜单左缘对齐 anchor 左缘（长按 Tab：菜单在该 Tab 正下方）；false = 按 [mine] 靠左 / 靠右。 */
+    alignToAnchor: Boolean = false,
 ) {
     // 展开中的子菜单（对齐 iOS UIMenu 的 inline submenu）。null = 显示顶层。
     var submenu by remember { mutableStateOf<SheetItem?>(null) }
@@ -183,7 +185,9 @@ fun MessageContextMenu(
     // 再按 200 算左边缘就会溢出屏幕右侧（实测第一版右边被裁掉）。
     val menuW = 220.dp
     // 左右跟随消息方向：自己的靠右、对方的靠左，与聊天页的横向内边距同一条边。
-    val menuLeft = if (mine) {
+    val menuLeft = if (alignToAnchor) {
+        anchorLeft.coerceIn(d.chatAvatarLeading, (screenW - menuW - d.chatAvatarLeading).coerceAtLeast(d.chatAvatarLeading))
+    } else if (mine) {
         (screenW - menuW - d.chatAvatarLeading).coerceAtLeast(d.chatAvatarLeading)
     } else {
         d.chatAvatarLeading

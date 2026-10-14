@@ -25,7 +25,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyListScope
@@ -71,8 +74,8 @@ internal fun SegTabBar(
     selected: Int,
     /** 每个页签标题右侧的未读角标（与 titles 一一对应；越界 / null = 不显示）。会话列表的文件夹 Tab 用。 */
     badges: List<SegBadge?> = emptyList(),
-    /** 长按某一格（下标）；null = 不响应长按。文件夹 Tab 的「编辑 / 删除」菜单用。 */
-    onLongPress: ((Int) -> Unit)? = null,
+    /** 长按某一格（下标 + 该格在窗口内的矩形，菜单贴在它下方）；null = 不响应长按。文件夹 Tab 的「编辑 / 删除」菜单用。 */
+    onLongPress: ((Int, Rect) -> Unit)? = null,
     /** 条上下留白；默认 10dp（详情页 / 收藏页）。会话列表的文件夹 Tab 传 0——由外层给上下**相等**的间距。 */
     verticalPadding: androidx.compose.ui.unit.Dp = 10.dp,
     onSelect: (Int) -> Unit,
@@ -97,7 +100,7 @@ internal fun SegTabBar(
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            titles.forEachIndexed { i, t -> MediaSeg(t, i == selected, badges.getOrNull(i), onLongClick = onLongPress?.let { f -> { f(i) } }) { onSelect(i) } }
+            titles.forEachIndexed { i, t -> MediaSeg(t, i == selected, badges.getOrNull(i), onLongClick = onLongPress?.let { f -> { r: Rect -> f(i, r) } }) { onSelect(i) } }
         }
     }
 }
@@ -135,18 +138,22 @@ internal fun MediaSeg(
     label: String,
     on: Boolean,
     badge: SegBadge? = null,
-    onLongClick: (() -> Unit)? = null,
+    onLongClick: ((Rect) -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val c = IMTheme.colors
+    // 只存布局坐标、长按那一刻再取窗口矩形：不写 State（滚动时每帧都会触发定位回调），也不会拿到过期矩形。
+    val coords = androidx.compose.runtime.remember { arrayOfNulls<LayoutCoordinates>(1) }
     // **选中/未选中同为主文字色，只以字重 + 药丸底色区分**（逐条对齐 iOS
     // `IMLiquidSegmentedControl.applyFonts`：semibold / medium，都是 label 色）。
     // 别再用「12% 主色底 + 主色字」表示选中——那在深色模式下几乎看不出来。
     Box(
-        Modifier.clip(RoundedCornerShape(14.dp))
+        Modifier
+            .then(if (onLongClick != null) Modifier.onGloballyPositioned { coords[0] = it } else Modifier)
+            .clip(RoundedCornerShape(14.dp))
             // 药丸底色走页签专用 token（深色下不再与底轨几乎同色，见 IMColors.segmentPill）
             .background(if (on) c.segmentPill else Color.Transparent)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick?.let { f -> { f(coords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero) } })
             .padding(horizontal = 14.dp, vertical = 6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
