@@ -36,6 +36,8 @@ enum class ChatsPage(val depth: Int) {
     CreateGroup(1),
     /** 首页全局搜索；其「搜索用户」下钻 [AddFriend]，比它再深一层不需要——回退直接回列表即可（同 iOS 点取消/返回）。 */
     Search(1),
+    /** 文件夹 Tab 长按 →「编辑」（聊天文件夹编辑页 + 其选择聊天子页，内部自管两层）。 */
+    FolderEdit(1),
 }
 
 /** 「通讯录」Tab 里的页面。建群是从「群聊」列表点进去的，比它深一层。 */
@@ -69,4 +71,6 @@ enum class MePage(val depth: Int) {
     Notifications(1),
     ShareCard(1),
     PowerSaving(1),
+    /** 聊天文件夹管理页（其下的编辑 / 选择聊天子页由 [com.libeyond.imandroid.ui.ChatFoldersHost] 内部自管）。 */
+    Folders(1),
 }

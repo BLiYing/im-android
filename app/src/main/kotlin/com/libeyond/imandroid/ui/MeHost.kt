@@ -93,6 +93,7 @@ fun MeHost(
                 onOpenChat = onOpenChat,
                 onBack = { page = MePage.List },
             )
+            MePage.Folders -> ChatFoldersHost(client = client, onBack = { page = MePage.List })
             MePage.Devices -> DevicesHost(client = client, onBack = { page = MePage.List })
             MePage.DataStorage -> DataStorageHost(client = client, initialSub = sub, onBack = { page = MePage.List })
             MePage.Privacy -> PrivacySecurityHost(client = client, initialSub = sub, onBack = { page = MePage.List })
@@ -131,6 +132,7 @@ fun MeHost(
                         onOpenPrivacy = { page = MePage.Privacy },
                         onOpenFavorites = { page = MePage.Favorites },
                         onOpenCallHistory = { page = MePage.CallHistory },
+                        onOpenFolders = { page = MePage.Folders },
                         onOpenNotifications = { page = MePage.Notifications },
                         onOpenLanguage = { page = MePage.Language },
                         onOpenAppearance = { page = MePage.Appearance },

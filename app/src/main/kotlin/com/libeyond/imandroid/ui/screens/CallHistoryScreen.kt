@@ -123,7 +123,7 @@ private fun CallHistorySegment(titles: List<String>, selected: Int, onSelect: (I
                 Modifier.weight(1f)
                     .then(if (on) Modifier.shadow(1.dp, RoundedCornerShape(7.dp)) else Modifier)
                     .clip(RoundedCornerShape(7.dp))
-                    .background(if (on) c.surfaceElevated else Color.Transparent)
+                    .background(if (on) c.segmentPill else Color.Transparent)
                     .clickable { onSelect(i) }
                     .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center,

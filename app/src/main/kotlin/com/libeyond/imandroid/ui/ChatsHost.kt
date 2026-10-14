@@ -33,6 +33,8 @@ import com.libeyond.imandroid.ui.components.MessageContextMenu
 import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.components.SheetItem
 import com.libeyond.imandroid.ui.screens.ConversationListScreen
+import com.libeyond.imandroid.ui.screens.FolderScrollMemory
+import kotlinx.coroutines.launch
 
 /**
  * 「消息」Tab：会话列表 + 右上角 ＋ 推出去的「添加朋友」「新建群聊」两页。
@@ -61,6 +63,10 @@ fun ChatsHost(
     muteNow: Long = System.currentTimeMillis(),
     /** 会话列表滚动位置：进会话时本 Tab 整层离开组合，状态必须挂在更外层（`MainScreen`）才不丢。 */
     listState: LazyListState,
+    /** 聊天文件夹当前选中项（null = 「全部」）与每 Tab 滚动位置：同上，挂在外壳才不随进会话丢。 */
+    selectedFolderId: String? = null,
+    onSelectFolder: (String?) -> Unit = {},
+    scrollMemory: FolderScrollMemory = remember { FolderScrollMemory() },
 ) {
     val owner = client.uid.orEmpty()
     val pendingCounts by client.pendingCounts.collectAsState()
@@ -88,6 +94,12 @@ fun ChatsHost(
         }
     }
     var page by remember { mutableStateOf(ChatsPage.List) }
+    // 聊天文件夹：整表快照（Tab 条 / 编辑页共用）+ 长按 Tab 的菜单 / 删除确认 / 去编辑的目标
+    val folderSnap by client.chatFolderStore.state.collectAsState()
+    var folderMenuFor by remember { mutableStateOf<com.libeyond.imandroid.data.ChatFolder?>(null) }
+    var folderDeleteFor by remember { mutableStateOf<com.libeyond.imandroid.data.ChatFolder?>(null) }
+    var folderEditId by remember { mutableStateOf<String?>(null) }
+    val folderScope = androidx.compose.runtime.rememberCoroutineScope()
     /** 「搜索用户「x」」带进加好友页的初始关键词；从加号进来为空。 */
     var addFriendQuery by remember { mutableStateOf("") }
     var plusAnchor by remember { mutableStateOf<Rect?>(null) }
@@ -122,6 +134,11 @@ fun ChatsHost(
                     conn = conn,
                     nowMs = muteNow,
                     listState = listState,
+                    folders = folderSnap.folders,
+                    selectedFolderId = selectedFolderId,
+                    onSelectFolder = onSelectFolder,
+                    onFolderLongPress = { folderMenuFor = it },
+                    scrollMemory = scrollMemory,
                 )
             }
             ChatsPage.AddFriend -> AddFriendHost(
@@ -138,6 +155,13 @@ fun ChatsHost(
                 onOpenChatAt = onOpenChatAt,
                 onOpenSetting = onOpenSetting,
                 onSearchUser = { q -> addFriendQuery = q; page = ChatsPage.AddFriend },
+                onBack = { page = ChatsPage.List },
+            )
+            ChatsPage.FolderEdit -> ChatFolderEditHost(
+                client = client,
+                folderId = folderEditId,
+                initialName = null,
+                conversations = conversations.orEmpty(),
                 onBack = { page = ChatsPage.List },
             )
             ChatsPage.CreateGroup -> CreateGroupHost(
@@ -167,6 +191,35 @@ fun ChatsHost(
                 SheetItem(stringResource(R.string.common_add_friend), icon = Lucide.UserPlus) { addFriendQuery = ""; page = ChatsPage.AddFriend },
             ),
             onDismiss = { plusAnchor = null },
+        )
+    }
+
+    // 长按文件夹 Tab：编辑 / 删除（「全部」不触发）
+    folderMenuFor?.let { f ->
+        com.libeyond.imandroid.ui.components.ActionSheet(
+            title = f.name,
+            items = listOf(
+                SheetItem(stringResource(R.string.folder_tab_menu_edit)) { folderEditId = f.id; page = ChatsPage.FolderEdit },
+                SheetItem(stringResource(R.string.folder_tab_menu_delete), destructive = true) { folderDeleteFor = f },
+            ),
+            onDismiss = { folderMenuFor = null },
+        )
+    }
+    folderDeleteFor?.let { f ->
+        com.libeyond.imandroid.ui.components.IMConfirmDialog(
+            title = f.name,
+            message = stringResource(R.string.folder_edit_delete_confirm, f.name),
+            confirmText = stringResource(R.string.common_delete),
+            destructive = true,
+            onConfirm = {
+                folderDeleteFor = null
+                folderScope.launch {
+                    runCatchingCancellable { client.chatFolderStore.delete(f.id) }
+                        .onSuccess { if (selectedFolderId == f.id) onSelectFolder(null) }
+                        .onFailure { toast = it.userMessage(Str.s(R.string.folder_toast_failed)) }
+                }
+            },
+            onDismiss = { folderDeleteFor = null },
         )
     }
 

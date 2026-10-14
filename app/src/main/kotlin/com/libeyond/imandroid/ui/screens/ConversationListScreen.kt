@@ -51,6 +51,8 @@ import androidx.compose.ui.graphics.compositeOver
 import com.libeyond.imandroid.data.ConversationRowStyle
 import com.composables.icons.lucide.Plus
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.ChatFolder
+import com.libeyond.imandroid.data.ChatFolderLogic
 import com.libeyond.imandroid.data.ChatSubtitle
 import com.libeyond.imandroid.data.ChatSubtitleSpec
 import com.libeyond.imandroid.sdk.ws.ConnState
@@ -104,9 +106,39 @@ fun ConversationListScreen(
     nowMs: Long = System.currentTimeMillis(),
     /** 滚动位置由调用方持有：点进会话时本页整个离开组合，页内 remember 的状态会丢，返回就被甩回顶部。 */
     listState: LazyListState,
+    /** 聊天文件夹（设计 CHAT_FOLDERS_DESIGN §4.1）：为空 = 不显示 Tab 条，列表与此前完全一致。 */
+    folders: List<ChatFolder> = emptyList(),
+    /** 当前选中的文件夹 id；null = 「全部」。状态由调用方持有（进会话时本页离开组合）。 */
+    selectedFolderId: String? = null,
+    onSelectFolder: (String?) -> Unit = {},
+    /** 长按文件夹 Tab（「全部」不触发）。 */
+    onFolderLongPress: (ChatFolder) -> Unit = {},
+    /** 每个 Tab 记住自己的滚动位置；由外壳持有。 */
+    scrollMemory: FolderScrollMemory = remember { FolderScrollMemory() },
 ) {
     val c = IMTheme.colors
     var plusRect by remember { mutableStateOf(Rect.Zero) }
+    // 选中的文件夹被删（别的设备删了）→ 回落「全部」；表格数据源 = 当前范围内的会话
+    val selectedFolder = folders.firstOrNull { it.id == selectedFolderId }
+    val shown = remember(conversations, selectedFolder) { ChatFolderLogic.filter(conversations, selectedFolder) }
+    val tabIndex = ChatFolderLogic.tabIndex(selectedFolderId, folders)
+    // 切 Tab：先存当前位置，再把目标 Tab 上次的位置还回来（首次进入 = 顶部）
+    val selectFolder: (String?) -> Unit = { id ->
+        if (id != selectedFolderId) {
+            scrollMemory.save(selectedFolderId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            onSelectFolder(id)
+        }
+    }
+    // 只在「Tab 真的变了」时还原：本页进会话时整层离开组合、返回时重新进入，LaunchedEffect 会再跑一次——
+    // 那一次 listState 本来就由外壳保住了，再 scrollToItem(0,0) 会把用户甩回顶部。
+    val shownFolderId = selectedFolder?.id
+    var restoredFor by remember { mutableStateOf(shownFolderId) }
+    LaunchedEffect(shownFolderId) {
+        if (restoredFor == shownFolderId) return@LaunchedEffect
+        restoredFor = shownFolderId
+        val (i, o) = scrollMemory.restore(shownFolderId)
+        listState.scrollToItem(i, o)
+    }
 
     Column(
         modifier = Modifier
@@ -137,8 +169,23 @@ fun ConversationListScreen(
             onClick = onSearch,
             modifier = Modifier.fillMaxWidth().padding(horizontal = IMTheme.dimens.space4, vertical = IMTheme.dimens.space2),
         )
+        // 文件夹 Tab 条：紧贴固定的搜索框下方；没有任何文件夹时不显示（设计 §4.1）
+        if (folders.isNotEmpty()) {
+            ChatFolderTabStrip(
+                folders = folders, conversations = conversations, nowMs = nowMs,
+                selectedId = selectedFolder?.id, onSelect = selectFolder, onLongPress = onFolderLongPress,
+            )
+        }
 
-        when (phase) {
+        // 内容区横滑切 Tab：只吃横向拖动，竖向滚动不受影响
+        Box(
+            Modifier.fillMaxSize().swipeToSwitchFolder(tabIndex, folders.size + 1) { i ->
+                selectFolder(if (i <= 0) null else folders.getOrNull(i - 1)?.id)
+            },
+        ) {
+        if (selectedFolder != null && shown.isEmpty()) {
+            FolderEmptyState()
+        } else when (phase) {
             // 还不知道有没有：什么都不画。画空态 = 先宣布「还没有会话」再改口
             ConversationListPhase.Loading -> Unit
             ConversationListPhase.Empty -> EmptyState()
@@ -148,13 +195,13 @@ fun ConversationListScreen(
                 // 用户本来就停在顶部时跟着回顶；往下翻着看时不动，不打断阅读。
                 // 「顶部」要在**新列表布局前**判：remember(topKey) 在组合期算，此时 listState 还是旧位置
                 // （等 LaunchedEffect 里再读，锚定已经把 index 推到了 1+）。
-                val topKey = conversations.firstOrNull()?.convId
+                val topKey = shown.firstOrNull()?.convId
                 val wasAtTop = remember(topKey) {
                     Snapshot.withoutReadObservation { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
                 }
                 LaunchedEffect(topKey) { if (wasAtTop) listState.scrollToItem(0) }
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                items(conversations, key = { it.convId }) { conv ->
+                items(shown, key = { it.convId }) { conv ->
                     ConversationRow(
                         conv, myUid, localNameOf, onlineOf, pendingOf(conv.convId), nowMs,
                         onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) },
@@ -163,6 +210,7 @@ fun ConversationListScreen(
             }
             }
         }
+        } // 横滑 Box
     }
 }
 
@@ -383,6 +431,24 @@ private fun UnreadBadge(conv: ConversationEntity, nowMs: Long) {
 /** 预览行右端有没有未读标记（数字徽标 / 标未读圆点）；没有就连间距都不占，预览得到整行宽。 */
 internal object UnreadMark {
     fun shown(conv: ConversationEntity): Boolean = conv.unread > 0 || conv.markedUnread
+}
+
+/** 选中了某个文件夹但其中没有会话（设计 §4.1）：提示怎么放进来。 */
+@Composable
+private fun FolderEmptyState() {
+    val c = IMTheme.colors
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = IMTheme.dimens.space4 * 2),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            stringResource(R.string.folder_list_empty),
+            color = c.textSecondary,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 @Composable

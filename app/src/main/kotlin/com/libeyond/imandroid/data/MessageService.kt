@@ -165,6 +165,13 @@ class MessageService(
      */
     val capabilityUpdates: SharedFlow<Long> = _capabilityUpdates.asSharedFlow()
 
+    private val _folderUpdates = MutableSharedFlow<com.libeyond.imandroid.sdk.protocol.FolderUpdateData>(extraBufferCapacity = 8)
+    /**
+     * 会话文件夹整表快照（收到 `folder_update`，PROTOCOL §6.15）。帧本身就是最终状态，**不再 GET**：
+     * 去重（版本 ≤ 本地的丢弃）与落盘在 `ChatFolderStore.apply`。
+     */
+    val folderUpdates: SharedFlow<com.libeyond.imandroid.sdk.protocol.FolderUpdateData> = _folderUpdates.asSharedFlow()
+
     private val _notifySettingsUpdates = MutableSharedFlow<Long>(extraBufferCapacity = 8)
     /**
      * 账号级通知设置有变（收到 `notify_settings_update`，PROTOCOL §6.13），值是服务端的新版本号。
@@ -337,6 +344,15 @@ class MessageService(
                 )
                 log.i("notify_settings_update", "version" to d.version)
                 _notifySettingsUpdates.tryEmit(d.version)
+            }
+
+            // 会话文件夹整表快照（PROTOCOL §6.15）：整份转发给 ChatFolderStore，版本去重在那里
+            FrameType.FOLDER_UPDATE -> data?.let {
+                val d = ProtocolJson.decodeFromJsonElement(
+                    com.libeyond.imandroid.sdk.protocol.FolderUpdateData.serializer(), it,
+                )
+                log.i("folder_update", "version" to d.version, "folders" to d.folders.size)
+                _folderUpdates.tryEmit(d)
             }
 
             FrameType.ERROR -> data?.let {

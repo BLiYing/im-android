@@ -39,6 +39,11 @@ object ErrorText {
         ErrCode.GROUP_JOIN_COOLDOWN -> R.string.err_300211
         ErrCode.GROUP_ADMIN_LIMIT -> R.string.err_300213
         ErrCode.GROUP_INVITE_REVOKED -> R.string.qr_action_admin_only_note
+        ErrCode.FOLDER_LIMIT -> R.string.err_300301
+        ErrCode.FOLDER_CONV_LIMIT -> R.string.err_300302
+        ErrCode.FOLDER_NAME_INVALID -> R.string.err_300303
+        ErrCode.FOLDER_NAME_DUPLICATE -> R.string.err_300304
+        ErrCode.FOLDER_NOT_FOUND -> R.string.err_300305
         ErrCode.TRANSCRIBE_DISABLED -> R.string.err_500101
         ErrCode.TRANSCRIBE_FAILED -> R.string.err_500102
         ErrCode.TRANSCRIBE_BUSY -> R.string.err_500103

@@ -74,6 +74,13 @@ object ErrCode {
     const val GROUP_INVITE_REVOKED = 300212
     const val GROUP_ADMIN_LIMIT = 300213
 
+    // --- 会话文件夹 3003xx（PROTOCOL §6.15）---
+    const val FOLDER_LIMIT = 300301
+    const val FOLDER_CONV_LIMIT = 300302
+    const val FOLDER_NAME_INVALID = 300303
+    const val FOLDER_NAME_DUPLICATE = 300304
+    const val FOLDER_NOT_FOUND = 300305
+
     // --- 文件 5000xx ---
     const val FILE_TOO_LARGE = 500001
     const val FILE_TYPE_INVALID = 500002

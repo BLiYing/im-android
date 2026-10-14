@@ -87,6 +87,13 @@ data class IMColors(
     val shadowSoft: Color,
     val shadowStrong: Color,
     val subtleFill: Color,
+    /**
+     * 页签条（SegTabBar / MediaSeg）选中**药丸**底色。独立成 token 的原因：深色下原先取 `surfaceElevated`
+     * （`#383838`），叠在 `subtleFill` 底轨（白 7% ≈ `#333333`）上只差 5 个灰阶，肉眼几乎看不出选了哪一格；
+     * iOS 的药丸是 `tertiarySystemFill` 叠在玻璃底轨上、深色下明显偏亮。浅色与 `surfaceElevated` 同值（纯白）。
+     * 深色值 `#494949` ≈ 底轨 + 22 灰阶（与 iOS 深色明度差同量级，见 CHAT_FOLDERS_DESIGN §6.2）。
+     */
+    val segmentPill: Color,
     val neutralControl: Color,
     /**
      * 左滑动作格的**中性底**（「拉黑」）。
@@ -164,6 +171,7 @@ val LightIMColors = IMColors(
     shadowSoft = Color(0x2E000000),
     shadowStrong = Color(0x47000000),
     subtleFill = Color(0x0D1D2129),
+    segmentPill = Color(0xFFFFFFFF),
     neutralControl = Color(0x2E7F7F7F),
     swipeNeutral = Color(0xFF8E8E93),
     swipePositive = Color(0xFF34C759),
@@ -226,6 +234,7 @@ val DarkIMColors = IMColors(
     shadowSoft = Color(0x2E000000),
     shadowStrong = Color(0x47000000),
     subtleFill = Color(0x12FFFFFF),
+    segmentPill = Color(0xFF494949),
     neutralControl = Color(0x4D7F7F7F),
     swipeNeutral = Color(0xFF8E8E93),
     swipePositive = Color(0xFF30D158),

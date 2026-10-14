@@ -1,5 +1,11 @@
 package com.libeyond.imandroid.ui.screens
 
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import com.libeyond.imandroid.voice.VoiceRules
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -60,7 +66,17 @@ internal fun DetailTabBar(tabs: List<DetailTab>, current: DetailTab, onSelect: (
  * 最可靠的保证是同一段代码画的（iOS 三处同为 `IMLiquidSegmentedControl`）。
  */
 @Composable
-internal fun SegTabBar(titles: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+internal fun SegTabBar(
+    titles: List<String>,
+    selected: Int,
+    /** 每个页签标题右侧的未读角标（与 titles 一一对应；越界 / null = 不显示）。会话列表的文件夹 Tab 用。 */
+    badges: List<SegBadge?> = emptyList(),
+    /** 长按某一格（下标）；null = 不响应长按。文件夹 Tab 的「编辑 / 删除」菜单用。 */
+    onLongPress: ((Int) -> Unit)? = null,
+    /** 条上下留白；默认 10dp（详情页 / 收藏页）。会话列表的文件夹 Tab 传 0——由外层给上下**相等**的间距。 */
+    verticalPadding: androidx.compose.ui.unit.Dp = 10.dp,
+    onSelect: (Int) -> Unit,
+) {
     val c = IMTheme.colors
     // **底轨 + 药丸**（对齐 iOS `IMLiquidSegmentedControl`：track 玻璃、pill 浮在上面）。
     // 起初这里只有一排裸按钮、选中态是 12% 绿底 + 绿字：深色模式下几乎看不出选了哪个
@@ -70,7 +86,7 @@ internal fun SegTabBar(titles: List<String>, selected: Int, onSelect: (Int) -> U
     // 此前底轨 fillMaxWidth，页签靠左、最右一个页签（链接）后面是一大片空底。
     // 放不下（页签多 / 大字号）时底轨顶满可用宽度并横向滚动，不截断。
     Box(
-        Modifier.fillMaxWidth().padding(horizontal = IMTheme.dimens.space4, vertical = 10.dp),
+        Modifier.fillMaxWidth().padding(horizontal = IMTheme.dimens.space4, vertical = verticalPadding),
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -81,7 +97,7 @@ internal fun SegTabBar(titles: List<String>, selected: Int, onSelect: (Int) -> U
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            titles.forEachIndexed { i, t -> MediaSeg(t, i == selected) { onSelect(i) } }
+            titles.forEachIndexed { i, t -> MediaSeg(t, i == selected, badges.getOrNull(i), onLongClick = onLongPress?.let { f -> { f(i) } }) { onSelect(i) } }
         }
     }
 }
@@ -110,24 +126,52 @@ internal val GALLERY_TITLE: String
 internal fun linkUrlOf(contentType: String, content: String, convSeq: Long): String? =
     if (LinkScan.isLinkMessage(contentType, content, convSeq)) LinkScan.firstUrl(content) else null
 
+/** 页签角标：文案已格式化（空串不画）；muted = 灰色（只有静音会话有未读）。 */
+internal data class SegBadge(val text: String, val muted: Boolean = false)
+
 @Composable
-internal fun MediaSeg(label: String, on: Boolean, onClick: () -> Unit) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+internal fun MediaSeg(
+    label: String,
+    on: Boolean,
+    badge: SegBadge? = null,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     val c = IMTheme.colors
     // **选中/未选中同为主文字色，只以字重 + 药丸底色区分**（逐条对齐 iOS
     // `IMLiquidSegmentedControl.applyFonts`：semibold / medium，都是 label 色）。
     // 别再用「12% 主色底 + 主色字」表示选中——那在深色模式下几乎看不出来。
     Box(
         Modifier.clip(RoundedCornerShape(14.dp))
-            .background(if (on) c.surfaceElevated else Color.Transparent)
-            .clickable(onClick = onClick)
+            // 药丸底色走页签专用 token（深色下不再与底轨几乎同色，见 IMColors.segmentPill）
+            .background(if (on) c.segmentPill else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 14.dp, vertical = 6.dp),
     ) {
-        Text(
-            label,
-            color = c.textPrimary,
-            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                label,
+                color = c.textPrimary,
+                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (badge != null && badge.text.isNotEmpty()) {
+                Spacer(Modifier.width(5.dp))
+                // 与会话行角标同规格：高 20、最小宽 20、圆角全圆、白字；蓝 = 有提醒，灰 = 静音
+                Box(
+                    Modifier
+                        .height(IMTheme.dimens.unreadBadgeHeight)
+                        .widthIn(min = IMTheme.dimens.unreadBadgeHeight)
+                        .clip(CircleShape)
+                        .background(if (badge.muted) c.unreadBadgeMuted else c.unreadBadge)
+                        .padding(horizontal = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(badge.text, color = c.onAccent, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
     }
 }
 

@@ -84,6 +84,7 @@ fun MeScreen(
     onOpenPrivacy: () -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenCallHistory: () -> Unit,
+    onOpenFolders: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenLanguage: () -> Unit,
     onOpenAppearance: () -> Unit,
@@ -120,7 +121,7 @@ fun MeScreen(
             MeRow(savedMessages, Lucide.Bookmark, ic.blue, onClick = onOpenFavorites),
             MeRow(recentCalls, Lucide.Phone, ic.green, onClick = onOpenCallHistory),
             MeRow(devices, Lucide.Laptop, ic.orange, onClick = onOpenDevices),
-            MeRow(folders, Lucide.Folder, ic.blue) { onComingSoon(folders) },
+            MeRow(folders, Lucide.Folder, ic.blue, onClick = onOpenFolders),
             // 与左上角「我的二维码」并列：二维码给**面对面**，名片消息给**线上**。
             MeRow(shareCard, Lucide.IdCard, ic.teal) { onShareCard() },
         ),

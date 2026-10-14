@@ -35,6 +35,7 @@ import com.libeyond.imandroid.data.ThumbBackfill
 import com.libeyond.imandroid.sdk.api.DevicesApi
 import com.libeyond.imandroid.sdk.api.DownloadSettingsApi
 import com.libeyond.imandroid.sdk.api.NotifySettingsApi
+import com.libeyond.imandroid.data.toSnapshot
 import com.libeyond.imandroid.sdk.api.ProfileApi
 import com.libeyond.imandroid.sdk.api.PushTokenApi
 import com.libeyond.imandroid.sdk.api.QrApi
@@ -128,6 +129,7 @@ class IMClient(context: Context) {
     val upload = UploadApi(http) { session.token }
     private val downloadSettingsApi = DownloadSettingsApi(http)
     private val notifySettingsApi = NotifySettingsApi(http)
+    private val chatFoldersApi = com.libeyond.imandroid.sdk.api.ChatFoldersApi(http)
     private val pushTokenApi = PushTokenApi(http)
 
     /**
@@ -194,6 +196,16 @@ class IMClient(context: Context) {
     )
 
     suspend fun refreshAccountNotifySettings() = accountNotifySettingsStore.start("app_main")
+
+    /**
+     * 会话文件夹（聊天文件夹，PROTOCOL §6.15）：用户自建的手动分类。**进程内一份**，按账号隔离、整表快照 + 单调版本。
+     * 什么时候同步见 init：真正连上时 GET 一次、收到 `folder_update` 整表替换；写操作成功后用回包整表替换。
+     */
+    val chatFolderStore = com.libeyond.imandroid.data.ChatFolderStore(
+        remote = chatFoldersApi,
+        persistence = com.libeyond.imandroid.data.PrefsFolderPersistence(context),
+        ownerProvider = { session.uid },
+    )
 
     /**
      * FCM 令牌上报编排（M5 批次 2，`../../IMServer/docs/design/PUSH_M5_DESIGN.md` §1.1）。**进程内一份**，
@@ -364,6 +376,7 @@ class IMClient(context: Context) {
                 session.clear()
                 downloadSettingsStore.forget()
                 accountNotifySettingsStore.forget()
+                chatFolderStore.forget()
                 fcmTokenStore.forget()
                 IMLog.currentUid = "-"
             }
@@ -388,6 +401,15 @@ class IMClient(context: Context) {
         }
         scope.launch {
             messages.notifySettingsUpdates.collect { accountNotifySettingsStore.onPushed(it) }
+        }
+
+        // 会话文件夹的多端同步（PROTOCOL §6.15）：① 真正连上时 GET 一次（断线期间可能错过帧）；
+        // ② 收到 folder_update 整表快照：直接整表替换（版本 ≤ 本地的丢弃）。
+        scope.launch {
+            socket.state.collect { if (it == ConnState.Connected) chatFolderStore.refresh() }
+        }
+        scope.launch {
+            messages.folderUpdates.collect { chatFolderStore.apply(it.toSnapshot(), fromFrame = true) }
         }
 
         // FCM 令牌上报（M5 批次 2，同上两段的道理）：真正连上（= 登录/恢复会话成功）时补一次——
@@ -480,6 +502,7 @@ class IMClient(context: Context) {
         downloads.syncOpenedOwner() // 退出后「看过」回空集，下一个账号不沿用上一个人的
         downloadSettingsStore.forget()
         accountNotifySettingsStore.forget()
+        chatFolderStore.forget()
         // 不调 fcmTokenStore 的服务端 delete：会话正常退出登录时服务端按会话联删令牌（父任务简报
         // 明确约定），客户端不必每次登出都补一刀；forget() 只复位本地"已上报"状态，见其类注释。
         fcmTokenStore.forget()

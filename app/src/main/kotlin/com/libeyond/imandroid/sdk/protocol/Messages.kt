@@ -480,6 +480,28 @@ data class NotifySettingsUpdateData(
     val version: Long = 0,
 )
 
+/**
+ * 会话文件夹（folder_update 与 REST 共用的同形结构，PROTOCOL §6.15）。
+ * `conv_ids` 永不为 null（无成员给 `[]`），按加入时间升序。
+ */
+@Serializable
+data class FolderWire(
+    val id: String = "",
+    val name: String = "",
+    val position: Int = 0,
+    @SerialName("conv_ids") val convIds: List<String> = emptyList(),
+)
+
+/**
+ * folder_update 下行（§6.15）：**本人全部文件夹的完整快照**，收端整表替换；`version` 每用户单调递增，
+ * ≤ 本地已知版本的帧直接丢弃。发给本人全部在线设备（含发起端，幂等）。
+ */
+@Serializable
+data class FolderUpdateData(
+    val version: Long = 0,
+    val folders: List<FolderWire> = emptyList(),
+)
+
 /** presence 下行广播（§5.5 租约模型）。 */
 @Serializable
 data class PresenceFrame(

@@ -6,6 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **聊天文件夹（2026-10-14，未提交，待 code-review --fix）**：`ChatFolders.kt`/`ChatFolderStore.kt`/`ChatFoldersApi.kt`、`ChatFolderTabs.kt`（Tab 条 + 横滑）、`ConversationMenu.kt`（自 MainScreen 拆出，文件夹项第一位）、管理/编辑/选择三页；`IMColors.segmentPill` 深色药丸 token；设计见 IMServer `docs/design/CHAT_FOLDERS_DESIGN.md`。
 - **失效三端口径对齐（2026-10-14，已提交并推送 a30e39a / 04640c5）**：
   - **口径**：服务端已清理即标失效，**不看本机有无缓存/原件**（取代 2026-08-07「铁律 A」）；`stateOf` 失效排在就绪之前。
   - **探测**：进页探（`rememberGate(probeExpiry)` → `verifyExpired(probeOnce)`），**本机已就绪的不在宫格/气泡里批量探**；并发上限 4，**满了就丢**（`tryAcquire`，撤记号，下次进组合再探）；查看器当前页进来不带 `probeOnce` 真探一次，命中经状态流回刷各面。
