@@ -158,13 +158,13 @@ internal fun MediaViewerScreen(
 ) {
     if (pages.isEmpty()) return
     val startIndex = MediaTimeline.indexOf(pages, startSeq).coerceAtLeast(0)
-    // 翻页状态 / 锚点只认**打开那一刻**的 startSeq：宿主在「关闭只翻布尔、数据不清」的转场里会复用同一份组合，
-    // 不按 startSeq 换键的话，第二次点另一条仍停在上次翻到的那一页（2026-10-14 群资料媒体页「点的与打开的不是同一张」）。
-    val state = key(startSeq) { rememberPagerState(initialPage = startIndex, pageCount = { pages.size }) }
+    // 「每次打开都是全新状态」由宿主按打开次数换键保证（`viewingToken`，见 GroupInfoHost / ChatDetailHost）；
+    // 这里**不要**再按 startSeq 换键：未确认的消息拿到 conv_seq 时 startSeq 会变，那会把翻页状态悄悄重置。
+    val state = rememberPagerState(initialPage = startIndex, pageCount = { pages.size })
     val current = pages[state.currentPage.coerceIn(0, pages.lastIndex)]
 
     // 当前看的那条**按 conv_seq 记**（见上方注释：下标会被续拉的更早一页整体推走）
-    var anchorSeq by remember(startSeq) { mutableLongStateOf(if (startSeq > 0) startSeq else pages[startIndex].convSeq) }
+    var anchorSeq by remember { mutableLongStateOf(if (startSeq > 0) startSeq else pages[startIndex].convSeq) }
     // ⚠️ **这个 effect 的 key 里绝不能有 `pages`**（2026-09-16 /code-review 抓出）：
     // 续拉把 N 条插到前面时 `currentPage` 数值不变、指向的却已经是另一条；带上 `pages` 的话它会先跑，
     // 把锚点覆盖成那条错的，下面那个"回正"随即判定「原地即可」而不再 scrollToPage——
@@ -180,8 +180,11 @@ internal fun MediaViewerScreen(
         pages.getOrNull(state.currentPage)?.let { downloads?.markOpened(it.content) }
     }
     // 当前页进来就探一次是否已被服务端清理：本机有原件时不会 404，加载回调等不到复验（每址每进程一次）
-    LaunchedEffect(state.currentPage, pages) {
-        pages.getOrNull(state.currentPage)?.let { (downloads ?: expiry)?.verifyExpired(it.content, it.isVideo, probeOnce = true) }
+    // **不带 probeOnce**：进过宫格 / 聊天页时那条地址已被「每进程一次」探过，这里是「进查看器那一次」，要真去问；
+    // 在途去重仍在（verifying），键只认当前页内容，续拉改 pages 不会重发
+    val gateKey = pages.getOrNull(state.currentPage)
+    LaunchedEffect(gateKey?.content) {
+        gateKey?.let { (downloads ?: expiry)?.verifyExpired(it.content, it.isVideo) }
     }
     LaunchedEffect(pages) {
         val i = MediaTimeline.indexOf(pages, anchorSeq)

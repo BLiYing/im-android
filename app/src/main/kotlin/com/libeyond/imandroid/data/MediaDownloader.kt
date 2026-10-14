@@ -156,8 +156,13 @@ class MediaDownloader(
         if (probeOnce && !probed.add(url)) return
         if (!verifying.add(url)) return
         scope.launch(Dispatchers.IO) {
-            // 主动探测有并发上限：翻一屏宫格会同时排出几十条，不限的话是一阵 ranged-GET 突发
-            if (probeOnce) probeGate.acquire()
+            // 主动探测有并发上限，**满了就丢**（撤记号，格子下次进组合再探）：排队的话，快速滑动会积压一堆
+            // 已经滚出屏幕的探测。tryAcquire 在 try 之外，所以丢弃路径要自己撤 verifying（不进 finally）
+            if (probeOnce && !probeGate.tryAcquire()) {
+                probed.remove(url)
+                verifying.remove(url)
+                return@launch
+            }
             try {
                 val req = Request.Builder()
                     .url(absolute(url))
