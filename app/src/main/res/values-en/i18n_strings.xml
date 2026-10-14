@@ -1263,6 +1263,7 @@
     <string name="media_viewer_download_open_local">Download and open in a local app</string>
     <string name="media_viewer_download_open_player">Download and open in a local player</string>
     <string name="media_viewer_gallery">Media gallery</string>
+    <string name="media_viewer_image_decoding">Converting image format…</string>
     <string name="media_viewer_image_unsupported">This browser can\'t preview this image format (e.g. HEIC).</string>
     <string name="media_viewer_locate">Show in chat</string>
     <string name="media_viewer_next">Next (→)</string>

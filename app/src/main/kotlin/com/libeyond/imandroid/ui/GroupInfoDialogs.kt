@@ -190,25 +190,8 @@ internal fun GroupManagePrompts(
                 }
             },
         )
-        GroupManageAction.ToggleMuteAll -> {
-            val on = GroupPermissions.isMuteActive(g.muteUntil)
-            IMConfirmDialog(
-                title = stringResource(if (on) R.string.group_manage_mute_all_off_confirm_title else R.string.group_manage_mute_all_on_confirm_title),
-                message = stringResource(
-                    if (on) R.string.group_manage_mute_all_off_confirm_message else R.string.group_manage_mute_all_on_confirm_message,
-                ),
-                confirmText = stringResource(if (on) R.string.group_manage_mute_all_off_confirm else R.string.group_manage_mute_all_on_confirm),
-                destructive = !on,
-                onDismiss = { onDismiss() },
-                onConfirm = {
-                    onDismiss()
-                    // -1 = 永久（协议口径），0 = 解除
-                    runManage(Str.s(if (on) R.string.group_manage_mute_all_off_label else R.string.group_manage_mute_all_on_label)) {
-                        client.groups.setMuteAll(convId, if (on) 0L else -1L)
-                    }
-                },
-            )
-        }
+        // 全员禁言不走弹层：开关直接切换（对齐 iOS / Web），入口在 GroupInfoHost 的 onManage
+        GroupManageAction.ToggleMuteAll -> Unit
         null -> Unit
     }
 }

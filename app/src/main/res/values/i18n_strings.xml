@@ -1228,6 +1228,7 @@
     <string name="media_viewer_download_open_local">下载后用本地程序打开</string>
     <string name="media_viewer_download_open_player">下载后用本地播放器打开</string>
     <string name="media_viewer_gallery">媒体库</string>
+    <string name="media_viewer_image_decoding">正在转换图片格式…</string>
     <string name="media_viewer_image_unsupported">当前浏览器无法预览该图片格式（如 HEIC）。</string>
     <string name="media_viewer_locate">定位到聊天位置</string>
     <string name="media_viewer_next">下一张（→）</string>

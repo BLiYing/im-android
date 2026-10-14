@@ -89,6 +89,7 @@ fun GroupInfoHost(
     val openLink = com.libeyond.imandroid.ui.components.LocalOpenLink.current
     // 本地快照（上次拉到的群资料）：进页即画整页，网络回来再静默覆盖；没有快照才退到占位页
     val infoCache = remember(context) { GroupInfoCache(java.io.File(context.filesDir, "group_info")) }
+    var muteAllBusy by remember(convId) { mutableStateOf(false) }
     var info by remember(convId) { mutableStateOf<GroupInfo?>(infoCache.load(client.uid.orEmpty(), convId)) }
     var infoFailed by remember(convId) { mutableStateOf(false) }
     var infoReload by remember(convId) { mutableStateOf(0) }
@@ -218,28 +219,13 @@ fun GroupInfoHost(
         if (toast == null) toast = Str.s(R.string.group_error_not_admin)
     }
 
-    /**
-     * 调完写接口统一刷一次群资料 + 成员首页——服务端是权威，别本地猜新状态。对齐 iOS
-     * 每个动作后都调 `loadGroupInfo`（含 `resetSuperMemberPaging`，同样重置到第一页，
-     * 代价是丢弃已滚动加载的更深几页，两端同一取舍）。**与 `onLoadMoreMembers` 共享
-     * `loading` 标志**：避免深分页时"触底加载更多"与"长按管理动作"并发写
-     * `members`/`cursor`/`hasMore`，旧游标数据拼接出成员区间空洞（`/code-review` 抓出）。
-     */
-    fun runManage(label: String, block: suspend () -> Any?) {
-        scope.launch {
-            val r = runCatching { block() }
-            r.onFailure { e ->
-                val code = (e as? com.libeyond.imandroid.sdk.http.ApiException)?.code
-                // 端上放行了但服务端拒——把码带出来，别只说「失败」
-                toast = if (code != null) Str.s(R.string.group_manage_op_failed_with_code, label, code)
-                    else Str.s(R.string.group_manage_op_failed, label)
-                IMLog.tag("IM.Group").w("group_manage_failed", "op" to label, "code" to (code ?: -1))
-            }
-            if (r.isSuccess) toast = (r.getOrNull() as? ManageToast)?.text ?: Str.s(R.string.group_manage_op_succeeded, label)
-            runCatching { client.groups.info(convId) }.onSuccess { info = it }
-            membersState.refresh()
-        }
-    }
+    fun runManageImpl(label: String, silentOnSuccess: Boolean, block: suspend () -> Any?) =
+        runGroupManage(scope, client, convId, label, silentOnSuccess, { toast = it }, { info = it }, { membersState.refresh() }, block)
+
+    fun runManage(label: String, block: suspend () -> Any?) = runManageImpl(label, false, block)
+
+    /** 开关类操作：成功时界面已自己翻转，不再补「xx成功」；失败照常提示。 */
+    fun runManageQuiet(label: String, block: suspend () -> Any?) = runManageImpl(label, true, block)
 
     // 换群头像：选图 → 压成 JPEG → POST /avatar → PUT /groups/{id}（**整体替换**，
     // 名字与简介必须原样带回，见 PROTOCOL §11）。整条链与"为什么立刻提交"在 GroupAvatarPicker.kt。
@@ -352,13 +338,27 @@ fun GroupInfoHost(
             info = g,
             banCount = bans?.size,
             members = membersState.members,
-            onManage = { action -> manage = action },
+            onManage = { action ->
+                if (action == GroupManageAction.ToggleMuteAll) {
+                    // 全员禁言：不再二次确认，开关直接切（对齐 iOS / Web）；乐观翻转 + 失败回滚，在途忽略重复点击
+                    if (muteAllBusy) return@GroupManageScreen
+                    val on = GroupPermissions.isMuteActive(g.muteUntil)
+                    val before = g
+                    muteAllBusy = true
+                    info = g.copy(muteUntil = MuteAllToggle.target(on))
+                    runManage(MuteAllToggle.label(on)) {
+                        MuteAllToggle.apply(client, convId, on, rollback = { info = before }, done = { muteAllBusy = false })
+                    }
+                } else {
+                    manage = action
+                }
+            },
             onToggleSetting = { key ->
                 // **整体替换**：五个值一次全传，翻转哪一个由纯函数算（见 GroupSettings）
                 val v = GroupSettings.toggled(g, key)
                 // 乐观更新：开关立刻翻（否则要等 PUT + 重拉两次往返才变，看着像没生效）；失败由 runManage 的重拉回滚
                 info = GroupSettings.applied(g, v)
-                runManage(GroupSettings.label(key)) {
+                runManageQuiet(GroupSettings.label(key)) {
                     // PUT 失败要**立刻**回滚本地乐观值：runManage 的重拉也失败（断网）时，开关会一直停在服务端没接受的状态
                     putSettingsOrRollback(client, convId, v) { info = g }
                 }
