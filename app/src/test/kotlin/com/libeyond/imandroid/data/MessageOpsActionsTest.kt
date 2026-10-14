@@ -39,18 +39,15 @@ class MessageOpsActionsTest {
         assertFalse(MessageAction.Translate in acts(msg(OTHER, content = "")))
     }
 
-    @Test fun `举报只给别人的消息，自己的与系统的不给`() {
-        assertTrue(MessageAction.Report in acts(msg(OTHER)))
+    @Test fun `长按菜单不再给举报（2026-10-14）`() {
+        assertFalse(MessageAction.Report in acts(msg(OTHER)))
         assertFalse(MessageAction.Report in acts(msg(ME)))
-        assertFalse(MessageAction.Report in acts(msg(OTHER, type = ContentType.SYSTEM)))
-        assertFalse(MessageAction.Report in acts(msg(DetailActions.SYSTEM_UID)))
     }
 
-    @Test fun `菜单顺序：多选 翻译 举报 都在删除之前`() {
+    @Test fun `菜单顺序：多选 翻译 都在删除之前`() {
         val a = acts(msg(OTHER))
         assertTrue(a.indexOf(MessageAction.MultiSelect) < a.indexOf(MessageAction.Translate))
-        assertTrue(a.indexOf(MessageAction.Translate) < a.indexOf(MessageAction.Report))
-        assertTrue(a.indexOf(MessageAction.Report) < a.indexOf(MessageAction.HideForMe))
+        assertTrue(a.indexOf(MessageAction.Translate) < a.indexOf(MessageAction.HideForMe))
     }
 
     @Test fun `撤回的消息什么都没有`() = assertEquals(emptyList<MessageAction>(), acts(msg(OTHER, recalledAt = 5)))

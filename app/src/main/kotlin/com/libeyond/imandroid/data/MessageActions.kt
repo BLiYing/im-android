@@ -136,10 +136,7 @@ object MessageActions {
 
         // 翻译：文本消息（含纯链接）；目标语言恒 zh
         if (msg.contentType == ContentType.TEXT && msg.content.isNotBlank()) out += MessageAction.Translate
-        // 举报：别人的消息（系统消息/系统账号不可举报）。用户级举报留在资料页，不并进来
-        if (SelectionActions.reportableSender(listOf(msg), myUid) != null && msg.contentType != ContentType.SYSTEM &&
-            !DetailActions.isSystemPeer(msg.sender)
-        ) out += MessageAction.Report
+        // 举报：**长按菜单不再给**（2026-10-14 用户要求去掉）。举报入口保留在多选批量举报与资料页（用户级）
 
         // 仅删除自己：任何消息都可以
         out += MessageAction.HideForMe

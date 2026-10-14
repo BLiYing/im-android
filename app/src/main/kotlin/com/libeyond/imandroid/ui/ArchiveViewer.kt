@@ -4,9 +4,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import com.libeyond.imandroid.data.ArchiveAction
 import com.libeyond.imandroid.data.ArchiveActions
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.MediaTimeline
+import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.data.ViewerAction
+import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.sdk.api.FavoriteDraft
 import com.libeyond.imandroid.data.ViewerMedia
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.data.toViewerMedia
@@ -86,6 +91,7 @@ internal fun ArchiveMediaViewer(
     // 摆在参数位上就是每一次重组都重排一遍——翻页时肉眼可见地发涩
     // （2026-09-16 用户报：详情页点开的查看器比聊天页点开的卡）。聊天页那条路一直是 remember 的。
     val pages = remember(archive.items, current.convSeq) { archiveViewerPages(archive.items, current) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     MediaViewerScreen(
         pages = pages,
         startSeq = current.convSeq,
@@ -102,7 +108,7 @@ internal fun ArchiveMediaViewer(
                 client = client, convId = convId, isGroup = isGroup, iAmManager = iAmManager,
                 item = vm, scope = scope, onClose = onClose,
                 onForwardPicker = onForwardPicker, onLocateInChat = onLocateInChat,
-                onChanged = onChanged, onToast = onToast,
+                onChanged = onChanged, onToast = onToast, context = context,
             )
         },
         onNearOldest = { idx ->
@@ -136,6 +142,7 @@ internal fun archiveViewerMoreItems(
     onLocateInChat: (Long) -> Unit,
     onChanged: () -> Unit,
     onToast: (String) -> Unit,
+    context: android.content.Context,
 ): List<SheetItem> {
     val owner = client.uid.orEmpty()
     val target = ArchiveTarget(
@@ -152,13 +159,50 @@ internal fun archiveViewerMoreItems(
         isGroup = isGroup,
         iAmManager = iAmManager,
     )
-    return buildArchiveMenu(actions) { a ->
+    if (actions.isEmpty()) return emptyList()
+    val entity = target.toMessageEntity(owner, convId)
+    // 顺序与聊天页查看器同一份：（内置「下载」由查看器自己排最前）定位 · 收藏 · 复制 · 转发 · 删除。
+    // 这里不再是旧的「转发 · 定位 · 删除」——三端「更多」的项与顺序已对齐（2026-10-14）。
+    val run = { a: ArchiveAction ->
         onClose()
         runArchiveAction(
             action = a, client = client, convId = convId, owner = owner, target = target,
             scope = scope, onForwardPicker = onForwardPicker,
             onLocateInChat = onLocateInChat, onChanged = onChanged, onToast = onToast,
         )
+    }
+    fun item(a: ViewerAction, onClick: () -> Unit) =
+        SheetItem(a.label, a.destructive, icon = viewerActionIcon(a), needsMedia = a.needsMedia) {
+            onClose()
+            onClick()
+        }
+    return buildList {
+        add(item(ViewerAction.Locate) { onLocateInChat(target.convSeq) })
+        add(
+            item(ViewerAction.Favorite) {
+                scope.launch {
+                    runCatchingCancellable { client.favorites.add(FavoriteDraft.of(entity)) }
+                        .onSuccess { onToast(Str.s(R.string.chat_favorite_success)) }
+                        .onFailure { onToast(it.userMessage(Str.s(R.string.net_fallback_favorite_failed))) }
+                }
+            },
+        )
+        // 视频没有「复制」（无"复制字节"语义，同 iOS / 聊天页查看器）
+        if (!item.isVideo) {
+            add(
+                item(ViewerAction.Copy) {
+                    scope.launch {
+                        val local = client.downloads.localFile(item.content, item.isVideo)
+                        val url = local?.let { android.net.Uri.fromFile(it).toString() }
+                            ?: MediaUrl.absolute(item.content, client.host, com.libeyond.imandroid.BuildConfig.USE_TLS)
+                        onToast(CopyImage.copy(context, url))
+                    }
+                },
+            )
+        }
+        add(item(ViewerAction.Forward) { run(ArchiveAction.Forward) })
+        // 危险项恒在最后；两档删除收进子菜单（与长按菜单同一份规则）
+        addAll(buildArchiveMenu(actions.filter { it == ArchiveAction.HideForMe || it == ArchiveAction.DeleteForEveryone }, run))
     }
 }
 

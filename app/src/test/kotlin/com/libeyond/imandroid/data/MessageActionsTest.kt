@@ -116,7 +116,7 @@ class MessageActionsTest {
         assertTrue(i(MessageAction.MultiSelect) < i(MessageAction.Translate))
         val theirs = MessageActions.availableFor(msg(sender = OTHER), ME, false, false, NOW)
         assertTrue(theirs.indexOf(MessageAction.MultiSelect) < theirs.indexOf(MessageAction.Translate))
-        assertTrue(theirs.indexOf(MessageAction.Translate) < theirs.indexOf(MessageAction.Report))
+        assertTrue(theirs.indexOf(MessageAction.Translate) < theirs.indexOf(MessageAction.HideForMe))
     }
 
     @Test
@@ -249,8 +249,8 @@ class MessageActionsMatrixTest {
     }
 
     @Test
-    fun `他人的文件与语音有举报无撤回无为所有人删除`() {
-        val tail = listOf(MessageAction.MultiSelect, MessageAction.Report, MessageAction.HideForMe)
+    fun `他人的文件与语音无举报无撤回无为所有人删除`() {
+        val tail = listOf(MessageAction.MultiSelect, MessageAction.HideForMe)
         assertEquals(common + tail, acts(msg(other, ContentType.FILE, "/uploads/x.pdf")))
         assertEquals(listOf(MessageAction.Transcribe) + common + tail, acts(msg(other, ContentType.VOICE, "/uploads/x.m4a")))
     }
@@ -276,12 +276,13 @@ class MessageActionsMatrixTest {
     }
 
     @Test
-    fun `文本本人有编辑翻译他人有翻译举报无编辑`() {
+    fun `文本本人有编辑翻译他人有翻译无举报无编辑`() {
         val mine = acts(msg(me, ContentType.TEXT, "hi"))
         assertTrue(MessageAction.Edit in mine && MessageAction.Translate in mine && MessageAction.Copy in mine)
         assertFalse(MessageAction.Report in mine)
         val theirs = acts(msg(other, ContentType.TEXT, "hi"))
-        assertTrue(MessageAction.Translate in theirs && MessageAction.Report in theirs)
+        assertTrue(MessageAction.Translate in theirs)
+        assertFalse(MessageAction.Report in theirs)
         assertFalse(MessageAction.Edit in theirs || MessageAction.Recall in theirs)
     }
 

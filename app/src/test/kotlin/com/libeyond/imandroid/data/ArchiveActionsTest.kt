@@ -38,10 +38,10 @@ class ArchiveActionsTest {
     // ————————————————— 顺序与恒显项 —————————————————
 
     @Test
-    fun `转发与定位到聊天恒显，且转发在前——顺序照抄 iOS`() {
+    fun `定位到聊天与转发恒显，且定位在前——三端长按菜单同序`() {
         val a = actions()
-        assertEquals(ArchiveAction.Forward, a[0])
-        assertEquals(ArchiveAction.LocateInChat, a[1])
+        assertEquals(ArchiveAction.LocateInChat, a[0])
+        assertEquals(ArchiveAction.Forward, a[1])
     }
 
     @Test
@@ -49,8 +49,8 @@ class ArchiveActionsTest {
         val a = actions(mine = true, downloading = true)
         assertEquals(
             listOf(
-                ArchiveAction.Forward,
                 ArchiveAction.LocateInChat,
+                ArchiveAction.Forward,
                 ArchiveAction.CancelDownload,
                 ArchiveAction.HideForMe,
                 ArchiveAction.DeleteForEveryone,

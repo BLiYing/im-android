@@ -60,8 +60,9 @@ object ArchiveActions {
     ): List<ArchiveAction> {
         if (convSeq <= 0L) return emptyList()
         return buildList {
-            add(ArchiveAction.Forward)
+            // 定位到聊天放第一位（与 Web / iOS 长按菜单同序，2026-10-14）
             add(ArchiveAction.LocateInChat)
+            add(ArchiveAction.Forward)
             if (downloading) add(ArchiveAction.CancelDownload)
             add(ArchiveAction.HideForMe)
             if (canDeleteForEveryone(mine, isGroup, iAmManager)) add(ArchiveAction.DeleteForEveryone)

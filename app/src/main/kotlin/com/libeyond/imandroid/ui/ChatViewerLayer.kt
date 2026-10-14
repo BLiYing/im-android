@@ -175,7 +175,7 @@ internal fun ChatViewerLayer(
 private fun isDeleteTier(a: MessageAction) = a == MessageAction.DeleteForEveryone || a == MessageAction.HideForMe
 
 /** 图标逐项对齐 iOS 的 SF Symbol（text.bubble / bookmark / arrowshape.turn.up.right / trash），用 Lucide 近义。 */
-private fun viewerActionIcon(a: ViewerAction): ImageVector = when (a) {
+internal fun viewerActionIcon(a: ViewerAction): ImageVector = when (a) {
     ViewerAction.Locate -> Lucide.MessageSquareText
     ViewerAction.Favorite -> Lucide.Bookmark
     ViewerAction.Copy -> Lucide.Copy
