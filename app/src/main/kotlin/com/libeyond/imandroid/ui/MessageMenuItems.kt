@@ -45,6 +45,8 @@ import com.libeyond.imandroid.data.ArchiveAction
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.data.MessageAction
 import com.libeyond.imandroid.data.MessageActions
+import com.libeyond.imandroid.data.SelectionActions
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.i18n.Str
@@ -79,10 +81,11 @@ private fun <T> buildMenuWithDeleteSubmenu(
     destructive: (T) -> Boolean,
     icon: (T) -> ImageVector,
     run: (T) -> Unit,
+    needsMedia: (T) -> Boolean = { false },
 ): List<SheetItem> {
     val deletes = actions.filter(isDelete)
     val head = actions.filterNot { it in deletes }.map { a ->
-        SheetItem(label(a), destructive(a), icon = icon(a)) { run(a) }
+        SheetItem(label(a), destructive(a), icon = icon(a), needsMedia = needsMedia(a)) { run(a) }
     }
     val tail = when {
         deletes.isEmpty() -> emptyList()
@@ -117,6 +120,7 @@ internal fun buildArchiveMenu(
     actions = actions,
     isDelete = { it == ArchiveAction.DeleteForEveryone || it == ArchiveAction.HideForMe },
     label = { it.label }, destructive = { it.destructive }, icon = ::archiveActionIcon, run = run,
+    needsMedia = { it == ArchiveAction.Forward },
 )
 
 /**
@@ -202,6 +206,10 @@ internal fun ChatMessageMenu(
         target, owner, conv.isGroup, iAmManager,
         hasTranscript = transcriber?.isExpanded(target.convSeq) == true,
         canPin = canPin,
+        mediaGone = (target.contentType == ContentType.IMAGE || target.contentType == ContentType.VIDEO) &&
+            SelectionActions.isExpiredMedia(target) { url, isVideo ->
+                client.downloads.stateOf(url, isVideo).phase == com.libeyond.imandroid.data.DownloadPhase.Expired
+            },
     )
     // 我发的群消息：菜单一开就去问已读名单（只有发送者能查，服务端同判）；
     // 超过 2000 人的群服务端回 enabled=false、出错同理——整行直接不出现（iOS 的 deferred element 同口径）

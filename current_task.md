@@ -6,6 +6,12 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **失效三端口径对齐（2026-10-14，已自测并提交）**：
+  - **口径**：服务端已清理即标失效，**不看本机有无缓存/原件**（取代 2026-08-07「铁律 A：缓存过的照显」）；`stateOf` 失效排在就绪之前。
+  - **探测**：进页探（`rememberGate(probeExpiry)` → `verifyExpired(probeOnce)`，每址进程内一次），**本机已就绪的不在宫格/气泡里批量探**，查看器每页进来探一次，命中经状态流回刷各面。
+  - **查看器**：失效页黑底 + `OctagonX`，「更多」去掉下载/复制/收藏/转发（`SheetItem.needsMedia`）；群资料/详情宫格失效视频只留磨砂；长按菜单对失效图/视频去掉复制图片/转发/收藏（`availableFor(mediaGone)`）。
+  - **已修**：归档查看器关闭后再点同一格仍停在上次翻到的页——宿主按「每次打开」自增 `viewingToken` 换键（`GroupInfoHost`/`ChatDetailHost`）。
+  - 失效样本（学习交流群 5 个文件）仍在 scratchpad `expiry-backup/`，用户决定不还原。
 - **气泡尾角 + 会话列表待审行 + 转文字业务码文案（2026-10-13，未 commit，待真机目测）**：有尾气泡自己右下/对方左下直角（`BubbleShape.kt`，待发文件/语音气泡同轮廓）；群待审时预览行只显红字「[入群申请 N]」不接上一条消息（对齐 iOS/Web）；转文字 REST 失败按业务码给专用文案（`ErrorText` 增 5001xx）。已知差异：`AppearancePreview` 的气泡预览仍是四角全圆，未跟尾角。
 - **好友成立系统消息 + 收藏页紧凑行 + 发名片多选确认 + 会话列表时间锚点（2026-10-13，未 commit，待真机目测）**：
   - `friend_accepted`：`SysEvents.GROUP` 加无参表项，聊天页居中灰字与会话列表预览共用；`IncomingRule.countsAsUnread` 对空 sender 兜底，`ChatJumpButton` 的 ↓N 改走同一判据（此前把 system 当对方消息计数）。

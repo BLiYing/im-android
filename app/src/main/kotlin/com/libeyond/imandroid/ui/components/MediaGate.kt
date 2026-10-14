@@ -81,6 +81,13 @@ fun rememberGate(
      * 静默拉走几百 MB。它们只**反映**状态，下不下由用户点。
      */
     autoPrefetch: Boolean = true,
+    /**
+     * 进页就**主动探一次**这条是不是服务端已清理（ranged-GET `bytes=0-0`，只探状态码）。
+     * **默认开**（聊天页气泡 / 相册宫格 / 归档宫格 / 媒体库共用同一套失效登记）：门控挡着的格子不加载原件，
+     * 不探的话「已失效」要等用户点开才显出来（2026-10-14 用户报：群资料媒体页进入时不显示失效、点开才显示）。
+     * 每个地址进程内只探一次；本机已有原件 / 已知失效直接略过。
+     */
+    probeExpiry: Boolean = true,
 ): GateInfo {
     val env = LocalMediaGate.current
     val isVideo = contentType == "video"
@@ -108,6 +115,14 @@ fun rememberGate(
     LaunchedEffect(url, isGroup, autoPrefetch, auto) {
         if (url.isBlank() || !autoPrefetch) return@LaunchedEffect
         if (auto) env.downloads.start(url, isVideo, sizeBytes)
+    }
+
+    // 主动探失效：本机没有原件、也不是已知失效才探；命中后下载器登记，状态流把本格重组成失效层。
+    // 会自动开下的不探：那条 GET 自己撞 404 就登记失效（`run`），再探一次是白打一个请求。
+    // 本机已就绪的不在宫格 / 气泡里批量探（省请求、免跳变）：进查看器那一次再复验，命中经状态流回刷各面
+    val probe = probeExpiry && !(autoPrefetch && auto) && state.phase != DownloadPhase.Ready
+    LaunchedEffect(url, probe) {
+        if (probe && url.isNotBlank()) env.downloads.verifyExpired(url, isVideo, probeOnce = true)
     }
 
     // 只订阅「这一条在不在集合里」的结论：别的媒体被看过不该让这一格重组

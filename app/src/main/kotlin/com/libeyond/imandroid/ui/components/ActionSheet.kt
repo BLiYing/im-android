@@ -37,6 +37,8 @@ data class SheetItem(
      * 摊成两个平级项会让人以为是两件事。
      */
     val submenu: List<SheetItem> = emptyList(),
+    /** 依赖媒体字节（复制 / 收藏 / 转发 / 下载）：查看器当前页已失效时由查看器滤掉。 */
+    val needsMedia: Boolean = false,
     val onClick: () -> Unit = {},
 )
 

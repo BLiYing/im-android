@@ -112,7 +112,7 @@ internal fun ChatViewerLayer(
             moreActionsFor = { vm ->
                 val cur = entityOf(vm)
                 ViewerActions.chatMoreActions(cur.convSeq, (cur.recalledAt ?: 0) > 0, vm.isVideo).map { a ->
-                    SheetItem(a.label, a.destructive, icon = viewerActionIcon(a)) {
+                    SheetItem(a.label, a.destructive, icon = viewerActionIcon(a), needsMedia = a.needsMedia) {
                         // 外部动作**先关查看器再执行**（iOS `showMoreSheet`）：回到聊天页上下文
                         onClose()
                         when (a) {

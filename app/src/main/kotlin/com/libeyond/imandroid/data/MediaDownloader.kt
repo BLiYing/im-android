@@ -123,14 +123,19 @@ class MediaDownloader(
 
     /** 在途复验去重：同一地址不并发多次 ranged-GET（滚动 / 多面同时 404 不打成探测风暴）。 */
     private val verifying: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    /** 主动探测的并发上限（[verifyExpired] 的 `probeOnce`）。 */
+    private val probeGate = kotlinx.coroutines.sync.Semaphore(4)
+    /** 已主动探测过的地址（[verifyExpired] 的 `probeOnce`）。内存态，进程内只探一次。 */
+    private val probed: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     /**
-     * 登记「服务端已清理」。**铁律：本机已有原件的不标**（缓存过的照显，与 iOS 一致）。
+     * 登记「服务端已清理」。**不看本机有没有原件**（2026-10-14 起，取代 2026-08-07 的「缓存过的照显」）：
+     * 服务端清理了就是失效，三端口径一致；本机副本仍在磁盘上，只是各展示面不再用它。
      * 同时写进状态表，所有订阅 [states] 的格子 / 气泡 / 查看器即刻重组出失效层。
      * @return 登记后该地址是否处于失效态
      */
     fun markExpired(url: String, isVideo: Boolean = false): Boolean {
-        if (url.isBlank() || cache.isReady(url, isVideo)) return false
+        if (url.isBlank()) return false
         if (!expired.add(url)) return true
         put(url, DownloadState(DownloadPhase.Expired))
         log.i("media_expired", "via" to "passive")
@@ -141,10 +146,18 @@ class MediaDownloader(
      * 被动展示路径（气泡 / 宫格 / 查看器直接按地址显示）加载失败后的**复验**（iOS `verifyExpiredForURL:`）：
      * ranged-GET `bytes=0-0` 只探状态码，**仅 404 / 410 才标失效**；断网 / 超时 / 5xx 不标，保留可重载。
      */
-    fun verifyExpired(url: String, isVideo: Boolean = false) {
-        if (url.isBlank() || url in expired || cache.isReady(url, isVideo)) return
+    fun verifyExpired(url: String, isVideo: Boolean = false, probeOnce: Boolean = false) {
+        if (url.isBlank() || url in expired) return
+        // 本机地址（待发的 content:// / file:// / data:）不是服务端资源：探它既无意义，
+        // `Request.Builder.url` 还会抛 IllegalArgumentException（不是 IOException，协程里无人接 = 闪退）
+        if (isLocalUri(url) || url.startsWith("data:")) return
+        // 主动探测（进页就探，不等加载失败）每个地址本次进程只探一次：宫格来回滚动不重复打请求。
+        // 网络错会把它放回去（下面 catch），瞬时失败不该让这条永远探不了。
+        if (probeOnce && !probed.add(url)) return
         if (!verifying.add(url)) return
         scope.launch(Dispatchers.IO) {
+            // 主动探测有并发上限：翻一屏宫格会同时排出几十条，不限的话是一阵 ranged-GET 突发
+            if (probeOnce) probeGate.acquire()
             try {
                 val req = Request.Builder()
                     .url(absolute(url))
@@ -153,12 +166,22 @@ class MediaDownloader(
                     .get()
                     .build()
                 ok.newCall(req).execute().use { resp ->
-                    if (ExpiryProbe.isGone(resp.code)) markExpired(url, isVideo)
+                    when {
+                        ExpiryProbe.isGone(resp.code) -> markExpired(url, isVideo)
+                        // 401 / 429 / 5xx：没探出结论，记号撤掉，下次进页再探（否则本进程永远探不了这条）
+                        !resp.isSuccessful -> probed.remove(url)
+                    }
                 }
-            } catch (e: IOException) {
-                // 网络错：不标失效
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                probed.remove(url)
+                throw e
+            } catch (e: Exception) {
+                // 网络错 / 地址不合法：不标失效；主动探测的记号撤掉，下次进页再探
+                probed.remove(url)
+                log.w("media_verify_failed", "err" to (e.message ?: e::class.simpleName ?: "?"))
             } finally {
                 verifying.remove(url)
+                if (probeOnce) probeGate.release()
             }
         }
     }
@@ -166,9 +189,10 @@ class MediaDownloader(
     /** 某条媒体此刻的状态。本地已有 → Ready；已知失效 → Expired；否则看有没有在途记录。 */
     fun stateOf(url: String, isVideo: Boolean = false): DownloadState {
         if (url.isBlank()) return DownloadState(DownloadPhase.NotStarted)
+        // 已知失效排最前：服务端清理即失效，**即使本机还有缓存**（2026-10-14 起）
+        if (url in expired) return DownloadState(DownloadPhase.Expired)
         _states.value[url]?.let { if (it.phase != DownloadPhase.Ready) return it }
         if (cache.isReady(url, isVideo)) return DownloadState(DownloadPhase.Ready)
-        if (url in expired) return DownloadState(DownloadPhase.Expired)
         // 走到这里，记录要么没有，要么是 Ready 而文件已经不在了（清了缓存 / 被系统清理）。
         // 后者照旧报 Ready 的话，localFile 给 null、Coil 拿不到图，气泡是一块空白而不是「未下载 ↓」。
         return DownloadState(DownloadPhase.NotStarted)

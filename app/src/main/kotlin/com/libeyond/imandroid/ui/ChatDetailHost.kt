@@ -7,6 +7,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -102,6 +103,9 @@ fun ChatDetailHost(
     // `page` 渲染 Media 分支，若这时数据已经被清空就会半路变白（UI_PARITY_IOS.md §4 第 316 行）。
     var viewingOpen by remember(conv.convId) { mutableStateOf(false) }
     var viewingData by remember(conv.convId) { mutableStateOf<ConvMediaItem?>(null) }
+    // 每次「打开」自增：同一格关了再点（startSeq 不变）也要拿到全新的查看器状态——
+    // 退场转场里组合是复用的，不换键的话会停在上次翻到的那一页（2026-10-14 失效页关闭后重开必现）
+    var viewingToken by remember(conv.convId) { mutableIntStateOf(0) }
     var toast by remember(conv.convId) { mutableStateOf<String?>(null) }
     // 点「名片」页签里的一行 → 该用户的资料页（盖在详情页之上；自己则进个人资料，由 MemberProfileHost 收口）
     var contactCard by remember(conv.convId) { mutableStateOf<com.libeyond.imandroid.data.CardContent.Contact?>(null) }
@@ -238,7 +242,7 @@ fun ChatDetailHost(
         when (state) {
             ChatDetailPage.Media -> viewingData?.let { m ->
                 // 翻页 / 「更多」/ 转发都在 ArchiveViewer.kt 里，与群资料那侧共用
-                ArchiveMediaViewer(
+                androidx.compose.runtime.key(viewingToken) { ArchiveMediaViewer(
                     client = client, convId = conv.convId, isGroup = false, iAmManager = false,
                     archive = archive, current = m, scope = scope,
                     // 查看器标题＝会话名（iOS `IMMediaPagerViewController.conversationTitle`）
@@ -249,7 +253,7 @@ fun ChatDetailHost(
                     onChanged = { archive.reload() },
                     onToast = { toast = it },
                     onClose = { viewingOpen = false },
-                )
+                ) }
             }
             ChatDetailPage.Profile -> {
                 UserProfileHost(
@@ -300,7 +304,7 @@ fun ChatDetailHost(
                     onLoadMore = { archive.loadMore() },
                     onOpenArchive = { item ->
                         openArchiveItem(client, context, item, onToast = { toast = it }) {
-                            viewingData = it; viewingOpen = true
+                            viewingData = it; viewingToken++; viewingOpen = true
                         }
                     },
                     onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },

@@ -315,7 +315,9 @@ internal fun MediaTile(
             model = when {
                 // 视频一格显示**封面**（几十 KB，是"信封"的一部分，同聊天页 `VideoContent`）：
                 // 门控作用在视频本体上。直接把视频 URL 交给 Coil 会去下整段再抽帧
-                isVideo -> MediaUrl.absolute(item.poster, host, useTls).takeIf { item.poster.isNotBlank() }
+                // 已失效且本机没有原件：封面也不画，只留磨砂（与大图格一致；iOS `IMMediaTileCell` 同）
+                isVideo -> if (!shown && gate.state.phase == DownloadPhase.Expired) null
+                    else MediaUrl.absolute(item.poster, host, useTls).takeIf { item.poster.isNotBlank() }
                 // 已在本机 → 本地原件
                 gate.model != null -> gate.model
                 // 豁免门控 → 按地址显示（图片加载器自带缓存，同 iOS `IMImageLoader`）

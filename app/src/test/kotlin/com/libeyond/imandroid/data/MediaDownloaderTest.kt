@@ -34,10 +34,15 @@ class MediaDownloaderTest {
     private val slowChunksSent = AtomicInteger(0)
     private val slowDone = AtomicBoolean(false)
 
+    /** 各路径被请求的次数（主动探测「只探一次」要数请求）。 */
+    private val hits = java.util.concurrent.ConcurrentHashMap<String, AtomicInteger>()
+    private fun hitsOf(path: String) = hits[path]?.get() ?: 0
+
     @Before
     fun setUp() {
         IMLog.useSinksForTest()
         server = TinyHttpServer { path, out ->
+            hits.computeIfAbsent(path) { AtomicInteger() }.incrementAndGet()
             when (path) {
                 "/uploads/small.jpg" -> {
                     out.head(SMALL_BYTES.toLong())
@@ -142,13 +147,56 @@ class MediaDownloaderTest {
     }
 
     @Test
-    fun `失效标记不覆盖本机已有原件（铁律：缓存过的照显）`() {
+    fun `主动探测：进页就探，404 标失效；可达的同址只探一次，断连撤掉记号可再探`() {
+        val d = downloader(MediaCache(tmp()))
+        d.verifyExpired("/uploads/gone.jpg", probeOnce = true)
+        assertTrue(waitUntil { d.stateOf("/uploads/gone.jpg").phase == DownloadPhase.Expired })
+
+        // 可达（200/206）的地址：探过一次后，probeOnce 不再发请求（滚动来回不重复打）
+        d.verifyExpired("/uploads/small.jpg", probeOnce = true)
+        assertTrue(waitUntil { hitsOf("/uploads/small.jpg") == 1 })
+        Thread.sleep(200) // 留出时间让「不会有第二次」成立：只有这一步必须等
+        d.verifyExpired("/uploads/small.jpg", probeOnce = true)
+        Thread.sleep(200)
+        assertEquals(1, hitsOf("/uploads/small.jpg"))
+        assertEquals(DownloadPhase.NotStarted, d.stateOf("/uploads/small.jpg").phase)
+
+        // 断连（网络错）：不标失效，也不留「已探」记号，下次进页还能再探
+        d.verifyExpired("/uploads/unknown.jpg", probeOnce = true)
+        assertTrue(waitUntil { hitsOf("/uploads/unknown.jpg") >= 1 })
+        val n1 = hitsOf("/uploads/unknown.jpg")
+        Thread.sleep(300) // 让这次失败走完 finally（撤记号 + 出在途表）
+        d.verifyExpired("/uploads/unknown.jpg", probeOnce = true)
+        assertTrue(waitUntil { hitsOf("/uploads/unknown.jpg") > n1 })
+    }
+
+    @Test
+    fun `主动探测：本机地址不探不抛；5xx 不留已探记号，下次还能再探`() {
+        val d = downloader(MediaCache(tmp()))
+        // 待发的本机地址不是服务端资源：不发请求、更不能抛（IllegalArgumentException 在协程里无人接 = 闪退）
+        d.verifyExpired("content://media/external/images/1", probeOnce = true)
+        d.verifyExpired("file:///data/x.jpg", probeOnce = true)
+        d.verifyExpired("data:image/jpeg;base64,AAAA", probeOnce = true)
+        Thread.sleep(200)
+        assertTrue(hits.keys.none { it.startsWith("content:") || it.startsWith("file:") || it.startsWith("data:") })
+
+        // 503 没探出结论：不标失效，也不能让这条在本进程里永远探不了
+        d.verifyExpired("/uploads/busy.jpg", probeOnce = true)
+        assertTrue(waitUntil { hitsOf("/uploads/busy.jpg") == 1 })
+        Thread.sleep(300)
+        d.verifyExpired("/uploads/busy.jpg", probeOnce = true)
+        assertTrue(waitUntil { hitsOf("/uploads/busy.jpg") == 2 })
+        assertEquals(DownloadPhase.NotStarted, d.stateOf("/uploads/busy.jpg").phase)
+    }
+
+    @Test
+    fun `服务端已清理即标失效，即使本机已有原件（2026-10-14 起取代「缓存过的照显」）`() {
         val d = downloader(MediaCache(tmp()))
         val url = "/uploads/small.jpg"
         d.start(url)
         assertTrue(waitUntil { d.stateOf(url).phase == DownloadPhase.Ready })
-        assertFalse(d.markExpired(url))
-        assertEquals(DownloadPhase.Ready, d.stateOf(url).phase)
+        assertTrue(d.markExpired(url))
+        assertEquals(DownloadPhase.Expired, d.stateOf(url).phase)
         assertTrue(d.markExpired("/uploads/never.jpg"))
     }
 

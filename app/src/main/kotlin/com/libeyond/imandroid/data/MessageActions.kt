@@ -69,6 +69,12 @@ object MessageActions {
         hasTranscript: Boolean = false,
         /** 我能不能置顶（[PinnedBanner.canPin]）；放在最后以保持老调用点的位置参数不变。 */
         canPin: Boolean = false,
+        /**
+         * 这条是图片/视频、且服务端已清理（[SelectionActions.isExpiredMedia]）：没有字节可复制 / 转发 / 收藏，
+         * 这三项不出现，只留引用 / 撤回 / 多选 / 删除等不依赖字节的项（iOS `expiredMedia` 同）。
+         * 带图说的失效图仍可复制——复制的是文字。
+         */
+        mediaGone: Boolean = false,
     ): List<MessageAction> {
         val pin = PinnedBanner.pinAction(msg, canPin)
         // 撤回墓碑上什么都不给——正文已被服务端脱敏，复制/引用都没有意义。
@@ -94,20 +100,21 @@ object MessageActions {
         }
 
         // 复制什么、给不给复制，都归 [copyKindOf]（对齐 iOS `copyMessageToPasteboard:` 那张矩阵）
-        if (copyKindOf(msg) != null) out += MessageAction.Copy
+        val copyKind = copyKindOf(msg)
+        if (copyKind != null && !(mediaGone && copyKind == CopyKind.Image)) out += MessageAction.Copy
 
         // 系统消息不可引用（它没有发送者，引用条显示不出来源）
         if (msg.contentType != ContentType.SYSTEM) out += MessageAction.Reply
 
         // 转发 / 多选：条件与 Forward.canForward 同源——**别在这里重写一遍判据**，
         // 两处判据分叉会让菜单里有「转发」但点了没反应（或反过来）。
-        if (Forward.canForward(msg)) out += MessageAction.Forward
+        if (!mediaGone && Forward.canForward(msg)) out += MessageAction.Forward
 
         // 收藏：**文本/图片/视频/文件/语音/链接/名片/聊天记录都给**（快照存 content + content_type，后端通用），
         // 顺序照 iOS `messageActionsForMessage:` 排在转发之后。判据与多选底栏「收藏」同一份
         // [SelectionActions.favoritable]——两个入口各判一遍的话，迟早出现"长按能收藏、多选里收不了"。
         // 此前本端长按菜单没有这一项（2026-09-17 用户报），只能先进多选再收藏。
-        if (SelectionActions.favoritable(listOf(msg)).isNotEmpty()) out += MessageAction.Favorite
+        if (!mediaGone && SelectionActions.favoritable(listOf(msg)).isNotEmpty()) out += MessageAction.Favorite
 
         // 撤回：仅本人，且在时间窗内。服务端超窗回 300008
         if (mine && now - msg.timestamp <= RECALL_WINDOW_MS) out += MessageAction.Recall

@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -157,11 +158,13 @@ internal fun MediaViewerScreen(
 ) {
     if (pages.isEmpty()) return
     val startIndex = MediaTimeline.indexOf(pages, startSeq).coerceAtLeast(0)
-    val state = rememberPagerState(initialPage = startIndex, pageCount = { pages.size })
+    // 翻页状态 / 锚点只认**打开那一刻**的 startSeq：宿主在「关闭只翻布尔、数据不清」的转场里会复用同一份组合，
+    // 不按 startSeq 换键的话，第二次点另一条仍停在上次翻到的那一页（2026-10-14 群资料媒体页「点的与打开的不是同一张」）。
+    val state = key(startSeq) { rememberPagerState(initialPage = startIndex, pageCount = { pages.size }) }
     val current = pages[state.currentPage.coerceIn(0, pages.lastIndex)]
 
     // 当前看的那条**按 conv_seq 记**（见上方注释：下标会被续拉的更早一页整体推走）
-    var anchorSeq by remember { mutableLongStateOf(if (startSeq > 0) startSeq else pages[startIndex].convSeq) }
+    var anchorSeq by remember(startSeq) { mutableLongStateOf(if (startSeq > 0) startSeq else pages[startIndex].convSeq) }
     // ⚠️ **这个 effect 的 key 里绝不能有 `pages`**（2026-09-16 /code-review 抓出）：
     // 续拉把 N 条插到前面时 `currentPage` 数值不变、指向的却已经是另一条；带上 `pages` 的话它会先跑，
     // 把锚点覆盖成那条错的，下面那个"回正"随即判定「原地即可」而不再 scrollToPage——
@@ -175,6 +178,10 @@ internal fun MediaViewerScreen(
     // 只登记**当前页**：预渲染的相邻页用户还没看到。
     LaunchedEffect(state.currentPage, pages) {
         pages.getOrNull(state.currentPage)?.let { downloads?.markOpened(it.content) }
+    }
+    // 当前页进来就探一次是否已被服务端清理：本机有原件时不会 404，加载回调等不到复验（每址每进程一次）
+    LaunchedEffect(state.currentPage, pages) {
+        pages.getOrNull(state.currentPage)?.let { (downloads ?: expiry)?.verifyExpired(it.content, it.isVideo, probeOnce = true) }
     }
     LaunchedEffect(pages) {
         val i = MediaTimeline.indexOf(pages, anchorSeq)
@@ -223,8 +230,8 @@ internal fun MediaViewerScreen(
         expiryHost?.states?.map { m -> m.filterValues { it.phase == com.libeyond.imandroid.data.DownloadPhase.Expired }.keys }
             ?.distinctUntilChanged() ?: flowOf(emptySet())
     }.collectAsState(initial = emptySet())
-    /** 失效且本机没有原件（铁律：缓存过的照显）。 */
-    fun gone(vm: ViewerMedia) = vm.content in expiredUrls && localOf(vm) == null
+    /** 服务端已清理即失效页，**不看本机有没有原件**（2026-10-14 起，取代「缓存过的照显」）。 */
+    fun gone(vm: ViewerMedia) = vm.content in expiredUrls
     val currentGone = gone(current)
 
     Box(
@@ -371,7 +378,8 @@ internal fun MediaViewerScreen(
             horizontalArrangement = Arrangement.spacedBy(VIEWER_GAP),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val more = moreActionsFor(current)
+            // 失效页：复制 / 收藏 / 转发这类要字节的项不给（iOS 同）
+            val more = moreActionsFor(current).filterNot { currentGone && it.needsMedia }
             if (more.isNotEmpty()) {
                 // 菜单锚在「⋯」上，靠近屏幕下沿时 DropdownMenu 自己往上展开（iOS IMPopoverCard 同）
                 Box {

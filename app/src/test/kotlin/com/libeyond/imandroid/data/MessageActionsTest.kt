@@ -265,6 +265,17 @@ class MessageActionsMatrixTest {
     }
 
     @Test
+    fun `已失效的图片视频没有复制图片转发收藏，引用多选删除照旧，带图说仍可复制文字`() {
+        fun gone(m: MessageEntity) = MessageActions.availableFor(m, me, false, false, now, mediaGone = true)
+        for (t in listOf(ContentType.IMAGE, ContentType.VIDEO)) {
+            val a = gone(msg(other, t, "/uploads/x"))
+            for (x in listOf(MessageAction.Copy, MessageAction.Forward, MessageAction.Favorite)) assertFalse(x in a)
+            for (x in listOf(MessageAction.Reply, MessageAction.MultiSelect, MessageAction.HideForMe)) assertTrue(x in a)
+        }
+        assertTrue(MessageAction.Copy in gone(msg(other, ContentType.IMAGE, "/uploads/x", caption = "说明")))
+    }
+
+    @Test
     fun `文本本人有编辑翻译他人有翻译举报无编辑`() {
         val mine = acts(msg(me, ContentType.TEXT, "hi"))
         assertTrue(MessageAction.Edit in mine && MessageAction.Translate in mine && MessageAction.Copy in mine)

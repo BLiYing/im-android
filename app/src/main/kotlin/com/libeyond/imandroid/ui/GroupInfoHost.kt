@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -125,6 +126,9 @@ fun GroupInfoHost(
     // viewingOpen，viewingData 留着不清，退场动画那 300ms 里 PushTransition 还要读它。
     var viewingOpen by remember(convId) { mutableStateOf(false) }
     var viewingData by remember(convId) { mutableStateOf<ConvMediaItem?>(null) }
+    // 每次「打开」自增：同一格关了再点（startSeq 不变）也要拿到全新的查看器状态——
+    // 退场转场里组合是复用的，不换键的话会停在上次翻到的那一页（2026-10-14 失效页关闭后重开必现）
+    var viewingToken by remember(convId) { mutableIntStateOf(0) }
     var archiveMenuFor by remember(convId) { mutableStateOf<ArchiveTarget?>(null) }
     var archiveMenuAnchor by remember(convId) { mutableStateOf(Rect.Zero) }
     var askFriend by remember(convId) { mutableStateOf<FriendRequestTarget?>(null) } // 成员菜单「添加好友」
@@ -395,7 +399,7 @@ fun GroupInfoHost(
         if (state == GroupInfoPage.Media) {
         viewingData?.let { m ->
         // 翻页 / 「更多」/ 转发都在 ArchiveViewer.kt 里，与单聊详情共用
-        ArchiveMediaViewer(
+        androidx.compose.runtime.key(viewingToken) { ArchiveMediaViewer(
             client = client, convId = convId, isGroup = true,
             iAmManager = info?.iAmManager == true,
             archive = archive, current = m, scope = scope,
@@ -407,7 +411,7 @@ fun GroupInfoHost(
             onChanged = { archive.reload() },
             onToast = { toast = it },
             onClose = { viewingOpen = false },
-        )
+        ) }
         }
         } else {
         // **整页替换而不是叠一层**：父布局由调用方决定，叠出来可能是竖排；替换还让滚动位置与成员分页游标原样留着
@@ -481,7 +485,7 @@ fun GroupInfoHost(
             archiveHasMore = archive.hasMore,
             onLoadMoreArchive = { archive.loadMore() },
             onOpenArchive = { item ->
-                openArchiveItem(client, context, item, onToast = { toast = it }) { viewingData = it; viewingOpen = true }
+                openArchiveItem(client, context, item, onToast = { toast = it }) { viewingData = it; viewingToken++; viewingOpen = true }
             },
             onLongPressArchive = { t, r -> archiveMenuFor = t; archiveMenuAnchor = r },
             onOpenLink = { url -> openLink?.invoke(url) },

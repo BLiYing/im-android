@@ -19,6 +19,9 @@ enum class ViewerAction(@StringRes private val labelRes: Int, val destructive: B
     ;
 
     val label: String get() = Str.s(labelRes)
+
+    /** 依赖媒体字节：失效页不给（iOS `IMPopoverCardItem.needsMediaBytes`）。 */
+    val needsMedia: Boolean get() = this == Favorite || this == Copy || this == Forward
 }
 
 /**
