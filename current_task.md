@@ -6,7 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
-- **聊天文件夹（2026-10-14，未提交，待 code-review --fix）**：`ChatFolders.kt`/`ChatFolderStore.kt`/`ChatFoldersApi.kt`、`ChatFolderTabs.kt`（Tab 条 + 横滑）、`ConversationMenu.kt`（自 MainScreen 拆出，文件夹项第一位）、管理/编辑/选择三页；`IMColors.segmentPill` 深色药丸 token；设计见 IMServer `docs/design/CHAT_FOLDERS_DESIGN.md`。
+- **聊天文件夹（2026-10-14，已提交 75fcd48；Tab 长按菜单锚定 feb9529）**：`ChatFolders.kt`/`ChatFolderStore.kt`/`ChatFoldersApi.kt`、`ChatFolderTabs.kt`（Tab 条 + 横滑）、`ConversationMenu.kt`（自 MainScreen 拆出，文件夹项第一位）、管理/编辑/选择三页；`IMColors.segmentPill` 深色药丸 token；设计见 IMServer `docs/design/CHAT_FOLDERS_DESIGN.md`。
 - **失效三端口径对齐（2026-10-14，已提交并推送 a30e39a / 04640c5）**：
   - **口径**：服务端已清理即标失效，**不看本机有无缓存/原件**（取代 2026-08-07「铁律 A」）；`stateOf` 失效排在就绪之前。
   - **探测**：进页探（`rememberGate(probeExpiry)` → `verifyExpired(probeOnce)`），**本机已就绪的不在宫格/气泡里批量探**；并发上限 4，**满了就丢**（`tryAcquire`，撤记号，下次进组合再探）；查看器当前页进来不带 `probeOnce` 真探一次，命中经状态流回刷各面。
@@ -30,7 +30,7 @@
 
 **以下为此前已提交内容：**
 - 被拒文案 / 撤回墓碑 / 失败红点对齐 iOS（eb92509）：200102/200103 微信式文案（`chat_reject_*`）、300001 说明行；撤回改居中胶囊 `RecallNote` + 重新编辑；红点统一 `ui/components/FailBadge.kt`（被拒收的不可点）。
-- 发送失败红点 + ack 超时（5ce8f4d）：`SendAckTimeouts` 同 client_msg_id 每 5s 重发、3 次后判失败（`LocalSendError.ACK_TIMEOUT`=5002），判失败后不再自动补发、点红点重发。OPPO 复测结果未记录。
+- 发送失败红点 + ack 超时（5ce8f4d）：`SendAckTimeouts` 同 client_msg_id 每 5s 重发、3 次后判失败（`LocalSendError.ACK_TIMEOUT`=5002），判失败后不再自动补发、点红点重发。OPPO 真机复测通过（2026-10-15：断网发送 → 5s 重发 → 约 20s 红❗；点红❗转「发送中」再失败回红❗；长按可删）。
 - 通话被踢后现场重启（784935c）：`RtcCall` 存 `Wanted`，`placeSingle/placeGroup/fetchCallHistory` 先 `restartIfStopped()`；`RtcRestartPolicy` 有单测。
 
 - **10-08 令牌过期不再当成被踢**：握手 401 先续期（`ws/WakeAction.kt` `unauthorizedActionFor`），续期被拒才回登录页；`manualClose` 初值 true，`connect()` 前唤醒不连；本机未登录时 FCM 消息/来电/未接一律丢并 `FcmToken.delete()`。
