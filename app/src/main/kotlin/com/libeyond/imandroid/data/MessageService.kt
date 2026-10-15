@@ -281,10 +281,14 @@ class MessageService(
                 val op = ProtocolJson.decodeFromJsonElement(MsgOpData.serializer(), el)
                 // 批量「为所有人删除」一次只来一帧 targets（PROTOCOL §6.7.2）：整批一条语句移除。
                 val batch = op.batchDeleteSeqs()
+                // 「取消所有置顶」同理一帧 targets（pin,pinned=false）：逐条落成未置顶（≤50 条），信号一次带全
+                val unpins = op.batchUnpinSeqs()
                 if (batch != null) repo.removeMessages(owner, op.convId, batch, retract = true)
+                else if (unpins != null) unpins.forEach { repo.applyMsgOp(owner, op.copy(targetConvSeq = it, targets = null)) }
                 else repo.applyMsgOp(owner, op)
                 if (op.op == MsgOp.DELETE) refreshIfPreviewRemoved(owner, op.convId, batch ?: listOf(op.targetConvSeq))
-                if (!_msgOps.tryEmit(MsgOpSignal(op.convId, op.op, batch ?: listOf(op.targetConvSeq)))) {
+                val seqs = batch ?: unpins ?: listOf(op.targetConvSeq)
+                if (!_msgOps.tryEmit(MsgOpSignal(op.convId, op.op, seqs, unpin = op.op == MsgOp.PIN && op.pinned == false))) {
                     log.w("msg_op_signal_dropped", "op" to op.op) // 缓冲满（重连后的积压帧）：置顶横幅靠重连/下次信号再对齐
                 }
             }

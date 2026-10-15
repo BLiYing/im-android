@@ -116,7 +116,9 @@
     <string name="chat_banner_join_request">入群申请</string>
     <string name="chat_banner_jump_to_message">跳转到该消息</string>
     <string name="chat_banner_pinned">置顶消息</string>
-    <string name="chat_banner_unpin_current">取消置顶当前这条</string>
+    <plurals name="chat_banner_pinned_count">
+        <item quantity="other">%1$d 条</item>
+    </plurals>
     <string name="chat_block_hint">已将对方加入黑名单（TA 发来的消息会被拒收）</string>
     <string name="chat_bubble_forward_from">转发自 %1$s</string>
     <string name="chat_clear_confirm">清空聊天记录？将删除此会话在本机的全部消息，且无法恢复。</string>
@@ -1414,8 +1416,17 @@
     <string name="password_footer_security_note">为保护账号安全，修改密码后你在其它设备上的登录会被自动下线，需用新密码重新登录；当前设备保持登录。</string>
     <string name="password_helper_min_length_hint">新密码至少 6 位，与旧密码不同。</string>
     <string name="password_success_toast">✓ 密码已修改，其它设备已下线</string>
+    <string name="pinned_locate">定位到聊天位置</string>
+    <string name="pinned_long_press_hint">长按消息可取消置顶</string>
+    <string name="pinned_long_press_hint_readonly">长按消息可复制或定位</string>
     <string name="pinned_title">置顶消息（%1$d）</string>
     <string name="pinned_unpin">取消置顶</string>
+    <string name="pinned_unpin_all">取消所有置顶</string>
+    <string name="pinned_unpin_all_confirm">全部取消</string>
+    <plurals name="pinned_unpin_all_message">
+        <item quantity="other">将取消本会话全部 %1$d 条置顶，所有成员都不再看到。</item>
+    </plurals>
+    <string name="pinned_unpin_all_title">取消所有置顶消息？</string>
     <string name="power_saving_auto_on_toast">电量低于 %1$d%%，已自动开启省电模式</string>
     <string name="power_saving_follow_sub">系统开省电模式时一起开启</string>
     <string name="power_saving_follow_sub_ios">系统开低电量模式时一起开启</string>

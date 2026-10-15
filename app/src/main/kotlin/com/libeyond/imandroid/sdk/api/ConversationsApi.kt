@@ -280,6 +280,14 @@ class ConversationsApi(private val http: HttpClient) {
     suspend fun pinned(convId: String): List<PinnedMessage> =
         decode(http.call("GET", "/api/v1/conversations/$convId/pinned"), PinnedResp.serializer())
             .items.filter { it.convSeq > 0 }
+
+    /**
+     * 一键取消本会话**全部**置顶（批量，一次请求；权限同置顶，越权回 300006）。服务端当场取全量清除，
+     * 实时广播一帧 `msg_op{op:pin,pinned:false,targets}`（见 [com.libeyond.imandroid.sdk.protocol.MsgOpData.batchUnpinSeqs]）。
+     * @return 实际取消的条数（无置顶时幂等 0）。
+     */
+    suspend fun clearPinned(convId: String): Int =
+        decode(http.call("POST", "/api/v1/conversations/$convId/pinned/clear"), PinnedClearResp.serializer()).cleared
 }
 
 /** 链接富预览（PROTOCOL §11 `GET /api/v1/link-preview`）。字段都可能缺。 */
@@ -388,10 +396,18 @@ data class PinnedMessage(
     val caption: String = "",
     val timestamp: Long = 0,
     @SerialName("pinned_at") val pinnedAt: Long = 0,
+    /**
+     * 与 new_msg / 历史接口同形的完整消息对象（置顶面板画真气泡用）；旧服务端不带。
+     * 兜底顺序见 [com.libeyond.imandroid.data.PinnedPanel.resolve]：本地行 > 它 > 类型词纯文本。
+     */
+    val message: MessageData? = null,
 )
 
 @Serializable
 private data class PinnedResp(val items: List<PinnedMessage> = emptyList(), val total: Int = 0)
+
+@Serializable
+private data class PinnedClearResp(@SerialName("conv_id") val convId: String = "", val cleared: Int = 0)
 
 /**
  * 一条我发的群消息的已读名单（`GET /conversations/{id}/messages/{seq}/read-by`，只有消息发送者能查）。

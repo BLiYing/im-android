@@ -6,9 +6,10 @@ package com.libeyond.imandroid.data
  * `MessageRepository` 收敛进消息行，这里只是告诉 UI「该重拉置顶集合了」。
  *
  * @param op `MsgOp.*`；「仅为我删除」没有 op，用 [HIDE]。
- * @param seqs 受影响的 conv_seq（批量删除一次多条）。
+ * @param seqs 受影响的 conv_seq（批量删除 / 取消所有置顶一次多条）。
+ * @param unpin 是「取消置顶」（`pin` 且 `pinned=false`）：横幅/面板可先本地摘掉再重拉。
  */
-data class MsgOpSignal(val convId: String, val op: String, val seqs: List<Long>) {
+data class MsgOpSignal(val convId: String, val op: String, val seqs: List<Long>, val unpin: Boolean = false) {
     companion object {
         const val HIDE = "hide"
     }

@@ -70,13 +70,19 @@ class PinnedBannerTest {
         assertFalse("空集合不算收起", PinnedBanner.dismissed("", ""))
     }
 
-    @Test fun `轮播下标夹取与循环推进`() {
-        assertEquals(0, PinnedBanner.clampIndex(3, 2)) // 别人取消置顶缩短了列表
-        assertEquals(0, PinnedBanner.clampIndex(-1, 2))
-        assertEquals(1, PinnedBanner.clampIndex(1, 2))
-        assertEquals(1, PinnedBanner.nextIndex(0, 3))
-        assertEquals(0, PinnedBanner.nextIndex(2, 3))
-        assertEquals(0, PinnedBanner.nextIndex(0, 0))
+    private fun pinAt(seq: Long, at: Long) = PinnedMessage(convSeq = seq, pinnedAt = at)
+
+    @Test fun `横幅恒显最新置顶（pinned_at 最大），不轮转`() {
+        assertEquals(7L, PinnedBanner.latest(listOf(pinAt(9, 100), pinAt(7, 300), pinAt(5, 200)))?.convSeq)
+        assertEquals("并列取靠前的（服务端已按 pinned_at 倒序）", 9L, PinnedBanner.latest(listOf(pinAt(9, 300), pinAt(7, 300)))?.convSeq)
+        assertNull(PinnedBanner.latest(emptyList()))
+    }
+
+    @Test fun `横幅 kicker：多条带条数，群聊带发送者，单条无计数`() {
+        assertEquals("置顶消息 · 3 条 · 张三", PinnedBanner.kicker("置顶消息", "3 条", "张三"))
+        assertEquals("置顶消息 · 张三", PinnedBanner.kicker("置顶消息", null, "张三"))
+        assertEquals("置顶消息 · 2 条", PinnedBanner.kicker("置顶消息", "2 条", ""))
+        assertEquals("置顶消息", PinnedBanner.kicker("置顶消息", null, ""))
     }
 
     @Test fun `发送者标签：单聊不显，群聊昵称优先退 uid`() {

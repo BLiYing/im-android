@@ -63,11 +63,22 @@ object PinnedBanner {
     /** 偏好键：带账号与会话，互不串（对齐 iOS `im_banner_dismiss_<kind>_<uid>_<conv>`）。 */
     fun dismissKey(kind: String, uid: String, convId: String) = "im_banner_dismiss_${kind}_${uid}_$convId"
 
-    /** 轮播下标夹取：别人取消置顶缩短了列表时回到 0。 */
-    fun clampIndex(index: Int, total: Int): Int = if (index < 0 || index >= total) 0 else index
+    /**
+     * 横幅恒显**最新置顶**（`pinned_at` 最大；并列取靠前的，服务端本就按它倒序）。不再轮转——点横幅开面板
+     * （PINNED_PANEL_DESIGN §1；此前连点逐条轮播，`clampIndex`/`nextIndex` 已删）。
+     */
+    fun latest(items: List<PinnedMessage>): PinnedMessage? =
+        items.fold<PinnedMessage, PinnedMessage?>(null) { best, it -> if (best == null || it.pinnedAt > best.pinnedAt) it else best }
 
-    /** 点横幅：先跳到当前这条，再把下标推进到下一条（循环），连点就是逐条轮播。 */
-    fun nextIndex(index: Int, total: Int): Int = if (total <= 0) 0 else (index + 1) % total
+    /**
+     * 横幅 kicker：「置顶消息」+ 多条时「 · N 条」+ 群聊「 · 发送者」（设计稿 ①）。
+     * @param countText 已本地化的条数（`chat.banner.pinned_count`）；单条传 null。
+     */
+    fun kicker(title: String, countText: String?, sender: String): String = buildString {
+        append(title)
+        if (!countText.isNullOrEmpty()) append(" · ").append(countText)
+        if (sender.isNotEmpty()) append(" · ").append(sender)
+    }
 
     /** 入群申请横幅要不要显：仅群主/管理员，且有待审。服务端本就只对管理层下发 `pending_count`，这里再兜一道。 */
     fun approvalCount(info: GroupInfo?): Int = if (info != null && info.iAmManager) info.pendingCount else 0

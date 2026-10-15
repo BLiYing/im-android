@@ -148,13 +148,22 @@ internal fun Bubble(
     loadLinkPreview: (suspend (String) -> com.libeyond.imandroid.sdk.api.LinkPreview?)? = null,
     /** 会话内搜索的命中词（已 trim）。空串 = 不高亮。 */
     searchHighlight: String = "",
+    /**
+     * 只读（置顶面板，PINNED_PANEL_DESIGN §2.2）：内容一律不可交互——不开查看器、不播语音、链接/@/名片/文件/引用/头像不响应、
+     * 不出长文本折叠与转写面板；正文最多 [READ_ONLY_MAX_LINES] 行；**整条气泡轻点 = [onTap]**，长按照常走 [onLongPress]。
+     * 气泡宽包裹内容（旁边要紧挨一枚定位图标），最大宽 = 本行可用宽 − 头像列，由调用方把图标列先让出去。
+     */
+    readOnly: Boolean = false,
+    /** 只读模式下轻点整条气泡。 */
+    onTap: (() -> Unit)? = null,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val appearance = IMTheme.appearance
     // 点链接走应用内浏览器（宿主 WebLinkHost，iOS `openLink:`）。长按菜单的原位预览里由 ChatMessageMenu 置空。
     // **别改成按 onLongPress 判**：ChatRowView 传进来的长按回调恒非空，那条判据永远不生效
-    val openLink = com.libeyond.imandroid.ui.components.LocalOpenLink.current
+    val openLink = if (readOnly) null else com.libeyond.imandroid.ui.components.LocalOpenLink.current
+    val tapMention = if (readOnly) null else onTapMention
     // 记住整行矩形：长按菜单按它定位（iOS 是 UITargetedPreview 把位图钉回原位）。
     var bubbleRect by remember { mutableStateOf(Rect.Zero) }
     // 气泡本体的位置：只在长按那一刻读一次，存坐标对象不存矩形（理由同 RectHolder：滚动时每帧回调）
@@ -165,13 +174,15 @@ internal fun Bubble(
     val besideAlpha = if (inPreview) Modifier.alpha(0f) else Modifier
     // 气泡最大宽是**内容区的比例**不是固定 dp（UI_SPEC §3）：固定值在窄机上过宽、宽机上过窄。
     // BoxWithConstraints 才能拿到本行可用宽度并按比例折算。
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-    val bubbleMax = bubbleMaxWidth(maxWidth, d.bubbleMaxWidthFraction)
+    BoxWithConstraints(modifier = if (readOnly) Modifier else Modifier.fillMaxWidth()) {
+    val bubbleMax = if (readOnly) {
+        maxWidth - if (reserveAvatarColumn) d.chatAvatar + d.chatAvatarGap else 0.dp
+    } else bubbleMaxWidth(maxWidth, d.bubbleMaxWidthFraction)
     Row(
         // 菜单锚点取**整行**而不是气泡本体：整行天然是全宽，预览重绘时
-        // 「Row 的左右对齐」不会再叠加一次偏移（第一版挂在气泡 Box 上，预览就画偏了）。
+        // 「Row 的左右对齐」不会再叠加一次偏移（第一版挂在气泡 Box 上，预览就画偏了）。只读时行即内容宽。
         modifier = Modifier
-            .fillMaxWidth()
+            .then(if (readOnly) Modifier else Modifier.fillMaxWidth())
             .onGloballyPositioned { bubbleRect = it.unclippedBoundsInWindow() },
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
@@ -189,7 +200,7 @@ internal fun Bubble(
             Box(
                 modifier = Modifier.size(d.chatAvatar).align(Alignment.Bottom).then(besideAlpha)
                     .then(
-                        if (showAvatar && onAvatarTap != null) Modifier.clickable(onClick = onAvatarTap) else Modifier,
+                        if (showAvatar && onAvatarTap != null && !readOnly) Modifier.clickable(onClick = onAvatarTap) else Modifier,
                     ),
             ) {
                 if (showAvatar) {
@@ -254,7 +265,7 @@ internal fun Bubble(
                                 // 合并转发卡点开详情页；其余类型点击**不做事**——文本气泡点一下就跳走是很怪的交互。
                                 // 图/视频由媒体块自己接（得先看下没下下来，见 MediaContent 的 onOpenMedia）
                                 onClick = {
-                                    msg?.let {
+                                    if (readOnly) onTap?.invoke() else msg?.let {
                                         when {
                                             onTapLongText?.invoke(it) == true -> Unit
                                             it.contentType == ContentType.CONTACT ->
@@ -299,7 +310,7 @@ internal fun Bubble(
                         QuoteBlock(
                             snapshot = snap,
                             thumb = quoteThumb,
-                            onTap = onTapQuote,
+                            onTap = if (readOnly) null else onTapQuote,
                             // 群聊两行式（对齐 iOS `IMBubbleCell`）：被引用者昵称独占一行。
                             // 单聊不显——只有两个人，写谁的名字都是废话。
                             fromName = replyFromName,
@@ -315,7 +326,7 @@ internal fun Bubble(
                         (msg?.contentType == ContentType.CONTACT || msg?.contentType == ContentType.CHAT_RECORD ||
                             (msg?.contentType ?: pendingType) == ContentType.CALL)
                     // 长文本三档（对齐 iOS/Web，阈值见 LongText）：只对已确认、未撤回的文本消息
-                    val tier = if (msg != null && msg.contentType == ContentType.TEXT) LongText.tierOf(text) else TextTier.Short
+                    val tier = if (!readOnly && msg != null && msg.contentType == ContentType.TEXT) LongText.tierOf(text) else TextTier.Short
                     // 搜索命中词在折叠段之外时自动展开，免得命中了却看不见（iOS 不做，属体验改良）
                     val collapsedNow = tier == TextTier.Long && !textExpanded &&
                         !(searchHighlight.isNotBlank() && text.contains(searchHighlight, ignoreCase = true))
@@ -334,7 +345,8 @@ internal fun Bubble(
                                 // 文件行占满气泡内容区（iOS 文件气泡定宽），名字才有地方中间截断
                                 fileRowWidth = bubbleMax - d.bubblePaddingH * 2,
                                 // 图/视频整块自己接点击（就绪才打开）；可点的口径与下面长按一致
-                                onOpenMedia = if (onLongPress != null) onOpenMedia else null,
+                                onOpenMedia = if (onLongPress != null && !readOnly) onOpenMedia else null,
+                                readOnly = readOnly,
                             )
                             // 时间胶囊**浮在媒体右下角**，不在下方另起一行——
                             // iOS `IMImageCell` 的 `_metaWrap` 就恒定钉在 thumb 右下（不论有无图说）。
@@ -365,7 +377,7 @@ internal fun Bubble(
                                 searchNeedle = searchHighlight,
                                 highlightBackground = c.accentSoft,
                                 mentionColor = c.link,
-                                onTapMention = onTapMention,
+                                onTapMention = tapMention,
                                 // 链接蓝字下划线、点开走应用内浏览器（iOS `applyURLHighlight:` + `openLink:`）
                                 linkify = true,
                                 linkColor = c.link,
@@ -373,6 +385,8 @@ internal fun Bubble(
                             ),
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
+                            maxLines = if (readOnly) READ_ONLY_MAX_LINES else Int.MAX_VALUE,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
                         if (tier == TextTier.Long) LongTextAffordance(expanded = !collapsedNow)
                         // 译文：同一气泡、原文之后，不加标签与分隔线（iOS 同）；折叠态不画（展开后才出现）
@@ -398,10 +412,12 @@ internal fun Bubble(
                                 searchNeedle = searchHighlight,
                                 highlightBackground = c.accentSoft,
                                 mentionColor = c.link,
-                                onTapMention = onTapMention,
+                                onTapMention = tapMention,
                             ),
                             color = c.textPrimary,
                             fontSize = appearance.chatFontSize,
+                            maxLines = if (readOnly) READ_ONLY_MAX_LINES else Int.MAX_VALUE,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             modifier = if (capPlacement == CaptionPlacement.UnderMedia) {
                                 // 贴边媒体：在气泡内补回内边距（iOS `_captionBG`：左右 10、上 6、下 10），
                                 // 与媒体构成 Telegram 式的一整块；列宽已钉成图宽，长图说在图宽内换行
@@ -430,7 +446,7 @@ internal fun Bubble(
             }
             // 语音转写面板：挂在气泡**外面**（这条消息列，气泡下方），不进气泡内——
             // 同 Web `msg-item` 的结构，不是 `VoiceBubbleBody` 的一部分。
-            if (msg != null && msg.convSeq > 0 && msg.contentType == ContentType.VOICE) {
+            if (!readOnly && msg != null && msg.convSeq > 0 && msg.contentType == ContentType.VOICE) {
                 val transcriber = com.libeyond.imandroid.ui.voice.LocalVoiceTranscriber.current
                 // convSeq > 0 已由上面的守卫保证，playableId 在这个分支恒不为 null。
                 val mid = com.libeyond.imandroid.voice.VoiceRules.playableId(msg.convSeq, msg.clientMsgId)!!
@@ -521,6 +537,9 @@ internal fun localizeReplySnapshot(raw: String): String = when {
  * 固定值的坏处在模拟器单一机型上**看不出来**，所以必须靠测试而不是靠肉眼。
  */
 internal fun bubbleMaxWidth(available: Dp, fraction: Float): Dp = available * fraction
+
+/** 只读气泡（置顶面板）正文最多几行，超出尾部「…」（PINNED_PANEL_DESIGN §2.2）。 */
+internal const val READ_ONLY_MAX_LINES = 8
 
 /** 走媒体渲染而不是纯文本的内容类型。 */
 private val MEDIA_TYPES = setOf("image", "video", "voice", "file")

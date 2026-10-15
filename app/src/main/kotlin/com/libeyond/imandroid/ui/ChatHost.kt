@@ -562,7 +562,7 @@ fun ChatHost(
         IMToast(t) { toast = null }
     }
 
-    banners.Dialogs(canPin)
+    banners.Dialogs(canPin, rowStyle)
     ops.Layers(
         chatFontSize = com.libeyond.imandroid.ui.theme.IMTheme.appearance.chatFontSize.value,
         nameOf = { uid -> friendsByUid[uid]?.displayName ?: memberNames[uid] ?: uid },

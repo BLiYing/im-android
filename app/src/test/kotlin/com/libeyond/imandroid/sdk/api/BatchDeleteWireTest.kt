@@ -53,4 +53,16 @@ class BatchDeleteWireTest {
         assertNull(seqs("""{"op":"delete","conv_id":"g","target_conv_seq":3,"client_msg_id":"c"}"""))
         assertNull(seqs("""{"op":"pin","conv_id":"g","target_conv_seq":3,"client_msg_id":"c","targets":[]}"""))
     }
+
+    @Test
+    fun `取消所有置顶广播帧：pin+pinned=false+targets 一帧取出全批，单条 pin 或置顶帧不算`() {
+        fun seqs(json: String) = ProtocolJson.decodeFromString(MsgOpData.serializer(), json).batchUnpinSeqs()
+        assertEquals(
+            listOf(3L, 5L, 9L),
+            seqs("""{"op":"pin","conv_id":"g","pinned":false,"by":"1","targets":[{"target_conv_seq":3,"op_conv_seq":10},{"target_conv_seq":5,"op_conv_seq":11},{"target_conv_seq":9,"op_conv_seq":12}]}"""),
+        )
+        assertNull("单条取消置顶", seqs("""{"op":"pin","conv_id":"g","target_conv_seq":3,"pinned":false}"""))
+        assertNull("置顶帧不会是批量取消", seqs("""{"op":"pin","conv_id":"g","pinned":true,"targets":[{"target_conv_seq":3}]}"""))
+        assertNull("批量删除帧不是批量取消置顶", seqs("""{"op":"delete","conv_id":"g","targets":[{"target_conv_seq":3}]}"""))
+    }
 }

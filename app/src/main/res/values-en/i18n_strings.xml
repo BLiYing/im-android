@@ -117,7 +117,10 @@
     <string name="chat_banner_join_request">Join requests</string>
     <string name="chat_banner_jump_to_message">Go to message</string>
     <string name="chat_banner_pinned">Pinned message</string>
-    <string name="chat_banner_unpin_current">Unpin this message</string>
+    <plurals name="chat_banner_pinned_count">
+        <item quantity="one">%1$d message</item>
+        <item quantity="other">%1$d messages</item>
+    </plurals>
     <string name="chat_block_hint">You\'ve blocked this person. Messages from them will be rejected.</string>
     <string name="chat_bubble_forward_from">Forwarded from %1$s</string>
     <string name="chat_clear_confirm">Clear chat history? All messages in this chat will be deleted from this device. This can’t be undone.</string>
@@ -1450,8 +1453,18 @@
     <string name="password_footer_security_note">For account security, other devices will be logged out after you change your password and will need the new password to log in again; this device stays logged in.</string>
     <string name="password_helper_min_length_hint">New password must be at least 6 characters and different from the old one.</string>
     <string name="password_success_toast">✓ Password changed. Other devices have been logged out.</string>
-    <string name="pinned_title">Pinned messages (%1$d)</string>
+    <string name="pinned_locate">Show in chat</string>
+    <string name="pinned_long_press_hint">Long-press to unpin</string>
+    <string name="pinned_long_press_hint_readonly">Long-press to copy or locate</string>
+    <string name="pinned_title">Pinned (%1$d)</string>
     <string name="pinned_unpin">Unpin</string>
+    <string name="pinned_unpin_all">Unpin all messages</string>
+    <string name="pinned_unpin_all_confirm">Unpin all</string>
+    <plurals name="pinned_unpin_all_message">
+        <item quantity="one">This will unpin %1$d message in this chat for all members.</item>
+        <item quantity="other">This will unpin all %1$d messages in this chat for all members.</item>
+    </plurals>
+    <string name="pinned_unpin_all_title">Unpin all messages?</string>
     <string name="power_saving_auto_on_toast">Battery below %1$d%%. Power Saving is on.</string>
     <string name="power_saving_follow_sub">Turns on with the system</string>
     <string name="power_saving_follow_sub_ios">Turns on with Low Power Mode</string>

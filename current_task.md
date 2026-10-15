@@ -6,6 +6,13 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **置顶消息底部面板（2026-10-15，未提交，待真机目测；设计 IMServer `docs/design/PINNED_PANEL_DESIGN.md` + 稿 `sketches/PINNED_PANEL_UX_SKETCH.html`）**：
+  - 横幅：整条 / ≡（恒显）= 开面板；恒显最新置顶（`PinnedBanner.latest`），kicker「置顶消息 · N 条 · 发送者」（`PinnedBanner.kicker` + `chat_banner_pinned_count`）；轮转（`index`/`clampIndex`/`nextIndex`/`tapPinned`）、`unpinCurrent`、`PinnedListDialog` 均已删。
+  - 面板 `ui/PinnedSheet.kt`：`ModalBottomSheet` + `IMTopBar`（✕ / 标题 / 仅有权限显副标题）+ 壁纸底 `LazyColumn`（每行 = 只读 `Bubble`，日期胶囊，定位图标 32 圆紧挨气泡：我发的在左、别人的在右）+ 流内底栏「取消所有置顶」（`IMConfirmDialog` → `POST …/pinned/clear`）。`sheetBody()` 半屏时把内容区缩回可见区（底栏不被推出屏）。
+  - 只读：`Bubble(readOnly, onTap)` / `MediaContent(readOnly)` / `VoiceBubbleBody(readOnly)`——无查看器 / 播放 / 链接 @ 名片 文件 引用 头像点击、无下载环、正文 ≤8 行、气泡包裹内容宽（最大宽 = 行宽 − 头像列，图标列 40 由行先让出）。
+  - 长按：`PinnedPanel.menuActions`（取消置顶仅有权限 / 复制仅文本 / 定位）→ 新 `components/WindowContextMenu.kt`（从 `PendingMenuPopup` 抽出的窗口级 `MessageContextMenu` 包装，两处共用）。取消只作用所长按那条：乐观摘行 + pin op(false) + 1.5s 兜底重拉。
+  - 数据：`PinnedMessage.message`（完整消息对象）；兜底 `PinnedPanel.resolve`（本地行 > message > 类型词纯文本）；`MsgOpData.batchUnpinSeqs`（clear 广播 targets 帧）→ `MessageService` 逐条落未置顶，`MsgOpSignal.unpin` 让横幅/面板先本地摘。图标 `components/LocateInChatIcon.kt`（§8 路径）。
+  - 单测：`PinnedPanelTest`（新）、`PinnedBannerTest`（去轮转、latest/kicker）、`BatchDeleteWireTest`（unpin targets），已变异验红。i18n 由 `gen-i18n.mjs --out-root` 生成后只拷 Android 两份（strings.json 已由上游补键）。
 - **聊天文件夹（2026-10-14，已提交 75fcd48；Tab 长按菜单锚定 feb9529）**：`ChatFolders.kt`/`ChatFolderStore.kt`/`ChatFoldersApi.kt`、`ChatFolderTabs.kt`（Tab 条 + 横滑）、`ConversationMenu.kt`（自 MainScreen 拆出，文件夹项第一位）、管理/编辑/选择三页；`IMColors.segmentPill` 深色药丸 token；设计见 IMServer `docs/design/CHAT_FOLDERS_DESIGN.md`。
 - **失效三端口径对齐（2026-10-14，已提交并推送 a30e39a / 04640c5）**：
   - **口径**：服务端已清理即标失效，**不看本机有无缓存/原件**（取代 2026-08-07「铁律 A」）；`stateOf` 失效排在就绪之前。
@@ -39,6 +46,7 @@
 
 ## 下一步
 
+0. **置顶面板真机目测**（浅/深色；各类型各置顶一条：文本长文 / 图 / 视频 / 语音 / 文件 / 引用 / 转发 / 名片；半屏 ↔ 全屏拖动时底栏位置、长按菜单位置、定位跳转、取消所有后横幅消失、无权限成员视图）。
 1. **离线积压剩余**：「@我的消息列表」入口（服务端接口已有，三端 UI 都缺，产品暂不要）。
 2. **转场没接的几处**（`docs/UI_PARITY_IOS.md` §4）：`ChatDetailHost` 已全部接完，`GroupInfoHost` 仅 `Media` 一支已接。
    - 根因：`ui/components/PushTransition.kt` 要退场页按冻结的 `state` 渲染，而这些 host 是「关闭即把数据变量置空」，退场时数据已没，半路变白。改法 = 「是否打开」与「显示什么数据」拆两个变量，关闭只翻布尔（参照 `ChatDetailHost` 的 `viewingOpen`/`viewingData`）。
@@ -60,6 +68,7 @@
 - **群资料页有本地快照**（`data/GroupInfoCache.kt`，`filesDir/group_info/<uid>_<convId>.json`，剔成员表）：进页先画快照、网络回来覆盖；没快照退 `GroupInfoPlaceholder`（只画顶栏 + 头像 + 群名，**不画任何依赖角色/开关/人数的入口**，默认值会让权限判定放开）。拉不到有「点击重试」。
 - **登录被顶（账号在别处登录）后应用不会立刻回登录页**：群资料等页面请求全 401，页面停着；重启才见「你的账号已在别处登录」。未修，属登录失效反馈问题。
 
+- **置顶面板半屏高度是 M3 固定的 50%**（稿上约 60%）：`ModalBottomSheet` 的 PartiallyExpanded 锚点写死 `fullHeight/2`，不可配；要 60% 得自写 sheet，暂不做。
 - **体量贴线**（硬闸 600，WARN 线 480）：`GroupInfoHost.kt` 596、`ChatHost.kt` 598（**只差 2 行**）、`MessageRepository.kt` 580、`ChatScreen.kt` 532、`MessageService.kt` 506 都很近；动它们之前先拆文件，新增一律放新文件。`Daos.kt` 别再加。
 - **合并转发记录里的名片 →「发消息」换不了会话**（未修）：`ChatHost` 绑死单一 `convId`，点了只关资料层退回记录页。
 - **`FavoritesHost`/`ChatPickerLayers`/`QrRouteHost` 进 `UserProfileHost` 没接 `onRemarkChanged`**（缓行，按 `ContactsHost` 同一套本机状态覆盖补即可）。

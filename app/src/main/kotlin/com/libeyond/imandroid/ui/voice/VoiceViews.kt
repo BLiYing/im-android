@@ -137,7 +137,7 @@ internal fun WaveformBars(
 
 /** 34dp 圆形播放键；播放中带 2s 呼吸光晕（设计 §6.1 tokens），暂停即停。 */
 @Composable
-private fun VoicePlayButton(playing: Boolean, background: Color, onTap: () -> Unit) {
+private fun VoicePlayButton(playing: Boolean, background: Color, enabled: Boolean = true, onTap: () -> Unit) {
     val c = IMTheme.colors
     val label = stringResource(if (playing) R.string.common_pause else R.string.common_play)
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(34.dp)) {
@@ -157,7 +157,7 @@ private fun VoicePlayButton(playing: Boolean, background: Color, onTap: () -> Un
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(34.dp).clip(CircleShape).background(background)
                 .semantics { contentDescription = label }
-                .passThroughTap(onTap = onTap),
+                .passThroughTap(enabled = enabled, onTap = onTap),
         ) {
             Image(
                 if (playing) Lucide.Pause else Lucide.Play, null, Modifier.size(15.dp),
@@ -195,7 +195,7 @@ private fun ScrubTip(text: String) {
  * 宽度 [VoiceRules.bubbleWidthDp]（含气泡内边距，所以这里减掉两侧 [horizontalInset]）。
  */
 @Composable
-internal fun VoiceBubbleBody(src: VoiceSource, mine: Boolean, horizontalInset: Dp) {
+internal fun VoiceBubbleBody(src: VoiceSource, mine: Boolean, horizontalInset: Dp, readOnly: Boolean = false) {
     val c = IMTheme.colors
     val player = LocalVoicePlayer.current
     val pb = playbackOf(player, src)
@@ -208,9 +208,10 @@ internal fun VoiceBubbleBody(src: VoiceSource, mine: Boolean, horizontalInset: D
     val toggle = { player?.toggle(src.id, src.convId, src.url, relayable = true, durationHintMs = src.durationMs) { toast = it } }
 
     val width = (VoiceRules.bubbleWidthDp(src.durationMs).dp - horizontalInset * 2).coerceAtLeast(120.dp)
-    Box(Modifier.width(width).passThroughTap { toggle() }) {
+    // 只读（置顶面板）：不播放、不吃轻点（整条气泡的轻点 = 定位）
+    Box(Modifier.width(width).passThroughTap(enabled = !readOnly) { toggle() }) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-            VoicePlayButton(pb?.playing == true, if (mine) c.voicePlayMine else c.accent) { toggle() }
+            VoicePlayButton(pb?.playing == true, if (mine) c.voicePlayMine else c.accent, enabled = !readOnly) { toggle() }
             Spacer(Modifier.width(9.dp))
             Column(Modifier.weight(1f)) {
                 ScrubbableWave(src, pb, player, mine)

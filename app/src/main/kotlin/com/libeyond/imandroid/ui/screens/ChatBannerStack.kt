@@ -45,7 +45,7 @@ data class BannerContent(
     val preview: String,
     /** 置顶多条时左侧竖条画成「上亮下暗」渐变，提示还有更多。 */
     val multiple: Boolean = false,
-    /** 右侧「列表」钮：仅置顶且多于一条。 */
+    /** 右侧「列表」钮：置顶横幅恒显（单条也显，PINNED_PANEL_DESIGN §1），点它与点主体等价（开面板）。 */
     val showList: Boolean = false,
     val closeLabel: String,
 )
@@ -78,7 +78,7 @@ fun ChatBannerStack(
 /**
  * 单张横幅：8dp 空隙 + 44dp 卡片，左右各缩 8dp，12dp 圆角、1px 分隔线描边、`surfaceElevated` 底。
  * 左侧 3×26dp 竖条（多条置顶 = 上亮下暗渐变）；文字块 = 11sp 半粗强调色 kicker（10dp 图标 + 文本）+ 13sp 单行预览；
- * 右侧永远有 30dp 的「收起」钮，置顶多条再多一颗「列表」钮；整张卡（不含两颗钮）可点。
+ * 右侧永远有 30dp 的「收起」钮，置顶横幅再多一颗「列表」钮；整张卡（不含两颗钮）可点。
  */
 @Composable
 private fun BannerCard(b: BannerContent, onTap: () -> Unit, onList: () -> Unit, onClose: () -> Unit) {

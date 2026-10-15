@@ -7,10 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -33,8 +29,6 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ArrowUp
 import com.composables.icons.lucide.Copy
@@ -213,38 +207,10 @@ internal fun PendingMenuPopup(
             if (a == PendingAction.Copy) clipboard.setText(AnnotatedString(copyText.orEmpty())) else onCancel()
         }
     }
-    // MessageContextMenu 是**树内**的全屏覆盖层（聊天页根上才铺得开）；待发气泡/格子里没有那么大的地方，
-    // 直接放会被裁在这一格里。包一层全屏 Dialog 把它抬到窗口级，锚点仍是窗口坐标。
-    // 背景模糊照样生效：LocalMenuBackdrop 会带进 Dialog，菜单在那里登记，模糊的是主窗口里的聊天页。
-    // 锚点是**主窗口**坐标，而 Dialog 窗口从状态栏下方开始——不换算的话预览与菜单整体下移一个状态栏高，
-    // 贴底的气泡菜单直接掉出屏幕（2026-10-07 OPPO 实测）。主窗口原点在这里取，Dialog 原点在里面量。
-    // 同理，Dialog 窗口还会比可见区高出一截：菜单的可用高度按主窗口的可见底边算，不按 Dialog 自己的高度。
-    val mainView = androidx.compose.ui.platform.LocalView.current
-    val mainOrigin = remember(anchor) {
-        IntArray(2).also { mainView.rootView.getLocationOnScreen(it) }.let { androidx.compose.ui.geometry.Offset(it[0].toFloat(), it[1].toFloat()) }
-    }
-    val mainBottom = mainOrigin.y + mainView.rootView.height
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        // 关掉系统给 Dialog 的那层默认压暗：背景由菜单自己的材质色 + 模糊负责，叠两层就是一片死黑
-        val dialogWindow = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
-        androidx.compose.runtime.SideEffect { dialogWindow?.setDimAmount(0f) }
-        var dialogOrigin by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
-        Box(Modifier.fillMaxSize().onGloballyPositioned { dialogOrigin = it.positionOnScreen() }) {
-            // 量到 Dialog 原点之前不画（只差一帧），免得先画在错位处再跳过去
-            val o = dialogOrigin ?: return@Box
-            val delta = mainOrigin - o
-            val visibleH = with(density) { (mainBottom - o.y).toDp() }
-            Box(Modifier.fillMaxWidth().height(visibleH)) {
-                MessageContextMenu(
-                    anchor = anchor.translate(delta), mine = true, items = items, onDismiss = onDismiss,
-                    focus = (focus ?: Rect(anchor.right - 1f, anchor.top, anchor.right, anchor.bottom)).translate(delta),
-                    preview = preview,
-                )
-            }
-        }
-    }
+    // 待发气泡/格子里没有全屏的树内空间：抬到窗口级（WindowContextMenu，坐标换算的坑都在那里）
+    com.libeyond.imandroid.ui.components.WindowContextMenu(
+        anchor = anchor, mine = true, items = items, onDismiss = onDismiss,
+        focus = focus ?: Rect(anchor.right - 1f, anchor.top, anchor.right, anchor.bottom),
+        preview = preview,
+    )
 }

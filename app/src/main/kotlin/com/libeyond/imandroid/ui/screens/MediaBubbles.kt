@@ -87,6 +87,8 @@ fun MediaContent(
      * 此前只有中间那枚徽标会下载，点徽标旁边的空白落到气泡上，直接把没下载的视频打开了（2026-09-10 用户报 #8）。
      */
     onOpenMedia: ((MessageEntity) -> Unit)? = null,
+    /** 只读（置顶面板）：语音不播放、文件不打开/不下载、不画下载环（图/视频由 [onOpenMedia] = null 关掉）。 */
+    readOnly: Boolean = false,
 ) {
     // **图说整体化**：有 caption 时媒体只圆上角，和下方文字连成一整块（iOS `_captionBG`）；
     // 没有 caption 时四角都圆——此时媒体本身就是整个气泡。
@@ -106,8 +108,9 @@ fun MediaContent(
             ),
             mine = mine,
             horizontalInset = IMTheme.dimens.bubblePaddingH,
+            readOnly = readOnly,
         )
-        else -> FileContent(msg, isGroup, fileRowWidth)
+        else -> FileContent(msg, isGroup, fileRowWidth, readOnly)
     }
 }
 
@@ -297,7 +300,7 @@ private fun VideoContent(
 }
 
 @Composable
-private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp) {
+private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp, readOnly: Boolean = false) {
     val c = IMTheme.colors
     val appearance = IMTheme.appearance
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -311,7 +314,7 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp) {
             // **就绪就能点开**（对齐 iOS：文件行/气泡在 ready 态点一下就是打开它）；
             // 没就绪时点一下等于点 ↓（失效时门控动作为空，点了不做事）。
             // 用 passThroughTap 不用 clickable：后者吃掉 down，长按文件行弹不出菜单（#13）
-            .passThroughTap {
+            .passThroughTap(enabled = !readOnly) {
                 if (gate.ready) {
                     val f = gate.localFile
                     toast.value = if (f == null) {
@@ -329,14 +332,17 @@ private fun FileContent(msg: MessageEntity, isGroup: Boolean, rowWidth: Dp) {
     ) {
         // 图标位：就绪才是按扩展名的类型图标（对齐 iOS `IMFileTypeIconForName`）；
         // 没下下来时这一格画下载状态——此前类型图标上再压一枚徽标，看着像已经能打开（#8）
-        FileGateSlot(gate.state, msg.fileSize ?: 0L, name)
+        // 只读不画下载状态（进度环 / ↓），恒为类型图标
+        if (readOnly) com.libeyond.imandroid.ui.components.FileTypeIcon(name, size = 44.dp) else FileGateSlot(gate.state, msg.fileSize ?: 0L, name)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             // 名字用强调色、跟随聊天字号、**放不下截中间**（iOS `NSLineBreakByTruncatingMiddle`）：
             // 截尾会把扩展名切掉，「季度报表-最终版-改…」看不出是表格还是文档
             MiddleEllipsisText(name, color = c.accent, fontSize = appearance.chatFontSize, maxLines = 2)
             // 大小直接用服务端给的字节数格式化，**不重新下载文件去算**；状态文案照 iOS（见 DownloadLabels）
-            val line = DownloadLabels.fileStatusLine(gate.state, msg.fileSize ?: 0L)
+            val line = if (readOnly) {
+                (msg.fileSize ?: 0L).takeIf { it > 0 }?.let { MediaUrl.formatSize(it) }.orEmpty()
+            } else DownloadLabels.fileStatusLine(gate.state, msg.fileSize ?: 0L)
             if (line.isNotEmpty()) {
                 Spacer(Modifier.height(3.dp))
                 val tint = if (DownloadLabels.fileStatusIsDanger(gate.state.phase)) c.danger else c.textSecondary

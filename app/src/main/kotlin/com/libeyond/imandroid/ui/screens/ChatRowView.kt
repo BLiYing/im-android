@@ -79,7 +79,7 @@ internal data class ChatRowStyle(
  * 原先是 `localNameOf ?: memberNameOf ?: fromNickname`——好友名（昵称）压过群昵称，
  * 且超级群成员表只有自己，非好友一律落到落库时的老快照，改了名也不变（2026-09-15）。
  */
-private fun ChatRowStyle.senderNameOf(m: MessageEntity): String? = SenderNames.bubbleName(
+internal fun ChatRowStyle.senderNameOf(m: MessageEntity): String? = SenderNames.bubbleName(
     remark = remarkOf(m.sender),
     memberName = memberNameOf(m.sender),
     latestSnapshot = latestNicknameOf(m.sender),

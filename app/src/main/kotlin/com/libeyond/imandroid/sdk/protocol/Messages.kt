@@ -405,6 +405,13 @@ data class MsgOpData(
     /** 批量删除帧要删的 seq（按帧内顺序）；不是批量删除帧返回 null，按单条处理。与 im-web `batchDeleteTargetsOf` 同口径。 */
     fun batchDeleteSeqs(): List<Long>? =
         if (op == MsgOp.DELETE) targets?.map { it.targetConvSeq }?.filter { it > 0 } else null
+
+    /**
+     * 「取消所有置顶」批量帧（`POST /conversations/{id}/pinned/clear` 的广播，`op:pin,pinned:false,targets`）要取消的 seq；
+     * 不是该帧返回 null。收端等价逐条取消置顶。与 [batchDeleteSeqs] 同形，三端各一份（SYMMETRY「批量帧读法」）。
+     */
+    fun batchUnpinSeqs(): List<Long>? =
+        if (op == MsgOp.PIN && pinned == false) targets?.map { it.targetConvSeq }?.filter { it > 0 } else null
 }
 
 /** 批量删除广播帧里的一项。 */

@@ -1,16 +1,6 @@
 package com.libeyond.imandroid.ui
 
 import android.content.Context
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,13 +8,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.MsgOpSignal
 import com.libeyond.imandroid.data.PinnedBanner
+import com.libeyond.imandroid.data.PinnedPanel
 import com.libeyond.imandroid.data.sendMsgOp
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.i18n.Str
@@ -49,7 +38,6 @@ class ChatBannersState {
     /** 置顶拉取的代次：多个触发源会并发拉，**后发的请求才有资格落地**，先发后到的旧响应丢弃。 */
     var reloadGen = 0
     var pinned by mutableStateOf<List<PinnedMessage>>(emptyList())
-    var index by mutableStateOf(0)
     var dismissedPin by mutableStateOf<String?>(null)
     var dismissedAnn by mutableStateOf<String?>(null)
     var dismissedApproval by mutableStateOf<Int?>(null)
@@ -93,13 +81,12 @@ fun rememberChatBanners(
         runCatchingCancellable { client.conversationsApi.pinned(conv.convId) }.onSuccess {
             if (my != st.reloadGen) return@onSuccess // 有更晚发出的请求，这份是旧的
             st.pinned = it
-            st.index = PinnedBanner.clampIndex(st.index, it.size)
         }
     }
     // 进会话拉一次；重连后（可能错过了离线期间的置顶帧）再拉一次
     LaunchedEffect(conv.convId, connected) { if (connected) reload() }
 
-    // 消息被操作：置顶/取消置顶 → 立刻重拉；撤回/删除命中某条置顶 → 先本地摘掉（弱网重拉失败也不留指向墓碑的横幅），
+    // 消息被操作：置顶/取消置顶 → 立刻重拉（取消的先本地摘掉：面板里该行当场消失，「取消所有置顶」一帧 targets 整批摘）；撤回/删除命中某条置顶 → 先本地摘掉（弱网重拉失败也不留指向墓碑的横幅），
     // 再重拉对齐；删除类**无条件**走 300ms 尾沿去抖（批量删除会连来几百帧，必须并成一次请求）
     LaunchedEffect(conv.convId) {
         var gen = 0
@@ -107,7 +94,10 @@ fun rememberChatBanners(
             if (s.convId != conv.convId) return@collect
             val hit = st.pinned.any { it.convSeq in s.seqs }
             when (s.op) {
-                MsgOp.PIN -> launch { reload() }
+                MsgOp.PIN -> {
+                    if (s.unpin) st.pinned = PinnedPanel.without(st.pinned, s.seqs)
+                    launch { reload() }
+                }
                 MsgOp.EDIT -> if (hit) launch { reload() }
                 MsgOp.RECALL, MsgOp.DELETE, MsgOpSignal.HIDE -> {
                     if (hit) st.pinned = st.pinned.filterNot { it.convSeq in s.seqs }
@@ -136,6 +126,9 @@ fun rememberChatBanners(
 }
 
 private const val RELOAD_DEBOUNCE_MS = 300L
+/** 单条取消置顶后的兜底重拉：服务端拒了（权限变更等）不会有 msg_op 回来，乐观摘掉的那行要回来。 */
+private const val UNPIN_RECHECK_MS = 1500L
+private val log = com.libeyond.imandroid.sdk.logging.IMLog.tag("IM.Chat")
 
 /** 动作与派生内容。字段由 [rememberChatBanners] 每次重组刷新（回调拿到的永远是最新的）。 */
 class ChatBannersHolder(
@@ -152,7 +145,8 @@ class ChatBannersHolder(
     var onOpenApproval: () -> Unit = {}
     var reload: () -> Unit = {}
 
-    private val shown: PinnedMessage? get() = st.pinned.getOrNull(PinnedBanner.clampIndex(st.index, st.pinned.size))
+    /** 横幅恒显最新置顶，不轮转（PINNED_PANEL_DESIGN §1）。 */
+    private val shown: PinnedMessage? get() = PinnedBanner.latest(st.pinned)
 
     /** 跳到一条置顶：目标已撤回（本地行）就提示并重拉，不跳——否则落在「撤回了一条消息」上闪一下，用户看不出原消息没了。 */
     fun jump(seq: Long) {
@@ -165,15 +159,33 @@ class ChatBannersHolder(
         }
     }
 
-    fun tapPinned() {
-        val cur = shown ?: return
-        jump(cur.convSeq)
-        st.index = PinnedBanner.nextIndex(PinnedBanner.clampIndex(st.index, st.pinned.size), st.pinned.size) // 连点逐条轮播
+    /** 点横幅（整条或 ≡）= 打开置顶面板。不再「直接跳转 + 轮转」。 */
+    fun openPinnedPanel() { if (st.pinned.isNotEmpty()) st.listOpen = true }
+
+    /**
+     * 面板长按「取消置顶」：**只作用于所长按那条**、不确认（可逆）。走现有 pin op（pinned=false）；本地先摘（该行消失），
+     * msg_op 回来重拉对齐；被服务端拒了收不到 msg_op，所以过一会儿再无条件拉一次兜底。
+     */
+    fun unpinOne(seq: Long) {
+        st.pinned = PinnedPanel.without(st.pinned, listOf(seq))
+        client.messages.sendMsgOp(conv.convId, MsgOp.PIN, seq, pinned = false)
+        scope.launch { delay(UNPIN_RECHECK_MS); reload() }
     }
 
-    fun unpinCurrent() {
-        val cur = shown ?: return
-        client.messages.sendMsgOp(conv.convId, MsgOp.PIN, cur.convSeq, pinned = false)
+    /** 「取消所有置顶」：批量接口一次请求。成功 → 集合清空（面板随之收起、横幅消失）；失败 → 吐司并重拉对齐。 */
+    fun unpinAll() {
+        scope.launch {
+            runCatchingCancellable { client.conversationsApi.clearPinned(conv.convId) }
+                .onSuccess {
+                    st.reloadGen++ // 作废在途的旧拉取：它若晚到，会把刚清空的集合又写回来
+                    st.pinned = emptyList() // 面板见空集自己走收起动画（PinnedBottomSheet）
+                }
+                .onFailure {
+                    log.w("pinned_clear_failed", "convId" to conv.convId, "err" to it.javaClass.simpleName)
+                    onToast(it.userMessage(Str.s(R.string.common_error_action_failed, Str.s(R.string.pinned_unpin_all))))
+                    reload()
+                }
+        }
     }
 
     private fun dismiss(kind: String, apply: () -> Unit, write: (android.content.SharedPreferences.Editor, String) -> Unit) {
@@ -229,16 +241,14 @@ class ChatBannersHolder(
         val items = st.pinned
         val cur = shown
         val pinned = if (cur != null && !PinnedBanner.dismissed(PinnedBanner.pinSignature(items), st.dismissedPin)) {
-            val label = PinnedBanner.senderLabel(cur, conv.isGroup)
-            val idx = PinnedBanner.clampIndex(st.index, items.size)
-            val kicker = buildString {
-                append(Str.s(R.string.chat_banner_pinned))
-                if (items.size > 1) append(" ${idx + 1}/${items.size}")
-                if (label.isNotEmpty()) append(" · $label")
-            }
+            val count = if (items.size > 1) {
+                androidx.compose.ui.res.pluralStringResource(R.plurals.chat_banner_pinned_count, items.size, items.size)
+            } else null
+            val kicker = PinnedBanner.kicker(stringResource(R.string.chat_banner_pinned), count, PinnedBanner.senderLabel(cur, conv.isGroup))
+            // ≡ 恒显（单条也显）：提示「点我是列表」，点它与点主体等价
             BannerContent(
                 BannerIcons.Pinned, c.accent, kicker, PinnedBanner.preview(cur),
-                multiple = items.size > 1, showList = items.size > 1, closeLabel = closePinnedLabel,
+                multiple = items.size > 1, showList = true, closeLabel = closePinnedLabel,
             )
         } else null
 
@@ -246,17 +256,17 @@ class ChatBannersHolder(
             join = join, announcement = ann, pinned = pinned,
             onJoinTap = onOpenApproval, onJoinClose = ::closeApproval,
             onAnnouncementTap = { st.annOpen = true }, onAnnouncementClose = ::closeAnnouncement,
-            onPinnedTap = ::tapPinned, onPinnedList = { st.listOpen = true }, onPinnedClose = ::closePinned,
+            onPinnedTap = ::openPinnedPanel, onPinnedList = ::openPinnedPanel, onPinnedClose = ::closePinned,
         )
     }
 
-    /** 置顶列表 / 公告全文两个弹层。 */
+    /** 置顶面板 / 公告全文两个弹层。[rowStyle] = 聊天页那份气泡渲染参数（面板与聊天页同源渲染）。 */
     @Composable
-    fun Dialogs(canPin: Boolean) {
-        if (st.listOpen) PinnedListDialog(
-            items = st.pinned, isGroup = conv.isGroup, canUnpin = canPin && shown != null,
-            onJump = { st.listOpen = false; jump(it) },
-            onUnpinCurrent = { st.listOpen = false; unpinCurrent() },
+    internal fun Dialogs(canPin: Boolean, rowStyle: com.libeyond.imandroid.ui.screens.ChatRowStyle) {
+        if (st.listOpen) PinnedBottomSheet(
+            items = st.pinned, convId = conv.convId, style = rowStyle, canUnpin = canPin,
+            localRows = { seqs -> seqs.mapNotNull { client.repo.messages.byConvSeq(uid, conv.convId, it) }.associateBy { it.convSeq } },
+            onLocate = ::jump, onUnpin = ::unpinOne, onUnpinAll = ::unpinAll, onToast = onToast,
             onDismiss = { st.listOpen = false },
         )
         val info = gs.info
@@ -276,42 +286,4 @@ internal fun announceSubtitle(at: Long): String {
     val loc = java.util.Locale.getDefault()
     val f = java.text.SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(loc, "MMMd HHmm"), loc)
     return Str.s(R.string.group_announcement_published_at, f.format(java.util.Date(at)))
-}
-
-/**
- * 全部置顶消息：每行「发送者：预览」（单聊不带发送者），点行跳转；有权限者多一行
- * 「取消置顶当前这条」——**取消的是横幅当前显示的那条，不是点的那一行**（对齐 iOS `bannerStackDidTapPinnedList:`）。
- */
-@Composable
-private fun PinnedListDialog(
-    items: List<PinnedMessage>, isGroup: Boolean, canUnpin: Boolean,
-    onJump: (Long) -> Unit, onUnpinCurrent: () -> Unit, onDismiss: () -> Unit,
-) {
-    val c = IMTheme.colors
-    // 别的管理员把最后一条也取消置顶了：弹层别留一个空壳
-    LaunchedEffect(items.isEmpty()) { if (items.isEmpty()) onDismiss() }
-    if (items.isEmpty()) return
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.chat_banner_pinned)) },
-        text = {
-            Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
-                items.forEach { item ->
-                    val sender = PinnedBanner.senderLabel(item, isGroup)
-                    val text = if (sender.isNotEmpty()) "$sender：${PinnedBanner.preview(item)}" else PinnedBanner.preview(item)
-                    Text(
-                        text, color = c.textPrimary, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().clickable { onJump(item.convSeq) }.padding(vertical = 10.dp),
-                    )
-                }
-                if (canUnpin) {
-                    Text(
-                        stringResource(R.string.chat_banner_unpin_current), color = c.danger,
-                        modifier = Modifier.fillMaxWidth().clickable(onClick = onUnpinCurrent).padding(vertical = 10.dp),
-                    )
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
-    )
 }
