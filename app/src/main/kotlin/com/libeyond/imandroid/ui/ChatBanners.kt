@@ -27,6 +27,8 @@ import com.libeyond.imandroid.ui.screens.BannerIcons
 import com.libeyond.imandroid.ui.screens.ChatBannerStack
 import com.libeyond.imandroid.ui.theme.IMTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -91,8 +93,16 @@ fun rememberChatBanners(
     // 进会话拉一次；重连后（可能错过了离线期间的置顶帧）再拉一次
     // 清空聊天记录抬高位点（conv.clearedUpTo 变）也要重拉：位点以内的置顶随之摘掉（reload 内按位点过滤）
     // （`conv` 是进页时的快照，位点要读实时行）
-    val liveConvs by client.repo.observeConversations(uid).collectAsState(initial = emptyList())
-    val clearedUpTo = liveConvs.firstOrNull { it.convId == conv.convId }?.clearedUpTo ?: conv.clearedUpTo
+    // 只订阅本会话的位点（map + distinctUntilChanged）：整份会话列表任何一行变（别的会话来消息）都不该重组聊天页
+    val clearedUpTo by remember(uid, conv.convId) {
+        client.repo.observeConversations(uid)
+            .map { rows -> rows.firstOrNull { it.convId == conv.convId }?.clearedUpTo ?: conv.clearedUpTo }
+            .distinctUntilChanged()
+    }.collectAsState(initial = conv.clearedUpTo)
+    // 位点抬高先就地过滤当前集合：纯本地，离线 / 重拉失败（onFailure 不动 st.pinned）也生效，不留指向已清空消息的横幅
+    LaunchedEffect(clearedUpTo) {
+        if (clearedUpTo > 0 && st.pinned.any { it.convSeq <= clearedUpTo }) st.pinned = st.pinned.filter { it.convSeq > clearedUpTo }
+    }
     LaunchedEffect(conv.convId, connected, clearedUpTo) { if (connected) reload() }
 
     // 消息被操作：置顶/取消置顶 → 立刻重拉（取消的先本地摘掉：面板里该行当场消失，「取消所有置顶」一帧 targets 整批摘）；撤回/删除命中某条置顶 → 先本地摘掉（弱网重拉失败也不留指向墓碑的横幅），
