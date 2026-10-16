@@ -205,6 +205,8 @@ fun ConversationListScreen(
                     ConversationRow(
                         conv, myUid, localNameOf, onlineOf, pendingOf(conv.convId), nowMs,
                         onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) },
+                        // 置顶 / 取消置顶：行平滑上移 / 下移（key = convId，重排时按位移补间，不再瞬间跳位）
+                        modifier = Modifier.animateItem(),
                     )
                 }
             }
@@ -225,6 +227,7 @@ private fun ConversationRow(
     nowMs: Long,
     onClick: () -> Unit,
     onLongClick: (Rect) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var rect by remember { mutableStateOf(Rect.Zero) }
     // 长按原位浮起（iOS 会话列表的 UIContextMenu）：本行录进层，菜单里画它（MenuLift.kt）
@@ -239,7 +242,7 @@ private fun ConversationRow(
     val preview = ConversationPreview.of(conv, myUid, localNameOf)
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             // 行高 76 = 12 + 52 + 12（UI_SPEC §2，iOS 写死 rowHeight 76）。
             // 用 heightIn(min) 不用 height：长昵称换行时允许长高，不裁内容。
