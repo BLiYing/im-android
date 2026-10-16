@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -97,7 +98,9 @@ internal fun SegTabBar(
                 .clip(RoundedCornerShape(18.dp))
                 .background(c.subtleFill)
                 .horizontalScroll(rememberScrollState())
-                .padding(4.dp),
+                .padding(4.dp)
+                // 各格等高 + 内容垂直居中：带角标的格（角标 20dp）比没角标的高，否则没角标的格贴在上沿
+                .height(androidx.compose.foundation.layout.IntrinsicSize.Min),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             titles.forEachIndexed { i, t -> MediaSeg(t, i == selected, badges.getOrNull(i), onLongClick = onLongPress?.let { f -> { r: Rect -> f(i, r) } }) { onSelect(i) } }
@@ -149,12 +152,14 @@ internal fun MediaSeg(
     // 别再用「12% 主色底 + 主色字」表示选中——那在深色模式下几乎看不出来。
     Box(
         Modifier
+            .fillMaxHeight()
             .then(if (onLongClick != null) Modifier.onGloballyPositioned { coords[0] = it } else Modifier)
             .clip(RoundedCornerShape(14.dp))
             // 药丸底色走页签专用 token（深色下不再与底轨几乎同色，见 IMColors.segmentPill）
             .background(if (on) c.segmentPill else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick?.let { f -> { f(coords[0]?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero) } })
             .padding(horizontal = 14.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
