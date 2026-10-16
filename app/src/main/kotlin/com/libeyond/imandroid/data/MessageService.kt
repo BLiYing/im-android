@@ -73,6 +73,8 @@ class MessageService(
 ) {
     /** 「按锚点开窗」的一问一答（MESSAGE_WINDOW_DESIGN §3.2），实现在 [WindowRequester]。 */
     internal val windows = WindowRequester(socket, scope)
+    /** 群帧触发的会话列表重拉：窗口合并，见 [RefreshCoalescer]。 */
+    private val groupListRefresh = RefreshCoalescer(scope, GROUP_LIST_REFRESH_MS) { refreshConversations() }
     /** 删掉摘要那条后重拉会话列表（见 PreviewRefresh.kt）。 */
     internal val previewRefresher = PreviewRefresher(scope) { refreshConversations() }
 
@@ -328,8 +330,8 @@ class MessageService(
                     _pendingCounts.value = _pendingCounts.value - d.convId
                 }
                 // 任意群帧都重拉会话列表（PROTOCOL §6.6、iOS 列表同）：改名/改头像/禁言/待审数都挂在它上面。
-                // launch 不阻塞帧分发（同 NEW_MSG 分支）
-                scope.launch { refreshConversations() }
+                // 合并（request 不阻塞帧分发）：一次邀请/批量变更可能连来多帧，逐帧重拉会并发打满 GET /conversations。
+                groupListRefresh.request()
             }
 
             // 账号级能力有变（PROTOCOL §6.9）。这里只转发版本号，去重与重拉在 DownloadSettingsStore

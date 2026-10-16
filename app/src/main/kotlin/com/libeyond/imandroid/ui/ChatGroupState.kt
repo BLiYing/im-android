@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
+import kotlinx.coroutines.delay
 
 /**
  * 聊天页持有的「本群资料」一份快照（从 `ChatHost` 拆出，那份文件贴着 600 行硬闸）：
@@ -43,8 +44,15 @@ fun ChatGroupLoad(client: IMClient, conv: ConversationEntity, gs: ChatGroupState
     LaunchedEffect(conv.convId) {
         client.groupEvents.collect { if (it.convId == conv.convId && !it.goneForMe(client.uid)) groupEventRev++ }
     }
+    val handledEventRev = remember(conv.convId) { intArrayOf(0) }
     LaunchedEffect(conv.convId, membersRev, groupEventRev) {
         if (!conv.isGroup) return@LaunchedEffect
+        // 群帧连发（一批邀请）时 key 连续变化会取消上一轮：先停一会儿，只有最后一帧真正发请求。
+        // 只对「群帧」触发的重拉防抖；成员表过期（membersRev）等其它原因照旧立即拉。
+        if (groupEventRev != handledEventRev[0]) {
+            delay(GROUP_EVENT_DEBOUNCE_MS)
+            handledEventRev[0] = groupEventRev
+        }
         runCatchingCancellable { client.groups.info(conv.convId) }.onSuccess {
             gs.info = it
             // 全局昵称/头像喂进解析器（**不喂群昵称**：A 群的昵称不能漏到 B 群）

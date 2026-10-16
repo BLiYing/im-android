@@ -6,9 +6,13 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+
+/** 群帧连发时重拉群资料前的停留（毫秒）：ChatGroupLoad 与 GroupInfoLiveLoad 共用。 */
+internal const val GROUP_EVENT_DEBOUNCE_MS = 250L
 
 /**
  * 群资料页的取数：进页拉一次，之后本群每来一帧 `group`（别的管理员/成员改了群，PROTOCOL §6.6）就重拉。
@@ -35,7 +39,11 @@ fun GroupInfoLiveLoad(
             refreshMembers()
         }
         launch(start = CoroutineStart.UNDISPATCHED) {
-            client.groupEvents.filter { it.convId == convId && !it.goneForMe(client.uid) }.conflate().collect { load() }
+            client.groupEvents.filter { it.convId == convId && !it.goneForMe(client.uid) }.conflate().collect {
+                // 停 250ms 再拉：conflate 把停留期间连来的帧并成下一次，一批邀请只重拉一两轮而不是每帧一轮
+                delay(GROUP_EVENT_DEBOUNCE_MS)
+                load()
+            }
         }
         load()
         loadSettings()
