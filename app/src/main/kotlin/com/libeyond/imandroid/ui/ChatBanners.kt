@@ -3,6 +3,7 @@ package com.libeyond.imandroid.ui
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -13,6 +14,7 @@ import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.MsgOpSignal
 import com.libeyond.imandroid.data.PinnedBanner
+import com.libeyond.imandroid.data.clearedUpTo
 import com.libeyond.imandroid.data.PinnedPanel
 import com.libeyond.imandroid.data.sendMsgOp
 import com.libeyond.imandroid.data.db.ConversationEntity
@@ -80,11 +82,18 @@ fun rememberChatBanners(
         val my = ++st.reloadGen
         runCatchingCancellable { client.conversationsApi.pinned(conv.convId) }.onSuccess {
             if (my != st.reloadGen) return@onSuccess // 有更晚发出的请求，这份是旧的
-            st.pinned = it
+            // 「清空聊天记录」只记本机位点（服务端不知道）：位点以内的置顶本体已不可见，横幅不能再指向它们
+            // （清空 → 删好友 → 重新加回后，否则仍显示清空前的旧置顶）。
+            val floor = if (uid.isEmpty()) 0L else client.repo.clearedUpTo(uid, conv.convId)
+            st.pinned = if (floor > 0) it.filter { p -> p.convSeq > floor } else it
         }
     }
     // 进会话拉一次；重连后（可能错过了离线期间的置顶帧）再拉一次
-    LaunchedEffect(conv.convId, connected) { if (connected) reload() }
+    // 清空聊天记录抬高位点（conv.clearedUpTo 变）也要重拉：位点以内的置顶随之摘掉（reload 内按位点过滤）
+    // （`conv` 是进页时的快照，位点要读实时行）
+    val liveConvs by client.repo.observeConversations(uid).collectAsState(initial = emptyList())
+    val clearedUpTo = liveConvs.firstOrNull { it.convId == conv.convId }?.clearedUpTo ?: conv.clearedUpTo
+    LaunchedEffect(conv.convId, connected, clearedUpTo) { if (connected) reload() }
 
     // 消息被操作：置顶/取消置顶 → 立刻重拉（取消的先本地摘掉：面板里该行当场消失，「取消所有置顶」一帧 targets 整批摘）；撤回/删除命中某条置顶 → 先本地摘掉（弱网重拉失败也不留指向墓碑的横幅），
     // 再重拉对齐；删除类**无条件**走 300ms 尾沿去抖（批量删除会连来几百帧，必须并成一次请求）
