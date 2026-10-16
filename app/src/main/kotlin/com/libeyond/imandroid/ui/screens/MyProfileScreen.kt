@@ -38,7 +38,9 @@ import com.libeyond.imandroid.ui.components.IMAvatar
 import com.libeyond.imandroid.ui.components.IMErrorText
 import com.libeyond.imandroid.ui.components.IMKeyValueRow
 import com.libeyond.imandroid.ui.components.IMRowDivider
+import com.libeyond.imandroid.ui.components.IMSectionFooter
 import com.libeyond.imandroid.ui.components.IMSettingsGroup
+import com.libeyond.imandroid.ui.components.IMSettingsRow
 import com.libeyond.imandroid.ui.components.IMTextField
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
@@ -77,6 +79,8 @@ fun MyProfileScreen(
     onSave: () -> Unit,
     onPickAvatar: () -> Unit,
     onBack: () -> Unit,
+    /** 非 null 时只读态底部显示「注销账号」组（仅本人资料页传；编辑态恒隐藏）。 */
+    onDeleteAccount: (() -> Unit)? = null,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -102,7 +106,7 @@ fun MyProfileScreen(
             if (editing) {
                 EditBody(form, onFormChange, avatarUrl, displayName, seed, onPickAvatar)
             } else {
-                ReadonlyBody(displayName, handle, phone, avatarUrl, seed)
+                ReadonlyBody(displayName, handle, phone, avatarUrl, seed, onDeleteAccount)
             }
             IMErrorText(error, Modifier.padding(top = d.space3, start = d.space4, end = d.space4))
             Spacer(Modifier.height(d.sectionGap))
@@ -117,6 +121,7 @@ private fun ReadonlyBody(
     phone: String,
     avatarUrl: String,
     seed: String,
+    onDeleteAccount: (() -> Unit)?,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -140,6 +145,18 @@ private fun ReadonlyBody(
             handle.ifEmpty { stringResource(R.string.settings_info_not_set) },
             valueColor = c.accent,
         )
+    }
+    if (onDeleteAccount != null) {
+        // 注销入口：单独一组红字居中行 + 脚注，与信息卡隔一个分组间距（DELETE_ACCOUNT_DESIGN §2）
+        Spacer(Modifier.height(d.sectionGap))
+        IMSettingsGroup {
+            IMSettingsRow(
+                title = stringResource(R.string.profile_delete_account_row),
+                onClick = onDeleteAccount,
+                destructive = true,
+            )
+        }
+        IMSectionFooter(stringResource(R.string.profile_delete_account_footer))
     }
 }
 

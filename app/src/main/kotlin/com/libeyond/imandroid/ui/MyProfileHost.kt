@@ -44,6 +44,8 @@ fun MyProfileHost(
     /** 资料变了通知外层重拉（「我」页头部要立刻显示新昵称/新头像）。 */
     onChanged: (UserCard) -> Unit,
     onBack: () -> Unit,
+    /** 只读态底部「注销账号」入口；null = 不显示（别处复用本页看自己时）。 */
+    onOpenDeleteAccount: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -198,6 +200,7 @@ fun MyProfileHost(
             pickAvatar.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         },
         onBack = onBack,
+        onDeleteAccount = onOpenDeleteAccount,
     )
 
     toast?.let { IMToast(it) { toast = null } }

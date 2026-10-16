@@ -43,14 +43,17 @@ fun IMPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     loading: Boolean = false,
+    /** 破坏性主按钮（注销账号）：底 danger、高 50dp、置灰 40%（DELETE_ACCOUNT_DESIGN §4）。 */
+    danger: Boolean = false,
 ) {
     val c = IMTheme.colors
+    val base = if (danger) c.danger else c.accent
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(if (danger) 50.dp else 48.dp)
             .background(
-                color = if (enabled && !loading) c.accent else c.accent.copy(alpha = 0.5f),
+                color = if (enabled && !loading) base else base.copy(alpha = if (danger) 0.4f else 0.5f),
                 shape = RoundedCornerShape(IMTheme.dimens.radiusCard),
             )
             .clickable(enabled = enabled && !loading) { onClick() },

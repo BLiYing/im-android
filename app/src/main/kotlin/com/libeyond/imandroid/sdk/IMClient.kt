@@ -120,6 +120,8 @@ class IMClient(context: Context) {
     val favorites = FavoriteApi(http)
     val groups = GroupApi(http)
     val profile = ProfileApi(http)
+    /** 注销账号 / 冷静期恢复（契约待与后端 PROTOCOL 对账，见 [AccountApi]）。 */
+    val account = com.libeyond.imandroid.sdk.api.AccountApi(http)
     val qr = QrApi(http)
     /** im-rtc（音视频通话）换票：`RtcCall` 用它取接入票，不再本地签调试票。 */
     val rtc = RtcApi(http)
@@ -508,6 +510,16 @@ class IMClient(context: Context) {
         fcmTokenStore.forget()
         InAppBannerStore.dismiss()
         profiles.clear() // 资料解析缓存属于上一个账号
+    }
+
+    /**
+     * 注销成功后清空本机聊天缓存（与退出登录不同：退出保留已下载记录，注销不保留，DELETE_ACCOUNT_DESIGN §3.4）。
+     * 在 [logout] 之后调用；清库失败只记日志（账号已注销，不能因本地清理失败卡住回登录页）。
+     * 限制：本库单库多账号（靠 ownerUid 隔离），这里整库清空，同机其它账号的离线缓存也会一并丢（会重新拉取）。
+     */
+    suspend fun wipeLocalChatData() {
+        runCatching { withContext(kotlinx.coroutines.Dispatchers.IO) { db.clearAllTables() } }
+            .onFailure { log.w("wipe_local_failed", "err" to it.javaClass.simpleName) }
     }
 
     /** 网络恢复 / 回到前台。 */

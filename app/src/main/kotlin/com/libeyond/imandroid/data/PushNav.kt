@@ -73,4 +73,6 @@ enum class MePage(val depth: Int) {
     PowerSaving(1),
     /** 聊天文件夹管理页（其下的编辑 / 选择聊天子页由 [com.libeyond.imandroid.ui.ChatFoldersHost] 内部自管）。 */
     Folders(1),
+    /** 注销账号二级页：从「我的资料」只读态底部进入，所以比 [Profile] 深一层；返回回资料页。 */
+    DeleteAccount(2),
 }

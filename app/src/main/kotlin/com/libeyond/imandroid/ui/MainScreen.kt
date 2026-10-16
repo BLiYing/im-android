@@ -88,7 +88,7 @@ private enum class Tab(@StringRes val labelRes: Int) {
  * 这一层阶段路由，主界面自己的导航不该混在里面。
  */
 @Composable
-fun MainScreen(client: IMClient, onLogout: () -> Unit) {
+fun MainScreen(client: IMClient, onLogout: () -> Unit, onAccountDeleted: () -> Unit = onLogout) {
     val owner = client.uid.orEmpty()
     // rememberSaveable：切语言 / 旋转 / 深浅色会重建 Activity，重建后停在原 tab（原先 remember 一律回消息页）
     var tab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(Tab.Chats) }
@@ -275,7 +275,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit) {
                                 onFriendsLoaded = { l -> knownFriends = l.associateBy { it.userId } },
                             )
                             Tab.Me -> MeHost(
-                                client = client, onLogout = onLogout, bottomBar = bottomBar,
+                                client = client, onLogout = onLogout, onAccountDeleted = onAccountDeleted, bottomBar = bottomBar,
                                 onOpenChat = { openConv = it },
                                 initialRoute = settingsRoute,
                                 onRouteConsumed = { settingsRoute = null },

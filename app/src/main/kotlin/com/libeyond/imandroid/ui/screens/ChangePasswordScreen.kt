@@ -151,7 +151,7 @@ fun ChangePasswordScreen(
 
 /** 一格密码输入：密文 + 右侧眼睛。明暗切换是纯界面态，留在这里（不上提）。 */
 @Composable
-private fun PasswordRow(
+internal fun PasswordRow(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,

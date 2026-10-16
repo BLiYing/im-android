@@ -26,17 +26,19 @@ data class UserCard(
     val presence: String = "",
     @SerialName("online_until") val onlineUntil: Long = 0,
     @SerialName("last_seen") val lastSeen: Long = 0,
+    /** 已注销（到期匿名化）账号：显示「已注销用户」+ 默认头像（DELETE_ACCOUNT_DESIGN §5 对端展示）。 */
+    val deleted: Boolean = false,
 ) {
     /**
      * 本机显示名。回退链 **备注 → 昵称 → @句柄 → 「未命名用户」**，
      * **末级绝不是 user_id**（那是 10 位随机内部 ID，露在界面上对用户毫无意义）。
      */
     val displayName: String
-        get() = remark.ifBlank { nickname }.ifBlank { username.ifBlank { "" }.let { if (it.isEmpty()) "" else "@$it" } }
+        get() = if (deleted) Str.s(R.string.delete_account_deleted_user) else remark.ifBlank { nickname }.ifBlank { username.ifBlank { "" }.let { if (it.isEmpty()) "" else "@$it" } }
             .ifBlank { Str.s(R.string.common_unnamed_user) }
 
     /** 副标题里的标识行。**为空时整行隐藏**，不显示「用户名：未设置」，更不回退内部 ID。 */
-    val handle: String get() = if (username.isBlank()) "" else "@$username"
+    val handle: String get() = if (deleted || username.isBlank()) "" else "@$username"
 }
 
 /** 好友关系项（对齐 `internal/friend.Entry`）。 */

@@ -6,6 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **注销账号 + 退出登录居中（2026-10-16，已提交 main，未 push；设计 IMServer `docs/design/DELETE_ACCOUNT_DESIGN.md`）**：`IMSettingsRow` destructive 居中；资料页只读态底部注销组；`MePage.DeleteAccount` + `DeleteAccountHost/Screen`（群主阻断、二次确认、`client.scope` 提交）；成功走 `onAccountDeleted`（logout + `wipeLocalChatData` + done_hint）；登录遇 `ACCOUNT_PENDING_DELETION` 弹 `RestoreAccountDialog` → `account.restore` → 登录；`UserCard.deleted`。**待对账**：`AccountApi` 路径/body、错误码 200005、`owned_groups`/`delete_at` 形状按设计稿 §5 写，PROTOCOL.md 未见该章节；未做：他设备被踢帧 `reason=account_deleted` 清缓存、阻断群名点击跳群管理、群成员/好友列表的 deleted 展示、设备/截图目视（Pixel 熄屏未测）。
 - **二维码展示三端对齐（2026-10-16，已三端自测 + 全量测试，未提交）**：名片码/群二维码/群邀请链接卡片头部（头像·名字·成员数/@句柄）竖排居中（iOS `IMQRCardView`、Web `QRCardModal`+扫码结果分支）；iOS 扫一扫「我的二维码」改为嵌入 `IMQRCardViewController`（同 Android 共用整页）；群邀请链接页改为链接框 + 分享/复制 + 「查看二维码」，不画码（三端）；群码有效期提示三端统一为「X月X日 前有效，重置后旧码立即失效」（无到期时间退回 7 天口径）；链接页不放重置（重置只在二维码页）；新增 i18n 键 `qr.card.share_link/view_code/group_link_hint_expiry` 已入 `strings.json` 并重新生成。
 - **置顶消息底部面板（2026-10-15，未提交，待真机目测；设计 IMServer `docs/design/PINNED_PANEL_DESIGN.md` + 稿 `sketches/PINNED_PANEL_UX_SKETCH.html`）**：
   - 横幅：整条 / ≡（恒显）= 开面板；恒显最新置顶（`PinnedBanner.latest`），kicker「置顶消息 · N 条 · 发送者」（`PinnedBanner.kicker` + `chat_banner_pinned_count`）；轮转（`index`/`clampIndex`/`nextIndex`/`tapPinned`）、`unpinCurrent`、`PinnedListDialog` 均已删。

@@ -35,6 +35,8 @@ import com.libeyond.imandroid.ui.screens.languageCurrentLabel
 fun MeHost(
     client: IMClient,
     onLogout: () -> Unit,
+    /** 注销成功：外壳走与退出登录同一路径、清本机聊天缓存并回登录页提示冷静期。 */
+    onAccountDeleted: () -> Unit = onLogout,
     bottomBar: @Composable () -> Unit,
     /** 收藏里的名片 → 资料页 →「发消息」：交给外壳进聊天页（与通讯录那条同一个出口）。 */
     onOpenChat: (com.libeyond.imandroid.data.db.ConversationEntity) -> Unit = {},
@@ -102,6 +104,11 @@ fun MeHost(
             MePage.Language -> LanguageHost(onBack = { page = MePage.List })
             MePage.Appearance -> AppearanceHost(onBack = { page = MePage.List })
             MePage.PowerSaving -> PowerSavingHost(client = client, onBack = { page = MePage.List })
+            MePage.DeleteAccount -> DeleteAccountHost(
+                client = client,
+                onDeleted = onAccountDeleted,
+                onBack = { page = MePage.Profile },
+            )
             MePage.Profile, MePage.ProfileEdit -> MyProfileHost(
                 client = client,
                 card = me,
@@ -114,6 +121,7 @@ fun MeHost(
                     if (p == MePage.ProfileEdit) toast = Str.s(R.string.profile_saved_toast)
                 },
                 onBack = { page = MePage.List },
+                onOpenDeleteAccount = { page = MePage.DeleteAccount },
             )
             MePage.List -> {
                 val languagePref by LanguageStore.pref.collectAsState()

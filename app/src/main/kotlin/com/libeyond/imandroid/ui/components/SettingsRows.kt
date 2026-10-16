@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -147,6 +148,9 @@ fun IMSettingsRow(
                     else -> c.textPrimary
                 },
                 style = MaterialTheme.typography.bodyLarge,
+                // 危险行（退出登录 / 注销账号）三端统一居中（DELETE_ACCOUNT_DESIGN §1）；分割线缩进与 chevron 逻辑不变
+                modifier = if (destructive) Modifier.fillMaxWidth() else Modifier,
+                textAlign = if (destructive) TextAlign.Center else null,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

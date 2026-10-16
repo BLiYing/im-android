@@ -42,6 +42,8 @@ class ApiException(
     val requestId: String = "",
     val httpStatus: Int = 0,
     cause: Throwable? = null,
+    /** 失败响应里的 `data`（如 NoPermission 附带的 `owned_groups`、登录的 `delete_at`）；多数错误为 null。 */
+    val data: JsonElement? = null,
 ) : Exception(message, cause) {
 
     /** token 失效——调用方据此触发续期或回登录页。 */

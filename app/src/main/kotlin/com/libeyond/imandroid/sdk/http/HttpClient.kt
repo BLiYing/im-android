@@ -108,6 +108,7 @@ class HttpClient(
                 env.message.ifEmpty { Str.s(R.string.err_request_failed, env.code.toString()) },
                 serverReqId,
                 status,
+                data = env.data,
             )
         }
 

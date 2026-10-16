@@ -36,6 +36,8 @@ import com.libeyond.imandroid.sdk.session.DeviceIdentity
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.session.RestoreOutcome
 import com.libeyond.imandroid.sdk.ws.SessionEndReason
+import com.libeyond.imandroid.sdk.api.AccountApi
+import com.libeyond.imandroid.sdk.protocol.ErrCode
 import com.libeyond.imandroid.ui.components.IMPrimaryButton
 import androidx.compose.runtime.DisposableEffect
 import com.libeyond.imandroid.data.Presence
@@ -73,6 +75,10 @@ fun AppRoot(client: IMClient) {
     var error by remember { mutableStateOf("") }
     var host by remember { mutableStateOf(client.host) }
     var endedNotice by remember { mutableStateOf("") }
+    /** 冷静期账号登录被拒后暂存的凭据；非 null 时弹「恢复账号」。 */
+    var pendingRestore by remember { mutableStateOf<PendingRestore?>(null) }
+    /** 本机刚完成注销：之后到的 WS 被踢信号不能覆盖「冷静期」提示。 */
+    var accountDeleted by remember { mutableStateOf(false) }
 
     // —— 冷启动恢复会话（只跑一次）——
     LaunchedEffect(Unit) {
@@ -96,6 +102,7 @@ fun AppRoot(client: IMClient) {
     // —— 被踢 / 被封：回登录页 ——
     LaunchedEffect(Unit) {
         client.sessionEnded.collect { reason ->
+            if (accountDeleted) return@collect
             endedNotice = when (reason) {
                 SessionEndReason.Revoked -> Str.s(R.string.login_revoked_notice)
                 SessionEndReason.Banned -> Str.s(R.string.err_200003)
@@ -135,6 +142,29 @@ fun AppRoot(client: IMClient) {
         }
     }
 
+    pendingRestore?.let { p ->
+        RestoreAccountDialog(
+            pending = p,
+            onDismiss = { pendingRestore = null },
+            onRestore = {
+                pendingRestore = null
+                scope.launch {
+                    busy = true; error = ""
+                    try {
+                        client.host = host
+                        client.account.restore(p.username, p.password)
+                        client.login(p.username, p.password)
+                        endedNotice = ""
+                        accountDeleted = false
+                        phase = Phase.Main
+                    } catch (e: ApiException) {
+                        error = LoginError.friendly(e, appContext)
+                    } finally { busy = false }
+                }
+            },
+        )
+    }
+
     when (phase) {
         Phase.Restoring -> Splash()
 
@@ -146,9 +176,12 @@ fun AppRoot(client: IMClient) {
                         client.host = host
                         client.login(u, p)
                         endedNotice = ""
+                        accountDeleted = false
                         phase = Phase.Main
                     } catch (e: ApiException) {
-                        error = LoginError.friendly(e, appContext)
+                        if (e.code == ErrCode.ACCOUNT_PENDING_DELETION && p.isNotEmpty()) {
+                            pendingRestore = PendingRestore(u, p, AccountApi.deleteAtMillis(e.data))
+                        } else error = LoginError.friendly(e, appContext)
                     } finally { busy = false }
                 }
             },
@@ -237,6 +270,16 @@ fun AppRoot(client: IMClient) {
                             onLogout = {
                                 scope.launch {
                                     client.logout()
+                                    phase = Phase.Login
+                                }
+                            },
+                            onAccountDeleted = {
+                                // client.scope：注销应答回来时页面可能已离开，清理不能随页面作用域取消
+                                client.scope.launch {
+                                    client.logout() // 服务端会话已全吊销，logout 的 100101 按「已退出」处理
+                                    client.wipeLocalChatData()
+                                    accountDeleted = true
+                                    endedNotice = Str.s(R.string.delete_account_done_hint)
                                     phase = Phase.Login
                                 }
                             },
