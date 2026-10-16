@@ -71,7 +71,12 @@ fun ReadReceiptsSheet(
             LazyColumn(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 items(uids, key = { it }) { uid ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { sheet.dismiss { onOpenUser(uid) } }
+                        Modifier.fillMaxWidth().clickable {
+                            // dismiss(after) 的 after **替换**了 onDismissed：不手动置空，readReceipts 永远不清，
+                            // 滑出屏幕的卡片仍在组合里——它的全屏遮罩吞触摸、BackHandler 吞返回键（closing 时不做事），
+                            // 资料页的返回键与边缘返回手势全部失灵。
+                            sheet.dismiss { onDismissed(); onOpenUser(uid) }
+                        }
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
