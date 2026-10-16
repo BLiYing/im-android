@@ -37,6 +37,7 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 /**
  * 一枚码的展示页——名片码 / 群二维码 / 群邀请链接三种共用（对齐 iOS `IMQRCardViewController`：
  * 一个 VC、`asLink` 只改标题文案；群二维码与群邀请链接同源同权限，此处对应 [title] 不同）。
+ * Android 的链接页（[linkMode]）更进一步：不画二维码，链接文本是主角。
  *
  * 副标题（[subtitle]）显示**公开信息**而不是内部 ID：名片码是公开句柄，群码是「XX 人」——
  * 都不落 uid/群内部 ID。没有就留空，不显示「未设置」。
@@ -59,13 +60,18 @@ fun QrCardScreen(
     /** null＝不显示「重置」（群码非群主/管理员时——对齐 iOS `resetButton.hidden`）。 */
     onReset: (() -> Unit)?,
     onBack: () -> Unit,
+    /** true＝群邀请链接页：不画二维码，链接本身是主角（按钮换成「分享链接 / 复制链接」，下方给「查看二维码」入口）。 */
+    linkMode: Boolean = false,
+    onViewCode: (() -> Unit)? = null,
+    /** 重置入口文案：名片码「重置二维码」、群码「重置群二维码」（对齐 iOS）。 */
+    resetText: String = stringResource(R.string.qr_reset),
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val code = card?.codeString.orEmpty()
     // 编码只跟内容有关，重组不该重算（一次编码是毫秒级但每帧都做就不合适了）。
-    val matrix = remember(code) { QrEncode.encode(code) }
-    val ready = matrix != null
+    val matrix = remember(code, linkMode) { if (linkMode) null else QrEncode.encode(code) }
+    val ready = if (linkMode) code.isNotEmpty() else matrix != null
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
         if (showTopBar) IMTopBar(title = title, onLeft = onBack)
@@ -98,11 +104,24 @@ fun QrCardScreen(
                     Text(subtitle, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Spacer(Modifier.height(20.dp))
-                QrCodeView(
-                    matrix = matrix,
-                    size = d.qrCode,
-                    modifier = Modifier.clip(RoundedCornerShape(d.space2)),
-                )
+                if (linkMode) {
+                    Text(
+                        text = code.ifEmpty { stringResource(R.string.qr_card_link_not_ready) },
+                        color = if (code.isEmpty()) c.textSecondary else c.textPrimary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(c.groupedBackground)
+                            .padding(horizontal = 12.dp, vertical = 14.dp),
+                    )
+                } else {
+                    QrCodeView(
+                        matrix = matrix,
+                        size = d.qrCode,
+                        modifier = Modifier.clip(RoundedCornerShape(d.space2)),
+                    )
+                }
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = error.ifEmpty { hint },
@@ -118,21 +137,37 @@ fun QrCardScreen(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(d.space3),
             ) {
-                CardButton(stringResource(R.string.qr_card_save_to_album), primary = false, enabled = ready, onClick = onSave, modifier = Modifier.weight(1f))
-                CardButton(stringResource(R.string.common_share), primary = true, enabled = ready, onClick = onShare, modifier = Modifier.weight(1f))
+                if (linkMode) {
+                    CardButton(stringResource(R.string.qr_card_share_link), primary = false, enabled = ready, onClick = onShare, modifier = Modifier.weight(1f))
+                    CardButton(stringResource(R.string.qr_copy_link), primary = true, enabled = ready, onClick = onCopyLink, modifier = Modifier.weight(1f))
+                } else {
+                    CardButton(stringResource(R.string.qr_card_save_to_album), primary = false, enabled = ready, onClick = onSave, modifier = Modifier.weight(1f))
+                    CardButton(stringResource(R.string.common_share), primary = true, enabled = ready, onClick = onShare, modifier = Modifier.weight(1f))
+                }
             }
 
             Spacer(Modifier.height(d.space3))
-            Text(
-                text = stringResource(R.string.qr_copy_link),
-                color = if (ready) c.accent else c.textTertiary,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.clickable(enabled = ready, onClick = onCopyLink).padding(6.dp),
-            )
+            if (linkMode) {
+                if (onViewCode != null) {
+                    Text(
+                        text = stringResource(R.string.qr_card_view_code),
+                        color = c.accent,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.clickable(onClick = onViewCode).padding(6.dp),
+                    )
+                }
+            } else {
+                Text(
+                    text = stringResource(R.string.qr_copy_link),
+                    color = if (ready) c.accent else c.textTertiary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.clickable(enabled = ready, onClick = onCopyLink).padding(6.dp),
+                )
+            }
             if (onReset != null) {
                 Spacer(Modifier.height(d.space2))
                 Text(
-                    text = stringResource(R.string.qr_reset),
+                    text = resetText,
                     color = c.textSecondary,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.clickable(onClick = onReset).padding(6.dp),

@@ -105,8 +105,9 @@ fun GroupInfoHost(
     var deciding by remember(convId) { mutableStateOf("") }
     // 群管理二级页（仅群主/管理员能进）
     var managing by remember(convId) { mutableStateOf(false) }
-    // 群二维码/群邀请链接页：null=关闭，false=二维码，true=邀请链接（同一份数据，见 GroupQrCardHost）
     var qrCardAsLink by remember(convId) { mutableStateOf<Boolean?>(null) }
+    var qrCameFromLink by remember(convId) { mutableStateOf(false) } // 链接页→「查看二维码」：返回回链接页
+    val qrBack = { if (qrCameFromLink) { qrCardAsLink = true; qrCameFromLink = false } else qrCardAsLink = null }
     // 会话媒体归档（详情页的「聊天媒体」，与单聊那侧同一个组件）
     // 归档已并进内联页签（2026-09-09），只剩「点开一张图/视频」还是独立的一层
     var pickedTab by remember(convId) { mutableStateOf(initialTab) }
@@ -170,7 +171,7 @@ fun GroupInfoHost(
             GroupInfoPage.MemberSearch -> memberSearchOpen = false
             GroupInfoPage.Media -> viewingOpen = false
             GroupInfoPage.Manage -> managing = false
-            GroupInfoPage.Qr -> qrCardAsLink = null
+            GroupInfoPage.Qr -> qrBack()
             GroupInfoPage.Detail -> onBack()
         }
     }
@@ -388,7 +389,8 @@ fun GroupInfoHost(
         GroupQrCardHost(
             client = client, convId = convId, groupName = g.name, avatarUrl = g.avatarUrl,
             memberCount = g.memberCount, asLink = qrCardAsLink == true, canReset = g.iAmManager,
-            onBack = { qrCardAsLink = null },
+            onBack = qrBack,
+            onViewCode = if (qrCardAsLink == true) ({ qrCardAsLink = false; qrCameFromLink = true }) else null,
         )
     } else {
         // Media 与 Detail 是这条链里唯一真的接了转场的一对（同 ChatDetailHost 这轮的写法）：
@@ -442,8 +444,8 @@ fun GroupInfoHost(
         remark = settings.remark,
         onEditRemark = settings::openRemarkEditor,
         onOpenNotice = settings::openNotice,
-        onOpenGroupQR = { qrCardAsLink = false },
-        onOpenGroupInviteLink = { qrCardAsLink = true },
+        onOpenGroupQR = { qrCameFromLink = false; qrCardAsLink = false },
+        onOpenGroupInviteLink = { qrCameFromLink = false; qrCardAsLink = true },
 
             onInvite = {
                 pick = PickPurpose.Invite

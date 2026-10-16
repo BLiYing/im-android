@@ -28,6 +28,7 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.QrCard
 import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
+import com.libeyond.imandroid.ui.components.TimeFormat
 import com.libeyond.imandroid.ui.components.qrToBitmap
 import com.libeyond.imandroid.ui.screens.QrCardScreen
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +37,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * 群二维码 / 群邀请链接（对齐 iOS `pushGroupCardAsLink:`：同一份数据、同一套动作，
- * [asLink] 只切标题文案——两个入口点开的是同一枚 `/q/g/<token>`）。
+ * [asLink] 切标题文案与版式（链接页不画码、只分享文字链接，可经 [onViewCode] 切到码页）——两个入口点开的是同一枚 `/q/g/<token>`）。
  *
  * 与 [QrCardHost]（名片码）几乎同构，唯独：取码/重置码走群接口、[canReset] 由调用方按
  * 群主/管理员判定传入（服务端仍会二次校验，这里只决定按钮显不显）。**只接「出示」这一半**——
@@ -52,6 +53,8 @@ fun GroupQrCardHost(
     asLink: Boolean,
     canReset: Boolean,
     onBack: () -> Unit,
+    /** 链接页底部「查看二维码」：由调用方切到同一枚 token 的二维码页。 */
+    onViewCode: (() -> Unit)? = null,
 ) {
     BackHandler(onBack = onBack)
 
@@ -73,8 +76,9 @@ fun GroupQrCardHost(
 
     // 展示页要给别人扫：临时拉满屏幕亮度，离开还原（同 QrCardHost）。
     val activity = context as? Activity
-    DisposableEffect(activity) {
-        val window = activity?.window
+    DisposableEffect(activity, asLink) {
+        // 链接页不出示二维码，不需要拉亮度。
+        val window = if (asLink) null else activity?.window
         val previous = window?.attributes?.screenBrightness
         window?.attributes = window?.attributes?.apply { screenBrightness = 1.0f }
         onDispose {
@@ -110,11 +114,11 @@ fun GroupQrCardHost(
         card = card,
         title = if (asLink) stringResource(R.string.qr_card_group_title_link) else stringResource(R.string.qr_card_group_title_code),
         displayName = groupName,
-        subtitle = pluralStringResource(R.plurals.common_people_count, memberCount, memberCount), // 与详情页头部人数文案一致（GroupInfoScreen.kt）
+        subtitle = pluralStringResource(R.plurals.qr_branch_group_meta, memberCount, memberCount), // 「N 名成员」，与 iOS 群码卡片 / 扫码预览一致
         avatarUrl = avatarUrl,
         seed = convId,
         error = error,
-        hint = if (asLink) stringResource(R.string.group_qr_hint_link) else stringResource(R.string.group_qr_hint_code),
+        hint = groupQrHint(asLink, card?.expiresAt ?: 0L),
         onCopyLink = {
             val code = card?.codeString.orEmpty()
             if (code.isEmpty()) {
@@ -135,8 +139,17 @@ fun GroupQrCardHost(
                 saveNow()
             }
         },
+        linkMode = asLink,
+        resetText = stringResource(R.string.qr_card_reset_group),
+        onViewCode = onViewCode,
         onShare = {
             val code = card?.codeString.orEmpty()
+            if (asLink) {
+                // 链接页只分享文字链接，不带图。
+                if (code.isEmpty()) toast = Str.s(R.string.qr_card_link_not_ready)
+                else ImageExport.shareText(context, code)?.let { toast = it }
+                return@QrCardScreen
+            }
             val matrix = QrEncode.encode(code)
             if (matrix == null) {
                 toast = Str.s(R.string.qr_card_not_ready)
@@ -149,7 +162,7 @@ fun GroupQrCardHost(
                 }
             }
         },
-        onReset = if (canReset) { { confirmReset = true } } else null,
+        onReset = if (canReset && !asLink) { { confirmReset = true } } else null, // 链接页不放重置（重置只在二维码页）
         onBack = onBack,
     )
 
@@ -170,4 +183,15 @@ fun GroupQrCardHost(
     }
 
     toast?.let { IMToast(it) { toast = null } }
+}
+
+/** 码页/链接页底部提示：有到期时间就写具体日期（与 iOS 同一套文案），没有则退回固定 7 天口径。 */
+@Composable
+private fun groupQrHint(asLink: Boolean, expiresAt: Long): String = when {
+    expiresAt > 0 -> stringResource(
+        if (asLink) R.string.qr_card_group_link_hint_expiry else R.string.qr_card_group_hint_expiry,
+        TimeFormat.dateLabel(expiresAt),
+    )
+    asLink -> stringResource(R.string.group_qr_hint_link)
+    else -> stringResource(R.string.group_qr_hint_code)
 }

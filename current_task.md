@@ -6,6 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **二维码展示三端对齐（2026-10-16，已三端自测 + 全量测试，未提交）**：名片码/群二维码/群邀请链接卡片头部（头像·名字·成员数/@句柄）竖排居中（iOS `IMQRCardView`、Web `QRCardModal`+扫码结果分支）；iOS 扫一扫「我的二维码」改为嵌入 `IMQRCardViewController`（同 Android 共用整页）；群邀请链接页改为链接框 + 分享/复制 + 「查看二维码」，不画码（三端）；群码有效期提示三端统一为「X月X日 前有效，重置后旧码立即失效」（无到期时间退回 7 天口径）；链接页不放重置（重置只在二维码页）；新增 i18n 键 `qr.card.share_link/view_code/group_link_hint_expiry` 已入 `strings.json` 并重新生成。
 - **置顶消息底部面板（2026-10-15，未提交，待真机目测；设计 IMServer `docs/design/PINNED_PANEL_DESIGN.md` + 稿 `sketches/PINNED_PANEL_UX_SKETCH.html`）**：
   - 横幅：整条 / ≡（恒显）= 开面板；恒显最新置顶（`PinnedBanner.latest`），kicker「置顶消息 · N 条 · 发送者」（`PinnedBanner.kicker` + `chat_banner_pinned_count`）；轮转（`index`/`clampIndex`/`nextIndex`/`tapPinned`）、`unpinCurrent`、`PinnedListDialog` 均已删。
   - 面板 `ui/PinnedSheet.kt`：`ModalBottomSheet` + `IMTopBar`（✕ / 标题 / 仅有权限显副标题）+ 壁纸底 `LazyColumn`（每行 = 只读 `Bubble`，日期胶囊，定位图标 32 圆紧挨气泡：我发的在左、别人的在右）+ 流内底栏「取消所有置顶」（`IMConfirmDialog` → `POST …/pinned/clear`）。`sheetBody()` 半屏时把内容区缩回可见区（底栏不被推出屏）。

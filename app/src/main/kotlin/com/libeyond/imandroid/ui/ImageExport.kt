@@ -63,6 +63,23 @@ object ImageExport {
         }
     }
 
+    /** 仅分享一段文字（群邀请链接页）。失败返回给用户看的文案；成功返回 null。 */
+    fun shareText(context: Context, text: String): String? {
+        return try {
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+            context.startActivity(
+                Intent.createChooser(intent, Str.s(R.string.common_share)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            null
+        } catch (e: Exception) {
+            log.w("share_text_failed", "err" to e.javaClass.simpleName)
+            Str.s(R.string.media_share_failed)
+        }
+    }
+
     /**
      * 走系统分享：图片 + 文本（对齐 iOS `UIActivityViewController` 那两个 activityItems）。
      *

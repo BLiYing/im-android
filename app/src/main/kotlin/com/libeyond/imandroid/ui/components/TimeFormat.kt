@@ -41,6 +41,17 @@ object TimeFormat {
         }
     }
 
+    /** 「M月d日」/ 往年「yyyy年M月d日」的纯日期标签（对齐 iOS `IMTheme dateLabelForDate:`）。 */
+    fun dateLabel(tsMillis: Long, now: Long = System.currentTimeMillis()): String {
+        val c = Calendar.getInstance().apply { timeInMillis = tsMillis }
+        val n = Calendar.getInstance().apply { timeInMillis = now }
+        return if (c.get(Calendar.YEAR) == n.get(Calendar.YEAR)) {
+            Str.s(R.string.time_month_day, Str.monthArg(c), c.get(Calendar.DAY_OF_MONTH))
+        } else {
+            Str.s(R.string.time_full_date, c.get(Calendar.YEAR).toString(), Str.monthArg(c), c.get(Calendar.DAY_OF_MONTH))
+        }
+    }
+
     /**
      * 归档（详情页的媒体 / 文件 / 语音 / 链接页签）里那一行时间：**完整的年月日 + 时分**。
      *
