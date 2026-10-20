@@ -106,7 +106,7 @@ fun UserProfileScreen(
         ) {
             // 标识行为空时**整行隐藏**——不显示「用户名：未设置」，更不回退内部 ID
             if (card.handle.isNotEmpty()) InfoRow(stringResource(R.string.settings_info_username), card.handle)
-            if (isFriend) {
+            if (isFriend && !card.deleted) {
                 Divider()
                 InfoRow(
                     stringResource(R.string.chat_detail_remark_name),
@@ -124,6 +124,8 @@ fun UserProfileScreen(
 
         Column(Modifier.padding(horizontal = d.space4)) {
             when {
+                // 已注销（§6.16.3）：不给发消息 / 加好友 / 同意；好友关系仍在（冷静期）时只留删除
+                card.deleted -> if (isFriend) IMSecondaryButton(stringResource(R.string.friend_menu_delete), onRemoveFriend)
                 isFriend -> {
                     IMPrimaryButton(stringResource(R.string.qr_action_send_message), onSendMessage)
                     Spacer(Modifier.height(d.cardGap))

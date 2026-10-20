@@ -25,13 +25,19 @@ data class GroupMember(
     @SerialName("joined_at") val joinedAt: Long = 0,
     /** 成员级禁言到期；0=未禁言。 */
     @SerialName("mute_until") val muteUntil: Long = 0,
+    /** 已注销账号（§6.16.3）：显示「已注销用户」，压过群昵称。 */
+    val deleted: Boolean = false,
 ) {
-    /** 群内显示名：**群昵称 → 全局昵称 → @句柄 → 未命名**（末级不是 uid）。 */
+    /** 群内显示名：**群昵称 → 全局昵称 → @句柄 → 未命名**（末级不是 uid）；已注销恒为「已注销用户」。 */
     val displayName: String
-        get() = groupNickname.ifBlank { nickname }
+        get() = if (deleted) DeletedUser.name else groupNickname.ifBlank { nickname }
             .ifBlank { if (username.isBlank()) "未命名用户" else "@$username" }
 
-    val handle: String get() = if (username.isBlank()) "" else "@$username"
+    val handle: String get() = if (deleted || username.isBlank()) "" else "@$username"
+
+    fun normalized(): GroupMember =
+        if (!deleted) this else copy(nickname = DeletedUser.name, groupNickname = "", username = "", avatarUrl = "")
+
     val isOwner: Boolean get() = role == ROLE_OWNER
     val isAdmin: Boolean get() = role == ROLE_ADMIN
     val isManager: Boolean get() = isOwner || isAdmin
@@ -171,6 +177,7 @@ class GroupApi(private val http: HttpClient) {
     /** 群资料 + 成员。**超级群只回我自己**，成员表必须走 [members]。 */
     suspend fun info(convId: String): GroupInfo =
         decode(http.call("GET", "/api/v1/groups/$convId"), GroupInfo.serializer())
+            .let { g -> g.copy(members = g.members.map { it.normalized() }) }
 
     /**
      * 成员目录游标分页（大群用）。
@@ -186,7 +193,7 @@ class GroupApi(private val http: HttpClient) {
         return decode(
             http.call("GET", "/api/v1/groups/$convId/members", query = query),
             GroupMembersPage.serializer(),
-        )
+        ).let { p -> p.copy(items = p.items.map { it.normalized() }) }
     }
 
     suspend fun create(name: String, memberIds: List<String>, avatarUrl: String = ""): GroupInfo =

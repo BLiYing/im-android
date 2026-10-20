@@ -55,7 +55,12 @@ data class ConversationSummary(
     @SerialName("mention_unread") val mentionUnread: Boolean = false,
     /** 会话备注名（G1，仅本人可见）。与 peer_remark 不同：这是"我对这个会话"的别名，群聊也适用。 */
     val remark: String = "",
-)
+    /** 单聊对端账号已注销（§6.16.3）：标题恒为「已注销用户」，压过会话备注/好友备注，头像用默认。 */
+    @SerialName("peer_deleted") val peerDeleted: Boolean = false,
+) {
+    fun normalized(): ConversationSummary = if (isGroup || !peerDeleted) this else
+        copy(peerNickname = DeletedUser.name, peerRemark = "", peerAvatarUrl = "", remark = "", peerPresence = "")
+}
 
 /**
  * 部署级配额/能力（`GET /server-config`）。
@@ -101,7 +106,7 @@ class ConversationsApi(private val http: HttpClient) {
     }.getOrNull()?.takeIf { it.isRenderable }
 
     suspend fun list(): List<ConversationSummary> =
-        decode(http.call("GET", "/api/v1/conversations"), ConversationsResp.serializer()).conversations
+        decode(http.call("GET", "/api/v1/conversations"), ConversationsResp.serializer()).conversations.map { it.normalized() }
 
     /**
      * 读取本人对某会话的会话级设置（对称于 [updateSettings]，`GET` 版）。

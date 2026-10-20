@@ -340,6 +340,7 @@
     <string name="chat_reader_title">Full text · %1$s</string>
     <string name="chat_reject_blocked">Message sent, but it was declined by the recipient</string>
     <string name="chat_reject_not_friend">Message sent, but it was declined by the recipient. Please send a friend request first.</string>
+    <string name="chat_reject_recipient_deleted">This account has been deleted. You can\'t send messages to it.</string>
     <string name="chat_reject_too_large">This message is too large to send</string>
     <string name="chat_reply_cancel">Cancel reply</string>
     <string name="chat_reply_cancel_a11y">Cancel reply</string>

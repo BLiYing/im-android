@@ -17,7 +17,8 @@ fun RestoreAccountDialog(pending: PendingRestore, onRestore: () -> Unit, onDismi
     val date = pending.deleteAtMillis?.let { DateFormat.getDateInstance(DateFormat.LONG, Locale.getDefault()).format(Date(it)) }.orEmpty()
     IMConfirmDialog(
         title = stringResource(R.string.delete_account_restore_title),
-        message = stringResource(R.string.delete_account_restore_message, date),
+        // 服务端没给 delete_at 时不渲染空日期（im-web useRestoreOffer 同）
+        message = if (date.isEmpty()) stringResource(R.string.delete_account_restore_title) else stringResource(R.string.delete_account_restore_message, date),
         confirmText = stringResource(R.string.delete_account_restore_action),
         onConfirm = onRestore,
         onDismiss = onDismiss,

@@ -2,6 +2,7 @@ package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,8 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.TriangleAlert
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DeleteAccountRules
+import com.libeyond.imandroid.data.DisplayName
+import com.libeyond.imandroid.sdk.api.OwnedGroup
 import com.libeyond.imandroid.ui.components.IMPrimaryButton
 import com.libeyond.imandroid.ui.components.IMSettingsGroup
 import com.libeyond.imandroid.ui.components.IMTopBar
@@ -51,7 +54,8 @@ fun DeleteAccountScreen(
     password: String,
     onPasswordChange: (String) -> Unit,
     error: String,
-    ownedGroups: List<String>,
+    ownedGroups: List<OwnedGroup>,
+    onOpenGroup: (OwnedGroup) -> Unit,
     submitting: Boolean,
     onSubmit: () -> Unit,
     onBack: () -> Unit,
@@ -74,7 +78,7 @@ fun DeleteAccountScreen(
             InfoBar(stringResource(R.string.delete_account_cooldown_hint), blocked = false)
             if (blocked) {
                 Spacer(Modifier.height(d.space3))
-                OwnedGroupsCard(ownedGroups)
+                OwnedGroupsCard(ownedGroups, onOpenGroup)
             }
             Spacer(Modifier.height(d.sectionGap))
             IMSettingsGroup {
@@ -172,11 +176,32 @@ private fun InfoBar(text: String, blocked: Boolean) {
     )
 }
 
-/** 群主阻断卡：说明 + 群名（最多 3 个，其余「等 N 个」）。 */
+/** 群主阻断卡：说明 + 群名（最多 3 个，每个可点进该群管理页；其余「等 N 个」）。无 conv_id 的项不可点。 */
 @Composable
-private fun OwnedGroupsCard(groups: List<String>) {
+private fun OwnedGroupsCard(groups: List<OwnedGroup>, onOpenGroup: (OwnedGroup) -> Unit) {
+    val c = IMTheme.colors
+    val d = IMTheme.dimens
     val more = DeleteAccountRules.moreCount(groups)
-    val names = DeleteAccountRules.listedGroups(groups).joinToString("、") { "「$it」" }
-    val tail = if (more > 0) stringResource(R.string.delete_account_owned_groups_more, more) else ""
-    InfoBar(stringResource(R.string.delete_account_owned_groups) + "\n" + names + tail, blocked = true)
+    Column(
+        Modifier.padding(horizontal = d.space4).fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp)).background(c.dangerSoft).padding(12.dp),
+    ) {
+        Text(stringResource(R.string.delete_account_owned_groups), color = c.danger, style = MaterialTheme.typography.bodyMedium)
+        DeleteAccountRules.listedGroups(groups).forEach { g ->
+            Text(
+                text = "「${g.name.ifBlank { DisplayName.UNNAMED_GROUP }}」 ›",
+                color = c.danger,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.fillMaxWidth()
+                    .then(if (g.convId.isNotEmpty()) Modifier.clickable { onOpenGroup(g) } else Modifier)
+                    .padding(top = 6.dp),
+            )
+        }
+        if (more > 0) {
+            Text(
+                stringResource(R.string.delete_account_owned_groups_more, more),
+                color = c.danger, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
 }

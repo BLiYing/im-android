@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.sdk.api.AccountApi
+import com.libeyond.imandroid.sdk.api.OwnedGroup
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,27 +11,28 @@ import org.junit.Test
 
 class DeleteAccountRulesTest {
     @Test fun emptyPasswordDisablesButton() {
-        assertFalse(DeleteAccountRules.canSubmit("", false, emptyList()))
-        assertTrue(DeleteAccountRules.canSubmit("x", false, emptyList()))
+        assertFalse(DeleteAccountRules.canSubmit("", false, emptyList<OwnedGroup>()))
+        assertTrue(DeleteAccountRules.canSubmit("x", false, emptyList<OwnedGroup>()))
     }
 
     @Test fun submittingOrOwnedGroupsBlock() {
-        assertFalse(DeleteAccountRules.canSubmit("x", true, emptyList()))
-        assertFalse(DeleteAccountRules.canSubmit("x", false, listOf("群A")))
+        assertFalse(DeleteAccountRules.canSubmit("x", true, emptyList<OwnedGroup>()))
+        assertFalse(DeleteAccountRules.canSubmit("x", false, listOf(OwnedGroup("c1", "群A"))))
     }
 
     @Test fun listsAtMostThreeGroupsAndCountsRest() {
-        val g = listOf("a", "b", "c", "d", "e")
-        assertEquals(listOf("a", "b", "c"), DeleteAccountRules.listedGroups(g))
+        val g = listOf("a", "b", "c", "d", "e").map { OwnedGroup(it, it) }
+        assertEquals(g.take(3), DeleteAccountRules.listedGroups(g))
         assertEquals(2, DeleteAccountRules.moreCount(g))
         assertEquals(0, DeleteAccountRules.moreCount(g.take(3)))
     }
 
-    @Test fun parsesOwnedGroupsFromStringsAndObjects() {
-        val j = Json.parseToJsonElement("""{"owned_groups":["A",{"name":"B"},{"group_name":"C"},{"x":1},""]}""")
-        assertEquals(listOf("A", "B", "C"), AccountApi.ownedGroups(j))
-        assertEquals(emptyList<String>(), AccountApi.ownedGroups(null))
-        assertEquals(emptyList<String>(), AccountApi.ownedGroups(Json.parseToJsonElement("{}")))
+    @Test fun parsesOwnedGroupsFromContract() {
+        val j = Json.parseToJsonElement("""{"owned_groups":[{"conv_id":"g_1","name":"A"},{"name":"B"},{"conv_id":"g_3"},"x",{"conv_id":"g_4","name":" "}]}""")
+        assertEquals(listOf(OwnedGroup("g_1", "A"), OwnedGroup("", "B"), OwnedGroup("g_3", ""), OwnedGroup("g_4", " ")), AccountApi.ownedGroups(j))
+        assertEquals(emptyList<OwnedGroup>(), AccountApi.ownedGroups(Json.parseToJsonElement("""{"owned_groups":[{"name":" "},{}]}""")))
+        assertEquals(emptyList<OwnedGroup>(), AccountApi.ownedGroups(null))
+        assertEquals(emptyList<OwnedGroup>(), AccountApi.ownedGroups(Json.parseToJsonElement("{}")))
     }
 
     @Test fun deleteAtAcceptsSecondsAndMillis() {

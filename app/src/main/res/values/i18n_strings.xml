@@ -329,6 +329,7 @@
     <string name="chat_reader_title">全文 · %1$s</string>
     <string name="chat_reject_blocked">消息已发出，但被对方拒收了</string>
     <string name="chat_reject_not_friend">消息已发出，但被对方拒收了。请先发送好友申请。</string>
+    <string name="chat_reject_recipient_deleted">对方账号已注销，无法发送消息</string>
     <string name="chat_reject_too_large">消息内容过大，无法发送</string>
     <string name="chat_reply_cancel">取消引用</string>
     <string name="chat_reply_cancel_a11y">取消回复</string>

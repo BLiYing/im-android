@@ -234,7 +234,10 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit, onAccountDeleted: () -> U
      * 换成资料页手里那份桩（stub）只会丢字段；待办由 chatArm 送达，用不着换页。
      */
     val switchTo: (ConversationEntity) -> Unit = { c -> if (openConv?.convId != c.convId) openConv = c }
-    androidx.compose.runtime.CompositionLocalProvider(LocalChatArmSink provides { chatArm = it }) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalChatArmSink provides { chatArm = it },
+        LocalOpenGroupInfo provides { g -> infoTab = null; infoGallery = false; infoApproval = false; openConv = g; infoForConv = g },
+    ) {
     Box(Modifier.fillMaxSize()) {
         // 扫码/点链接加群路由宿主：挂在这里（不是更外层的 AppRoot）是因为它要改 openConv 来进群聊/单聊，
         // 那份状态是本函数的私有变量，宿主离它太远够不着（QrRouteHost.kt 头注释）。

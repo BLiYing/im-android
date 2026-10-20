@@ -30,6 +30,7 @@ object DisplayName {
 
     /** 会话在**本机**列表/标题里显示的名字。可以带备注。 */
     fun ofConversation(c: ConversationSummary): String {
+        if (!c.isGroup && c.peerDeleted) return com.libeyond.imandroid.sdk.api.DeletedUser.name // 压过一切备注
         if (c.remark.isNotBlank()) return c.remark
         return if (c.isGroup) {
             c.name.ifBlank { UNNAMED_GROUP }

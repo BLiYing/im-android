@@ -31,7 +31,7 @@ object ErrCode {
     const val USER_ALREADY_EXISTS = 200004
     /**
      * 账号处于注销冷静期（登录返回，附 `delete_at`，不签 token）。
-     * 码值取 DELETE_ACCOUNT_DESIGN §5 的建议 200005；**待与后端 PROTOCOL.md 对账**。
+     * 见 PROTOCOL §6.16（`200005 AccountPendingDeletion`，`data.delete_at` 毫秒）。
      */
     const val ACCOUNT_PENDING_DELETION = 200005
 

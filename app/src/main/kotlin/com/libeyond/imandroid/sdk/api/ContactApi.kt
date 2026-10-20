@@ -39,6 +39,15 @@ data class UserCard(
 
     /** 副标题里的标识行。**为空时整行隐藏**，不显示「用户名：未设置」，更不回退内部 ID。 */
     val handle: String get() = if (deleted || username.isBlank()) "" else "@$username"
+
+    /** 已注销：名字换成本地化「已注销用户」、清备注/头像/句柄（PROTOCOL §6.16.3，压过一切本机备注）；正常账号原样返回。 */
+    fun normalized(): UserCard =
+        if (!deleted) this else copy(nickname = DeletedUser.name, remark = "", username = "", avatarUrl = "", presence = "")
+}
+
+/** 「已注销用户」的统一取名口（三类用户对象 + 会话摘要的 `deleted` / `peer_deleted` 都走它）。 */
+object DeletedUser {
+    val name: String get() = Str.s(R.string.delete_account_deleted_user)
 }
 
 /** 好友关系项（对齐 `internal/friend.Entry`）。 */
@@ -57,11 +66,16 @@ data class FriendEntry(
     val blocked: Boolean = false,
     /** 好友申请的验证消息，只在 pending/requested 时有值。 */
     val hello: String = "",
+    /** 已注销账号（§6.16.3）：显示「已注销用户」+ 默认头像，压过备注。 */
+    val deleted: Boolean = false,
 ) {
     val displayName: String
-        get() = remark.ifBlank { nickname }.ifBlank { if (username.isBlank()) Str.s(R.string.common_unnamed_user) else "@$username" }
+        get() = if (deleted) DeletedUser.name else remark.ifBlank { nickname }.ifBlank { if (username.isBlank()) Str.s(R.string.common_unnamed_user) else "@$username" }
 
-    val handle: String get() = if (username.isBlank()) "" else "@$username"
+    val handle: String get() = if (deleted || username.isBlank()) "" else "@$username"
+
+    fun normalized(): FriendEntry =
+        if (!deleted) this else copy(nickname = DeletedUser.name, remark = "", username = "", avatarUrl = "")
 
     companion object {
         const val ACCEPTED = "accepted"
@@ -81,7 +95,7 @@ class ContactApi(private val http: HttpClient) {
     /** @param status 空=全部；accepted / pending / requested / blocked */
     suspend fun friends(status: String = ""): List<FriendEntry> {
         val q = if (status.isEmpty()) emptyMap() else mapOf("status" to status)
-        return decode(http.call("GET", "/api/v1/friends", query = q), FriendsResp.serializer()).friends
+        return decode(http.call("GET", "/api/v1/friends", query = q), FriendsResp.serializer()).friends.map { it.normalized() }
     }
 
     /**
@@ -92,10 +106,10 @@ class ContactApi(private val http: HttpClient) {
         decode(
             http.call("GET", "/api/v1/users/search", query = mapOf("q" to q, "limit" to limit.toString())),
             UsersResp.serializer(),
-        ).users
+        ).users.map { it.normalized() }
 
     suspend fun card(userId: String): UserCard =
-        decode(http.call("GET", "/api/v1/users/$userId"), UserCard.serializer())
+        decode(http.call("GET", "/api/v1/users/$userId"), UserCard.serializer()).normalized()
 
     suspend fun me(): UserCard =
         decode(http.call("GET", "/api/v1/users/me"), UserCard.serializer())
@@ -168,7 +182,7 @@ class ContactApi(private val http: HttpClient) {
     suspend fun usersBatch(ids: List<String>): com.libeyond.imandroid.data.ProfileBatch {
         val data = http.call("POST", "/api/v1/users/batch", buildJsonObject { putJsonArray("ids") { ids.forEach { add(it) } } })
         val r = decode(data, UsersBatchResp.serializer())
-        return com.libeyond.imandroid.data.ProfileBatch(r.users, r.missing)
+        return com.libeyond.imandroid.data.ProfileBatch(r.users.map { it.normalized() }, r.missing)
     }
 
     /** 设备注名。空串=清除。须已是好友，否则 200103。 */

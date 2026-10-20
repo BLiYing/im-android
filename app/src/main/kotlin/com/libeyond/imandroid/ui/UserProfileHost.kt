@@ -129,10 +129,18 @@ private fun SelfProfile(client: IMClient, onBack: () -> Unit) {
         runCatchingCancellable { client.contacts.me() }
             .onSuccess { me = it; client.cacheMyProfile(it) }
     }
+    // 与「我」页路径同口径：只读态底部带「注销账号」组（外壳动作由 [LocalAccountDeleted] 提供）
+    val onDeleted = LocalAccountDeleted.current
+    var deleting by remember { mutableStateOf(false) }
+    if (deleting && onDeleted != null) {
+        DeleteAccountHost(client = client, onDeleted = onDeleted, onBack = { deleting = false })
+        return
+    }
     MyProfileHost(
         client = client,
         card = me,
         onChanged = { me = it; client.cacheMyProfile(it) },
         onBack = onBack,
+        onOpenDeleteAccount = onDeleted?.let { { deleting = true } },
     )
 }

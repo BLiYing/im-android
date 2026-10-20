@@ -21,6 +21,7 @@ object SendRejection {
     fun noteRes(code: Int): Int? = when (code) {
         ErrCode.FRIEND_BLOCKED -> R.string.chat_reject_blocked
         ErrCode.NOT_FRIEND -> R.string.chat_reject_not_friend
+        ErrCode.RECIPIENT_NOT_FOUND -> R.string.chat_reject_recipient_deleted // 对端已注销（§6.16.3）：重发必然再失败，不可点
         ErrCode.ACCOUNT_MUTED -> R.string.err_300004
         ErrCode.MSG_TOO_LONG -> R.string.chat_reject_too_large
         ErrCode.NOT_GROUP_MEMBER -> R.string.err_300203

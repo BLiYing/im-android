@@ -22,6 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.User
+import com.libeyond.imandroid.ui.theme.IMTheme
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DetailActions
 import com.libeyond.imandroid.data.DisplayName
@@ -92,6 +95,18 @@ fun IMAvatar(
             contentScale = ContentScale.Crop,
             modifier = modifier.size(size).clip(CircleShape),
         )
+        return
+    }
+    if (displayName == com.libeyond.imandroid.sdk.api.DeletedUser.name) {
+        // 已注销用户（§6.16.3）：不画「户」字首字母，用灰底人形默认头像
+        Box(modifier.size(size).clip(CircleShape).background(IMTheme.colors.textTertiary), Alignment.Center) {
+            Image(
+                imageVector = Lucide.User,
+                contentDescription = null,
+                modifier = Modifier.size(size * 0.55f),
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White),
+            )
+        }
         return
     }
     Box(

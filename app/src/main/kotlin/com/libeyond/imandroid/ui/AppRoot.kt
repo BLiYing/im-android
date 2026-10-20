@@ -107,6 +107,7 @@ fun AppRoot(client: IMClient) {
                 SessionEndReason.Revoked -> Str.s(R.string.login_revoked_notice)
                 SessionEndReason.Banned -> Str.s(R.string.err_200003)
                 SessionEndReason.Expired -> Str.s(R.string.common_login_expired)
+                SessionEndReason.AccountDeleted -> Str.s(R.string.delete_account_done_hint)
             }
             phase = Phase.Login
         }
@@ -192,6 +193,7 @@ fun AppRoot(client: IMClient) {
                         client.host = host
                         client.register(u, p, n)
                         endedNotice = ""
+                        accountDeleted = false
                         phase = Phase.Main
                     } catch (e: ApiException) {
                         error = LoginError.friendly(e, appContext)
@@ -205,6 +207,7 @@ fun AppRoot(client: IMClient) {
                         client.host = host
                         client.login(u, null)
                         endedNotice = ""
+                        accountDeleted = false
                         phase = Phase.Main
                     } catch (e: ApiException) {
                         error = LoginError.friendly(e, appContext)
@@ -248,7 +251,19 @@ fun AppRoot(client: IMClient) {
             // 下载门控的环境（下载器 + 策略 + 网络类型）。**整棵树共用一份**：
             // 气泡 / 宫格 / 文件 / 详情四处必须看到同一份在途状态，
             // 各建一个的话同一条媒体会被下两遍、进度各显各的。
+            // client.scope：注销应答回来时页面可能已离开，清理不能随页面作用域取消
+            val onAccountDeleted: () -> Unit = {
+                val owner = client.uid.orEmpty() // logout 会清掉，先取
+                client.scope.launch {
+                    client.logout() // 服务端会话已全吊销，logout 的 100101 按「已退出」处理
+                    client.wipeLocalChatData(owner)
+                    accountDeleted = true
+                    endedNotice = Str.s(R.string.delete_account_done_hint)
+                    phase = Phase.Login
+                }
+            }
             CompositionLocalProvider(
+                LocalAccountDeleted provides onAccountDeleted,
                 LocalMediaGate provides MediaGateEnv(
                     downloads = client.downloads,
                     settings = { client.downloadSettings },
@@ -273,16 +288,7 @@ fun AppRoot(client: IMClient) {
                                     phase = Phase.Login
                                 }
                             },
-                            onAccountDeleted = {
-                                // client.scope：注销应答回来时页面可能已离开，清理不能随页面作用域取消
-                                client.scope.launch {
-                                    client.logout() // 服务端会话已全吊销，logout 的 100101 按「已退出」处理
-                                    client.wipeLocalChatData()
-                                    accountDeleted = true
-                                    endedNotice = Str.s(R.string.delete_account_done_hint)
-                                    phase = Phase.Login
-                                }
-                            },
+                            onAccountDeleted = onAccountDeleted,
                         )
                     }
                     // §5 自动开启提示：盖在主界面之上

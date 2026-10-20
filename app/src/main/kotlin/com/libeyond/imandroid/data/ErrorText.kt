@@ -21,6 +21,7 @@ object ErrorText {
         ErrCode.WRONG_PASSWORD -> R.string.err_200002
         ErrCode.ACCOUNT_BANNED -> R.string.err_200003
         ErrCode.USER_ALREADY_EXISTS -> R.string.err_200004
+        ErrCode.RECIPIENT_NOT_FOUND -> R.string.chat_reject_recipient_deleted
         ErrCode.ACCOUNT_MUTED -> R.string.err_300004
         ErrCode.GROUP_MUTED -> R.string.chat_input_disabled_mute_all
         ErrCode.GROUP_MEMBER_MUTED -> R.string.chat_input_disabled_muted

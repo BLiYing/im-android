@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.contentOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -25,7 +26,18 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 /** 会话被服务端否定的原因，UI 据此给不同文案并回登录页。Expired = 续期凭据到了绝对寿命上限。 */
-enum class SessionEndReason { Revoked, Banned, Expired }
+enum class SessionEndReason {
+    Revoked, Banned, Expired,
+    /** 账号被注销（本人在另一台设备注销，PROTOCOL §6.16.2 `error.reason=account_deleted`）：除回登录页外还要清本机聊天缓存。 */
+    AccountDeleted,
+}
+
+/** 注销踢下线帧（§6.16.2）：`type=error` 且 `data.reason=="account_deleted"`；其它 error 帧不是。 */
+internal fun isAccountDeletedFrame(env: Envelope): Boolean =
+    env.type == FrameType.ERROR &&
+        ((env.data as? kotlinx.serialization.json.JsonObject)?.get("reason") as? kotlinx.serialization.json.JsonPrimitive)
+            ?.contentOrNull == "account_deleted"
+
 
 /**
  * WebSocket 长连接（对应 iOS `IMSocketManager`、Web `IMClient` 的连接部分）。
@@ -383,6 +395,11 @@ class IMSocketManager(
             // 真要看原始帧时临时把 text.take(N) 加回来（2026-09-07 排 sync_resp 时这么干过）。
             if (env.type != FrameType.PONG) {
                 log.d("ws_frame", "type" to env.type, "len" to text.length)
+            }
+            if (isAccountDeletedFrame(env)) {
+                // 服务端随后断连；先停重连再发信号（同 401 被踢路径），清缓存由 IMClient 订阅 sessionEnded 做
+                synchronized(lock) { endSession(SessionEndReason.AccountDeleted) }
+                return
             }
             if (env.type == FrameType.PONG) {
                 probeJob?.cancel()
