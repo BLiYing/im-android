@@ -79,4 +79,11 @@ class LoginErrorTest {
         assertEquals("服务端说了句什么", LoginError.friendly(ApiException(999999, "服务端说了句什么"), strings))
         assertEquals("请求失败(999999)", LoginError.friendly(ApiException(999999, ""), strings))
     }
+
+    @Test
+    fun `冷静期账号免密路径给本地化指引而不是服务端英文原文`() {
+        val msg = LoginError.friendly(ApiException(ErrCode.ACCOUNT_PENDING_DELETION, "account pending deletion"), strings)
+        assertEquals(Str.s(R.string.err_200005), msg)
+        assertFalse(msg.contains("pending deletion"))
+    }
 }

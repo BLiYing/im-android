@@ -41,4 +41,13 @@ class RtcInviteProviderTest {
         assertEquals("@cc", out[1].name)
         assertNull(out[1].avatarUrl)
     }
+
+    @Test fun `已注销成员不出现在邀请候选里`() {
+        val out = RtcInviteProvider.candidates(
+            ctx(emptyList()),
+            listOf(member("a", "甲"), GroupMember(userId = "gone", username = "g", nickname = "x", deleted = true)),
+            "me", RtcProfileSources(),
+        ) { it }
+        assertEquals(listOf("a"), out.map { it.uid })
+    }
 }

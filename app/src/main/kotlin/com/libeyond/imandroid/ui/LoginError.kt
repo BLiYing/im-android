@@ -41,6 +41,8 @@ object LoginError {
             ErrCode.USER_NOT_FOUND -> strings.get(R.string.err_200001)
             ErrCode.USER_ALREADY_EXISTS -> strings.get(R.string.err_200004)
             ErrCode.ACCOUNT_BANNED -> strings.get(R.string.err_200003)
+            // 冷静期账号：有密码走恢复弹窗（AppRoot），走到这里的是免密路径——给本地化指引，不显示服务端英文原文
+            ErrCode.ACCOUNT_PENDING_DELETION -> strings.get(R.string.err_200005)
             ErrCode.PARAM_INVALID -> e.message.ifEmpty { strings.get(R.string.login_error_param_invalid) }
             ErrCode.RATE_LIMITED -> strings.get(R.string.err_100002)
             else -> e.message.ifEmpty { strings.get(R.string.err_request_failed, e.code.toString()) }

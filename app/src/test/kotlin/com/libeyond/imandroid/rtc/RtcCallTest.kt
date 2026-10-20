@@ -42,4 +42,9 @@ class RtcCallTest {
         val result = Result.failure<RtcTokenResult>(RuntimeException("network down"))
         assertNull(rtcTokenFrom(result))
     }
+
+    @Test fun `群通话被叫剔掉已注销者`() {
+        assertEquals(listOf("a", "c"), RtcCallRules.liveCallees(listOf("a", "gone", "c")) { it == "gone" })
+        assertEquals(emptyList<String>(), RtcCallRules.liveCallees(listOf("gone")) { it == "gone" })
+    }
 }

@@ -62,7 +62,7 @@ class RtcInviteProvider(
         private fun memberRow(m: GroupMember) =
             RtcProfileSources.MemberRow(m.userId, m.groupNickname, m.nickname, m.username, m.avatarUrl)
 
-        /** 一页成员 → 候选人（纯逻辑）：剔掉自己；已在通话 / 正在振铃的人置灰。 */
+        /** 一页成员 → 候选人（纯逻辑）：剔掉自己与已注销者；已在通话 / 正在振铃的人置灰。 */
         fun candidates(
             ctx: IMInviteContext,
             members: List<GroupMember>,
@@ -71,7 +71,7 @@ class RtcInviteProvider(
             absolute: (String) -> String,
         ): List<IMInviteCandidate> {
             val inCall = ctx.participantUids.toSet()
-            return members.filter { it.userId.isNotEmpty() && it.userId != myUid }.map { m ->
+            return members.filter { it.userId.isNotEmpty() && it.userId != myUid && !it.deleted }.map { m ->
                 val busy = m.userId in inCall
                 IMInviteCandidate(
                     uid = m.userId,

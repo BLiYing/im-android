@@ -742,6 +742,7 @@
     <string name="err_200002">密码错误</string>
     <string name="err_200003">账号已被封禁</string>
     <string name="err_200004">用户名已被注册</string>
+    <string name="err_200005">该账号已申请注销，请使用密码登录以恢复</string>
     <string name="err_200101">你们已经是好友了</string>
     <string name="err_200102">暂时无法添加对方为好友</string>
     <string name="err_200103">对方不是你的好友</string>
@@ -1172,6 +1173,7 @@
     <string name="ios_tab_messages">消息</string>
     <string name="login_button_login">登录</string>
     <string name="login_button_register">注册并登录</string>
+    <string name="login_error_dev_login_failed">免密登录失败（后端需以 -dev-login 启动）</string>
     <string name="login_error_fill_credentials">请填写用户名与密码</string>
     <string name="login_error_host_invalid">服务器地址格式不对（示例：192.168.1.12:8080 或 https://im.example.com）</string>
     <string name="login_error_host_required">请填写服务器地址</string>
@@ -1761,6 +1763,7 @@
     <string name="record_chat_history">聊天记录</string>
     <string name="record_dirty_card">[个人名片]</string>
     <string name="record_dirty_record">[聊天记录]</string>
+    <string name="rtc_call_peer_deleted">对方账号已注销，无法发起通话</string>
     <string name="rtc_connecting">正在连接通话服务…</string>
     <string name="rtc_error_id_empty">%1$s 为空</string>
     <string name="rtc_error_id_has_whitespace">%1$s 含空白：%2$s</string>

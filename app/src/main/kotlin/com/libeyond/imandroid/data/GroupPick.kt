@@ -40,8 +40,12 @@ object GroupPick {
             .filter { it.role == GroupMember.ROLE_MEMBER }
             .map { it.toCandidate() }
         // 群通话：除自己外都能选。不筛角色 / 是否好友——通话对象是「群成员」，不是「我的好友」。
-        PickPurpose.Transfer, PickPurpose.Call -> members
+        PickPurpose.Transfer -> members
             .filter { it.userId != myUid }
+            .map { it.toCandidate() }
+        // 已注销成员（冷静期）不可呼叫：服务端群通话对他们放行，由宿主在选人处剔除
+        PickPurpose.Call -> members
+            .filter { it.userId != myUid && !it.deleted }
             .map { it.toCandidate() }
         PickPurpose.Invite -> {
             val inGroup = members.mapTo(HashSet()) { it.userId }

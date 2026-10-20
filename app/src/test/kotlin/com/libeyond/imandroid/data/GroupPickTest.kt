@@ -128,4 +128,11 @@ class GroupPickTest {
         assertEquals(emptySet<String>(), GroupPick.toggle(PickPurpose.AddAdmin, emptySet(), "x", full))
         assertEquals(5, GroupPick.adminSlotsLeft(listOf(m("o", GroupMember.ROLE_OWNER), m("x", GroupMember.ROLE_MEMBER))))
     }
+
+    @Test
+    fun call_excludes_deleted_members() {
+        val withGone = members + GroupMember(userId = "gone", username = "gone", nickname = "x", role = "member", deleted = true)
+        val ids = GroupPick.candidates(PickPurpose.Call, withGone, emptyList(), "owner1").map { it.id }
+        assertEquals(listOf("admin1", "m1", "m2"), ids)
+    }
 }

@@ -767,6 +767,7 @@
     <string name="err_200002">Wrong password</string>
     <string name="err_200003">This account has been banned</string>
     <string name="err_200004">This username is already taken</string>
+    <string name="err_200005">This account is scheduled for deletion. Sign in with your password to restore it.</string>
     <string name="err_200101">You’re already friends</string>
     <string name="err_200102">Can’t add this person as a friend right now</string>
     <string name="err_200103">This person isn’t your friend</string>
@@ -1208,6 +1209,7 @@
     <string name="ios_tab_messages">Messages</string>
     <string name="login_button_login">Log in</string>
     <string name="login_button_register">Sign up and log in</string>
+    <string name="login_error_dev_login_failed">Passwordless sign-in failed (the backend must run with -dev-login)</string>
     <string name="login_error_fill_credentials">Enter your username and password</string>
     <string name="login_error_host_invalid">Invalid server address (for example: 192.168.1.12:8080 or https://im.example.com)</string>
     <string name="login_error_host_required">Enter the server address</string>
@@ -1807,6 +1809,7 @@
     <string name="record_chat_history">Chat history</string>
     <string name="record_dirty_card">[Contact]</string>
     <string name="record_dirty_record">[Chat History]</string>
+    <string name="rtc_call_peer_deleted">This account has been deleted. You can\'t call it.</string>
     <string name="rtc_connecting">Connecting to the call service…</string>
     <string name="rtc_error_id_empty">%1$s is empty</string>
     <string name="rtc_error_id_has_whitespace">%1$s contains whitespace: %2$s</string>

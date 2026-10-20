@@ -26,6 +26,7 @@ import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.data.ResolvedLanguage
 import com.libeyond.imandroid.fcm.CallNotifications
 import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.sdk.api.DeletedUser
 import com.libeyond.imandroid.sdk.api.RtcApi
 import com.libeyond.imandroid.sdk.api.RtcTokenResult
 import com.libeyond.imandroid.sdk.http.ApiException
@@ -264,12 +265,18 @@ object RtcCall : RtcHostBridge {
         log.i("rtc_stop", "uid" to uid)
     }
 
+    /** 对端已注销时给用户看的原因；否则 null。单聊各入口（详情页 / 气泡回拨 / 通话记录）都汇到 [placeSingle]。 */
+    internal fun peerDeletedReason(peerUid: String): String? =
+        if (DeletedUser.has(peerUid)) Str.s(R.string.rtc_call_peer_deleted) else null
+
     /**
      * 单聊一对一通话。返回 null 表示已交给 Kit；否则是给用户看的原因。
      * 还没登上时 Kit 先补一次登录、补不上自己提示（im-rtc 2.2.0）；`onError` 留给调用方，目前不会被调。
      */
     @Suppress("UNUSED_PARAMETER")
     fun placeSingle(peerUid: String, video: Boolean, onError: (String) -> Unit = {}): String? {
+        // 对端已注销（冷静期 / 已匿名化）：入口处先拦，给明确原因（服务端 invite-check 也会拒，但 Kit 只提示「对方暂时无法被邀请」）
+        peerDeletedReason(peerUid)?.let { return it }
         restartIfStopped()
         unavailableReason()?.let { return it }
         RtcIds.problem(Str.s(R.string.rtc_kind_peer_id), peerUid)?.let { return it }
@@ -290,10 +297,11 @@ object RtcCall : RtcHostBridge {
         restartIfStopped()
         unavailableReason()?.let { return it }
         RtcIds.problem(Str.s(R.string.rtc_kind_group_id), chatGroupId)?.let { return it }
-        if (calleeUids.isEmpty()) return Str.s(R.string.rtc_error_no_callees)
+        val liveUids = RtcCallRules.liveCallees(calleeUids) // 已注销成员不呼叫
+        if (liveUids.isEmpty()) return Str.s(R.string.rtc_error_no_callees)
         profileResolver?.groupId = chatGroupId
         IMCallKit.placeCall(
-            calleeUids, mediaType(video = true),
+            liveUids, mediaType(video = true),
             IMCallOptions(isGroup = true, chatGroupId = chatGroupId),
         )
         // 拨出即算「通话中」：否则对方响铃期间来的消息会在本端外拨界面上叠一声提示音（/code-review 2026-09-29）；
