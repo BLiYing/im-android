@@ -96,7 +96,7 @@ class MessageRepository(
     suspend fun applyPeerCard(owner: String, peerUid: String, card: com.libeyond.imandroid.sdk.api.UserCard) {
         val row = conversations.byPeer(owner, peerUid) ?: return
         val m = PeerCardMerge.merge(row, card)
-        conversations.updatePeerProfile(owner, row.convId, m.title, m.avatarUrl, m.peerRemark)
+        conversations.updatePeerProfile(owner, row.convId, m.title, m.avatarUrl, m.peerRemark, m.peerDeleted)
     }
 
     /**
@@ -332,6 +332,7 @@ class MessageRepository(
                 title = DisplayName.ofConversation(s),
                 avatarUrl = if (s.isGroup) s.avatarUrl else s.peerAvatarUrl,
                 peerRemark = s.peerRemark,
+                peerDeleted = !s.isGroup && s.peerDeleted,
                 lastContent = s.lastMessage
                     ?.let { MessagePreview.of(it.contentType, it.content, it.caption, viewerIsSender = it.from == owner) } ?: "",
                 lastContentType = s.lastMessage?.contentType ?: ContentType.TEXT,

@@ -4,6 +4,7 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -154,6 +155,30 @@ class MigrationTest {
             )
             db.query("SELECT COUNT(*) FROM friend_local").use { c -> c.moveToFirst(); assertEquals(1, c.getInt(0)) }
             db.query("SELECT COUNT(*) FROM group_local").use { c -> c.moveToFirst(); assertEquals(1, c.getInt(0)) }
+        }
+    }
+
+    /** 17→18 会话加 `peerDeleted`：老行保留且默认 0（未注销），新列可写。 */
+    @Test
+    fun migrate17To18AddsPeerDeletedDefaultingToZero() {
+        helper.createDatabase(DB, 17).use { db ->
+            db.execSQL(
+                """INSERT INTO conversation (ownerUid, convId, isGroup, peerUid, title, avatarUrl, peerRemark,
+                   lastContent, lastContentType, lastTimestamp, lastConvSeq, lastFrom, lastFromNickname, lastRecalled,
+                   lastSysEvent, lastSysArgs, lastSysSegments, unread, mentionUnread, readSeq, peerReadSeq,
+                   syncedConvSeq, pinnedAt, muted, muteUntil, markedUnread, isSuper, headConvSeq, clearedUpTo)
+                   VALUES ('me', 'u_a_u_b', 0, 'b', 'B', '', '', 'hi', 'text', 1, 1, 'b', '', 0,
+                   '', '', '', 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0)""",
+            )
+        }
+        helper.runMigrationsAndValidate(DB, 18, true, IMDatabase.MIGRATION_17_18).use { db ->
+            db.query("SELECT title, peerDeleted FROM conversation").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("B", c.getString(0))
+                assertEquals(0, c.getInt(1))
+            }
+            db.execSQL("UPDATE conversation SET peerDeleted = 1")
+            db.query("SELECT peerDeleted FROM conversation").use { c -> c.moveToFirst(); assertEquals(1, c.getInt(0)) }
         }
     }
 

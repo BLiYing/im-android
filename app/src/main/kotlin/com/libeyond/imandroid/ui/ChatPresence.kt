@@ -99,8 +99,8 @@ internal fun rememberChatSubtitle(
             isGroup = conv.isGroup,
             typingUid = client.presence.typingIn(conv.convId, maxOf(tick, typingNow)),
             conn = conn,
-            // 已注销对端（标题即「已注销用户」）没有在线态，别显示「很久未上线」
-            peerPresence = if (conv.isGroup || conv.title == com.libeyond.imandroid.sdk.api.DeletedUser.name) "" else client.presence.snapshotOf(conv.peerUid).let { p ->
+            // 已注销对端没有在线态，别显示「很久未上线」
+            peerPresence = if (conv.isGroup || conv.peerDeleted || com.libeyond.imandroid.sdk.api.DeletedUser.has(conv.peerUid)) "" else client.presence.snapshotOf(conv.peerUid).let { p ->
                 Presence.label(Presence.display(p.status, p.onlineUntil, p.lastSeen, tick), tick)
             },
             memberCount = groupInfo?.memberCount ?: 0,

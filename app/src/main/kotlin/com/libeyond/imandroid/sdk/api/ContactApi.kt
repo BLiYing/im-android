@@ -42,12 +42,23 @@ data class UserCard(
 
     /** 已注销：名字换成本地化「已注销用户」、清备注/头像/句柄（PROTOCOL §6.16.3，压过一切本机备注）；正常账号原样返回。 */
     fun normalized(): UserCard =
-        if (!deleted) this else copy(nickname = DeletedUser.name, remark = "", username = "", avatarUrl = "", presence = "")
+        if (!deleted) { DeletedUser.unmark(userId); this } else { DeletedUser.mark(userId); copy(nickname = DeletedUser.name, remark = "", username = "", avatarUrl = "", presence = "") }
 }
 
 /** 「已注销用户」的统一取名口（三类用户对象 + 会话摘要的 `deleted` / `peer_deleted` 都走它）。 */
 object DeletedUser {
     val name: String get() = Str.s(R.string.delete_account_deleted_user)
+
+    /**
+     * 已知已注销的 uid（内存，Compose 可订阅）。各类用户对象 `normalized()` 与会话行 `peerDeleted` 都会登记，
+     * [com.libeyond.imandroid.ui.components.IMAvatar] 与聊天里按 uid 取名的地方据此判断，**不比对本地化文案**。
+     */
+    private val known = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+    fun mark(uid: String) { if (uid.isNotEmpty() && known[uid] != true) known[uid] = true }
+    fun has(uid: String): Boolean = uid.isNotEmpty() && known[uid] == true
+    fun unmark(uid: String) { if (known.containsKey(uid)) known.remove(uid) }
+    fun clear() = known.clear()
 }
 
 /** 好友关系项（对齐 `internal/friend.Entry`）。 */
@@ -75,7 +86,7 @@ data class FriendEntry(
     val handle: String get() = if (deleted || username.isBlank()) "" else "@$username"
 
     fun normalized(): FriendEntry =
-        if (!deleted) this else copy(nickname = DeletedUser.name, remark = "", username = "", avatarUrl = "")
+        if (!deleted) { DeletedUser.unmark(userId); this } else { DeletedUser.mark(userId); copy(nickname = DeletedUser.name, remark = "", username = "", avatarUrl = "") }
 
     companion object {
         const val ACCEPTED = "accepted"
@@ -112,7 +123,7 @@ class ContactApi(private val http: HttpClient) {
         decode(http.call("GET", "/api/v1/users/$userId"), UserCard.serializer()).normalized()
 
     suspend fun me(): UserCard =
-        decode(http.call("GET", "/api/v1/users/me"), UserCard.serializer())
+        decode(http.call("GET", "/api/v1/users/me"), UserCard.serializer()).normalized()
 
     /** @param hello 验证消息，≤50 rune；服务端压单行 + 超长截断而非报错。
      * @return 是否已直接成为好友（outcome=accepted）。 */

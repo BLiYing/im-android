@@ -67,6 +67,8 @@ import kotlinx.coroutines.flow.SharedFlow
  */
 class IMClient(context: Context) {
 
+    private val appContext = context.applicationContext
+
     private val log = IMLog.tag("IM.Client")
     val scope = CoroutineScope(SupervisorJob())
 
@@ -532,6 +534,9 @@ class IMClient(context: Context) {
                 db.groupLocal().clear(owner)
             }
         }.onFailure { log.w("wipe_local_failed", "err" to it.javaClass.simpleName) }
+        // 库之外的本机落地物（媒体原件按 URL 存、非按账号，整个清，别的账号会重新下载）；不因库清理失败而跳过
+        runCatching { com.libeyond.imandroid.data.LocalWipe.filesAndPrefs(appContext) }
+            .onFailure { log.w("wipe_files_failed", "err" to it.javaClass.simpleName) }
     }
 
     /** 网络恢复 / 回到前台。 */

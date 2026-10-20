@@ -133,6 +133,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit, onAccountDeleted: () -> U
     // `CallHistoryHost` 既有的 `associateBy { it.convId }` 手法，别在导航这条热路径上现扫一遍全表
     // （`/code-review` 抓出的效率点）。
     val conversationsById = remember(conversations) { conversations.orEmpty().associateBy { it.convId } }
+    // 重启后从本地库恢复「已注销」登记（头像 / 预览发送者名按 uid 查它）
+    LaunchedEffect(conversations) { conversations.orEmpty().forEach { if (it.peerDeleted) com.libeyond.imandroid.sdk.api.DeletedUser.mark(it.peerUid) } }
 
     // 点系统推送通知跳转到会话（M5 批次 2）：MainActivity 收到 intent 后记在 NotificationRoute，
     // 这里在主界面真正组合出来后消费——本地已有这个会话就直接用，没有就用 payload 带的标题现造一个
@@ -193,7 +195,9 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit, onAccountDeleted: () -> U
     var chatArm by remember { mutableStateOf(ChatArm()) }
     // 回到会话列表 = 没有聊天页能接待办了：清掉，免得一件没送达的（如资料页「搜索」换会话没成）
     // 留到以后某次再进那个会话时突然开出搜索态
-    LaunchedEffect(openConv == null) { if (openConv == null) chatArm = ChatArm() }
+    LaunchedEffect(openConv == null) {
+        if (openConv == null) chatArm = ChatArm()
+    }
 
     // 会话列表滚动位置：进聊天页时 Tab 层整个离开组合，放在 ChatsHost/列表里会随之丢失（返回回顶部）
     val chatsListState = androidx.compose.runtime.saveable.rememberSaveable(saver = androidx.compose.foundation.lazy.LazyListState.Saver) {
@@ -236,7 +240,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit, onAccountDeleted: () -> U
     val switchTo: (ConversationEntity) -> Unit = { c -> if (openConv?.convId != c.convId) openConv = c }
     androidx.compose.runtime.CompositionLocalProvider(
         LocalChatArmSink provides { chatArm = it },
-        LocalOpenGroupInfo provides { g -> infoTab = null; infoGallery = false; infoApproval = false; openConv = g; infoForConv = g },
+        // 点群名进群前先把落点设成注销页：退回时 MeHost 重新进组合，按 initialRoute 回到它（不是「我」根页）
+        LocalOpenGroupInfo provides { g -> settingsRoute = SettingsRoute(com.libeyond.imandroid.data.MePage.DeleteAccount); infoTab = null; infoGallery = false; infoApproval = false; openConv = g; infoForConv = g },
     ) {
     Box(Modifier.fillMaxSize()) {
         // 扫码/点链接加群路由宿主：挂在这里（不是更外层的 AppRoot）是因为它要改 openConv 来进群聊/单聊，

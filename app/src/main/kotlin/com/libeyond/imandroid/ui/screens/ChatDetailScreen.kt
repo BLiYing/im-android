@@ -198,7 +198,8 @@ internal fun ChatDetailScreen(
                     )
                 }
             }
-            if (showBody) item(key = "info") {
+            // 已注销对端整块不画（无备注、无用户名；§6.16.3）
+            if (showBody && !conv.peerDeleted && !com.libeyond.imandroid.sdk.api.DeletedUser.has(conv.peerUid)) item(key = "info") {
                 // —— 信息（对齐 iOS 的 IMDetailSectionInfo：备注名 + 用户名）——
                 Spacer(Modifier.height(d.cardGap))
                 Card {

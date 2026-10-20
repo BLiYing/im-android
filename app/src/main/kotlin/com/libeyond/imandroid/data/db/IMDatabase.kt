@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class, ConvRangeEntity::class,
         FriendLocalEntity::class, GroupLocalEntity::class,
     ],
-    version = 17,
+    version = 18,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -267,6 +267,13 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /** v17 → v18：会话加 `peerDeleted`（对端已注销，老行 0 = 未注销，下次拉会话列表自然刷新）。 */
+        internal val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversation ADD COLUMN peerDeleted INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): IMDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -278,7 +285,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
+                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
                 )
                 .build().also { instance = it }
         }

@@ -55,4 +55,24 @@ class DeletedUserTest {
         assertFalse(isAccountDeletedFrame(Envelope("pong", 0, Json.parseToJsonElement("""{"reason":"account_deleted"}"""))))
         assertFalse(isAccountDeletedFrame(Envelope("error", 0, null)))
     }
+
+    @Test fun normalizedRegistersUidAndMergeCarriesFlag() {
+        val c = UserCard(userId = "u_del", nickname = "旧", deleted = true)
+        assertFalse(com.libeyond.imandroid.sdk.api.DeletedUser.has("u_del"))
+        c.normalized()
+        assertTrue(com.libeyond.imandroid.sdk.api.DeletedUser.has("u_del"))
+        assertFalse(com.libeyond.imandroid.sdk.api.DeletedUser.has("u_ok"))
+        val row = com.libeyond.imandroid.data.db.ConversationEntity(ownerUid = "me", convId = "c", peerUid = "u_del", title = "旧")
+        assertTrue(PeerCardMerge.merge(row, c.normalized()).peerDeleted)
+        assertFalse(PeerCardMerge.merge(row, UserCard(userId = "u_ok", nickname = "x")).peerDeleted)
+    }
+
+    @Test fun previewSenderUsesDeletedNameForDeletedUid() {
+        com.libeyond.imandroid.sdk.api.DeletedUser.mark("u_gone")
+        val conv = com.libeyond.imandroid.data.db.ConversationEntity(
+            ownerUid = "me", convId = "g1", isGroup = true, lastContent = "hi", lastFrom = "u_gone", lastFromNickname = "老昵称",
+        )
+        val text = ConversationPreview.of(conv, "me") { null }
+        assertTrue(text, text.startsWith("已注销用户"))
+    }
 }

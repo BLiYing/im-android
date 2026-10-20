@@ -15,11 +15,12 @@ import com.libeyond.imandroid.sdk.api.UserCard
  */
 object PeerCardMerge {
 
-    data class Merged(val title: String, val avatarUrl: String, val peerRemark: String)
+    data class Merged(val title: String, val avatarUrl: String, val peerRemark: String, val peerDeleted: Boolean = false)
 
     fun merge(row: ConversationEntity, card: UserCard): Merged = Merged(
         title = card.remark.ifBlank { card.nickname }.ifBlank { row.title },
         avatarUrl = card.avatarUrl.ifBlank { row.avatarUrl },
         peerRemark = card.remark,
+        peerDeleted = card.deleted,
     )
 }

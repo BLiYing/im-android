@@ -129,6 +129,7 @@ fun ChatDetailHost(
     }
     // 好友态 / 拉黑 / 用户名句柄都从同一份 `friend` 派生，别再单读 knownFriends（见 PeerRelation）
     val rel = PeerRelation.of(friend)
+    val peerGone = conv.peerDeleted || com.libeyond.imandroid.sdk.api.DeletedUser.has(conv.peerUid)
     var remark by remember(conv.convId) { mutableStateOf(conv.peerRemark) }
     // 对端权威名片：进页拉一次，并回会话行（对方改了昵称 / 头像，信息页与会话列表都跟着新；
     // 与 IMProgram `loadPeerProfile`、im-web `loadPeerCard` 同口径）。单聊才有；自己 / 空 uid 不拉；
@@ -319,6 +320,7 @@ fun ChatDetailHost(
                         isSystemPeer = DetailActions.isSystemPeer(conv.peerUid),
                         peerIsFriend = rel.isFriend,
                         showsMessagePill = showsMessagePill,
+                        peerDeleted = peerGone,
                     ),
                     moreItems = DetailActions.moreFor(
                         isGroup = false,
@@ -326,6 +328,7 @@ fun ChatDetailHost(
                         iAmOwner = false,
                         peerBlocked = rel.blocked,
                         peerIsFriend = rel.isFriend,
+                        peerDeleted = peerGone,
                     ),
                     onAction = { a ->
                         when (a) {

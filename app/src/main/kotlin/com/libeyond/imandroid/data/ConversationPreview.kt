@@ -61,6 +61,7 @@ object ConversationPreview {
     }
 
     private fun displayNameOf(conv: ConversationEntity, nameOf: (String) -> String?): String =
-        nameOf(conv.lastFrom)?.takeIf { it.isNotBlank() }
+        if (com.libeyond.imandroid.sdk.api.DeletedUser.has(conv.lastFrom)) com.libeyond.imandroid.sdk.api.DeletedUser.name
+        else nameOf(conv.lastFrom)?.takeIf { it.isNotBlank() }
             ?: conv.lastFromNickname.ifBlank { conv.lastFrom }
 }

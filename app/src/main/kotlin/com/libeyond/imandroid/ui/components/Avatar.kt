@@ -97,7 +97,7 @@ fun IMAvatar(
         )
         return
     }
-    if (displayName == com.libeyond.imandroid.sdk.api.DeletedUser.name) {
+    if (com.libeyond.imandroid.sdk.api.DeletedUser.has(seed)) {
         // 已注销用户（§6.16.3）：不画「户」字首字母，用灰底人形默认头像
         Box(modifier.size(size).clip(CircleShape).background(IMTheme.colors.textTertiary), Alignment.Center) {
             Image(

@@ -36,7 +36,7 @@ data class GroupMember(
     val handle: String get() = if (deleted || username.isBlank()) "" else "@$username"
 
     fun normalized(): GroupMember =
-        if (!deleted) this else copy(nickname = DeletedUser.name, groupNickname = "", username = "", avatarUrl = "")
+        if (!deleted) { DeletedUser.unmark(userId); this } else { DeletedUser.mark(userId); copy(nickname = DeletedUser.name, groupNickname = "", username = "", avatarUrl = "") }
 
     val isOwner: Boolean get() = role == ROLE_OWNER
     val isAdmin: Boolean get() = role == ROLE_ADMIN

@@ -58,8 +58,8 @@ data class ConversationSummary(
     /** 单聊对端账号已注销（§6.16.3）：标题恒为「已注销用户」，压过会话备注/好友备注，头像用默认。 */
     @SerialName("peer_deleted") val peerDeleted: Boolean = false,
 ) {
-    fun normalized(): ConversationSummary = if (isGroup || !peerDeleted) this else
-        copy(peerNickname = DeletedUser.name, peerRemark = "", peerAvatarUrl = "", remark = "", peerPresence = "")
+    fun normalized(): ConversationSummary = if (isGroup) this else if (!peerDeleted) { DeletedUser.unmark(peer); this } else
+        also { DeletedUser.mark(peer) }.copy(peerNickname = DeletedUser.name, peerRemark = "", peerAvatarUrl = "", remark = "", peerPresence = "")
 }
 
 /**

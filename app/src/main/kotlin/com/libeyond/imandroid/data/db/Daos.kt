@@ -359,8 +359,8 @@ interface ConversationDao {
     suspend fun updateSettings(owner: String, convId: String, pinnedAt: Long, muted: Boolean, muteUntil: Long, markedUnread: Boolean)
 
     /** 只改对端资料三列，不动未读 / 游标 / 置顶等别的列（读-改-写整行会盖掉并发的同步进度）。 */
-    @Query("UPDATE conversation SET title = :title, avatarUrl = :avatarUrl, peerRemark = :peerRemark WHERE ownerUid = :owner AND convId = :convId")
-    suspend fun updatePeerProfile(owner: String, convId: String, title: String, avatarUrl: String, peerRemark: String)
+    @Query("UPDATE conversation SET title = :title, avatarUrl = :avatarUrl, peerRemark = :peerRemark, peerDeleted = :peerDeleted WHERE ownerUid = :owner AND convId = :convId")
+    suspend fun updatePeerProfile(owner: String, convId: String, title: String, avatarUrl: String, peerRemark: String, peerDeleted: Boolean)
 
     @Query("SELECT * FROM conversation WHERE ownerUid = :owner")
     suspend fun all(owner: String): List<ConversationEntity>

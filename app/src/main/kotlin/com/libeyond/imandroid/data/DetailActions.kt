@@ -46,8 +46,11 @@ object DetailActions {
         showsMessagePill: Boolean,
         /** 群聊要不要出「语音 / 视频」pill（群通话接入后为 true）。单聊不看它。 */
         groupCallEnabled: Boolean = false,
+        /** 单聊对端已注销（PROTOCOL §6.16.3）：不给消息 / 通话 / 加好友，只留搜索与更多。 */
+        peerDeleted: Boolean = false,
     ): List<DetailAction> {
         if (!isGroup && isSystemPeer) return listOf(DetailAction.More)
+        if (!isGroup && peerDeleted) return listOf(DetailAction.Search, DetailAction.More)
         val out = mutableListOf<DetailAction>()
         if (!isGroup) {
             if (!peerIsFriend) return listOf(DetailAction.AddFriend)
@@ -71,7 +74,12 @@ object DetailActions {
         iAmOwner: Boolean,
         peerBlocked: Boolean,
         peerIsFriend: Boolean,
+        /** 对端已注销：不能分享名片 / 拉黑 / 举报，只留清空记录（与删除好友）。 */
+        peerDeleted: Boolean = false,
     ): List<DetailMoreAction> {
+        if (!isGroup && peerDeleted && !isSystemPeer) {
+            return buildList { add(DetailMoreAction.ClearHistory); if (peerIsFriend) add(DetailMoreAction.RemoveFriend) }
+        }
         if (isGroup) {
             val out = mutableListOf(DetailMoreAction.ClearHistory, DetailMoreAction.LeaveGroup)
             if (iAmOwner) out += DetailMoreAction.DissolveGroup

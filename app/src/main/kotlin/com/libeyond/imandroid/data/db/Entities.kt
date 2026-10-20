@@ -178,6 +178,8 @@ data class ConversationEntity(
     val avatarUrl: String = "",
     /** 单聊对端备注名（仅本人可见）。 */
     val peerRemark: String = "",
+    /** 单聊对端账号已注销（`peer_deleted`，PROTOCOL §6.16.3）：头像 / 在线态 / 预览据此判，不比对本地化标题。 */
+    val peerDeleted: Boolean = false,
     val lastContent: String = "",
     val lastContentType: String = "text",
     val lastTimestamp: Long = 0,
