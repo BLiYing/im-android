@@ -1209,6 +1209,7 @@
     <string name="ios_tab_messages">Messages</string>
     <string name="login_button_login">Log in</string>
     <string name="login_button_register">Sign up and log in</string>
+    <string name="login_dev_login">Passwordless login (dev)</string>
     <string name="login_error_dev_login_failed">Passwordless sign-in failed (the backend must run with -dev-login)</string>
     <string name="login_error_fill_credentials">Enter your username and password</string>
     <string name="login_error_host_invalid">Invalid server address (for example: 192.168.1.12:8080 or https://im.example.com)</string>
@@ -1232,6 +1233,8 @@
     <string name="login_relogin">Log in again</string>
     <string name="login_restoring">Restoring your session…</string>
     <string name="login_revoked_notice">Your account was logged in elsewhere, or this device was removed.</string>
+    <string name="login_server_address">Server address</string>
+    <string name="login_server_summary">Server: %1$s</string>
     <string name="login_session_revoked">This device has been signed out. Please log in again.</string>
     <string name="login_submitting">Logging in…</string>
     <string name="login_tab_password">Password login</string>

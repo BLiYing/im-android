@@ -165,7 +165,7 @@ fun LoginScreen(
 
             if (devLoginEnabled && tab == LoginTab.Password) {
                 IMSecondaryButton(
-                    text = "免密登录（开发）",
+                    text = stringResource(R.string.login_dev_login),
                     onClick = { onDevLogin(username.trim()) },
                     enabled = username.isNotBlank() && !busy,
                 )
@@ -173,7 +173,7 @@ fun LoginScreen(
 
             // —— 服务器地址（开发期常要改，收在一个可折叠行里）——
             Text(
-                text = if (showHost) "服务器地址" else "服务器：$host",
+                text = if (showHost) stringResource(R.string.login_server_address) else stringResource(R.string.login_server_summary, host),
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.textSecondary,
                 textAlign = TextAlign.Center,
