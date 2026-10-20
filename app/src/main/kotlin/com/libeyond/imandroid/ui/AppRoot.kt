@@ -254,10 +254,10 @@ fun AppRoot(client: IMClient) {
             // client.scope：注销应答回来时页面可能已离开，清理不能随页面作用域取消
             val onAccountDeleted: () -> Unit = {
                 val owner = client.uid.orEmpty() // logout 会清掉，先取
+                accountDeleted = true // 先立旗：logout / 清缓存期间到的 Revoked 等信号不能覆盖「冷静期」提示
                 client.scope.launch {
                     client.logout() // 服务端会话已全吊销，logout 的 100101 按「已退出」处理
                     client.wipeLocalChatData(owner)
-                    accountDeleted = true
                     endedNotice = Str.s(R.string.delete_account_done_hint)
                     phase = Phase.Login
                 }

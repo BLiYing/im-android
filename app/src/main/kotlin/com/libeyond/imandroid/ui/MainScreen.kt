@@ -195,9 +195,7 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit, onAccountDeleted: () -> U
     var chatArm by remember { mutableStateOf(ChatArm()) }
     // 回到会话列表 = 没有聊天页能接待办了：清掉，免得一件没送达的（如资料页「搜索」换会话没成）
     // 留到以后某次再进那个会话时突然开出搜索态
-    LaunchedEffect(openConv == null) {
-        if (openConv == null) chatArm = ChatArm()
-    }
+    LaunchedEffect(openConv == null) { if (openConv == null) chatArm = ChatArm() }
 
     // 会话列表滚动位置：进聊天页时 Tab 层整个离开组合，放在 ChatsHost/列表里会随之丢失（返回回顶部）
     val chatsListState = androidx.compose.runtime.saveable.rememberSaveable(saver = androidx.compose.foundation.lazy.LazyListState.Saver) {
@@ -241,7 +239,8 @@ fun MainScreen(client: IMClient, onLogout: () -> Unit, onAccountDeleted: () -> U
     androidx.compose.runtime.CompositionLocalProvider(
         LocalChatArmSink provides { chatArm = it },
         // 点群名进群前先把落点设成注销页：退回时 MeHost 重新进组合，按 initialRoute 回到它（不是「我」根页）
-        LocalOpenGroupInfo provides { g -> settingsRoute = SettingsRoute(com.libeyond.imandroid.data.MePage.DeleteAccount); infoTab = null; infoGallery = false; infoApproval = false; openConv = g; infoForConv = g },
+        // tab 一并切到「我」：注销页也能从聊天里点自己头像进入，不切的话路由会滞留到以后某次点开「我」时突然弹出注销页
+        LocalOpenGroupInfo provides { g -> tab = Tab.Me; settingsRoute = SettingsRoute(com.libeyond.imandroid.data.MePage.DeleteAccount); infoTab = null; infoGallery = false; infoApproval = false; openConv = g; infoForConv = g },
     ) {
     Box(Modifier.fillMaxSize()) {
         // 扫码/点链接加群路由宿主：挂在这里（不是更外层的 AppRoot）是因为它要改 openConv 来进群聊/单聊，

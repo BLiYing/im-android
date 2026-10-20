@@ -66,7 +66,7 @@ class SessionStore(context: Context) {
      * 清掉会让用户每次退出后都要重填一遍内网 IP。
      */
     fun clear() {
-        prefs.edit().remove(KEY_TOKEN).remove(KEY_REFRESH).remove(KEY_UID).remove(KEY_USERNAME).remove(KEY_MY_PROFILE).apply()
+        prefs.edit().remove(KEY_TOKEN).remove(KEY_REFRESH).remove(KEY_UID).remove(KEY_USERNAME).remove(KEY_MY_PROFILE).commit() // 同步落盘：apply 异步，进程在落盘前被杀会让已死 token / 已注销账号的登录态复活
     }
 
     /**

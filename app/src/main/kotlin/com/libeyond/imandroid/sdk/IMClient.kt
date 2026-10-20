@@ -515,6 +515,7 @@ class IMClient(context: Context) {
         fcmTokenStore.forget()
         InAppBannerStore.dismiss()
         profiles.clear() // 资料解析缓存属于上一个账号
+        com.libeyond.imandroid.sdk.api.DeletedUser.clear() // 已注销登记是内存态，换号后由新账号的数据重新登记
     }
 
     /**
@@ -535,7 +536,7 @@ class IMClient(context: Context) {
             }
         }.onFailure { log.w("wipe_local_failed", "err" to it.javaClass.simpleName) }
         // 库之外的本机落地物（媒体原件按 URL 存、非按账号，整个清，别的账号会重新下载）；不因库清理失败而跳过
-        runCatching { com.libeyond.imandroid.data.LocalWipe.filesAndPrefs(appContext) }
+        runCatching { com.libeyond.imandroid.data.LocalWipe.filesAndPrefs(appContext, owner) }
             .onFailure { log.w("wipe_files_failed", "err" to it.javaClass.simpleName) }
     }
 

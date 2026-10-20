@@ -13,11 +13,18 @@ import java.io.File
  */
 object LocalWipe {
     val DIRS = listOf("media", "group_info", "pending_media", "voice_pending")
-    val PREFS = listOf("im_viewed_media", "im_chat_folders", "im_voice", "im_favorites", "chat_banners")
+    /** 不分账号的偏好：整个清。 */
+    val PREFS = listOf("im_voice", "im_favorites", "chat_banners")
 
-    fun filesAndPrefs(context: Context) {
+    /** 按账号分键的偏好（文件名 → 键）：只删被注销账号的键，同机其它账号的不动。 */
+    val OWNER_KEYED_PREFS = mapOf("im_viewed_media" to "viewed.", "im_chat_folders" to "folders.")
+
+    fun filesAndPrefs(context: Context, owner: String) {
         // 删完立刻重建空目录：MediaCache / VoiceRecorder 只在构造时 mkdirs，本进程内接着登录不能写到不存在的目录
         DIRS.forEach { File(context.filesDir, it).also { d -> d.deleteRecursively(); d.mkdirs() } }
         PREFS.forEach { context.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit() }
+        OWNER_KEYED_PREFS.forEach { (name, prefix) ->
+            context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().remove(prefix + owner).commit()
+        }
     }
 }

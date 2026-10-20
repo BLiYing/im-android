@@ -398,7 +398,12 @@ class IMSocketManager(
             }
             if (isAccountDeletedFrame(env)) {
                 // 服务端随后断连；先停重连再发信号（同 401 被踢路径），清缓存由 IMClient 订阅 sessionEnded 做
-                synchronized(lock) { endSession(SessionEndReason.AccountDeleted) }
+                // 同时作废本代并关掉这条连接：endSession 只丢引用不关 socket，不关的话销毁后的迟到帧还会进库
+                synchronized(lock) {
+                    generation++
+                    webSocket.close(1000, "account deleted")
+                    endSession(SessionEndReason.AccountDeleted)
+                }
                 return
             }
             if (env.type == FrameType.PONG) {
