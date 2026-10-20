@@ -42,6 +42,7 @@ import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.UserMinus
 import com.composables.icons.lucide.UserPlus
+import com.composables.icons.lucide.UserX
 import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.Video
 import com.libeyond.imandroid.data.DetailAction
@@ -158,5 +159,5 @@ private fun moreIconFor(m: DetailMoreAction): ImageVector = when (m) {
     DetailMoreAction.ClearHistory -> Lucide.Trash2
     DetailMoreAction.RemoveFriend -> Lucide.UserMinus
     DetailMoreAction.LeaveGroup -> Lucide.LogOut
-    DetailMoreAction.DissolveGroup -> Lucide.Trash2
+    DetailMoreAction.DissolveGroup -> Lucide.UserX   // 与「清空聊天记录」的垃圾桶区分
 }
