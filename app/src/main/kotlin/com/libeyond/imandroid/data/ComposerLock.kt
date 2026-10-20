@@ -20,8 +20,14 @@ object ComposerLock {
         myMuteUntil: Long,
         muteUntil: Long,
         now: Long = System.currentTimeMillis(),
+        /** 单聊对端已注销（PROTOCOL §6.16.3：客户端应禁用发消息入口；对齐 iOS / Web 的只读输入栏）。 */
+        peerDeleted: Boolean = false,
     ): Int? {
-        if (!isGroup) return if (peerUid == DetailActions.SYSTEM_UID) R.string.chat_input_disabled_system else null
+        if (!isGroup) return when {
+            peerUid == DetailActions.SYSTEM_UID -> R.string.chat_input_disabled_system
+            peerDeleted -> R.string.chat_detail_deleted_user
+            else -> null
+        }
         if (GroupPermissions.isMuteActive(myMuteUntil, now)) return R.string.chat_input_disabled_muted
         val isMember = myRole == null || myRole == "member"
         // myRole 还没拉回来（null）时按普通成员判：宁可先锁——拉回后管理员自动解锁，反向则会让被禁言者白发一次

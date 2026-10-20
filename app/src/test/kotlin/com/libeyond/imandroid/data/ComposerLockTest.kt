@@ -14,6 +14,9 @@ class ComposerLockTest {
 
     @Test fun `系统通知会话锁`() = assertEquals(R.string.chat_input_disabled_system, lock(false, DetailActions.SYSTEM_UID))
     @Test fun `普通单聊不锁`() = assertNull(lock(false, "1002"))
+    @Test fun `对端已注销的单聊锁`() =
+        assertEquals(R.string.chat_detail_deleted_user, ComposerLock.reasonRes(false, "1002", null, 0, 0, now, peerDeleted = true))
+    @Test fun `群聊不受对端已注销影响`() = assertNull(ComposerLock.reasonRes(true, "", "member", 0, 0, now, peerDeleted = true))
     @Test fun `普通群不锁`() = assertNull(lock())
     @Test fun `成员级禁言锁且压过全员禁言`() =
         assertEquals(R.string.chat_input_disabled_muted, lock(my = now + 5, all = -1))

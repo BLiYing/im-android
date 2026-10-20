@@ -355,8 +355,8 @@ fun ChatHost(
         extraSendable = !paste.isEmpty,
         backUnread = backUnread,
         banners = { banners.Stack() },
-        composerLock = ComposerLock.reasonRes(conv.isGroup, conv.peerUid, myRole, myMuteUntil, groupMuteUntil, lockNow)
-            ?.let { Str.s(it) },
+        composerLock = ComposerLock.reasonRes(conv.isGroup, conv.peerUid, myRole, myMuteUntil, groupMuteUntil, lockNow, // 末参=对端已注销→只读
+            !conv.isGroup && (conv.peerDeleted || com.libeyond.imandroid.sdk.api.DeletedUser.has(conv.peerUid)))?.let { Str.s(it) },
         // 已发过申请就别再弹（再点只会重复申请）；拒收行本身是瞬态说明，不随关系变化消失
         onAddFriendFromNote = {
             if (friendAsked) toast = Str.s(R.string.friend_request_sent)
