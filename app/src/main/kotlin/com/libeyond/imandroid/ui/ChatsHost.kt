@@ -309,13 +309,12 @@ fun ChatsHost(
         )
     }
 
-    // 批量删除确认（Android / Web 同口径：标题「删除 N 个会话？」+ 正文；文件夹 Tab 内追加「会同时从全部和所有文件夹中消失」）
+    // 批量删除确认（Android / Web 同口径：标题「删除 N 个会话？」+ 正文）
     if (edit.confirmingDelete && selectedConvs.isNotEmpty()) {
         val n = selectedConvs.size
         com.libeyond.imandroid.ui.components.IMConfirmDialog(
             title = androidx.compose.ui.res.pluralStringResource(R.plurals.conv_edit_delete_title, n, n),
-            message = stringResource(R.string.conv_edit_delete_body) +
-                if (selectedFolder != null) stringResource(R.string.conv_edit_delete_body_folder) else "",
+            message = stringResource(R.string.conv_edit_delete_body),
             confirmText = stringResource(R.string.common_delete),
             destructive = true,
             onConfirm = onBatchDelete,
