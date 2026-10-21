@@ -20,6 +20,7 @@ import com.libeyond.imandroid.ui.components.menuBackdrop
 import com.libeyond.imandroid.data.Forward
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.CardContent
+import com.libeyond.imandroid.data.AutoDelete
 import com.libeyond.imandroid.data.ChatDetailNav
 import com.libeyond.imandroid.data.ChatDetailPage
 import com.libeyond.imandroid.data.DetailAction
@@ -204,12 +205,16 @@ fun ChatDetailHost(
 
     // 详情页列表的滚动态放在宿主：查看器打开时 Detail 页离开组合，页内的会丢（返回后媒体宫格回到第一行）
     val detailListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val page = ChatDetailNav.current(mediaOpen = viewingOpen, profileOpen = profile)
+    // 自动删除档位：右值读本地库（conv_update / 列表刷新 / 本机保存都落这一列，就地刷新），点行进档位页
+    var autoDeleteOpen by remember(conv.convId) { mutableStateOf(false) }
+    val autoDeleteSec = rememberConvAutoDelete(client, conv.convId, conv.autoDeleteSec)
+    val page = ChatDetailNav.current(mediaOpen = viewingOpen, profileOpen = profile, autoDeleteOpen = autoDeleteOpen)
     // 返回键一处派发（同 GroupInfoHost；理由见 ChatDetailPage 的注释）
     BackHandler {
         when (page) {
             ChatDetailPage.Media -> viewingOpen = false
             ChatDetailPage.Profile -> profile = false
+            ChatDetailPage.AutoDelete -> autoDeleteOpen = false
             ChatDetailPage.Detail -> onBack()
         }
     }
@@ -256,6 +261,7 @@ fun ChatDetailHost(
                     onClose = { viewingOpen = false },
                 ) }
             }
+            ChatDetailPage.AutoDelete -> ConvAutoDeletePage(client, conv.convId, autoDeleteSec) { autoDeleteOpen = false }
             ChatDetailPage.Profile -> {
                 UserProfileHost(
                     client = client,
@@ -312,6 +318,8 @@ fun ChatDetailHost(
                     onOpenLink = { url -> openLink?.invoke(url) },
                     onTogglePinned = { v -> pinned = v; pushSettings(v, muted) },
                     onOpenMuteSheet = { muteSheetOpen = true },
+                    autoDeleteValue = AutoDelete.label(autoDeleteSec),
+                    onOpenAutoDelete = { autoDeleteOpen = true },
                     // 页内弹窗编辑，不跳页（对齐 iOS `editRemark`；弹窗组件与用户资料页共用，见 RemarkEditDialog）
                     onSetRemark = { editingRemark = true },
                     onOpenProfile = { profile = true },

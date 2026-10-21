@@ -432,6 +432,8 @@ data class ConvUpdateData(
     /** 定时免打扰到期毫秒（0=永久或未免打扰，第二批 NOTIFICATIONS_P1_DESIGN §5.2）。 */
     @SerialName("mute_until") val muteUntil: Long = 0,
     @SerialName("marked_unread") val markedUnread: Boolean = false,
+    /** 自动删除档位全值（0=关；AUTO_DELETE_DESIGN §1，settings 帧恒带）。 */
+    @SerialName("auto_delete_sec") val autoDeleteSec: Int = 0,
     /** 会话备注全值（G1，仅本人可见）。服务端**每帧都带**（无 omitempty）：settings 帧是真值，`""`=清除；delete 帧恒为 `""` 无意义。 */
     val remark: String = "",
     /** 仅 action=delete 带。 */

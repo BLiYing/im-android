@@ -14,13 +14,20 @@ class ChatDetailNavTest {
         assertEquals(ChatDetailPage.Detail, ChatDetailNav.current(mediaOpen = false, profileOpen = false))
     }
 
+    @Test
+    fun `自动删除档位页盖在详情之上、退回详情`() {
+        assertEquals(ChatDetailPage.AutoDelete, ChatDetailNav.current(mediaOpen = false, profileOpen = false, autoDeleteOpen = true))
+        assertEquals(ChatDetailPage.Detail, ChatDetailNav.back(ChatDetailPage.AutoDelete))
+        assertEquals(1, ChatDetailPage.AutoDelete.depth)
+    }
+
     /**
      * 媒体**查看器不在这一层**——它归 ConvMediaHost 自己管。
      * 每个宿主只描述自己这一层，层级才不会互相渗透（枚举里出现 Viewer 就说明渗透了）。
      */
     @Test
     fun `查看器不属于这一层`() {
-        assertEquals(3, ChatDetailPage.entries.size)
+        assertEquals(4, ChatDetailPage.entries.size)
     }
 
     /**

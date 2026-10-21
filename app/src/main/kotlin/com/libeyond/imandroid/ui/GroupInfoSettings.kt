@@ -40,6 +40,8 @@ class GroupInfoSettingsState internal constructor(
     private val muteUntilState = mutableStateOf(0L)
     private val muteSheetOpenState = mutableStateOf(false)
     private val markedUnreadState = mutableStateOf(false)
+    private val autoDeleteSecState = mutableStateOf(0)
+    private val autoDeleteOpenState = mutableStateOf(false)
     private val remarkState = mutableStateOf("")
     private val editingMyNicknameState = mutableStateOf(false)
     private val editingRemarkState = mutableStateOf(false)
@@ -48,6 +50,9 @@ class GroupInfoSettingsState internal constructor(
     val pinned: Boolean get() = pinnedState.value
     val muted: Boolean get() = MuteState.isMutedNow(mutedState.value, muteUntilState.value)
     val muteSheetOpen: Boolean get() = muteSheetOpenState.value
+    /** 本会话自动删除档位（AUTO_DELETE_DESIGN §3.3 C）。进页 GET 种下，其后由 [rememberGroupAutoDeleteLabel] 跟本地库同步。 */
+    val autoDeleteSec: Int get() = autoDeleteSecState.value
+    val autoDeleteOpen: Boolean get() = autoDeleteOpenState.value
     val remark: String get() = remarkState.value
     val editingMyNickname: Boolean get() = editingMyNicknameState.value
     val editingRemark: Boolean get() = editingRemarkState.value
@@ -63,6 +68,7 @@ class GroupInfoSettingsState internal constructor(
                 muteUntilState.value = s.muteUntil
                 markedUnreadState.value = s.markedUnread
                 remarkState.value = s.remark
+                autoDeleteSecState.value = s.autoDeleteSec
             }
             .onFailure { IMLog.tag("IM.Group").w("group_settings_failed") }
     }
@@ -88,6 +94,9 @@ class GroupInfoSettingsState internal constructor(
 
     fun togglePinned(v: Boolean) { pinnedState.value = v; push(v, muted) }
     fun openMuteSheet() { muteSheetOpenState.value = true }
+    fun openAutoDelete() { autoDeleteOpenState.value = true }
+    fun closeAutoDelete() { autoDeleteOpenState.value = false }
+    internal fun syncAutoDelete(sec: Int) { autoDeleteSecState.value = sec }
     fun dismissMuteSheet() { muteSheetOpenState.value = false }
 
     /** 时长菜单的结果：`null` = 取消免打扰，否则为到期毫秒（0 = 永久）。 */
@@ -137,6 +146,21 @@ data class GroupTextNotice(val title: String, val body: String, val subtitle: St
 fun rememberGroupMuteValueText(settings: GroupInfoSettingsState): String {
     rememberMuteTick(settings.tickSource()) // 只负责到期 / 回前台时触发重组，取值走 muteValueText 的墙钟
     return settings.muteValueText() ?: stringResource(R.string.common_off)
+}
+
+/** 群资料页「自动删除消息」行右值：跟本地库那一列同步（别端 `conv_update` / 本机保存后就地刷新）。 */
+@Composable
+fun rememberGroupAutoDeleteLabel(client: IMClient, convId: String, settings: GroupInfoSettingsState): String {
+    val sec = rememberConvAutoDelete(client, convId, settings.autoDeleteSec)
+    androidx.compose.runtime.LaunchedEffect(sec) { settings.syncAutoDelete(sec) }
+    return com.libeyond.imandroid.data.AutoDelete.label(sec)
+}
+
+/** 群资料页的档位页（盖在群资料之上，宿主在页链里一行接入）。 */
+@Composable
+fun GroupAutoDeletePage(client: IMClient, convId: String, settings: GroupInfoSettingsState) {
+    val sec = rememberConvAutoDelete(client, convId, settings.autoDeleteSec) // 订阅库里最新档位，不用打开前的快照
+    ConvAutoDeletePage(client, convId, sec, onBack = settings::closeAutoDelete)
 }
 
 /** 群资料页的免打扰时长菜单（与聊天信息页同一个 [MuteDurationSheet]）；未打开时不画。 */

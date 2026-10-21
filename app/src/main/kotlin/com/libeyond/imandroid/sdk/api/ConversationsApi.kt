@@ -51,6 +51,8 @@ data class ConversationSummary(
      */
     @SerialName("mute_until") val muteUntil: Long = 0,
     @SerialName("marked_unread") val markedUnread: Boolean = false,
+    /** 自动删除档位秒数（0=关；AUTO_DELETE_DESIGN §1）。老服务端无此字段 = 0。 */
+    @SerialName("auto_delete_sec") val autoDeleteSec: Int = 0,
     /** 未读区间内有人 @我。**穿透免打扰**做强提醒。 */
     @SerialName("mention_unread") val mentionUnread: Boolean = false,
     /** 会话备注名（G1，仅本人可见）。与 peer_remark 不同：这是"我对这个会话"的别名，群聊也适用。 */
@@ -89,6 +91,8 @@ data class ConversationSettings(
     @SerialName("mute_until") val muteUntil: Long = 0,
     @SerialName("marked_unread") val markedUnread: Boolean = false,
     val remark: String = "",
+    /** 自动删除档位秒数（0=关）。 */
+    @SerialName("auto_delete_sec") val autoDeleteSec: Int = 0,
 )
 
 class ConversationsApi(private val http: HttpClient) {
@@ -127,13 +131,20 @@ class ConversationsApi(private val http: HttpClient) {
      *   免打扰」，**保留原到期时间**——改置顶/标未读时把 `muted` 原样带回却不带这个参数的调用方
      *   （[updateSettings] 的绝大多数调用点）**不会**把定时免打扰变成永久。选时长菜单的调用点才
      *   显式传值；`muted=false` 时服务端一律清 0，传不传都一样。
+     * @param autoDeleteSec 自动删除档位（PROTOCOL §6.8.1）。**可省略（null，不落进请求体）= 服务端保留原值**——
+     *   所以改置顶 / 免打扰 / 标未读的调用点不传它也不会把档位清零，且不会拿本地旧值盖掉别端刚改的；
+     *   只有会话详情页的「自动删除消息」行显式传值。
      */
-    suspend fun updateSettings(convId: String, pinnedAt: Long, muted: Boolean, markedUnread: Boolean, muteUntil: Long? = null) {
+    suspend fun updateSettings(
+        convId: String, pinnedAt: Long, muted: Boolean, markedUnread: Boolean,
+        muteUntil: Long? = null, autoDeleteSec: Int? = null,
+    ) {
         http.call("PUT", "/api/v1/conversations/$convId/settings", buildJsonObject {
             put("pinned_at", pinnedAt)
             put("muted", muted)
             put("marked_unread", markedUnread)
             if (muteUntil != null) put("mute_until", muteUntil)
+            if (autoDeleteSec != null) put("auto_delete_sec", autoDeleteSec)
         })
     }
 
@@ -162,6 +173,8 @@ class ConversationsApi(private val http: HttpClient) {
             http.call("GET", "/api/v1/conversations/$convId/media", query = query),
             ConvMediaPage.serializer(),
         ).let { if (after > 0) ConvQueryFloor.mediaNewer(it, clearedUpTo) else ConvQueryFloor.media(it, clearedUpTo) }
+            // 服务端不按自动删除档位过滤媒体（设计 §3.1）：已过期的在这里丢掉，与本地库口径一致
+            .let { p -> p.copy(items = AutoDeleteFloor.dropExpired(convId, p.items) { it.timestamp }) }
     }
 
     /**
@@ -194,6 +207,7 @@ class ConversationsApi(private val http: HttpClient) {
             http.call("GET", "/api/v1/conversations/$convId/messages/search", query = query),
             ConvSearchPage.serializer(),
         ).let { ConvQueryFloor.search(it, clearedUpTo) }
+            .let { p -> p.copy(items = AutoDeleteFloor.dropExpired(convId, p.items) { it.timestamp }) }
     }
 
     /**
@@ -285,6 +299,7 @@ class ConversationsApi(private val http: HttpClient) {
     suspend fun pinned(convId: String): List<PinnedMessage> =
         decode(http.call("GET", "/api/v1/conversations/$convId/pinned"), PinnedResp.serializer())
             .items.filter { it.convSeq > 0 }
+            .let { list -> AutoDeleteFloor.dropExpired(convId, list) { it.timestamp } }
 
     /**
      * 一键取消本会话**全部**置顶（批量，一次请求；权限同置顶，越权回 300006）。服务端当场取全量清除，

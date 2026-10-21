@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -19,7 +20,7 @@ class PrivacySecurityTest {
             listOf(
                 "已屏蔽的用户不能给你发消息，也看不到你的资料。",
                 "绑定第二因子后，即使密码泄露也无法登录你的账号。",
-                "为你开始的每个新会话默认开启阅后自删。",
+                "新会话默认开启此设置；只影响你自己看到的消息，不影响对方。",
                 "这些设置决定他人在你的资料页看到多少。",
                 "",
             ),
@@ -47,18 +48,32 @@ class PrivacySecurityTest {
         assertEquals("关闭", values["两步验证"])
         assertEquals("关闭", values["通行密钥"])
         assertEquals("", values["邮箱登录"])
-        assertEquals("关闭", values["自动删除消息"])
+        assertEquals("", values["自动删除消息"]) // 活行：右值由页面按 GET /users/me/privacy 填
         assertEquals(listOf("我的联系人", "我的联系人", "所有人", "所有人", "我的联系人"), groups[3].rows.map { it.value })
         assertEquals("", values["清除所有对话"])
     }
 
-    /** 只有第一组两行是真功能；其余全灰置。把某个占位行误接成活行（或反过来）都会在这里红。 */
+    /** 第一组两行与「自动删除消息」是真功能；其余全灰置。把某个占位行误接成活行（或反过来）都会在这里红。 */
     @Test
-    fun `只有已屏蔽与修改密码是活行`() {
+    fun `只有已屏蔽、修改密码与自动删除是活行`() {
         val first = groups.first().rows
         assertEquals(listOf(PrivacyAction.Blocked, PrivacyAction.ChangePassword), first.map { it.action })
         assertTrue(first.none { it.isPlaceholder })
-        assertTrue(groups.drop(1).flatMap { it.rows }.all { it.isPlaceholder && it.action == PrivacyAction.ComingSoon })
+        val autoDelete = groups[2].rows.single()
+        assertEquals(PrivacyAction.AutoDelete, autoDelete.action)
+        assertFalse(autoDelete.isPlaceholder)
+        val rest = groups.drop(1).flatMap { it.rows }.filter { it !== autoDelete }
+        assertTrue(rest.all { it.isPlaceholder && it.action == PrivacyAction.ComingSoon })
+    }
+
+    /** 行右值 = 账号默认档位；还没拉到（null）留空，别显「关闭」误导。 */
+    @Test
+    fun `自动删除行右值`() {
+        assertEquals("", PrivacySecurity.autoDeleteLabel(null))
+        assertEquals("关闭", PrivacySecurity.autoDeleteLabel(0))
+        assertEquals("1 天", PrivacySecurity.autoDeleteLabel(86_400))
+        assertEquals("1 周", PrivacySecurity.autoDeleteLabel(604_800))
+        assertEquals("1 个月", PrivacySecurity.autoDeleteLabel(2_592_000))
     }
 
     @Test

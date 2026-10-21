@@ -6,6 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **自动删除消息（2026-10-21，OPPO 已装实测，未提交；设计 IMServer `docs/design/AUTO_DELETE_DESIGN.md`，契约 PROTOCOL §6.8.1）**：个人级、只清本机视图。判据 `data/AutoDelete.kt`（`AutoDeleteTest` 读共用向量 `auto_delete.json`，`src/test/resources` 有拷贝并比对真源）；会话行 `autoDeleteSec`（Room v19 + `MIGRATION_18_19`，`MigrationTest` 已跑）；入库即过滤（`persistPage` / `onIncoming` → `MessageRepositoryAutoDelete.kt`，区间/游标照推）；清理 `purgeExpired`（物理删本机行、重算预览/未读、会话行保留）+ `AutoDeleteSweeper`（`RefreshCoalescer` 合并；触发 = 列表刷新 / `conv_update` / 本机改档位 / `MainActivity` RESUMED 立即扫 + 每 30s）；服务端分页接口（媒体/搜索/置顶）经 `sdk/api/AutoDeleteFloor` 镜像丢过期项。UI：隐私页活行 + `PrivacyPage.AutoDelete`（GET/PUT `/users/me/privacy`，`PrivacyApi`）；`AutoDeleteScreen`（复用 `LanguageOptionRow`）；单聊/群资料页行 + `ConvAutoDeletePage`（确认框、`setConvAutoDelete`）。设置搜索登记 `privacy_auto_delete`（25 条，**iOS/Web 登记表待同步**）。`updateSettings` 其它调用点不传 `auto_delete_sec`（省略=服务端保留）。instrumented：`AutoDeletePurgeTest`。
 - **会话列表编辑模式（2026-10-20，OPPO 已装实测，未提交）**：`IMTopBar` 左槽 `leftLabel`「编辑 / 完成」→ `SelectionCheck` 勾选圈 + 底栏 `ConversationEditBar`（TabRoot 底栏插槽换成选择栏，不与列表重叠）；状态 / 批量执行在 `ui/ChatsEditing.kt`，选择集与 `runBounded` 在 `data/ConversationSelection.kt`（`ConversationSelectionTest` 读共用向量）；`MessageService.deleteConversation(refresh=)` 批量时不逐条拉列表。设计 `IMServer/docs/design/CONV_LIST_EDIT_MODE_DESIGN.md` + `sketches/CONV_LIST_EDIT_MODE_UX_SKETCH.html`；共用向量 `IMServer/docs/conformance/conv_selection.json`；新增 i18n 键 `conv.edit.*`（7 个，已重新生成三端）。
 - **注销账号·通话入口与免密提示（2026-10-20，已提交）**：已注销对端不可呼叫——单聊入口拦截（toast `rtc.call.peer_deleted`）、群通话选人 / 通话中邀请候选剔除 `deleted`；冷静期账号免密登录显示本地化 `err.200005`，不再露服务端英文。口径见 `IMServer/docs/design/DELETE_ACCOUNT_DESIGN.md` §3.5/§3.6。已实测通过（回拨拦截 / 群选人 / 英文文案）。限制（已确认属预期）：杀 App 冷启动后直接点通话记录，对端资料未加载，靠服务端 `invite-check` 兜底，提示笼统「对方暂时无法被邀请」。
 - **注销账号（2026-10-20，已收尾提交 main，未 push；设计 IMServer `docs/design/DELETE_ACCOUNT_DESIGN.md`，契约 PROTOCOL §6.16 已对账）**：WS error `reason=account_deleted` → `SessionEndReason.AccountDeleted`（`IMSocketManager`）→ `IMClient` 按 owner 清本账号 Room 缓存（`wipeLocalChatData(owner)`，不动其它账号）；用户/好友/群成员/会话摘要 `deleted`/`peer_deleted` 统一 `normalized()` + `displayName` 压过备注（`DeletedUser.name`），`IMAvatar` 对「已注销用户」画灰底人形，资料页对已注销不给发消息/加好友；阻断卡群名可点（`LocalOpenGroupInfo` → MainScreen 开群聊+群资料）；300003 显示拒收注释；自己资料页两个入口（我页 / `UserProfileHost.SelfProfile`）都带注销组（`LocalAccountDeleted`）。OPPO 真机（user 999 隔离空间）自测全通过，code-review 已跑。
@@ -67,6 +68,8 @@
 8. 小尾巴（均不影响行为）：「刷新补名失败不重试」靠下次连接/刷新自愈；`resolveKind` 对畸形 convId 当群聊（测试已钉住）；`VoiceLocalStore.putText` 每次重写整份 FIFO 顺序表；`PendingVoiceBubble` 里多余的 `coerceAtLeast(160.dp)`；`applySync` 对全是 `msg_op`/墓碑的一页也调 `bumpConversationFromLatest`（白多一次索引 SELECT）。
 
 ## 已知坑 / 限制
+
+- **自动删除**：本机时钟决定清理时机，后台不扫（回前台补扫）；关闭/放宽不复活已清的本机消息；前台 30s tick 与到点消失未能在真机造「差几十秒满 1 天」的消息实测（服务端无法造旧时间戳），靠 `AutoDeletePurgeTest` + 判据向量覆盖；`MessageRepository.kt` 593 / `MessageService.kt` 583 行贴线。
 
 - **OPPO（MTK）4K 视频没有封面/缩略**：硬解上限 2560×1440，`MediaMetadataRetriever` 与 `ContentResolver.loadThumbnail` 都失败（实测），宫格与待发气泡同样空白；发出去的视频没有 `poster`。设备限制，别当 bug 反复查；真要兜底得自己 `MediaCodec` 走软解。
 - **App 的省电模式（设置里「始终开启」）会让视频预加载生效值为关**：`MediaBubbles`/`AlbumBubble` 对**接收侧**视频只画磨砂、不拉封面；自己发的（`ungated`）必须照常画封面，别再把这个分支放开到发送方。测省电相关 UI 前先看 `shared_prefs/im_power_saving.xml` 的 `mode`。

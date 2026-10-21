@@ -11,6 +11,7 @@ import com.libeyond.imandroid.data.db.PendingMessageDao
 import com.libeyond.imandroid.data.db.PendingMessageEntity
 import com.libeyond.imandroid.data.db.SendState
 import com.libeyond.imandroid.fcm.FcmNotifications
+import com.libeyond.imandroid.sdk.api.AutoDeleteFloor
 import com.libeyond.imandroid.sdk.api.ConversationSummary
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.AckData
@@ -24,6 +25,7 @@ import com.libeyond.imandroid.sdk.protocol.MsgOpData
 import com.libeyond.imandroid.sdk.protocol.ReceiptData
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
@@ -112,6 +114,8 @@ class MessageRepository(
     fun observeTail(owner: String, convId: String, fromSeq: Long, limit: Int): Flow<List<MessageEntity>> =
         messages.observeWindowFrom(owner, convId, fromSeq, limit).map { it.asReversed() }
 
+    fun observeAutoDelete(owner: String, convId: String): Flow<Int> = conversations.observeAutoDelete(owner, convId).distinctUntilChanged()
+
     fun observeHead(owner: String, convId: String): Flow<Long> = conversations.observeHead(owner, convId)
 
     fun observePeerReadSeq(owner: String, convId: String): Flow<Long> = conversations.observePeerReadSeq(owner, convId)
@@ -177,6 +181,7 @@ class MessageRepository(
             if (m.convSeq > 0) ranges.register(owner, m.convId, m.convSeq, m.convSeq)
             return false
         }
+        if (droppedAsExpired(owner, m)) return false // 自动删除：入库即过期的不进库（MessageRepositoryAutoDelete.kt）
         val row = m.toEntity(owner)
         // 实时消息也登记 [seq, seq]（紧接尾段则并入）——漏登记的后果是刚聊完的会话被判「本地不齐」
         tx.run {
@@ -214,12 +219,16 @@ class MessageRepository(
         }
         // 用户清掉的那一段不能被 sync / window 又带回来（只在有消息要落时才读这一行，空页不多花一次查询）
         if (plain.isNotEmpty()) {
-            val floor = conversations.byId(owner, convId)?.clearedUpTo ?: 0L
+            val conv = conversations.byId(owner, convId)
+            val floor = conv?.clearedUpTo ?: 0L
             if (floor > 0) {
                 val kept = ClearFloor.dropCleared(plain, floor)
                 plain.clear()
                 plain += kept
             }
+            // 自动删除：入库即过期的不进库（区间 / 游标照推，见 MessageRepositoryAutoDelete.kt）
+            val alive = AutoDelete.dropExpired(plain, conv?.autoDeleteSec ?: 0, System.currentTimeMillis()) { it.timestamp }
+            if (alive.size != plain.size) { plain.clear(); plain += alive }
         }
         // 无事可写（没有可落的消息、也没有要登记的区间——`too_long` 与「没有新消息」都是这样）就别开事务：
         // 重连时几十个会话各来一个空页，每个都白付一次事务提交（真机 34 个空页合计 625 ms，埋点抓到的）。
@@ -361,6 +370,7 @@ class MessageRepository(
                 muted = s.muted,
                 muteUntil = s.muteUntil,
                 markedUnread = s.markedUnread,
+                autoDeleteSec = s.autoDeleteSec,
                 isSuper = s.isSuper,
                 // head 只增不减：列表的 latest_conv_seq 与本地已记的取大（sync 的 too_long 也往这写）
                 headConvSeq = maxOf(existing?.headConvSeq ?: 0L, s.latestConvSeq),
@@ -368,6 +378,7 @@ class MessageRepository(
             ).keepNewerLocalTail(existing)
         }
         conversations.upsert(rows)
+        AutoDeleteFloor.replaceAll(rows.filter { it.autoDeleteSec > 0 }.associate { it.convId to it.autoDeleteSec })
         // 快照是全量权威：本地有、快照没有的群行 = 别端退群 / 离线时被移出 / 群已解散，直接删（见 StaleGroupRows）
         if (groupIdsBeforeRequest != null) {
             StaleGroupRows.of(conversations.all(owner), list.mapTo(HashSet()) { it.convId }, groupIdsBeforeRequest)
@@ -452,7 +463,8 @@ class MessageRepository(
         if (u.action == "delete") {
             removeConversation(owner, u.convId)
         } else {
-            conversations.updateSettings(owner, u.convId, u.pinnedAt, u.muted, u.muteUntil, u.markedUnread)
+            conversations.updateSettings(owner, u.convId, u.pinnedAt, u.muted, u.muteUntil, u.markedUnread, u.autoDeleteSec)
+            AutoDeleteFloor.set(u.convId, u.autoDeleteSec)
         }
         log.i("conv_update_applied", "convId" to u.convId, "action" to u.action)
     }

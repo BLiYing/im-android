@@ -80,8 +80,9 @@ fun languageCurrentLabel(pref: LanguagePref, resolved: ResolvedLanguage): String
         languagePrefDisplayName(pref)
     }
 
+/** 单选行（标题 + 选中 ✓）。语言页与自动删除档位页共用，不另造组件。 */
 @Composable
-private fun LanguageOptionRow(title: String, selected: Boolean, onClick: () -> Unit) {
+internal fun LanguageOptionRow(title: String, selected: Boolean, onClick: () -> Unit) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     Row(

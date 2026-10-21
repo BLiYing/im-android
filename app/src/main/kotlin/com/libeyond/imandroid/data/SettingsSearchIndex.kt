@@ -4,13 +4,13 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
 
 /** 设置项图标（纯数据；UI 层映射到 Lucide 图标，与「我」页同款）。 */
-enum class SettingsGlyph { Bookmark, Phone, Laptop, IdCard, Bell, Lock, HardDrive, Contrast, Zap, Globe, Ban, Key, Volume, Smartphone, Wifi, Image, Video, File }
+enum class SettingsGlyph { Bookmark, Phone, Laptop, IdCard, Bell, Lock, HardDrive, Contrast, Zap, Globe, Ban, Key, Volume, Smartphone, Wifi, Image, Video, File, Timer }
 
 /** 设置项图标底色（UI 层映射到 `IMTheme.settingsIcons`）。 */
 enum class SettingsTint { Blue, Green, Orange, Red, Gray, Yellow, Purple, Teal }
 
 /** 「隐私与安全」内部页（原先是 PrivacySecurityHost 的私有枚举，搜索落点需要从外面指定）。 */
-enum class PrivacyPage { Main, Blocked, ChangePassword }
+enum class PrivacyPage { Main, Blocked, ChangePassword, AutoDelete }
 
 /**
  * 二级页内的落点（[SettingsRoute.page] 之下再深的那几层）。`None` = 只开到「我」页的一级页。
@@ -99,6 +99,9 @@ object SettingsSearchIndex {
             SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.Blocked))))
         add(SettingsSearchEntry("privacy_password", Str.s(R.string.settings_change_password), listOf(privacy, Str.s(R.string.settings_change_password)), SettingsGlyph.Key, SettingsTint.Blue,
             SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.ChangePassword))))
+
+        add(SettingsSearchEntry("privacy_auto_delete", Str.s(R.string.ps_row_auto_delete_messages), listOf(privacy, Str.s(R.string.ps_row_auto_delete_messages)), SettingsGlyph.Timer, SettingsTint.Orange,
+            SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.AutoDelete))))
 
         // 数据和存储：两个网络页 [数据和存储, 网络] + 每网络三个分类页 [数据和存储, 网络, 图片/视频/文件]
         for (net in DownloadNetwork.entries) {

@@ -112,6 +112,8 @@ class IMClient(context: Context) {
     /** 已登录设备。**公开**：既是 [TokenSession] 的探活接口，也是「我」页设备管理页的数据源。 */
     val devices = DevicesApi(http)
     val conversationsApi = ConversationsApi(http)
+    /** 账号级隐私设置（目前：新会话默认的自动删除档位）。 */
+    val privacy = com.libeyond.imandroid.sdk.api.PrivacyApi(http)
     val contacts = ContactApi(http)
 
     /** uid → 头像/显名 解析器（成员表给不出身份时兜底，见 [UserProfileCache]）。内存缓存。 */
@@ -301,6 +303,9 @@ class IMClient(context: Context) {
 
     /** 会话备注变更信号（聊天页标题就地刷新用）。 */
     val convRemarks: SharedFlow<com.libeyond.imandroid.data.ConvRemarkSignal> get() = messages.convRemarks
+
+    /** 请求一次自动删除全量扫（合并去抖；启动 / 回前台 / 前台 30 秒 tick / 本机改档位后调用）。 */
+    fun sweepAutoDelete() = messages.autoDelete.request()
 
     /** 消息被撤回/删除/编辑/置顶的信号（置顶横幅对齐服务端用）。 */
     val msgOps: SharedFlow<com.libeyond.imandroid.data.MsgOpSignal> get() = messages.msgOps
@@ -515,6 +520,7 @@ class IMClient(context: Context) {
         fcmTokenStore.forget()
         InAppBannerStore.dismiss()
         profiles.clear() // 资料解析缓存属于上一个账号
+        com.libeyond.imandroid.sdk.api.AutoDeleteFloor.clear() // 档位镜像属于上一个账号
         com.libeyond.imandroid.sdk.api.DeletedUser.clear() // 已注销登记是内存态，换号后由新账号的数据重新登记
     }
 

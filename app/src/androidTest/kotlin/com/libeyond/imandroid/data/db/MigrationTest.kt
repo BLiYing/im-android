@@ -182,6 +182,30 @@ class MigrationTest {
         }
     }
 
+    /** 18→19 会话加 `autoDeleteSec`（自动删除档位）：老行保留且默认 0（关），新列可写。 */
+    @Test
+    fun migrate18To19AddsAutoDeleteSecDefaultingToZero() {
+        helper.createDatabase(DB, 18).use { db ->
+            db.execSQL(
+                """INSERT INTO conversation (ownerUid, convId, isGroup, peerUid, title, avatarUrl, peerRemark, peerDeleted,
+                   lastContent, lastContentType, lastTimestamp, lastConvSeq, lastFrom, lastFromNickname, lastRecalled,
+                   lastSysEvent, lastSysArgs, lastSysSegments, unread, mentionUnread, readSeq, peerReadSeq,
+                   syncedConvSeq, pinnedAt, muted, muteUntil, markedUnread, isSuper, headConvSeq, clearedUpTo)
+                   VALUES ('me', 'u_a_u_b', 0, 'b', 'B', '', '', 0, 'hi', 'text', 1, 1, 'b', '', 0,
+                   '', '', '', 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0)""",
+            )
+        }
+        helper.runMigrationsAndValidate(DB, 19, true, IMDatabase.MIGRATION_18_19).use { db ->
+            db.query("SELECT title, autoDeleteSec FROM conversation").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("B", c.getString(0))
+                assertEquals(0, c.getInt(1))
+            }
+            db.execSQL("UPDATE conversation SET autoDeleteSec = 86400")
+            db.query("SELECT autoDeleteSec FROM conversation").use { c -> c.moveToFirst(); assertEquals(86400, c.getInt(0)) }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

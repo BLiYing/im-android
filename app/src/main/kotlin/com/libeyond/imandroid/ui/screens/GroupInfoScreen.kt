@@ -103,6 +103,9 @@ fun GroupInfoScreen(
     muteValueText: String,
     onTogglePinned: (Boolean) -> Unit,
     onOpenMute: () -> Unit,
+    /** 「自动删除消息」行（本会话档位，AUTO_DELETE_DESIGN §3.3 C）：右值 + 点进档位页。 */
+    autoDeleteValue: String,
+    onOpenAutoDelete: () -> Unit,
     /** 我在本群的昵称（仅本人可见，覆盖全局昵称）。 */
     onEditMyNickname: () -> Unit,
     /** 群备注（G1，仅本人可见，与单聊「备注名」同一套接口、多端同步）。 */
@@ -258,6 +261,8 @@ fun GroupInfoScreen(
                     SettingsSwitchRow(stringResource(R.string.chat_detail_pinned), pinned, onTogglePinned)
                     SettingsDivider()
                     SettingsChevronRow(stringResource(R.string.chat_detail_muted), muteValueText, onClick = onOpenMute)
+                    SettingsDivider()
+                    SettingsChevronRow(stringResource(R.string.ps_row_auto_delete_messages), autoDeleteValue, onClick = onOpenAutoDelete)
                     SettingsDivider()
                     SettingsChevronRow(
                         stringResource(R.string.chat_detail_my_group_nickname),

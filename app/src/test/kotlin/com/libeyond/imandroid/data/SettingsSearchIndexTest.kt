@@ -74,6 +74,8 @@ class SettingsSearchIndexTest {
         val byId = all.associateBy { it.id }
         assertEquals(SettingsRoute(MePage.Notifications, SettingsSub.Notification(NotificationPage.Sound, true)), byId.getValue("notif_group_sound").route)
         assertEquals(SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.Blocked)), byId.getValue("privacy_blocked").route)
+        assertEquals(SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.AutoDelete)), byId.getValue("privacy_auto_delete").route)
+        assertEquals(listOf("隐私与安全", "自动删除消息"), byId.getValue("privacy_auto_delete").path)
         assertEquals(
             SettingsRoute(MePage.DataStorage, SettingsSub.Storage(DownloadNetwork.Wifi, DownloadCategory.Video)),
             byId.getValue("storage_wifi_video").route,
@@ -96,7 +98,7 @@ class SettingsSearchIndexTest {
         assertEquals("视频", v.title)
         assertEquals(listOf("数据和存储", "使用 Wi-Fi", "视频"), v.path)
         assertEquals("数据和存储 › 使用 Wi-Fi › 视频", v.subtitle)
-        assertEquals(24, all.size)
+        assertEquals(25, all.size) // 24 + 自动删除消息（privacy_auto_delete，iOS/Web 登记表待同步）
     }
 
     @Test fun searchWifiFindsNetworkPageThenItsCategories() {

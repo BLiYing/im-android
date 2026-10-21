@@ -248,4 +248,9 @@ data class ConversationEntity(
      * 消费方（C3 进会话 / C4 ↓ / C6 服务端搜索）取 `max(服务端可见下界, clearedUpTo)` 当有效下界。
      */
     val clearedUpTo: Long = 0,
+    /**
+     * 自动删除档位秒数（0=关；AUTO_DELETE_DESIGN §3.4）。来源：会话列表 / `conv_update` / `GET …/settings`，
+     * 服务端覆盖；清理例程 `MessageRepository.purgeExpired` 与入库过滤据此判。
+     */
+    val autoDeleteSec: Int = 0,
 )

@@ -392,7 +392,7 @@ fun GroupInfoHost(
             onBack = qrBack,
             onViewCode = if (qrCardAsLink == true) ({ qrCardAsLink = false; qrCameFromLink = true }) else null,
         )
-    } else {
+    } else if (settings.autoDeleteOpen) { GroupAutoDeletePage(client, convId, settings) } else {
         // Media 与 Detail 是这条链里唯一真的接了转场的一对（同 ChatDetailHost 这轮的写法）：
         // 关闭只翻 viewingOpen，viewingData 留着不清，退场动画期间渲染读的是 PushTransition
         // 冻结下来的 state，不是活变量。其余 8 个分支仍是整页替换，本轮不碰。
@@ -439,7 +439,7 @@ fun GroupInfoHost(
         pinned = settings.pinned,
         muteValueText = rememberGroupMuteValueText(settings),
         onTogglePinned = settings::togglePinned,
-        onOpenMute = settings::openMuteSheet,
+        onOpenMute = settings::openMuteSheet, autoDeleteValue = rememberGroupAutoDeleteLabel(client, convId, settings), onOpenAutoDelete = settings::openAutoDelete,
         onEditMyNickname = settings::openMyNicknameEditor,
         remark = settings.remark,
         onEditRemark = settings::openRemarkEditor,

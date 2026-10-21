@@ -95,6 +95,9 @@ internal fun ChatDetailScreen(
     onTogglePinned: (Boolean) -> Unit,
     /** 点「消息免打扰」行：打开时长菜单（NOTIFICATIONS_P1_DESIGN §4.1/§4.2，草图 B）。 */
     onOpenMuteSheet: () -> Unit,
+    /** 「自动删除消息」行（本会话档位，AUTO_DELETE_DESIGN §3.3 C）：右值 = 关闭 / 1 天 / 1 周 / 1 个月，点进档位页。 */
+    autoDeleteValue: String,
+    onOpenAutoDelete: () -> Unit,
     onSetRemark: () -> Unit,
     onOpenProfile: () -> Unit,
     /** 头部操作排（消息/呼叫/视频/搜索/更多，或非好友时只有「加好友」）。 */
@@ -225,6 +228,8 @@ internal fun ChatDetailScreen(
                     // 「免打扰」从开关变成右值行（第二批 NOTIFICATIONS_P1_DESIGN §4.2）：点了弹时长菜单，
                     // 右值 = 关 / 至……/ 永久。
                     Row2(stringResource(R.string.chat_detail_muted), muteValueText, onClick = onOpenMuteSheet)
+                    Divider()
+                    Row2(stringResource(R.string.ps_row_auto_delete_messages), autoDeleteValue, onClick = onOpenAutoDelete)
                     // 「查找聊天记录 / 清空聊天记录」**不在这张卡上**：iOS 把它们放在头部
                     // 操作排的「搜索」与「更多 → 清空聊天记录」里。摆两处等于同一件事有两个入口，
                     // 而其中一个还写着"还没做"。

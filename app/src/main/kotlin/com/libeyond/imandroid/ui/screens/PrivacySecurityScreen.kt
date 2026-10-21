@@ -52,6 +52,9 @@ fun PrivacySecurityScreen(
     onBack: () -> Unit,
     onOpenBlocked: () -> Unit,
     onOpenChangePassword: () -> Unit,
+    /** 「自动删除消息」行的右值（账号默认档位；还没拉到为空串）与点击。 */
+    autoDeleteLabel: String,
+    onOpenAutoDelete: () -> Unit,
     onComingSoon: (String) -> Unit,
 ) {
     val c = IMTheme.colors
@@ -75,14 +78,15 @@ fun PrivacySecurityScreen(
                             onClick = when (row.action) {
                                 PrivacyAction.Blocked -> onOpenBlocked
                                 PrivacyAction.ChangePassword -> onOpenChangePassword
+                                PrivacyAction.AutoDelete -> onOpenAutoDelete
                                 PrivacyAction.ComingSoon -> soon
                             },
                             icon = iconOf(row.icon),
                             iconBackground = tintOf(row.tint, ic),
-                            rightValue = if (row.action == PrivacyAction.Blocked) {
-                                PrivacySecurity.blockedCountLabel(blockedCount)
-                            } else {
-                                row.value
+                            rightValue = when (row.action) {
+                                PrivacyAction.Blocked -> PrivacySecurity.blockedCountLabel(blockedCount)
+                                PrivacyAction.AutoDelete -> autoDeleteLabel
+                                else -> row.value
                             },
                             muted = row.isPlaceholder,
                         )

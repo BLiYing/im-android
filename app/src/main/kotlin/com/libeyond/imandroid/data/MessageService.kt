@@ -75,6 +75,10 @@ class MessageService(
     internal val windows = WindowRequester(socket, scope)
     /** 群帧触发的会话列表重拉：窗口合并，见 [RefreshCoalescer]。 */
     private val groupListRefresh = RefreshCoalescer(scope, GROUP_LIST_REFRESH_MS) { refreshConversations() }
+    /** 自动删除全量扫（AUTO_DELETE_DESIGN §3.2）；清掉东西后走 [msgOps] 的 HIDE 信号，置顶横幅 / 面板据此对齐。 */
+    internal val autoDelete = AutoDeleteSweeper(scope, repo, ownerProvider) { convId, seqs ->
+        _msgOps.tryEmit(MsgOpSignal(convId, MsgOpSignal.HIDE, seqs))
+    }
     /** 删掉摘要那条后重拉会话列表（见 PreviewRefresh.kt）。 */
     internal val previewRefresher = PreviewRefresher(scope) { refreshConversations() }
 
@@ -298,6 +302,7 @@ class MessageService(
             FrameType.CONV_UPDATE -> data?.let { el ->
                 val u = ProtocolJson.decodeFromJsonElement(ConvUpdateData.serializer(), el)
                 repo.applyConvUpdate(owner, u)
+                autoDelete.request() // 档位变短 / 由关变开 → 立刻清理（幂等，没变就是空扫）
                 ConvRemarkSignal.of(u)?.let { _convRemarks.tryEmit(it) }
             }
 
@@ -553,6 +558,7 @@ class MessageService(
             val list = conversationsApi.list()
             repo.applyConversationList(owner, list, presence, groupsBefore)
             _pendingCounts.value = list.filter { it.isGroup && it.pendingCount > 0 }.associate { it.convId to it.pendingCount }
+            autoDelete.request() // 列表发现档位变了（别端改的）也要清
             catchUpHidden(owner) // 扩展函数，见 HiddenCatchUp.kt（本文件贴 600 行硬闸）
             _listedConversations.value = ListedConversations(owner, list.size)
         } catch (e: Exception) {

@@ -11,7 +11,7 @@ import com.libeyond.imandroid.i18n.Str
  * 三端这张表逐字一致，抄错一行由 `PrivacySecurityTest` 当场抓。
  * 图标与底色用语义名，到 Lucide / `IMTheme.settingsIcons` 的映射在页面里（本层不能 import 它们）。
  *
- * 只有第一组两行是真功能；其余四组是**灰置占位**（点了提示开发中）。占位行照样列出来，
+ * 第一组两行与「自动删除消息」是真功能；其余是**灰置占位**（点了提示开发中）。占位行照样列出来，
  * 理由与「我」页相同：删掉会让三端这一页长得不一样，用户换个端就找不到东西。
  */
 enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, LastSeen, Avatar, Bio, Birthday, Trash, Export }
@@ -20,7 +20,7 @@ enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, Las
 enum class PrivacyTint { Red, Blue, Gray, Purple, Teal, Orange, Green, Yellow, Pink }
 
 /** 点一行做什么。 */
-enum class PrivacyAction { Blocked, ChangePassword, ComingSoon }
+enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, ComingSoon }
 
 data class PrivacyRow(
     val title: String,
@@ -69,7 +69,8 @@ object PrivacySecurity {
             header = Str.s(R.string.ps_section_chat_privacy),
             footer = Str.s(R.string.ps_chat_privacy_footer),
             rows = listOf(
-                PrivacyRow(Str.s(R.string.ps_row_auto_delete_messages), PrivacyIcon.Timer, PrivacyTint.Orange, Str.s(R.string.common_off)),
+                // 活行：右值 = 账号默认档位，由页面按 GET /users/me/privacy 填（[autoDeleteLabel]）
+                PrivacyRow(Str.s(R.string.ps_row_auto_delete_messages), PrivacyIcon.Timer, PrivacyTint.Orange, action = PrivacyAction.AutoDelete),
             ),
         ),
         PrivacyGroup(
@@ -91,6 +92,9 @@ object PrivacySecurity {
             ),
         ),
     )
+
+    /** 「自动删除消息」行的右值：还没拉到账号默认档位（null）留空，拉到了显 关闭 / 1 天 / 1 周 / 1 个月。 */
+    fun autoDeleteLabel(sec: Int?): String = if (sec == null) "" else AutoDelete.label(sec)
 
     /**
      * 「已屏蔽的用户」行的右值：**有才显数字**，0 与还没拉到都留空（iOS/Web 同）。

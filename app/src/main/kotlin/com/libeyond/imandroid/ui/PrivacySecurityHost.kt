@@ -12,6 +12,7 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.ChangePasswordRules
 import com.libeyond.imandroid.data.PasswordFeedback
 import com.libeyond.imandroid.data.PrivacyPage
+import com.libeyond.imandroid.data.PrivacySecurity
 import com.libeyond.imandroid.data.SettingsSub
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
@@ -19,6 +20,8 @@ import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.PushTransition
+import androidx.compose.ui.res.stringResource
+import com.libeyond.imandroid.ui.screens.AutoDeleteScreen
 import com.libeyond.imandroid.ui.screens.BlockedUsersScreen
 import com.libeyond.imandroid.ui.screens.ChangePasswordScreen
 import com.libeyond.imandroid.ui.screens.PrivacySecurityScreen
@@ -44,6 +47,10 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
     var pwdError by remember { mutableStateOf<PasswordFeedback.Inline?>(null) }
     var submitting by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
+    /** 账号默认的自动删除档位（`GET /users/me/privacy`）；还没拉到为 null。`autoShown` 是选择页上打勾的那个（乐观，失败回滚）。 */
+    var autoDefault by remember { mutableStateOf<Int?>(null) }
+    var autoShown by remember { mutableStateOf<Int?>(null) }
+    var autoSaving by remember { mutableStateOf(false) }
 
     suspend fun reloadBlocked() {
         runCatchingCancellable { client.contacts.friends(FriendEntry.BLOCKED) }
@@ -66,6 +73,19 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
             } finally {
                 unblocking.remove(f.userId)
             }
+        }
+    }
+
+    /** 选中即保存（账号默认不弹确认，它只影响之后新建的会话）；成功回上一页刷新右值，失败 toast 并回滚勾选。 */
+    fun saveAutoDefault(sec: Int) {
+        if (autoSaving) return
+        autoSaving = true
+        autoShown = sec
+        scope.launch {
+            runCatchingCancellable { client.privacy.setAutoDeleteDefault(sec) }
+                .onSuccess { autoDefault = sec; page = PrivacyPage.Main }
+                .onFailure { autoShown = autoDefault; toast = Str.s(R.string.autodel_save_failed) }
+            autoSaving = false
         }
     }
 
@@ -104,7 +124,12 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
     }
 
     // 每回到容器页 / 进列表页都重拉（iOS 两页的 viewWillAppear 同）
-    LaunchedEffect(page) { if (page != PrivacyPage.ChangePassword) reloadBlocked() }
+    LaunchedEffect(page) { if (page == PrivacyPage.Main || page == PrivacyPage.Blocked) reloadBlocked() }
+    // 进隐私页 / 选择页都取最新的账号默认档位（不推帧，别的端改了靠重新进页刷新）；失败保留已有值
+    LaunchedEffect(page) {
+        if (page != PrivacyPage.Main && page != PrivacyPage.AutoDelete) return@LaunchedEffect
+        runCatchingCancellable { client.privacy.get() }.onSuccess { autoDefault = it.autoDeleteDefaultSec; if (!autoSaving) autoShown = it.autoDeleteDefaultSec }
+    }
 
     PushTransition(targetState = page, depthOf = { if (it == PrivacyPage.Main) 0 else 1 }) { p ->
         when (p) {
@@ -115,6 +140,8 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
                     onBack = onBack,
                     onOpenBlocked = { page = PrivacyPage.Blocked },
                     onOpenChangePassword = { page = PrivacyPage.ChangePassword },
+                    autoDeleteLabel = PrivacySecurity.autoDeleteLabel(autoDefault),
+                    onOpenAutoDelete = { autoShown = autoDefault; page = PrivacyPage.AutoDelete },
                     onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                 )
             }
@@ -125,6 +152,16 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
                     blocked = blocked,
                     error = blockedError,
                     onUnblock = { unblock(it) },
+                    onBack = { page = PrivacyPage.Main },
+                )
+            }
+
+            PrivacyPage.AutoDelete -> {
+                BackHandler { page = PrivacyPage.Main }
+                AutoDeleteScreen(
+                    current = autoShown ?: 0,
+                    footer = stringResource(R.string.autodel_default_footer),
+                    onSelect = { saveAutoDefault(it) },
                     onBack = { page = PrivacyPage.Main },
                 )
             }

@@ -105,6 +105,16 @@ fun rememberChatBanners(
     }
     LaunchedEffect(conv.convId, connected, clearedUpTo) { if (connected) reload() }
 
+    // 自动删除（AUTO_DELETE_DESIGN §3.1）：置顶消息到点过期时横幅 / 面板跟着摘掉（置顶本体可能不在本地库，
+    // 清理例程的信号碰不到它）。每 30 秒按本会话当前档位过滤一次当前集合；服务端重拉也在 pinned() 里按同口径丢。
+    LaunchedEffect(conv.convId) {
+        while (true) {
+            kotlinx.coroutines.delay(com.libeyond.imandroid.data.AutoDelete.SWEEP_INTERVAL_MS)
+            val floor = com.libeyond.imandroid.sdk.api.AutoDeleteFloor.floorTs(conv.convId)
+            if (floor > 0 && st.pinned.any { it.timestamp <= floor }) st.pinned = st.pinned.filter { it.timestamp > floor }
+        }
+    }
+
     // 消息被操作：置顶/取消置顶 → 立刻重拉（取消的先本地摘掉：面板里该行当场消失，「取消所有置顶」一帧 targets 整批摘）；撤回/删除命中某条置顶 → 先本地摘掉（弱网重拉失败也不留指向墓碑的横幅），
     // 再重拉对齐；删除类**无条件**走 300ms 尾沿去抖（批量删除会连来几百帧，必须并成一次请求）
     LaunchedEffect(conv.convId) {

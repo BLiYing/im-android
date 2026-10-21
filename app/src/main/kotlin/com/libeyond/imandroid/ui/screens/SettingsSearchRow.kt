@@ -27,6 +27,7 @@ import com.composables.icons.lucide.HardDrive
 import com.composables.icons.lucide.IdCard
 import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.Key
+import com.composables.icons.lucide.Timer
 import com.composables.icons.lucide.Laptop
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.Lucide
@@ -90,6 +91,7 @@ private fun glyphOf(g: SettingsGlyph): ImageVector = when (g) {
     SettingsGlyph.Image -> Lucide.Image
     SettingsGlyph.Video -> Lucide.Video
     SettingsGlyph.File -> Lucide.File
+    SettingsGlyph.Timer -> Lucide.Timer
 }
 
 private fun tintOf(t: SettingsTint, ic: IMSettingsIconColors): Color = when (t) {

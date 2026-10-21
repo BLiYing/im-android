@@ -23,6 +23,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import android.content.Intent
 import com.libeyond.imandroid.data.AppActive
+import com.libeyond.imandroid.data.AutoDelete
 import com.libeyond.imandroid.fcm.FcmNotifications
 import com.libeyond.imandroid.data.reportAppState
 import com.libeyond.imandroid.data.LanguageStore
@@ -38,6 +39,7 @@ import com.libeyond.imandroid.ui.theme.MediaHost
 import com.libeyond.imandroid.fcm.CallNotifications
 import com.libeyond.imandroid.rtc.RtcCall
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
@@ -85,6 +87,13 @@ class MainActivity : ComponentActivity() {
                 AppActive.current = true
                 PowerSavingStore.onForeground() // 后台触发的自动开启提示，10 分钟内补弹
                 client.socket.reportAppState(true)
+                // 自动删除（AUTO_DELETE_DESIGN §3.2）：启动 / 回前台立刻全量扫一遍，前台常驻每 30 秒轻扫；后台不扫
+                launch {
+                    while (true) {
+                        client.sweepAutoDelete()
+                        delay(AutoDelete.SWEEP_INTERVAL_MS)
+                    }
+                }
                 FcmNotifications.clearAll() // 进了 App 通知栏就不再挂消息通知（iOS sceneDidBecomeActive 同款）
                 RtcCall.onForeground() // 正在响的来电由 Kit 的来电界面接手，收掉它的离线推送横幅
                 try {

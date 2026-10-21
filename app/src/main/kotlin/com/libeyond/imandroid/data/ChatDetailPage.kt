@@ -10,7 +10,7 @@ package com.libeyond.imandroid.data
  * 枚举的写法）：`Media` 与 `Profile` **都只从 `Detail` 直接进**（互相之间没有真实跳转路径），
  * 是并列的两个子页，深度同为 1，不必再分二三级。
  */
-enum class ChatDetailPage(val depth: Int) { Detail(0), Profile(1), Media(1) }
+enum class ChatDetailPage(val depth: Int) { Detail(0), Profile(1), Media(1), AutoDelete(1) }
 
 object ChatDetailNav {
 
@@ -20,9 +20,10 @@ object ChatDetailNav {
      * 媒体查看器**不在这一层**：它归 `ConvMediaHost` 自己管（媒体归档 → 查看器是那一页内部的深度）。
      * 每个宿主只描述**自己这一层**的页面，层级才不会互相渗透。
      */
-    fun current(mediaOpen: Boolean, profileOpen: Boolean): ChatDetailPage =
+    fun current(mediaOpen: Boolean, profileOpen: Boolean, autoDeleteOpen: Boolean = false): ChatDetailPage =
         when {
             mediaOpen -> ChatDetailPage.Media
+            autoDeleteOpen -> ChatDetailPage.AutoDelete
             profileOpen -> ChatDetailPage.Profile
             else -> ChatDetailPage.Detail
         }
@@ -31,6 +32,7 @@ object ChatDetailNav {
     fun back(page: ChatDetailPage): ChatDetailPage? = when (page) {
         ChatDetailPage.Media -> ChatDetailPage.Detail
         ChatDetailPage.Profile -> ChatDetailPage.Detail
+        ChatDetailPage.AutoDelete -> ChatDetailPage.Detail
         ChatDetailPage.Detail -> null
     }
 }
