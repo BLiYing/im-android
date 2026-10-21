@@ -625,6 +625,21 @@
     <string name="contacts_search_results_title">搜索结果</string>
     <string name="contacts_search_title">添加朋友</string>
     <string name="contacts_title">通讯录</string>
+    <string name="conv_edit_delete_body">将从你的列表移除，不影响对方；对方再发消息时会话会重新出现。</string>
+    <string name="conv_edit_delete_body_folder">会话会同时从「全部」和所有文件夹中消失。</string>
+    <plurals name="conv_edit_delete_failed">
+        <item quantity="other">%1$d 个会话删除失败</item>
+    </plurals>
+    <plurals name="conv_edit_delete_n">
+        <item quantity="other">删除 %1$d 个会话</item>
+    </plurals>
+    <plurals name="conv_edit_delete_title">
+        <item quantity="other">删除 %1$d 个会话？</item>
+    </plurals>
+    <string name="conv_edit_mark_read">已读</string>
+    <plurals name="conv_edit_selected_count">
+        <item quantity="other">已选择 %1$d 项</item>
+    </plurals>
     <string name="conv_error_delete_failed">删除失败</string>
     <string name="conv_error_delete_failed_detail">删除失败：%1$s</string>
     <string name="conv_error_invalid_peer_uid">请输入有效且不同于自己的对方 uid</string>

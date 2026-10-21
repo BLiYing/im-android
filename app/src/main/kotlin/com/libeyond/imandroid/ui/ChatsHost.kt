@@ -22,7 +22,9 @@ import com.composables.icons.lucide.UserPlus
 import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.sdk.ws.ConnState
 import com.libeyond.imandroid.data.ChatsPage
+import com.libeyond.imandroid.data.ChatFolderLogic
 import com.libeyond.imandroid.data.ConversationListPhase
+import com.libeyond.imandroid.data.ConversationSelection
 import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.PresenceDisplay
 import com.libeyond.imandroid.data.SettingsRoute
@@ -34,6 +36,7 @@ import com.libeyond.imandroid.ui.components.LocalOpenQrScan
 import com.libeyond.imandroid.ui.components.MessageContextMenu
 import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.components.SheetItem
+import com.libeyond.imandroid.ui.screens.ConversationEditBar
 import com.libeyond.imandroid.ui.screens.ConversationListScreen
 import com.libeyond.imandroid.ui.screens.FolderScrollMemory
 import kotlinx.coroutines.launch
@@ -117,9 +120,81 @@ fun ChatsHost(
     // 同 ContactsHost：挂在转场外面、按目标页判
     if (page != ChatsPage.List) BackHandler { page = ChatsPage.List }
 
+    // —— 编辑模式（批量已读 / 删除，设计 CONV_LIST_EDIT_MODE_DESIGN）——
+    val edit = remember { ConversationEditState() }
+    val selectedFolder = folderSnap.folder(selectedFolderId)
+    val shownConvs = remember(conversations, selectedFolder) { ChatFolderLogic.filter(conversations.orEmpty(), selectedFolder) }
+    // 列表换新（新消息重排 / 他端删除 / 退群）：剔除已不存在的已选项，不退出编辑
+    LaunchedEffect(shownConvs) { if (edit.editing) edit.selection = edit.selection.pruneTo(shownConvs) }
+    // 切 Tab（含当前文件夹被他端删而回落「全部」）：清空选择、保持编辑
+    var editScopeFolder by remember { mutableStateOf(selectedFolder?.id) }
+    LaunchedEffect(selectedFolder?.id) {
+        if (editScopeFolder != selectedFolder?.id) {
+            editScopeFolder = selectedFolder?.id
+            edit.selection = ConversationSelection()
+        }
+    }
+    if (page == ChatsPage.List && edit.editing) BackHandler { edit.exit() }
+    val selectedConvs = if (edit.editing) edit.selection.selectedIn(shownConvs) else emptyList()
+    val markReadable = selectedConvs.filter { ConversationSelection.hasUnread(it) }
+    // 确认框开着时已选项被剔空（他端删除 / 切范围）：框随之消失，标志也要复位，否则下次一勾选就弹出
+    LaunchedEffect(selectedConvs.isEmpty()) { if (selectedConvs.isEmpty()) edit.confirmingDelete = false }
+    val onBatchRead: () -> Unit = {
+        if (!edit.busy && markReadable.isNotEmpty()) {
+            edit.busy = true
+            folderScope.launch {
+                val r = runCatchingCancellable { batchMarkRead(client, markReadable) }.getOrNull()
+                edit.busy = false
+                if (r == null || r.failed.isNotEmpty()) {
+                    toast = Str.s(R.string.conv_error_mark_failed) // 设计 §3：toast「标记失败」
+                    if (r != null) edit.selection = edit.selection.deselect(r.succeeded.map { it.convId })
+                } else {
+                    edit.exit()
+                }
+            }
+        }
+    }
+    val onBatchDelete: () -> Unit = {
+        val targets = selectedConvs
+        edit.confirmingDelete = false
+        if (!edit.busy && targets.isNotEmpty()) {
+            edit.busy = true
+            folderScope.launch {
+                val r = runCatchingCancellable { batchDelete(client, targets) }.getOrNull()
+                edit.busy = false
+                if (r == null || r.failed.isNotEmpty()) {
+                    val failed = r?.failed?.size ?: targets.size
+                    toast = Str.p(R.plurals.conv_edit_delete_failed, failed, failed)
+                    // 成功的行已消失；失败的保持勾选，留在编辑模式，便于重试
+                    if (r != null) edit.selection = edit.selection.deselect(r.succeeded.map { it.convId })
+                } else {
+                    edit.exit()
+                }
+            }
+        }
+    }
+    // 编辑中：底栏插槽换成选择栏（独立一条、不与列表重叠；TabBar 隐藏）
+    val rootBottomBar: @Composable () -> Unit = if (edit.editing) {
+        {
+            ConversationEditBar(
+                allSelected = edit.selection.isAllSelectedIn(shownConvs),
+                canSelectAll = shownConvs.isNotEmpty() && !edit.busy,
+                canRead = markReadable.isNotEmpty() && !edit.busy,
+                canDelete = selectedConvs.isNotEmpty() && !edit.busy,
+                onSelectAll = {
+                    edit.selection = if (edit.selection.isAllSelectedIn(shownConvs)) ConversationSelection() else edit.selection.selectAll(shownConvs)
+                },
+                onRead = onBatchRead,
+                onDelete = { edit.confirmingDelete = true },
+            )
+        }
+    } else {
+        bottomBar
+    }
+
     PushTransition(targetState = page, depthOf = { it.depth }) { p ->
         when (p) {
-            ChatsPage.List -> TabRoot(bottomBar) {
+            ChatsPage.List -> TabRoot(rootBottomBar) {
                 ConversationListScreen(
                     conversations = conversations.orEmpty(),
                     phase = phase,
@@ -141,6 +216,11 @@ fun ChatsHost(
                     onSelectFolder = onSelectFolder,
                     onFolderLongPress = { f, r -> folderMenuFor = f to r },
                     scrollMemory = scrollMemory,
+                    editing = edit.editing,
+                    selectedIds = edit.selection.ids,
+                    onToggleSelect = { id -> edit.selection = edit.selection.toggle(id) },
+                    onEnterEdit = { edit.enter() },
+                    onExitEdit = { edit.exit() },
                 )
             }
             ChatsPage.AddFriend -> AddFriendHost(
@@ -226,6 +306,20 @@ fun ChatsHost(
                 }
             },
             onDismiss = { folderDeleteFor = null },
+        )
+    }
+
+    // 批量删除确认（Android / Web 同口径：标题「删除 N 个会话？」+ 正文；文件夹 Tab 内追加「会同时从全部和所有文件夹中消失」）
+    if (edit.confirmingDelete && selectedConvs.isNotEmpty()) {
+        val n = selectedConvs.size
+        com.libeyond.imandroid.ui.components.IMConfirmDialog(
+            title = androidx.compose.ui.res.pluralStringResource(R.plurals.conv_edit_delete_title, n, n),
+            message = stringResource(R.string.conv_edit_delete_body) +
+                if (selectedFolder != null) stringResource(R.string.conv_edit_delete_body_folder) else "",
+            confirmText = stringResource(R.string.common_delete),
+            destructive = true,
+            onConfirm = onBatchDelete,
+            onDismiss = { edit.confirmingDelete = false },
         )
     }
 

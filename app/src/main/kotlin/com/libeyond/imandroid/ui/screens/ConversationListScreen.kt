@@ -34,6 +34,7 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.libeyond.imandroid.ui.components.liftSource
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
@@ -115,6 +116,12 @@ fun ConversationListScreen(
     onFolderLongPress: (ChatFolder, Rect) -> Unit = { _, _ -> },
     /** 每个 Tab 记住自己的滚动位置；由外壳持有。 */
     scrollMemory: FolderScrollMemory = remember { FolderScrollMemory() },
+    /** 编辑模式（批量已读 / 删除，设计 CONV_LIST_EDIT_MODE_DESIGN）：状态由外壳持有（底栏在 TabRoot 的底栏插槽里）。 */
+    editing: Boolean = false,
+    selectedIds: Set<String> = emptySet(),
+    onToggleSelect: (String) -> Unit = {},
+    onEnterEdit: () -> Unit = {},
+    onExitEdit: () -> Unit = {},
 ) {
     val c = IMTheme.colors
     var plusRect by remember { mutableStateOf(Rect.Zero) }
@@ -148,38 +155,51 @@ fun ConversationListScreen(
     ) {
         // 标题**居中**、连接态走副标题，对齐 iOS 注入栏（标题恒为「消息」，连接中放在「在线」那个位置）。
         // 此前是左对齐的大标题 + 右上角一个文字「我」——底栏已有「我」，那个入口是多余的（2026-09-15 用户报）
+        // 编辑模式：标题 =「已选择 N 项」（未选时仍是「消息」）、右上「＋」隐藏、左槽「编辑 / 完成」
+        // （聊天多选「取消」同一个 leftLabel 槽）；空列表不给入口。
         IMTopBar(
-            title = stringResource(R.string.ios_tab_messages),
+            title = if (editing && selectedIds.isNotEmpty()) {
+                androidx.compose.ui.res.pluralStringResource(R.plurals.conv_edit_selected_count, selectedIds.size, selectedIds.size)
+            } else {
+                stringResource(R.string.ios_tab_messages)
+            },
+            leftLabel = if (editing) stringResource(R.string.common_done) else if (shown.isNotEmpty()) stringResource(R.string.common_edit) else "",
+            onLeft = if (editing) onExitEdit else if (shown.isNotEmpty()) onEnterEdit else null,
             subtitle = when (ChatSubtitle.connection(conn)) {
                 ChatSubtitleSpec.Connecting -> stringResource(R.string.conn_state_connecting)
                 ChatSubtitleSpec.Disconnected -> stringResource(R.string.conn_state_disconnected)
                 else -> ""
             },
-            right = {
-                TopBarCircleButton(
-                    icon = Lucide.Plus,
-                    description = stringResource(R.string.common_add),
-                    onClick = { onPlus(plusRect) },
-                    modifier = Modifier.onGloballyPositioned { plusRect = it.boundsInWindow() },
-                )
+            right = if (editing) null else {
+                {
+                    TopBarCircleButton(
+                        icon = Lucide.Plus,
+                        description = stringResource(R.string.common_add),
+                        onClick = { onPlus(plusRect) },
+                        modifier = Modifier.onGloballyPositioned { plusRect = it.boundsInWindow() },
+                    )
+                }
             },
         )
         IMSearchEntry(
             placeholder = stringResource(R.string.search_global_placeholder),
-            onClick = onSearch,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = IMTheme.dimens.space4, vertical = IMTheme.dimens.space2),
+            onClick = if (editing) ({}) else onSearch, // 编辑模式：搜索入口置灰、点击无效
+            modifier = Modifier.fillMaxWidth().padding(horizontal = IMTheme.dimens.space4, vertical = IMTheme.dimens.space2)
+                .alpha(if (editing) 0.5f else 1f),
         )
         // 文件夹 Tab 条：紧贴固定的搜索框下方；没有任何文件夹时不显示（设计 §4.1）
         if (folders.isNotEmpty()) {
             ChatFolderTabStrip(
                 folders = folders, conversations = conversations, nowMs = nowMs,
-                selectedId = selectedFolder?.id, onSelect = selectFolder, onLongPress = onFolderLongPress,
+                selectedId = selectedFolder?.id, onSelect = selectFolder,
+                onLongPress = if (editing) ({ _, _ -> }) else onFolderLongPress, // 编辑模式：Tab 只用来切换范围，长按菜单关闭
             )
         }
 
         // 内容区横滑切 Tab：只吃横向拖动，竖向滚动不受影响
         Box(
-            Modifier.fillMaxSize().swipeToSwitchFolder(tabIndex, folders.size + 1) { i ->
+            // 编辑模式：左右滑切 Tab 关闭（只剩点 Tab 条切换），避免勾选时误切
+            if (editing) Modifier.fillMaxSize() else Modifier.fillMaxSize().swipeToSwitchFolder(tabIndex, folders.size + 1) { i ->
                 selectFolder(if (i <= 0) null else folders.getOrNull(i - 1)?.id)
             },
         ) {
@@ -204,7 +224,9 @@ fun ConversationListScreen(
                 items(shown, key = { it.convId }) { conv ->
                     ConversationRow(
                         conv, myUid, localNameOf, onlineOf, pendingOf(conv.convId), nowMs,
-                        onClick = { onOpen(conv) }, onLongClick = { r -> onLongPress(conv, r) },
+                        onClick = { if (editing) onToggleSelect(conv.convId) else onOpen(conv) },
+                        onLongClick = { r -> onLongPress(conv, r) },
+                        editing = editing, selected = conv.convId in selectedIds,
                         // 置顶 / 取消置顶：行平滑上移 / 下移（key = convId，重排时按位移补间，不再瞬间跳位）
                         modifier = Modifier.animateItem(),
                     )
@@ -228,6 +250,9 @@ private fun ConversationRow(
     onClick: () -> Unit,
     onLongClick: (Rect) -> Unit,
     modifier: Modifier = Modifier,
+    /** 编辑模式：行首出现勾选圈（圈 22 + 间距 8 = [SELECTION_GUTTER]），点整行 = 勾选，长按菜单关闭。 */
+    editing: Boolean = false,
+    selected: Boolean = false,
 ) {
     var rect by remember { mutableStateOf(Rect.Zero) }
     // 长按原位浮起（iOS 会话列表的 UIContextMenu）：本行录进层，菜单里画它（MenuLift.kt）
@@ -250,16 +275,32 @@ private fun ConversationRow(
             // 放在底色之前：置顶行的强调色底也要录进浮起的那张卡片
             .liftSource(lift)
             // 置顶行底色：强调色 α0.10 叠在页面底色上（iOS `contentView.backgroundColor`，深浅色皆适配）
-            .background(if (conv.pinnedAt > 0) c.accent.copy(alpha = 0.10f).compositeOver(c.pageBackground) else c.pageBackground)
+            .background(
+                when {
+                    selected -> c.accent.copy(alpha = 0.16f).compositeOver(c.pageBackground) // 选中行：主色 16%（盖过置顶底色；比置顶的 10% 深，两者才分得清）
+                    conv.pinnedAt > 0 -> c.accent.copy(alpha = 0.10f).compositeOver(c.pageBackground)
+                    else -> c.pageBackground
+                },
+            )
             .onGloballyPositioned { rect = it.unclippedBoundsInWindow() }
-            .combinedClickable(onClick = onClick, onLongClick = {
+            .combinedClickable(onClick = onClick, onLongClick = if (editing) null else ({
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                 lift.lift(rect)
                 onLongClick(rect)
-            })
+            }))
             .padding(horizontal = d.space4, vertical = d.space3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = editing,
+            enter = androidx.compose.animation.expandHorizontally() + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkHorizontally() + androidx.compose.animation.fadeOut(),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SelectionCheck(selected)
+                SelectionGutterSpacer()
+            }
+        }
         Box {
             IMAvatar(
                 displayName = title,

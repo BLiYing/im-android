@@ -568,10 +568,10 @@ class MessageService(
      * 对齐 iOS `deleteConversation:`（成功后 `deleteCachedConversation:`）；对方再发消息时
      * 会话行由列表刷新 / 推送重新建出来。失败（网络 / 服务端拒）抛出，由调用方提示。
      */
-    suspend fun deleteConversation(convId: String) {
+    suspend fun deleteConversation(convId: String, refresh: Boolean = true) {
         val owner = ownerProvider() ?: return
         conversationsApi.delete(convId)
         repo.removeConversation(owner, convId)
-        refreshConversations()
+        if (refresh) refreshConversations() // 批量删除（编辑模式）传 false，结束后调用方只拉一次
     }
 }

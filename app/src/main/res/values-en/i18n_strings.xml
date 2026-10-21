@@ -647,6 +647,25 @@
     <string name="contacts_search_results_title">Search results</string>
     <string name="contacts_search_title">Add friends</string>
     <string name="contacts_title">Contacts</string>
+    <string name="conv_edit_delete_body">Removed from your list only. The other side isn\'t affected, and if they send a new message the conversation will reappear.</string>
+    <string name="conv_edit_delete_body_folder">Also removed from All and every folder.</string>
+    <plurals name="conv_edit_delete_failed">
+        <item quantity="one">%1$d conversation couldn\'t be deleted</item>
+        <item quantity="other">%1$d conversations couldn\'t be deleted</item>
+    </plurals>
+    <plurals name="conv_edit_delete_n">
+        <item quantity="one">Delete %1$d conversation</item>
+        <item quantity="other">Delete %1$d conversations</item>
+    </plurals>
+    <plurals name="conv_edit_delete_title">
+        <item quantity="one">Delete %1$d conversation?</item>
+        <item quantity="other">Delete %1$d conversations?</item>
+    </plurals>
+    <string name="conv_edit_mark_read">Read</string>
+    <plurals name="conv_edit_selected_count">
+        <item quantity="one">Selected %1$d</item>
+        <item quantity="other">Selected %1$d</item>
+    </plurals>
     <string name="conv_error_delete_failed">Couldn’t delete the chat</string>
     <string name="conv_error_delete_failed_detail">Couldn’t delete: %1$s</string>
     <string name="conv_error_invalid_peer_uid">Enter a valid uid that is not your own</string>
