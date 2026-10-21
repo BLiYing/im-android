@@ -630,9 +630,6 @@
     <plurals name="conv_edit_delete_failed">
         <item quantity="other">%1$d 个会话删除失败</item>
     </plurals>
-    <plurals name="conv_edit_delete_n">
-        <item quantity="other">删除 %1$d 个会话</item>
-    </plurals>
     <plurals name="conv_edit_delete_title">
         <item quantity="other">删除 %1$d 个会话？</item>
     </plurals>

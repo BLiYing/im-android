@@ -653,10 +653,6 @@
         <item quantity="one">%1$d conversation couldn\'t be deleted</item>
         <item quantity="other">%1$d conversations couldn\'t be deleted</item>
     </plurals>
-    <plurals name="conv_edit_delete_n">
-        <item quantity="one">Delete %1$d conversation</item>
-        <item quantity="other">Delete %1$d conversations</item>
-    </plurals>
     <plurals name="conv_edit_delete_title">
         <item quantity="one">Delete %1$d conversation?</item>
         <item quantity="other">Delete %1$d conversations?</item>
