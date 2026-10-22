@@ -379,9 +379,9 @@ interface ConversationDao {
     @Query("UPDATE conversation SET autoDeleteSec = :sec, autoDeleteFrom = :from WHERE ownerUid = :owner AND convId = :convId")
     suspend fun setAutoDelete(owner: String, convId: String, sec: Int, from: Long)
 
-    /** 本会话档位 + 起点的变化流（资料页行右值就地刷新）。会话行不存在时无发射。 */
+    /** 本会话档位 + 起点的变化流（资料页行右值就地刷新）。会话行不存在时 Room **发射 null**（不是无发射），故返回可空。 */
     @Query("SELECT autoDeleteSec AS sec, autoDeleteFrom AS fromMs FROM conversation WHERE ownerUid = :owner AND convId = :convId")
-    fun observeAutoDelete(owner: String, convId: String): kotlinx.coroutines.flow.Flow<AutoDeleteSetting>
+    fun observeAutoDelete(owner: String, convId: String): kotlinx.coroutines.flow.Flow<AutoDeleteSetting?>
 
     /** 档位 >0 的会话（自动删除扫描的对象）。 */
     @Query("SELECT * FROM conversation WHERE ownerUid = :owner AND autoDeleteSec > 0")

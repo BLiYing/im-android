@@ -98,7 +98,7 @@ fun GroupInfoHost(
     // 点开的成员资料页盖在群资料之上；开着时本页的返回让位给它
     var memberProfile by remember(convId) { mutableStateOf<GroupMember?>(null) }
     // 群成员搜索页（大群专用，GroupMemberSearch.shouldOffer 门控入口）
-    var memberSearchOpen by remember(convId) { mutableStateOf(false) }
+    var memberSearchOpen by remember(convId) { mutableStateOf(false) }; val memberSearchState = remember(convId) { GroupMemberSearchState() }
     // 待审入群申请（G3）。null = 没打开过
     var joinReqs by remember(convId) { mutableStateOf<List<JoinRequest>?>(null) }
     var joinReqsLoading by remember(convId) { mutableStateOf(false) }
@@ -330,7 +330,7 @@ fun GroupInfoHost(
         )
     } else if (memberSearchOpen) {
         GroupMemberSearchHost(
-            client = client, convId = convId, totalMembers = g.memberCount,
+            client = client, convId = convId, totalMembers = g.memberCount, state = memberSearchState,
             onPickMember = { m -> memberProfile = m },
             onBack = { memberSearchOpen = false },
         )
@@ -432,7 +432,7 @@ fun GroupInfoHost(
         waveformOf = rememberVoiceWaveforms(client, convId, active = tab == DetailTab.Voice)::get,
         hasMoreMembers = membersState.hasMore,
         onLoadMoreMembers = { membersState.loadNext(scope) },
-        onOpenMemberSearch = { memberSearchOpen = true },
+        onOpenMemberSearch = { memberSearchState.clear(); memberSearchOpen = true },
         onOpenMember = { m -> memberProfile = m },
         myUid = client.uid.orEmpty(),
         onOpenManage = { managing = true },

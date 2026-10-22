@@ -1202,7 +1202,6 @@
     <string name="group_upgrade_hint_item_2">升级后已读回执、「正在输入」、成员在线态不再显示</string>
     <string name="group_upgrade_hint_item_3">升级后成员进出不再产生群消息（「X 加入了群聊」等）</string>
     <string name="group_upgrade_hint_item_4">单向操作，升级后不可撤销；需联系管理员办理</string>
-    <string name="group_upgrade_hint_item_4_short">单向操作，升级后不可撤销</string>
     <string name="group_upgrade_hint_tap_copy_id">点此复制群 ID</string>
     <string name="group_upgrade_hint_title">成员已达上限 %1$d</string>
     <string name="home_search_empty">未找到相关内容</string>

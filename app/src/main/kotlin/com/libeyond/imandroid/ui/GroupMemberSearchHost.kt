@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,6 +19,25 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
+ * 搜索页的可恢复状态，由 `GroupInfoHost` 按群持有：点结果进成员资料页时搜索页会离开组合，
+ * 页内 `remember` 会丢，返回后得到一张空白搜索页；状态放在宿主侧，返回时原样恢复。
+ */
+class GroupMemberSearchState {
+    var query by mutableStateOf("")
+    var results by mutableStateOf<List<GroupMember>>(emptyList())
+    var cursor by mutableStateOf("")
+    var hasMore by mutableStateOf(false)
+    var failed by mutableStateOf(false)
+    /** 结果对应的那个词，供续页使用——不是输入框里正在打的那个（可能已经变了） */
+    var loadedNeedle by mutableStateOf("")
+    /** 结果列表的滚动位置：返回后停在点进去的那一行 */
+    var listState by mutableStateOf(LazyListState())
+
+    /** 重新打开搜索页时清空（只有「点结果→资料页→返回」才恢复） */
+    fun clear() { query = ""; results = emptyList(); cursor = ""; hasMore = false; failed = false; loadedNeedle = ""; listState = LazyListState() }
+}
+
+/**
  * 群成员搜索页接线层（从 `GroupInfoHost` 独立成一页，那个文件贴着 600 行硬闸）。
  *
  * 恒走服务端 `?q=`、去抖/翻页/去重口径见 [GroupMemberSearch]（判据整体照抄 iOS
@@ -32,19 +52,19 @@ fun GroupMemberSearchHost(
     client: IMClient,
     convId: String,
     totalMembers: Int,
+    state: GroupMemberSearchState,
     onPickMember: (GroupMember) -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
 
-    var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<GroupMember>>(emptyList()) }
-    var cursor by remember { mutableStateOf("") }
-    var hasMore by remember { mutableStateOf(false) }
+    var query by state::query
+    var results by state::results
+    var cursor by state::cursor
+    var hasMore by state::hasMore
+    var failed by state::failed
+    var loadedNeedle by state::loadedNeedle
     var loading by remember { mutableStateOf(false) }
-    var failed by remember { mutableStateOf(false) }
-    // 结果对应的那个词，供续页使用——不是输入框里正在打的那个（可能已经变了）
-    var loadedNeedle by remember { mutableStateOf("") }
     // 每次 query 变化自增一代（同 iOS `_searchToken`）：续页请求带着发起时的代次出去，
     // 响应回来时代次对不上就整批丢弃——旧词的迟到分页不会污染新词已经显示的结果。
     var searchGen by remember { mutableIntStateOf(0) }
@@ -74,6 +94,11 @@ fun GroupMemberSearchHost(
     LaunchedEffect(query) {
         searchGen++
         val gen = searchGen
+        // 从成员资料页返回：同一个词的结果还在，不重搜（否则列表闪一下、滚动位置也丢）
+        if (query.isNotBlank() && query == loadedNeedle && results.isNotEmpty()) {
+            loading = false // 旧词在途请求已随代次作废，不复位的话 loading 永远为 true、续页被卡死
+            return@LaunchedEffect
+        }
         if (query.isBlank()) {
             results = emptyList(); cursor = ""; hasMore = false; failed = false; loading = false
             return@LaunchedEffect
@@ -99,6 +124,7 @@ fun GroupMemberSearchHost(
         query = query,
         onQueryChange = { query = it },
         results = results,
+        listState = state.listState,
         hasMore = hasMore,
         loading = loading,
         failed = failed,

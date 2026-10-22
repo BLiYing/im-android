@@ -1247,7 +1247,6 @@
     <string name="group_upgrade_hint_item_2">After upgrading, read receipts, typing indicators, and member online status will no longer show</string>
     <string name="group_upgrade_hint_item_3">After upgrading, members joining or leaving will no longer post group messages (such as “X joined the group”)</string>
     <string name="group_upgrade_hint_item_4">This is a one-way operation and can\'t be undone after upgrading; contact an administrator</string>
-    <string name="group_upgrade_hint_item_4_short">One-way operation. Can\'t be undone after upgrading.</string>
     <string name="group_upgrade_hint_tap_copy_id">Tap to copy the group ID</string>
     <string name="group_upgrade_hint_title">Member limit reached (%1$d)</string>
     <string name="home_search_empty">No results found</string>

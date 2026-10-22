@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun rememberConvAutoDelete(client: IMClient, convId: String, initial: Int): Int {
-    val flow = remember(convId) { client.repo.observeAutoDelete(client.uid.orEmpty(), convId).map { it.sec }.distinctUntilChanged() }
+    val flow = remember(convId) { client.repo.observeAutoDelete(client.uid.orEmpty(), convId).map { it?.sec ?: initial }.distinctUntilChanged() }
     return flow.collectAsState(initial = initial).value
 }
 

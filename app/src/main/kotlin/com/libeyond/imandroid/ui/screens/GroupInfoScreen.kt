@@ -48,6 +48,7 @@ import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
 import com.libeyond.imandroid.ui.GroupUpgradeHintUi
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.IMSectionFooter
 import androidx.compose.ui.geometry.Rect
 import com.libeyond.imandroid.data.ArchiveTarget
 import com.libeyond.imandroid.data.DetailAction
@@ -293,6 +294,7 @@ fun GroupInfoScreen(
                         )
                     }
                 }
+                IMSectionFooter(stringResource(R.string.chat_detail_mute_footer))
             }
 
             // 「聊天媒体」那一行没有了——归档已经是下面的内联页签（对齐 iOS）。
@@ -451,13 +453,14 @@ private fun UpgradeHintCard(upgradeHint: GroupUpgradeHintUi) {
             style = MaterialTheme.typography.bodyLarge,
         )
         // 5 条短句分行（不是一大段），行距放宽——iOS 同
-        val lines = listOf(
+        // 编号 1–4 + 第 4 条用长版，口径以 Web 为准（SUPERGROUP_DESIGN §4.1）；末行「点此复制群 ID」不编号
+        val items = listOf(
             stringResource(R.string.group_upgrade_hint_item_1, upgradeHint.maxSupergroupMembers),
             stringResource(R.string.group_upgrade_hint_item_2),
             stringResource(R.string.group_upgrade_hint_item_3),
-            stringResource(R.string.group_upgrade_hint_item_4_short),
-            stringResource(R.string.group_upgrade_hint_tap_copy_id),
+            stringResource(R.string.group_upgrade_hint_item_4),
         )
+        val lines = items.mapIndexed { i, t -> "${i + 1}. $t" } + stringResource(R.string.group_upgrade_hint_tap_copy_id)
         Text(
             lines.joinToString("\n"), color = c.textSecondary,
             style = MaterialTheme.typography.bodySmall.copy(lineHeight = 20.sp),

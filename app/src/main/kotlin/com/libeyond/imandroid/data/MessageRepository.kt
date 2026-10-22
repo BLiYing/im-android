@@ -114,7 +114,7 @@ class MessageRepository(
     fun observeTail(owner: String, convId: String, fromSeq: Long, limit: Int): Flow<List<MessageEntity>> =
         messages.observeWindowFrom(owner, convId, fromSeq, limit).map { it.asReversed() }
 
-    fun observeAutoDelete(owner: String, convId: String): Flow<com.libeyond.imandroid.data.db.AutoDeleteSetting> = conversations.observeAutoDelete(owner, convId).distinctUntilChanged()
+    fun observeAutoDelete(owner: String, convId: String): Flow<com.libeyond.imandroid.data.db.AutoDeleteSetting?> = conversations.observeAutoDelete(owner, convId).distinctUntilChanged()
 
     fun observeHead(owner: String, convId: String): Flow<Long> = conversations.observeHead(owner, convId)
 

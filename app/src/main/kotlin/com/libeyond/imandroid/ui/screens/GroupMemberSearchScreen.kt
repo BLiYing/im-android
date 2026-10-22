@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,6 +40,7 @@ fun GroupMemberSearchScreen(
     query: String,
     onQueryChange: (String) -> Unit,
     results: List<GroupMember>,
+    listState: LazyListState,
     hasMore: Boolean,
     loading: Boolean,
     failed: Boolean,
@@ -70,7 +72,7 @@ fun GroupMemberSearchScreen(
                 )
             }
         } else {
-            LazyColumn(Modifier.fillMaxSize()) {
+            LazyColumn(Modifier.fillMaxSize(), state = listState) {
                 itemsIndexed(results, key = { _, m -> m.userId }) { idx, m ->
                     // 滚到底自动续拉：搜 "big" 能命中几千人，结果本身就是长列表，不该让人点几十次
                     if (GroupMemberSearch.shouldAutoLoadMore(idx, results.size, hasMore, loading)) {
