@@ -110,8 +110,8 @@ fun rememberChatBanners(
     LaunchedEffect(conv.convId) {
         while (true) {
             kotlinx.coroutines.delay(com.libeyond.imandroid.data.AutoDelete.SWEEP_INTERVAL_MS)
-            val floor = com.libeyond.imandroid.sdk.api.AutoDeleteFloor.floorTs(conv.convId)
-            if (floor > 0 && st.pinned.any { it.timestamp <= floor }) st.pinned = st.pinned.filter { it.timestamp > floor }
+            val gone = { ts: Long -> com.libeyond.imandroid.sdk.api.AutoDeleteFloor.expired(conv.convId, ts) }
+            if (st.pinned.any { gone(it.timestamp) }) st.pinned = st.pinned.filterNot { gone(it.timestamp) }
         }
     }
 

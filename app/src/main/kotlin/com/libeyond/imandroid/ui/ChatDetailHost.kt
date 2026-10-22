@@ -261,7 +261,7 @@ fun ChatDetailHost(
                     onClose = { viewingOpen = false },
                 ) }
             }
-            ChatDetailPage.AutoDelete -> ConvAutoDeletePage(client, conv.convId, autoDeleteSec) { autoDeleteOpen = false }
+            ChatDetailPage.AutoDelete -> ConvAutoDeletePage(client, conv.convId, autoDeleteSec, isGroup = false, canSet = true) { autoDeleteOpen = false }
             ChatDetailPage.Profile -> {
                 UserProfileHost(
                     client = client,

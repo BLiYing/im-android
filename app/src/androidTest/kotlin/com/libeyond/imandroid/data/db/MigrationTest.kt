@@ -206,6 +206,39 @@ class MigrationTest {
         }
     }
 
+    /**
+     * 19→20 会话加 `autoDeleteFrom`（自动删除计时起点，v2 会话级共享）：老行保留，`autoDeleteFrom` 默认 0；
+     * v1 的个人档位 `autoDeleteSec` 不迁移——清 0（否则「sec>0 且 from=0」会被新公式当成从头追溯，
+     * 在首次拉会话列表覆盖之前把老历史清掉）。
+     */
+    @Test
+    fun migrate19To20AddsAutoDeleteFromAndResetsV1Tier() {
+        helper.createDatabase(DB, 19).use { db ->
+            db.execSQL(
+                """INSERT INTO conversation (ownerUid, convId, isGroup, peerUid, title, avatarUrl, peerRemark, peerDeleted,
+                   lastContent, lastContentType, lastTimestamp, lastConvSeq, lastFrom, lastFromNickname, lastRecalled,
+                   lastSysEvent, lastSysArgs, lastSysSegments, unread, mentionUnread, readSeq, peerReadSeq,
+                   syncedConvSeq, pinnedAt, muted, muteUntil, markedUnread, isSuper, headConvSeq, clearedUpTo, autoDeleteSec)
+                   VALUES ('me', 'u_a_u_b', 0, 'b', 'B', '', '', 0, 'hi', 'text', 1, 1, 'b', '', 0,
+                   '', '', '', 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 86400)""",
+            )
+        }
+        helper.runMigrationsAndValidate(DB, 20, true, IMDatabase.MIGRATION_19_20).use { db ->
+            db.query("SELECT title, autoDeleteSec, autoDeleteFrom FROM conversation").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("B", c.getString(0))
+                assertEquals(0, c.getInt(1)) // v1 个人档位不迁移
+                assertEquals(0L, c.getLong(2))
+            }
+            db.execSQL("UPDATE conversation SET autoDeleteSec = 86400, autoDeleteFrom = 1700000000001")
+            db.query("SELECT autoDeleteSec, autoDeleteFrom FROM conversation").use { c ->
+                c.moveToFirst()
+                assertEquals(86400, c.getInt(0))
+                assertEquals(1700000000001L, c.getLong(1))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

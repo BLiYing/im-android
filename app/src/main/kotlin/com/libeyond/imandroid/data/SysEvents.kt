@@ -58,6 +58,21 @@ object SysEvents {
         "friend_accepted" to GroupEvent(R.string.sys_friend_accepted, emptyList(), emptyList()),
     )
 
+    /** 会话级自动删除档位变更（单聊 / 群通用）：模板按 `sys_args.sec` 选 on / off，见 [resolve]。 */
+    private const val AUTO_DELETE = "auto_delete"
+    private val AUTO_DELETE_ON = GroupEvent(R.string.sys_auto_delete_on, listOf("actor", "period"), listOf("actor"))
+    private val AUTO_DELETE_OFF = GroupEvent(R.string.sys_auto_delete_off, listOf("actor"), listOf("actor"))
+
+    /**
+     * 事件 → 模板 + 实际参数。多数事件是静态表；`auto_delete` 要看 `sec`（>0 开启 / 0 关闭），`{period}` 由 `sec`
+     * 按 `autodel.unit.*` 折算。`sec` 缺失 / 非数字 / 负数 → null（回退 `content` 整句）。
+     */
+    private fun resolve(event: String, args: Map<String, String>): Pair<GroupEvent, Map<String, String>>? {
+        if (event != AUTO_DELETE) return GROUP[event]?.let { it to args }
+        val sec = args["sec"]?.toIntOrNull()?.takeIf { it >= 0 } ?: return null
+        return if (sec > 0) AUTO_DELETE_ON to (args + ("period" to AutoDelete.period(sec))) else AUTO_DELETE_OFF to args
+    }
+
     private val ARGS_SERIALIZER = MapSerializer(String.serializer(), String.serializer())
 
     /** `sys_args` 落库用的 JSON；空 → null（与 sysSegments 同口径）。 */
@@ -79,9 +94,9 @@ object SysEvents {
      * 候选人名段不足（脏数据）→ 该占位符留空，不崩。
      */
     fun groupSegments(event: String?, argsJson: String?, segmentsJson: String?): List<SysSegment>? {
-        val def = GROUP[event ?: return null] ?: return null
-        val args = parseArgs(argsJson)
+        val (def, args) = resolve(event ?: return null, parseArgs(argsJson)) ?: return null
         val people = SysSegments.parse(segmentsJson).filter(SysSegments::isName)
+        if (event == AUTO_DELETE && people.isEmpty()) return null // 没有操作者：整句回退 content，别渲染无主语的半句
         val out = mutableListOf<SysSegment>()
         tokenize(Str.s(def.res)).forEach { tok ->
             when {

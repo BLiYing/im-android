@@ -51,8 +51,10 @@ data class ConversationSummary(
      */
     @SerialName("mute_until") val muteUntil: Long = 0,
     @SerialName("marked_unread") val markedUnread: Boolean = false,
-    /** 自动删除档位秒数（0=关；AUTO_DELETE_DESIGN §1）。老服务端无此字段 = 0。 */
+    /** 自动删除档位秒数（0=关；v2 会话级共享，AUTO_DELETE_DESIGN §1）。老服务端无此字段 = 0。 */
     @SerialName("auto_delete_sec") val autoDeleteSec: Int = 0,
+    /** 自动删除计时起点毫秒（v2 会话级，与 sec 一起读；0 = 关）。 */
+    @SerialName("auto_delete_from") val autoDeleteFrom: Long = 0,
     /** 未读区间内有人 @我。**穿透免打扰**做强提醒。 */
     @SerialName("mention_unread") val mentionUnread: Boolean = false,
     /** 会话备注名（G1，仅本人可见）。与 peer_remark 不同：这是"我对这个会话"的别名，群聊也适用。 */
@@ -91,8 +93,9 @@ data class ConversationSettings(
     @SerialName("mute_until") val muteUntil: Long = 0,
     @SerialName("marked_unread") val markedUnread: Boolean = false,
     val remark: String = "",
-    /** 自动删除档位秒数（0=关）。 */
+    /** 自动删除档位秒数（0=关）+ 计时起点毫秒（v2 会话级共享）。 */
     @SerialName("auto_delete_sec") val autoDeleteSec: Int = 0,
+    @SerialName("auto_delete_from") val autoDeleteFrom: Long = 0,
 )
 
 class ConversationsApi(private val http: HttpClient) {
@@ -132,8 +135,8 @@ class ConversationsApi(private val http: HttpClient) {
      *   （[updateSettings] 的绝大多数调用点）**不会**把定时免打扰变成永久。选时长菜单的调用点才
      *   显式传值；`muted=false` 时服务端一律清 0，传不传都一样。
      * @param autoDeleteSec 自动删除档位（PROTOCOL §6.8.1）。**可省略（null，不落进请求体）= 服务端保留原值**——
-     *   所以改置顶 / 免打扰 / 标未读的调用点不传它也不会把档位清零，且不会拿本地旧值盖掉别端刚改的；
-     *   只有会话详情页的「自动删除消息」行显式传值。
+     *   所以改置顶 / 免打扰 / 标未读的调用点不传它也不会把档位清零，且不会拿本地旧值盖掉别人刚设的共享档位（v2 影响对方）；
+     *   只有用户主动改档位那一处（`setConvAutoDelete`）显式传值。
      */
     suspend fun updateSettings(
         convId: String, pinnedAt: Long, muted: Boolean, markedUnread: Boolean,

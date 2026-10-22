@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -7,8 +8,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -16,9 +20,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.ui.theme.IMTheme
 
@@ -39,6 +47,8 @@ data class SheetItem(
     val submenu: List<SheetItem> = emptyList(),
     /** 依赖媒体字节（复制 / 收藏 / 转发 / 下载）：查看器当前页已失效时由查看器滤掉。 */
     val needsMedia: Boolean = false,
+    /** 单选态：右侧打 ✓（自动删除「自定义时间」弹窗用）。 */
+    val checked: Boolean = false,
     val onClick: () -> Unit = {},
 )
 
@@ -69,6 +79,8 @@ fun ActionSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(d.space2)
+                // 行很多时整体不超过屏高 65%（其余留给遮罩），中间行区滚动
+                .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.65f).dp)
                 .clip(RoundedCornerShape(d.radiusCard))
                 .background(c.surfaceElevated)
                 .navigationBarsPadding()
@@ -85,21 +97,35 @@ fun ActionSheet(
                 )
                 Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
             }
-            items.forEach { item ->
-                Text(
-                    text = item.label,
-                    color = if (item.destructive) c.danger else c.textPrimary,
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            item.onClick()
-                            onDismiss()
+            // 行多（如 18 档）时可滚动；标题与「取消」固定在两端
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                items.forEach { item ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                item.onClick()
+                                onDismiss()
+                            },
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
+                        Text(
+                            text = item.label,
+                            color = if (item.destructive) c.danger else c.textPrimary,
+                            style = MaterialTheme.typography.titleMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                        )
+                        if (item.checked) {
+                            Image(
+                                Lucide.Check, null,
+                                Modifier.padding(end = d.space4).height(18.dp),
+                                colorFilter = ColorFilter.tint(c.accent),
+                            )
                         }
-                        .padding(vertical = 14.dp),
-                )
-                Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
+                    }
+                    Box(Modifier.fillMaxWidth().height(0.5.dp).background(c.separator))
+                }
             }
             Text(
                 text = stringResource(R.string.common_cancel),

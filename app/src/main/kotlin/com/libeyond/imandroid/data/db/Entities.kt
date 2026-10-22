@@ -253,4 +253,9 @@ data class ConversationEntity(
      * 服务端覆盖；清理例程 `MessageRepository.purgeExpired` 与入库过滤据此判。
      */
     val autoDeleteSec: Int = 0,
+    /**
+     * 自动删除计时起点（毫秒，v2 会话级共享；0 = 关或老库）。`ts >= from` 的消息才会过期，`from` 之前的永不过期。
+     * 与 [autoDeleteSec] 来源相同，**必须一起覆盖**。
+     */
+    val autoDeleteFrom: Long = 0,
 )

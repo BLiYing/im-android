@@ -301,8 +301,7 @@ class MessageService(
 
             FrameType.CONV_UPDATE -> data?.let { el ->
                 val u = ProtocolJson.decodeFromJsonElement(ConvUpdateData.serializer(), el)
-                repo.applyConvUpdate(owner, u)
-                autoDelete.request() // 档位变短 / 由关变开 → 立刻清理（幂等，没变就是空扫）
+                if (repo.applyConvUpdate(owner, u)) autoDelete.request() // sec 或 from 变了且 >0 → 扫（不追溯，只清窗口）
                 ConvRemarkSignal.of(u)?.let { _convRemarks.tryEmit(it) }
             }
 

@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MessageEntity::class, PendingMessageEntity::class, ConversationEntity::class, ConvRangeEntity::class,
         FriendLocalEntity::class, GroupLocalEntity::class,
     ],
-    version = 19,
+    version = 20,
     exportSchema = true,
 )
 abstract class IMDatabase : RoomDatabase() {
@@ -281,6 +281,18 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
             }
         }
 
+        /**
+         * v19 → v20：会话加 `autoDeleteFrom`（自动删除计时起点，v2 会话级共享，老行 0）。
+         * v1 的个人档位 `autoDeleteSec` **不迁移**：这里直接清 0——否则「sec>0 且 from=0」会被新公式当成
+         * 从头追溯，在首次拉会话列表（服务端会话级值覆盖）之前的那几秒把老历史清掉。
+         */
+        internal val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversation ADD COLUMN autoDeleteFrom INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE conversation SET autoDeleteSec = 0")
+            }
+        }
+
         fun get(context: Context): IMDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -292,7 +304,7 @@ internal val MIGRATION_5_6 = object : Migration(5, 6) {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19,
+                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20,
                 )
                 .build().also { instance = it }
         }

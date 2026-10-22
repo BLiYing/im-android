@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.AutoDelete
 import com.libeyond.imandroid.data.MuteState
 import com.libeyond.imandroid.data.PinnedAt
 import com.libeyond.imandroid.data.db.ConversationEntity
@@ -68,7 +69,7 @@ class GroupInfoSettingsState internal constructor(
                 muteUntilState.value = s.muteUntil
                 markedUnreadState.value = s.markedUnread
                 remarkState.value = s.remark
-                autoDeleteSecState.value = s.autoDeleteSec
+                autoDeleteSecState.value = com.libeyond.imandroid.data.AutoDelete.effectiveSec(s.autoDeleteSec, s.autoDeleteFrom)
             }
             .onFailure { IMLog.tag("IM.Group").w("group_settings_failed") }
     }
@@ -95,6 +96,8 @@ class GroupInfoSettingsState internal constructor(
     fun togglePinned(v: Boolean) { pinnedState.value = v; push(v, muted) }
     fun openMuteSheet() { muteSheetOpenState.value = true }
     fun openAutoDelete() { autoDeleteOpenState.value = true }
+    /** 点「自动删除消息」行：群主 / 管理员进档位页；普通成员只读，直接 [onDenied]（toast），不进页、不发 PUT。 */
+    fun tapAutoDelete(iAmManager: Boolean, onDenied: () -> Unit) { if (AutoDelete.canSet(true, iAmManager)) openAutoDelete() else onDenied() }
     fun closeAutoDelete() { autoDeleteOpenState.value = false }
     internal fun syncAutoDelete(sec: Int) { autoDeleteSecState.value = sec }
     fun dismissMuteSheet() { muteSheetOpenState.value = false }
@@ -153,14 +156,14 @@ fun rememberGroupMuteValueText(settings: GroupInfoSettingsState): String {
 fun rememberGroupAutoDeleteLabel(client: IMClient, convId: String, settings: GroupInfoSettingsState): String {
     val sec = rememberConvAutoDelete(client, convId, settings.autoDeleteSec)
     androidx.compose.runtime.LaunchedEffect(sec) { settings.syncAutoDelete(sec) }
-    return com.libeyond.imandroid.data.AutoDelete.label(sec)
+    return AutoDelete.label(sec)
 }
 
 /** 群资料页的档位页（盖在群资料之上，宿主在页链里一行接入）。 */
 @Composable
-fun GroupAutoDeletePage(client: IMClient, convId: String, settings: GroupInfoSettingsState) {
+fun GroupAutoDeletePage(client: IMClient, convId: String, settings: GroupInfoSettingsState, iAmManager: Boolean) {
     val sec = rememberConvAutoDelete(client, convId, settings.autoDeleteSec) // 订阅库里最新档位，不用打开前的快照
-    ConvAutoDeletePage(client, convId, sec, onBack = settings::closeAutoDelete)
+    ConvAutoDeletePage(client, convId, sec, isGroup = true, canSet = AutoDelete.canSet(true, iAmManager), onBack = settings::closeAutoDelete)
 }
 
 /** 群资料页的免打扰时长菜单（与聊天信息页同一个 [MuteDurationSheet]）；未打开时不画。 */

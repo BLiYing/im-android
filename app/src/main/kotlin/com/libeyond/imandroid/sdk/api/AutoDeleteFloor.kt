@@ -7,34 +7,38 @@ import java.util.concurrent.ConcurrentHashMap
  * 会话媒体库 / 会话内搜索 / 置顶列表走服务端，服务端不按档位过滤（设计 §3.1），端上要自己丢掉已过期项，
  * 否则本地库清掉了、媒体库里还翻得出来。
  *
- * 数据来源与本地库同一份：会话列表快照整份换入、`conv_update` 逐条写入（`MessageRepository`）。
+ * 数据来源与本地库同一份：会话列表快照整份换入、`conv_update` 逐条写入（sec + from 成对）（`MessageRepository`）。
  * 只是个内存镜像，丢了（进程重启）会在会话列表刷新后重建；判据本身见 `data/AutoDelete.kt`。
  */
 object AutoDeleteFloor {
-    private val secs = ConcurrentHashMap<String, Int>()
+    private data class Tier(val sec: Int, val from: Long)
 
-    fun set(convId: String, sec: Int) {
-        if (sec > 0) secs[convId] = sec else secs.remove(convId)
+    private val tiers = ConcurrentHashMap<String, Tier>()
+
+    /** sec 与 from 一起写（会话级共享，永远成对覆盖）；关闭则移除。 */
+    fun set(convId: String, sec: Int, from: Long) {
+        if (sec > 0) tiers[convId] = Tier(sec, from) else tiers.remove(convId)
     }
 
-    /** 会话列表快照是全量权威：整份换入。 */
-    fun replaceAll(all: Map<String, Int>) {
-        secs.keys.retainAll(all.keys.toSet())
-        all.forEach { (k, v) -> set(k, v) }
+    /** 会话列表快照是全量权威：整份换入（convId → sec to from）。 */
+    fun replaceAll(all: Map<String, Pair<Int, Long>>) {
+        tiers.keys.retainAll(all.keys.toSet())
+        all.forEach { (k, v) -> set(k, v.first, v.second) }
     }
 
-    fun clear() = secs.clear()
+    fun clear() = tiers.clear()
 
-    fun secOf(convId: String): Int = secs[convId] ?: 0
+    fun secOf(convId: String): Int = tiers[convId]?.sec ?: 0
 
-    /** 该会话此刻的过期线；关闭为 0（不过滤）。 */
-    fun floorTs(convId: String, now: Long = System.currentTimeMillis()): Long {
-        val sec = secOf(convId)
-        return if (sec > 0) maxOf(0L, now - sec * 1000L) else 0L
+    /** 该会话里这条（时间戳 [ts]）此刻是否已过期；关闭或没登记 = 否。公式见 `data/AutoDelete.kt`。 */
+    fun expired(convId: String, ts: Long, now: Long = System.currentTimeMillis()): Boolean {
+        val t = tiers[convId] ?: return false
+        return t.sec > 0 && ts >= t.from && ts + t.sec * 1000L <= now
     }
 
     fun <T> dropExpired(convId: String, items: List<T>, tsOf: (T) -> Long): List<T> {
-        val floor = floorTs(convId)
-        return if (floor <= 0L) items else items.filter { tsOf(it) > floor }
+        if (tiers[convId] == null) return items
+        val now = System.currentTimeMillis()
+        return items.filterNot { expired(convId, tsOf(it), now) }
     }
 }

@@ -296,19 +296,19 @@ interface MessageDao {
     @Query("DELETE FROM message WHERE ownerUid = :owner")
     suspend fun clearAccount(owner: String)
 
-    /** 自动删除：本会话 `timestamp <= :floor` 的 conv_seq（过期线判据见 `AutoDelete.floorTs`）。 */
-    @Query("SELECT convSeq FROM message WHERE ownerUid = :owner AND convId = :convId AND timestamp <= :floor")
-    suspend fun expiredSeqs(owner: String, convId: String, floor: Long): List<Long>
+    /** 自动删除：本会话 `timestamp ∈ [:lo, :hi]` 的 conv_seq（窗口见 `AutoDelete.window`；`lo` = `from`，之前的永不过期）。 */
+    @Query("SELECT convSeq FROM message WHERE ownerUid = :owner AND convId = :convId AND timestamp BETWEEN :lo AND :hi")
+    suspend fun expiredSeqs(owner: String, convId: String, lo: Long, hi: Long): List<Long>
 
     /** 其中算未读的条数（读位点之后、别人发的、非系统消息；口径同 `IncomingRule.countsAsUnread`）。 */
     @Query("""
-        SELECT COUNT(*) FROM message WHERE ownerUid = :owner AND convId = :convId AND timestamp <= :floor
+        SELECT COUNT(*) FROM message WHERE ownerUid = :owner AND convId = :convId AND timestamp BETWEEN :lo AND :hi
           AND convSeq > :readSeq AND sender <> '' AND sender <> :owner AND contentType <> 'system'
     """)
-    suspend fun countExpiredUnread(owner: String, convId: String, floor: Long, readSeq: Long): Int
+    suspend fun countExpiredUnread(owner: String, convId: String, lo: Long, hi: Long, readSeq: Long): Int
 
-    @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId AND timestamp <= :floor")
-    suspend fun deleteExpired(owner: String, convId: String, floor: Long): Int
+    @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId AND timestamp BETWEEN :lo AND :hi")
+    suspend fun deleteExpired(owner: String, convId: String, lo: Long, hi: Long): Int
 }
 
 @Dao
@@ -368,17 +368,20 @@ interface ConversationDao {
     @Query("SELECT * FROM conversation WHERE ownerUid = :owner AND peerUid = :peer AND isGroup = 0 LIMIT 1")
     suspend fun byPeer(owner: String, peer: String): ConversationEntity?
 
-    /** conv_update(settings) 只改四列设置：单语句原子，**不要**读-改-写整行（会把已被并发删掉的行写回来）。行不存在时影响 0 行。 */
-    @Query("UPDATE conversation SET pinnedAt = :pinnedAt, muted = :muted, muteUntil = :muteUntil, markedUnread = :markedUnread, autoDeleteSec = :autoDeleteSec WHERE ownerUid = :owner AND convId = :convId")
-    suspend fun updateSettings(owner: String, convId: String, pinnedAt: Long, muted: Boolean, muteUntil: Long, markedUnread: Boolean, autoDeleteSec: Int)
+    /** conv_update(settings) 只改五列设置（sec 与 from 必须一起覆盖）：单语句原子，**不要**读-改-写整行（会把已被并发删掉的行写回来）。行不存在时影响 0 行。 */
+    @Query("UPDATE conversation SET pinnedAt = :pinnedAt, muted = :muted, muteUntil = :muteUntil, markedUnread = :markedUnread, autoDeleteSec = :autoDeleteSec, autoDeleteFrom = :autoDeleteFrom WHERE ownerUid = :owner AND convId = :convId")
+    suspend fun updateSettings(
+        owner: String, convId: String, pinnedAt: Long, muted: Boolean, muteUntil: Long, markedUnread: Boolean,
+        autoDeleteSec: Int, autoDeleteFrom: Long,
+    )
 
     /** 本机保存档位后就地写（不等 conv_update 回声）。行不存在时影响 0 行。 */
-    @Query("UPDATE conversation SET autoDeleteSec = :sec WHERE ownerUid = :owner AND convId = :convId")
-    suspend fun setAutoDeleteSec(owner: String, convId: String, sec: Int)
+    @Query("UPDATE conversation SET autoDeleteSec = :sec, autoDeleteFrom = :from WHERE ownerUid = :owner AND convId = :convId")
+    suspend fun setAutoDelete(owner: String, convId: String, sec: Int, from: Long)
 
-    /** 本会话档位的变化流（资料页行右值就地刷新）。会话行不存在时无发射。 */
-    @Query("SELECT autoDeleteSec FROM conversation WHERE ownerUid = :owner AND convId = :convId")
-    fun observeAutoDelete(owner: String, convId: String): kotlinx.coroutines.flow.Flow<Int>
+    /** 本会话档位 + 起点的变化流（资料页行右值就地刷新）。会话行不存在时无发射。 */
+    @Query("SELECT autoDeleteSec AS sec, autoDeleteFrom AS fromMs FROM conversation WHERE ownerUid = :owner AND convId = :convId")
+    fun observeAutoDelete(owner: String, convId: String): kotlinx.coroutines.flow.Flow<AutoDeleteSetting>
 
     /** 档位 >0 的会话（自动删除扫描的对象）。 */
     @Query("SELECT * FROM conversation WHERE ownerUid = :owner AND autoDeleteSec > 0")
@@ -470,3 +473,6 @@ interface ConversationDao {
     @Query("DELETE FROM conversation WHERE ownerUid = :owner")
     suspend fun clearAccount(owner: String)
 }
+
+/** 会话级自动删除设置（档位 + 计时起点，两者永远一起读写）。 */
+data class AutoDeleteSetting(val sec: Int = 0, val fromMs: Long = 0)

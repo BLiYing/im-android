@@ -114,7 +114,7 @@ class MessageRepository(
     fun observeTail(owner: String, convId: String, fromSeq: Long, limit: Int): Flow<List<MessageEntity>> =
         messages.observeWindowFrom(owner, convId, fromSeq, limit).map { it.asReversed() }
 
-    fun observeAutoDelete(owner: String, convId: String): Flow<Int> = conversations.observeAutoDelete(owner, convId).distinctUntilChanged()
+    fun observeAutoDelete(owner: String, convId: String): Flow<com.libeyond.imandroid.data.db.AutoDeleteSetting> = conversations.observeAutoDelete(owner, convId).distinctUntilChanged()
 
     fun observeHead(owner: String, convId: String): Flow<Long> = conversations.observeHead(owner, convId)
 
@@ -227,7 +227,7 @@ class MessageRepository(
                 plain += kept
             }
             // 自动删除：入库即过期的不进库（区间 / 游标照推，见 MessageRepositoryAutoDelete.kt）
-            val alive = AutoDelete.dropExpired(plain, conv?.autoDeleteSec ?: 0, System.currentTimeMillis()) { it.timestamp }
+            val alive = AutoDelete.dropExpired(plain, conv?.autoDeleteSec ?: 0, conv?.autoDeleteFrom ?: 0L, System.currentTimeMillis()) { it.timestamp }
             if (alive.size != plain.size) { plain.clear(); plain += alive }
         }
         // 无事可写（没有可落的消息、也没有要登记的区间——`too_long` 与「没有新消息」都是这样）就别开事务：
@@ -370,15 +370,16 @@ class MessageRepository(
                 muted = s.muted,
                 muteUntil = s.muteUntil,
                 markedUnread = s.markedUnread,
-                autoDeleteSec = s.autoDeleteSec,
+                autoDeleteSec = AutoDelete.effectiveSec(s.autoDeleteSec, s.autoDeleteFrom),
+                autoDeleteFrom = s.autoDeleteFrom,
                 isSuper = s.isSuper,
                 // head 只增不减：列表的 latest_conv_seq 与本地已记的取大（sync 的 too_long 也往这写）
                 headConvSeq = maxOf(existing?.headConvSeq ?: 0L, s.latestConvSeq),
                 clearedUpTo = existing?.clearedUpTo ?: 0L, // 纯本机状态，服务端快照里没有——整行重写会把它清零
-            ).keepNewerLocalTail(existing)
+            ).keepNewerLocalTail(existing).keepAutoDeleteTail(existing, System.currentTimeMillis())
         }
         conversations.upsert(rows)
-        AutoDeleteFloor.replaceAll(rows.filter { it.autoDeleteSec > 0 }.associate { it.convId to it.autoDeleteSec })
+        AutoDeleteFloor.replaceAll(rows.filter { it.autoDeleteSec > 0 }.associate { it.convId to (it.autoDeleteSec to it.autoDeleteFrom) })
         // 快照是全量权威：本地有、快照没有的群行 = 别端退群 / 离线时被移出 / 群已解散，直接删（见 StaleGroupRows）
         if (groupIdsBeforeRequest != null) {
             StaleGroupRows.of(conversations.all(owner), list.mapTo(HashSet()) { it.convId }, groupIdsBeforeRequest)
@@ -456,17 +457,21 @@ class MessageRepository(
         log.i("msg_op_applied", "op" to op.op, "convId" to op.convId, "target" to op.targetConvSeq)
     }
 
-    /** 应用 conv_update（§6.8）。下行**携带变更后的完整状态**，直接覆盖本地。 */
-    suspend fun applyConvUpdate(owner: String, u: ConvUpdateData) {
+    /**
+     * 应用 conv_update（§6.8）。下行**携带变更后的完整状态**，直接覆盖本地。
+     * @return 自动删除档位或起点变了且新档位>0（调用方据此扫该会话，[AutoDelete.needsSweep]）。
+     */
+    suspend fun applyConvUpdate(owner: String, u: ConvUpdateData): Boolean {
+        var sweep = false
         // delete 帧（本端 DELETE 的回声 / 别的设备删了）：整行移走。此前对所有帧都「读行→copy→upsert」，
         // 回声帧比 removeConversation 慢半拍时把刚删的行原样写回（OPPO 复现：行不消失、重启才没）。
         if (u.action == "delete") {
             removeConversation(owner, u.convId)
         } else {
-            conversations.updateSettings(owner, u.convId, u.pinnedAt, u.muted, u.muteUntil, u.markedUnread, u.autoDeleteSec)
-            AutoDeleteFloor.set(u.convId, u.autoDeleteSec)
+            sweep = applySettingsUpdate(owner, u) // MessageRepositoryAutoDelete.kt
         }
         log.i("conv_update_applied", "convId" to u.convId, "action" to u.action)
+        return sweep
     }
 
     /**
