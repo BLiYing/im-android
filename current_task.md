@@ -68,6 +68,7 @@
 8. 小尾巴（均不影响行为）：「刷新补名失败不重试」靠下次连接/刷新自愈；`resolveKind` 对畸形 convId 当群聊（测试已钉住）；`VoiceLocalStore.putText` 每次重写整份 FIFO 顺序表；`PendingVoiceBubble` 里多余的 `coerceAtLeast(160.dp)`；`applySync` 对全是 `msg_op`/墓碑的一页也调 `bumpConversationFromLatest`（白多一次索引 SELECT）。
 
 ## 已知坑 / 限制
+- **非群成员发送者卡片缓存无过期（2026-10-26）**：`UserProfileCache` 仅内存、无 TTL，只兜底「本地无好友也无群成员记录」的发送者（如超级群发言者）。对方改头像可见性（隐私「谁能看到」）后，这类人的旧头像要等重启 / 切换账号才更新；好友 / 群成员 / 会话列表都是整表覆盖，不受影响。要补：给缓存加短 TTL 或会话列表刷新时清。设计见 `IMServer/docs/design/PRIVACY_VISIBILITY_DESIGN.md` §5。
 
 - **自动删除**：本机时钟决定清理时机，后台不扫（回前台补扫）；关闭/放宽不复活已清的本机消息；前台 30s tick 与到点消失未能在真机造「差几十秒满 1 天」的消息实测（服务端无法造旧时间戳），靠 `AutoDeletePurgeTest` + 判据向量覆盖；`MessageRepository.kt` 593 / `MessageService.kt` 583 行贴线。
 
