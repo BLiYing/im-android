@@ -50,6 +50,8 @@ object AlertPlayer {
     fun init(context: Context) {
         if (pool != null) return
         appContext = context.applicationContext
+        // 设计 §3.2 指定该 usage；API 36 标弃用但无等价替代的行为验证，保持不变
+        @Suppress("DEPRECATION")
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)

@@ -2,6 +2,7 @@ package com.libeyond.imandroid.data
 
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -16,6 +17,7 @@ import java.io.IOException
  * 自动下载策略的读、存、回滚与多端同步。重点是**时序**：乱序应答、离线保存、切账号——
  * 这几种情况下出错不会崩，只会让设置页停在一个不是服务端真值的状态，而且没人发现。
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class DownloadSettingsStoreTest {
 
     private val d = DownloadPolicy.defaults()

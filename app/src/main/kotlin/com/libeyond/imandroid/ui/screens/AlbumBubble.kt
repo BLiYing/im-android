@@ -303,7 +303,7 @@ private fun AlbumTileView(
                 indication = androidx.compose.foundation.LocalIndication.current,
                 // 没下下来的格子点一下是下载（开始 / 暂停 / 重试，失效不做事），**不打开**（iOS `IMAlbumCell` 同）
                 // 多选态：一律是「勾选这一格」，不触发下载也不开查看器
-                onClick = { if (!selecting && !ungated && gate != null && !gate.ready) gate.onTap() else onTap() },
+                onClick = { if (!selecting && !ungated && !gate.ready) gate.onTap() else onTap() },
                 onLongClick = if (selecting) null else {
                     {
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)

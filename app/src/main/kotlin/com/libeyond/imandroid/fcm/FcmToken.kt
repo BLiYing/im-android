@@ -3,6 +3,7 @@ package com.libeyond.imandroid.fcm
 import com.google.firebase.messaging.FirebaseMessaging
 import com.libeyond.imandroid.sdk.logging.IMLog
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -19,20 +20,23 @@ import java.util.concurrent.atomic.AtomicBoolean
 object FcmToken {
     private val log = IMLog.tag("IM.Fcm")
 
+    // Firebase 25.1 起 getToken/deleteToken 标弃用，新的 register()/onRegistered 走另一套注册后端；
+    // 本机无 google-services.json 无法验证新路径，故沿用仍受支持的旧接口
+    @Suppress("DEPRECATION")
     suspend fun current(): String? = suspendCancellableCoroutine { cont ->
         deleteArmed.set(false) // 登录后才会取：下次登出能再作废一次
         try {
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (task.isSuccessful) {
-                    cont.resume(task.result, null)
+                    cont.resume(task.result)
                 } else {
                     log.w("fcm_token_fetch_failed", "err" to (task.exception?.javaClass?.simpleName ?: "unknown"))
-                    cont.resume(null, null)
+                    cont.resume(null)
                 }
             }
         } catch (e: Throwable) {
             log.w("fcm_token_unavailable", "err" to e.javaClass.simpleName)
-            cont.resume(null, null)
+            cont.resume(null)
         }
     }
 
@@ -44,6 +48,7 @@ object FcmToken {
      * 此前在结果出来前就置位、且永不复位，失败一次（断网）服务端就会一直往这台登出的设备推（/code-review 2026-10-08）。
      * 登录后 [current] 被调用（连上即取）时复位，下次登出能再作废。没有 Firebase 配置时只记日志、不崩。
      */
+    @Suppress("DEPRECATION") // 同 [current]
     fun deleteWhileLoggedOut() {
         if (!deleteArmed.compareAndSet(false, true)) return
         try {

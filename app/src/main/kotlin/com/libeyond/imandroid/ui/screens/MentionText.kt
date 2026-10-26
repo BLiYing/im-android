@@ -133,7 +133,7 @@ private fun AnnotatedString.Builder.appendHighlighted(
 }
 
 /** `pushLink` 的一层薄封装：把样式与点击绑在一起，免得每处都拼一遍 [TextLinkStyles]。[tag] 回传给 [onTap]。 */
-private inline fun AnnotatedString.Builder.withClickable(
+internal inline fun AnnotatedString.Builder.withClickable(
     tag: String,
     style: SpanStyle,
     noinline onTap: (String) -> Unit,

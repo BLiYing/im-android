@@ -36,7 +36,7 @@ class UploadStateTest {
         assertTrue(p.states.value.isEmpty() && p.state.value.isEmpty())
     }
 
-    @Test fun `排队态只进完整状态，不写百分比（否则整包上传的图片会一直挂 0% 环）`() {
+    @Test fun `排队态只进完整状态，不写百分比（否则整包上传的图片会一直挂 0％ 环）`() {
         val p = UploadProgress()
         p.queued("c", 100)
         assertEquals(UploadState.Phase.Queued, p.states.value.getValue("c").phase)

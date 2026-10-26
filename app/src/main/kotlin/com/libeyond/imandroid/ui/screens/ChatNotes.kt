@@ -10,10 +10,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -88,7 +89,9 @@ internal fun SystemNote(
     // 名字段用**琥珀色半粗**，不用 accent：胶囊底是主题绿，把名字染成同样是绿的 accent
     // 两者色相几乎重合，看不出哪几个字是名字（iOS 2026-08-30 用户反馈过）。
     // 也不用白——那与胶囊正文同色，只剩粗细之差。琥珀在绿胶囊与黑胶囊上都跳得出来。
-    val annotated = remember(segs, sysSegments, myUid) {
+    val tapUid by rememberUpdatedState(onTapUid) // 链接监听读最新回调，不让回调变化重建整段文本
+    val tappable = onTapUid != null
+    val annotated = remember(segs, sysSegments, myUid, tappable) {
         buildAnnotatedString {
             segs.forEach { seg ->
                 if (!SysSegments.isName(seg)) {
@@ -96,11 +99,13 @@ internal fun SystemNote(
                     return@forEach
                 }
                 val shown = SysSegments.displayName(seg, localName(seg.uid), null, myUid)
-                pushStringAnnotation(SYS_NAME_TAG, seg.uid)
-                withStyle(SpanStyle(color = SYS_NAME_COLOR, fontWeight = FontWeight.SemiBold)) {
-                    append(shown)
+                val nameStyle = SpanStyle(color = SYS_NAME_COLOR, fontWeight = FontWeight.SemiBold)
+                // 点名字才响应、点固定文案不动作（同 iOS 的 TextKit 反查）；不传 onTapUid 则只染色
+                if (tappable) {
+                    withClickable(seg.uid, nameStyle, { tapUid?.invoke(it) }) { append(shown) }
+                } else {
+                    withStyle(nameStyle) { append(shown) }
                 }
-                pop()
             }
         }
     }
@@ -117,18 +122,13 @@ internal fun SystemNote(
                 .locateFlash() // 定位命中系统行 / 通话记录行：iOS flashRowAtIndexPath 对无气泡的 cell 回落整行，这里闪胶囊
                 .padding(horizontal = 10.dp, vertical = 4.dp),
         ) {
-            ClickableText(
+            Text(
                 text = annotated,
                 style = TextStyle(
                     color = c.onMedia,
                     fontSize = appearance.sysFontSize,
                     textAlign = TextAlign.Center,
                 ),
-                onClick = { offset ->
-                    // 点在名字上才响应，点在固定文案上不动作（同 iOS 的 TextKit 反查）
-                    annotated.getStringAnnotations(SYS_NAME_TAG, offset, offset)
-                        .firstOrNull()?.let { onTapUid?.invoke(it.item) }
-                },
             )
         }
     }
@@ -194,7 +194,6 @@ internal fun highlightedText(
 }
 
 /** 名字段的标注 tag 与颜色（iOS `datePillNameText` = #FFD98A）。 */
-private const val SYS_NAME_TAG = "sysName"
 private val SYS_NAME_COLOR = androidx.compose.ui.graphics.Color(0xFFFFD98A)
 
 @Composable

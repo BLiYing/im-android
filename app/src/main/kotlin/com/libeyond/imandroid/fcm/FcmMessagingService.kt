@@ -45,6 +45,8 @@ class FcmMessagingService : FirebaseMessagingService() {
 
     private val log = IMLog.tag("IM.Fcm")
 
+    // 同 [FcmToken.current]：onNewToken 标弃用，新路径 onRegistered 暂不迁；仍调 super，免得父类日后加逻辑被跳过
+    @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         log.i("fcm_new_token")

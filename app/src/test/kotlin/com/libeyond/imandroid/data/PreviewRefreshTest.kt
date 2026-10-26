@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.data
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -8,6 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** 删掉会话摘要指着的那条 → 重拉会话列表（对齐 iOS / Web）；其余删除不白拉。 */
+@OptIn(ExperimentalCoroutinesApi::class)
 class PreviewRefreshTest {
     @Test
     fun `删的是摘要那条——要刷新`() {

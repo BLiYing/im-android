@@ -98,11 +98,11 @@ private suspend fun MessageRepository.anchoredAroundReadSeq(
     // 那一条必须和读位点**接得上**（它所在那一段从读位点之后就开始）：否则它只是缺口另一侧的孤岛，
     // 拿它当「读位点之后第一条」会把用户定位到错的地方，可见即读还会越过缺口
     if (seg == null || seg.lo > maxOf(readSeq + 1, st.visibleFrom)) return null
-    val lowBound = maxOf(seg?.lo ?: 0L, st.visibleFrom)
+    val lowBound = maxOf(seg.lo, st.visibleFrom)
     val before = messages.pointsBefore(owner, convId, first.timestamp, first.convSeq, ChatWindows.ENTRY_BEFORE)
         .filter { it.convSeq >= lowBound }
     val atOrAfter = messages.pointsAtOrAfter(owner, convId, first.timestamp, first.convSeq, ChatWindows.ENTRY_AFTER)
-        .filter { seg == null || it.convSeq <= seg.hi }
+        .filter { it.convSeq <= seg.hi }
     return ChatWindows.boundsOf(before, atOrAfter)
 }
 
