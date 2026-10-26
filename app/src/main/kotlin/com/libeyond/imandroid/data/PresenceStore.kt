@@ -39,7 +39,10 @@ class PresenceStore {
 
     /** 会话列表/资料页的 HTTP 快照——**初始值来源**，presence 帧只做其后的增量更新。 */
     fun seed(uid: String, status: String, onlineUntil: Long, lastSeen: Long) {
-        if (uid.isEmpty() || status.isEmpty()) return
+        if (uid.isEmpty()) return
+        // 快照里在线态为空 = 对方不可见（「上次上线」设为联系人 / 无人）或服务端没给：以快照为准，清掉旧值，
+        // 否则副标题 / 绿点会一直停在对方隐藏之前的状态
+        if (status.isEmpty()) { _presence.value = _presence.value - uid; return }
         applyPresence(uid, PresenceSnapshot(status, onlineUntil, lastSeen))
     }
 

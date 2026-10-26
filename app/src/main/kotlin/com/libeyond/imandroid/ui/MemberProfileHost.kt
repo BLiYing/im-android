@@ -38,7 +38,7 @@ fun MemberProfileHost(
     }
     val f = knownFriends[userId]
     val shownName = f?.nickname?.ifBlank { null } ?: name
-    val shownAvatar = f?.avatarUrl?.ifBlank { null } ?: avatarUrl
+    val shownAvatar = com.libeyond.imandroid.data.AvatarPrecedence.profile(f?.avatarUrl, avatarUrl)
     val stubConv = remember(userId, shownName, shownAvatar) { client.conversationStubFor(userId, shownName, shownAvatar) }
     val armChat = LocalChatArmSink.current
     ChatDetailHost(

@@ -1660,6 +1660,12 @@
     <string name="ps_section_chat_privacy">Chat privacy</string>
     <string name="ps_section_data">Data</string>
     <string name="ps_section_who_can_see">Who can see</string>
+    <string name="ps_visibility_avatar_footer">Choose who can see your profile photo. Others will see a default avatar instead. You can always see your own.</string>
+    <string name="ps_visibility_contacts">My contacts</string>
+    <string name="ps_visibility_everyone">Everyone</string>
+    <string name="ps_visibility_last_seen_footer">Choose who can see your online status and when you were last online. You can always see your own.</string>
+    <string name="ps_visibility_nobody">Nobody</string>
+    <string name="ps_visibility_save_failed">Couldn\'t save. Please try again.</string>
     <string name="ps_who_can_see_footer">These settings control how much others can see on your profile.</string>
     <string name="push_call_action_answer">Answer</string>
     <string name="push_call_channel_name">Incoming calls</string>

@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import com.libeyond.imandroid.data.AvatarPrecedence
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.IMClient
 
@@ -19,7 +20,7 @@ internal fun rememberSenderAvatarOf(client: IMClient, memberAvatars: Map<String,
     val profilesRev by client.profiles.revision.collectAsState()
     return remember(profilesRev, memberAvatars) {
         { uid ->
-            memberAvatars[uid]?.takeIf { u -> u.isNotBlank() } ?: client.profiles.peek(uid)?.avatarUrl
+            AvatarPrecedence.sender(memberAvatars, uid, client.profiles.peek(uid)?.avatarUrl)
                 ?: run { client.profiles.request(uid); "" }
         }
     }

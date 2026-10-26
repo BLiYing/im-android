@@ -20,7 +20,7 @@ enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, Las
 enum class PrivacyTint { Red, Blue, Gray, Purple, Teal, Orange, Green, Yellow, Pink }
 
 /** 点一行做什么。 */
-enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, ComingSoon }
+enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, ComingSoon }
 
 data class PrivacyRow(
     val title: String,
@@ -78,8 +78,9 @@ object PrivacySecurity {
             footer = Str.s(R.string.ps_who_can_see_footer),
             rows = listOf(
                 PrivacyRow(Str.s(R.string.ps_row_phone_number), PrivacyIcon.Phone, PrivacyTint.Green, Str.s(R.string.common_my_contacts)),
-                PrivacyRow(Str.s(R.string.ps_row_last_seen), PrivacyIcon.LastSeen, PrivacyTint.Blue, Str.s(R.string.common_my_contacts)),
-                PrivacyRow(Str.s(R.string.ps_row_avatar), PrivacyIcon.Avatar, PrivacyTint.Purple, Str.s(R.string.common_everyone)),
+                // 活行：右值 = 当前档位名，由页面按 GET /users/me/privacy 填（[Visibility.label]）
+                PrivacyRow(Str.s(R.string.ps_row_last_seen), PrivacyIcon.LastSeen, PrivacyTint.Blue, action = PrivacyAction.LastSeen),
+                PrivacyRow(Str.s(R.string.ps_row_avatar), PrivacyIcon.Avatar, PrivacyTint.Purple, action = PrivacyAction.Avatar),
                 PrivacyRow(Str.s(R.string.ps_row_bio), PrivacyIcon.Bio, PrivacyTint.Yellow, Str.s(R.string.common_everyone)),
                 PrivacyRow(Str.s(R.string.ps_row_birthday), PrivacyIcon.Birthday, PrivacyTint.Pink, Str.s(R.string.common_my_contacts)),
             ),

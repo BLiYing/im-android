@@ -14,6 +14,9 @@ import com.libeyond.imandroid.data.PasswordFeedback
 import com.libeyond.imandroid.data.PrivacyPage
 import com.libeyond.imandroid.data.PrivacySecurity
 import com.libeyond.imandroid.data.SettingsSub
+import com.libeyond.imandroid.data.Visibility
+import com.libeyond.imandroid.data.VisibilityField
+import com.libeyond.imandroid.data.VisibilityKind
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
@@ -25,6 +28,7 @@ import com.libeyond.imandroid.ui.screens.AutoDeleteScreen
 import com.libeyond.imandroid.ui.screens.BlockedUsersScreen
 import com.libeyond.imandroid.ui.screens.ChangePasswordScreen
 import com.libeyond.imandroid.ui.screens.PrivacySecurityScreen
+import com.libeyond.imandroid.ui.screens.VisibilityScreen
 import kotlinx.coroutines.launch
 
 private data class PasswordForm(val old: String = "", val new: String = "", val confirm: String = "")
@@ -51,6 +55,11 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
     var autoDefault by remember { mutableStateOf<Int?>(null) }
     var autoShown by remember { mutableStateOf<Int?>(null) }
     var autoSaving by remember { mutableStateOf(false) }
+    /** 「谁能看到」两项（同一份 `GET /users/me/privacy`）；`visRev` 只用来在字段变化后触发重组。 */
+    val lastSeenField = remember { VisibilityField() }
+    val avatarField = remember { VisibilityField() }
+    var visRev by remember { mutableStateOf(0) }
+    fun fieldOf(k: VisibilityKind) = if (k == VisibilityKind.LastSeen) lastSeenField else avatarField
 
     suspend fun reloadBlocked() {
         runCatchingCancellable { client.contacts.friends(FriendEntry.BLOCKED) }
@@ -86,6 +95,21 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
                 .onSuccess { autoDefault = sec; page = PrivacyPage.Main }
                 .onFailure { autoShown = autoDefault; toast = Str.s(R.string.autodel_save_failed) }
             autoSaving = false
+        }
+    }
+
+    /** 选中即保存（不弹确认），**PUT 只带被改的那一项**；成功回上一页，失败 toast 并回滚行值 / 勾选。 */
+    fun saveVisibility(kind: VisibilityKind, v: Visibility) {
+        if (fieldOf(kind).isSaving) return // 防连点：保存途中的重复点击静默忽略，不当作失败
+        scope.launch {
+            val ok = fieldOf(kind).choose(v) { level ->
+                when (kind) {
+                    VisibilityKind.LastSeen -> client.privacy.setLastSeenVisibility(level.wire)
+                    VisibilityKind.Avatar -> client.privacy.setAvatarVisibility(level.wire)
+                }
+            }
+            visRev++
+            if (ok) page = PrivacyPage.Main else toast = Str.s(R.string.ps_visibility_save_failed)
         }
     }
 
@@ -127,8 +151,13 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
     LaunchedEffect(page) { if (page == PrivacyPage.Main || page == PrivacyPage.Blocked) reloadBlocked() }
     // 进隐私页 / 选择页都取最新的账号默认档位（不推帧，别的端改了靠重新进页刷新）；失败保留已有值
     LaunchedEffect(page) {
-        if (page != PrivacyPage.Main && page != PrivacyPage.AutoDelete) return@LaunchedEffect
-        runCatchingCancellable { client.privacy.get() }.onSuccess { autoDefault = it.autoDeleteDefaultSec; if (!autoSaving) autoShown = it.autoDeleteDefaultSec }
+        if (page != PrivacyPage.Main && page != PrivacyPage.AutoDelete && page != PrivacyPage.LastSeen && page != PrivacyPage.Avatar) return@LaunchedEffect
+        runCatchingCancellable { client.privacy.get() }.onSuccess {
+            autoDefault = it.autoDeleteDefaultSec; if (!autoSaving) autoShown = it.autoDeleteDefaultSec
+            lastSeenField.load(Visibility.parse(it.lastSeenVisibility))
+            avatarField.load(Visibility.parse(it.avatarVisibility))
+            visRev++
+        }
     }
 
     PushTransition(targetState = page, depthOf = { if (it == PrivacyPage.Main) 0 else 1 }) { p ->
@@ -142,6 +171,10 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
                     onOpenChangePassword = { page = PrivacyPage.ChangePassword },
                     autoDeleteLabel = PrivacySecurity.autoDeleteLabel(autoDefault),
                     onOpenAutoDelete = { autoShown = autoDefault; page = PrivacyPage.AutoDelete },
+                    lastSeenLabel = visRev.let { lastSeenField.committed?.label.orEmpty() },
+                    avatarLabel = visRev.let { avatarField.committed?.label.orEmpty() },
+                    onOpenLastSeen = { lastSeenField.resetShown(); page = PrivacyPage.LastSeen },
+                    onOpenAvatar = { avatarField.resetShown(); page = PrivacyPage.Avatar },
                     onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                 )
             }
@@ -162,6 +195,18 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
                     current = autoShown ?: 0,
                     footer = stringResource(R.string.autodel_default_footer),
                     onSelect = { saveAutoDefault(it) },
+                    onBack = { page = PrivacyPage.Main },
+                )
+            }
+
+            PrivacyPage.LastSeen, PrivacyPage.Avatar -> {
+                val kind = if (p == PrivacyPage.LastSeen) VisibilityKind.LastSeen else VisibilityKind.Avatar
+                BackHandler { page = PrivacyPage.Main }
+                VisibilityScreen(
+                    title = stringResource(if (kind == VisibilityKind.LastSeen) R.string.ps_row_last_seen else R.string.ps_row_avatar),
+                    footer = stringResource(if (kind == VisibilityKind.LastSeen) R.string.ps_visibility_last_seen_footer else R.string.ps_visibility_avatar_footer),
+                    current = visRev.let { fieldOf(kind).shown },
+                    onSelect = { saveVisibility(kind, it) },
                     onBack = { page = PrivacyPage.Main },
                 )
             }

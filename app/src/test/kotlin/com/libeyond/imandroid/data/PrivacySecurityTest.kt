@@ -49,20 +49,24 @@ class PrivacySecurityTest {
         assertEquals("关闭", values["通行密钥"])
         assertEquals("", values["邮箱登录"])
         assertEquals("", values["自动删除消息"]) // 活行：右值由页面按 GET /users/me/privacy 填
-        assertEquals(listOf("我的联系人", "我的联系人", "所有人", "所有人", "我的联系人"), groups[3].rows.map { it.value })
+        // 上次上线 / 头像是活行：右值由页面按 GET /users/me/privacy 填，表里留空
+        assertEquals(listOf("我的联系人", "", "", "所有人", "我的联系人"), groups[3].rows.map { it.value })
         assertEquals("", values["清除所有对话"])
     }
 
     /** 第一组两行与「自动删除消息」是真功能；其余全灰置。把某个占位行误接成活行（或反过来）都会在这里红。 */
     @Test
-    fun `只有已屏蔽、修改密码与自动删除是活行`() {
+    fun `只有已屏蔽、修改密码、自动删除、上次上线与头像是活行`() {
         val first = groups.first().rows
         assertEquals(listOf(PrivacyAction.Blocked, PrivacyAction.ChangePassword), first.map { it.action })
         assertTrue(first.none { it.isPlaceholder })
         val autoDelete = groups[2].rows.single()
         assertEquals(PrivacyAction.AutoDelete, autoDelete.action)
         assertFalse(autoDelete.isPlaceholder)
-        val rest = groups.drop(1).flatMap { it.rows }.filter { it !== autoDelete }
+        val who = groups[3].rows
+        assertEquals(listOf(PrivacyAction.ComingSoon, PrivacyAction.LastSeen, PrivacyAction.Avatar, PrivacyAction.ComingSoon, PrivacyAction.ComingSoon), who.map { it.action })
+        assertTrue(who.filter { it.action != PrivacyAction.ComingSoon }.none { it.isPlaceholder })
+        val rest = groups.drop(1).flatMap { it.rows }.filter { it !== autoDelete && it.action != PrivacyAction.LastSeen && it.action != PrivacyAction.Avatar }
         assertTrue(rest.all { it.isPlaceholder && it.action == PrivacyAction.ComingSoon })
     }
 

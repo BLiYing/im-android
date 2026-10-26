@@ -60,4 +60,13 @@ class RtcProfileSourcesTest {
         s.putMembers("g1", listOf(member("u1", avatar = "/m.png")))
         assertEquals("成员表头像优先", "/m.png", s.avatarUrl("u1", "g1"))
     }
+
+    @Test
+    fun group_member_with_empty_avatar_does_not_fall_back_to_stale_conversation_avatar() {
+        val s = RtcProfileSources()
+        s.setPeers(listOf(peer("u1", "小明", "/old.png")))
+        s.putMembers("g1", listOf(member("u1", avatar = "")))
+        assertNull("成员表说没有头像（对方设了不可见）就不能画回旧头像", s.avatarUrl("u1", "g1"))
+        assertEquals("/old.png", s.avatarUrl("u1", ""))
+    }
 }

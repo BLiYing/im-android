@@ -1610,6 +1610,12 @@
     <string name="ps_section_chat_privacy">会话隐私</string>
     <string name="ps_section_data">数据</string>
     <string name="ps_section_who_can_see">谁能看到</string>
+    <string name="ps_visibility_avatar_footer">决定谁能看到你的头像。不可见的人只会看到默认头像，你自己始终可见。</string>
+    <string name="ps_visibility_contacts">我的联系人</string>
+    <string name="ps_visibility_everyone">所有人</string>
+    <string name="ps_visibility_last_seen_footer">决定谁能看到你的在线状态和上次上线时间。你自己始终可见。</string>
+    <string name="ps_visibility_nobody">无人</string>
+    <string name="ps_visibility_save_failed">设置失败，请稍后重试</string>
     <string name="ps_who_can_see_footer">这些设置决定他人在你的资料页看到多少。</string>
     <string name="push_call_action_answer">接听</string>
     <string name="push_call_channel_name">来电提醒</string>

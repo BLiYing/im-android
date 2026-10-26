@@ -34,10 +34,11 @@ class PeerCardMergeTest {
         assertEquals("", m.peerRemark)
     }
 
+    /** 名字空 = fail-open 保持原样；头像空 = 对方设了「头像不可见」/ 清了头像，服务端权威，必须清掉旧头像。 */
     @Test
-    fun empty_card_fields_keep_the_usable_old_values() {
+    fun empty_card_name_keeps_old_but_empty_avatar_clears_it() {
         val m = PeerCardMerge.merge(row, UserCard(userId = "u1"))
         assertEquals("旧昵称", m.title)
-        assertEquals("/old.png", m.avatarUrl)
+        assertEquals("", m.avatarUrl)
     }
 }

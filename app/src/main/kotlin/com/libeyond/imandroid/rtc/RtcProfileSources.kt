@@ -57,7 +57,9 @@ class RtcProfileSources {
     fun avatarUrl(uid: String, groupId: String): String? {
         val peer = peers.get()[uid]?.avatarUrl.usable()
         if (groupId.isEmpty()) return peer
-        return members[groupId]?.get(uid)?.avatarUrl.usable() ?: peer
+        // 群成员表里有这个人就以它为准（空串 = 对方设了「头像不可见」，不能退到会话行里更旧的头像）
+        val member = members[groupId]?.get(uid) ?: return peer
+        return member.avatarUrl.usable()
     }
 
     private fun String?.usable(): String? = this?.trim()?.takeIf { it.isNotEmpty() && it != DisplayName.UNNAMED }

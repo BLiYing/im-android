@@ -10,7 +10,7 @@ import com.libeyond.imandroid.sdk.api.UserCard
  * 名片是权威值，拿到就并回去——**信息页头部、会话列表、通话界面读的都是这一行**，所以三处天然一致。
  *
  * - 名字：备注 > 昵称；名片里两者都空就保持原样（fail-open，不把一个能用的名字清成「未命名用户」）
- * - 头像：名片给了才覆盖（空 = 保持原样，与 IMProgram 一致）
+ * - 头像：名片是权威值，**空串也照写**（对方设了「头像不可见」/ 清了头像，服务端下发空串，旧头像必须清掉）
  * - 备注：服务端备注是权威值，原样并回（空串 = 已清除）
  */
 object PeerCardMerge {
@@ -19,7 +19,7 @@ object PeerCardMerge {
 
     fun merge(row: ConversationEntity, card: UserCard): Merged = Merged(
         title = card.remark.ifBlank { card.nickname }.ifBlank { row.title },
-        avatarUrl = card.avatarUrl.ifBlank { row.avatarUrl },
+        avatarUrl = card.avatarUrl,
         peerRemark = card.remark,
         peerDeleted = card.deleted,
     )
