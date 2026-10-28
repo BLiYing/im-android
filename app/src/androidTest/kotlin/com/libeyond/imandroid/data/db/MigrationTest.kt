@@ -239,6 +239,31 @@ class MigrationTest {
         }
     }
 
+    /** 20→21 新增独立清空位点表：老行上非零的 `clearedUpTo` 回填进去（行将来被删也不丢），零值不进。 */
+    @Test
+    fun migrate20To21CreatesClearFloorTableAndBackfillsNonZero() {
+        helper.createDatabase(DB, 20).use { db ->
+            fun conv(id: String, cleared: Int) = db.execSQL(
+                """INSERT INTO conversation (ownerUid, convId, isGroup, peerUid, title, avatarUrl, peerRemark, peerDeleted,
+                   lastContent, lastContentType, lastTimestamp, lastConvSeq, lastFrom, lastFromNickname, lastRecalled,
+                   lastSysEvent, lastSysArgs, lastSysSegments, unread, mentionUnread, readSeq, peerReadSeq,
+                   syncedConvSeq, pinnedAt, muted, muteUntil, markedUnread, isSuper, headConvSeq, clearedUpTo, autoDeleteSec, autoDeleteFrom)
+                   VALUES ('me', '$id', 0, 'b', 'B', '', '', 0, 'hi', 'text', 1, 1, 'b', '', 0,
+                   '', '', '', 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, $cleared, 0, 0)""",
+            )
+            conv("c_cleared", 7)
+            conv("c_plain", 0)
+        }
+        helper.runMigrationsAndValidate(DB, 21, true, IMDatabase.MIGRATION_20_21).use { db ->
+            db.query("SELECT convId, clearedUpTo FROM conv_clear_floor_local").use { c ->
+                assertEquals(1, c.count)
+                c.moveToFirst()
+                assertEquals("c_cleared", c.getString(0))
+                assertEquals(7L, c.getLong(1))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

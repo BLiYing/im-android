@@ -17,6 +17,10 @@ internal fun newConversationStub(owner: String, convId: String): ConversationEnt
     )
 }
 
+/** 壳行带上独立位点表里的位点（删除会话后复现）：位点与游标都不低于它，sync 从位点之后起、不把位点以内的旧史再要一遍。 */
+internal fun ConversationEntity.withFloor(floor: Long): ConversationEntity =
+    if (floor <= 0) this else copy(clearedUpTo = maxOf(clearedUpTo, floor), syncedConvSeq = maxOf(syncedConvSeq, floor))
+
 /**
  * HTTP 会话快照落库时，若本地这一行**比快照新**（快照发出后又有 new_msg 到达并 bump 过），保留本地的
  * 预览 / 时间 / 序号 / 未读——否则旧快照整行覆盖会把刚到的消息回退（陌生人连发两条时必现：

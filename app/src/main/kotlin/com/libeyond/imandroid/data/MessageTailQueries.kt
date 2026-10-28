@@ -22,7 +22,7 @@ data class TailState(
 suspend fun MessageRepository.tailState(owner: String, convId: String, page: Int, historyFloor: Long = 0L): TailState {
     val c = conversations.byId(owner, convId)
     val tip = ChatTailPlan.tip(c?.headConvSeq ?: 0L, c?.lastConvSeq ?: 0L)
-    val from = ChatTailPlan.visibleFrom(c?.clearedUpTo ?: 0L, historyFloor)
+    val from = ChatTailPlan.visibleFrom(clearedUpTo(owner, convId), historyFloor)
     val rs = ranges.ranges(owner, convId)
     val lo = ChatTailPlan.latestPageLowAboveFloor(tip, page, from)
     val covered = tip > 0 && (tip < from || SyncRanges.coversSpan(rs, lo, tip))
@@ -43,7 +43,7 @@ suspend fun MessageRepository.planEntry(
 ): EntryPlan {
     val c = conversations.byId(owner, convId)
     val tip = ChatTailPlan.tip(c?.headConvSeq ?: 0L, c?.lastConvSeq ?: 0L)
-    val visibleFrom = ChatTailPlan.visibleFrom(c?.clearedUpTo ?: 0L, historyFloor)
+    val visibleFrom = ChatTailPlan.visibleFrom(clearedUpTo(owner, convId), historyFloor)
     return ChatEntryPlan.plan(
         readSeq = readSeq, unread = unread, tip = tip,
         ranges = ranges.ranges(owner, convId),
@@ -113,7 +113,7 @@ suspend fun MessageRepository.unreadBelowFacts(owner: String, convId: String, hi
     val c = conversations.byId(owner, convId)
     return UnreadBelowFacts(
         tip = ChatTailPlan.tip(c?.headConvSeq ?: 0L, c?.lastConvSeq ?: 0L),
-        floor = maxOf(0L, ChatTailPlan.visibleFrom(c?.clearedUpTo ?: 0L, historyFloor) - 1),
+        floor = maxOf(0L, ChatTailPlan.visibleFrom(clearedUpTo(owner, convId), historyFloor) - 1),
         ranges = ranges.ranges(owner, convId),
         localNewest = messages.maxConvSeq(owner, convId) ?: 0L,
     )

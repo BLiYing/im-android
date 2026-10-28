@@ -33,6 +33,8 @@ data class ConversationSummary(
     @SerialName("peer_last_seen") val peerLastSeen: Long = 0,
     @SerialName("last_message") val lastMessage: MessageData? = null,
     @SerialName("latest_conv_seq") val latestConvSeq: Long = 0,
+    /** 我删除该会话时的位点（>0 才带；历史可见下界，§6.7.1）。本机位点低于它就要对齐。 */
+    @SerialName("cleared_at") val clearedAt: Long = 0,
     val unread: Int = 0,
     /** unread 撞到服务端上限，真实值 ≥ 它。据此显示「N+」而不是一律 99+。 */
     @SerialName("unread_capped") val unreadCapped: Boolean = false,
@@ -243,9 +245,10 @@ class ConversationsApi(private val http: HttpClient) {
         })
     }
 
-    suspend fun delete(convId: String) {
-        http.call("DELETE", "/api/v1/conversations/$convId")
-    }
+    /** 返回回包里的 `cleared_at`（删除位点；缺字段 = 0，调用方退回本机 head，OFFLINE_BACKLOG_DESIGN §6.7.1）。 */
+    suspend fun delete(convId: String): Long =
+        (http.call("DELETE", "/api/v1/conversations/$convId") as? kotlinx.serialization.json.JsonObject)
+            ?.get("cleared_at")?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull() } ?: 0L
 
     suspend fun serverConfig(): ServerConfig =
         decode(http.call("GET", "/api/v1/server-config"), ServerConfig.serializer())

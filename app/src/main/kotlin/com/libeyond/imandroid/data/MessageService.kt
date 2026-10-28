@@ -219,7 +219,8 @@ class MessageService(
             FrameType.ACK -> data?.let {
                 val ack = ProtocolJson.decodeFromJsonElement(AckData.serializer(), it)
                 ackTimeouts.cancel(ack.clientMsgId)
-                repo.onAck(owner, ack)
+                // 本地没有这个会话（删过 / 从「我的群组」直接进来发的第一条）只落了个没标题的壳：拉一次权威列表补名字
+                if (repo.onAck(owner, ack)) scope.launch { refreshConversations() }
             }
 
             FrameType.NEW_MSG -> data?.let {
@@ -301,6 +302,7 @@ class MessageService(
 
             FrameType.CONV_UPDATE -> data?.let { el ->
                 val u = ProtocolJson.decodeFromJsonElement(ConvUpdateData.serializer(), el)
+                if (u.action == "delete") historyFloors.remove(u.convId) // 删除会话＝清到位点，服务端下界缓存作废（§6.7.1）
                 if (repo.applyConvUpdate(owner, u)) autoDelete.request() // sec 或 from 变了且 >0 → 扫（不追溯，只清窗口）
                 ConvRemarkSignal.of(u)?.let { _convRemarks.tryEmit(it) }
             }
@@ -555,7 +557,7 @@ class MessageService(
         try {
             val groupsBefore = repo.localGroupIds(owner)
             val list = conversationsApi.list()
-            repo.applyConversationList(owner, list, presence, groupsBefore)
+            repo.applyConversationList(owner, list, presence, groupsBefore).forEach { historyFloors.remove(it) }
             _pendingCounts.value = list.filter { it.isGroup && it.pendingCount > 0 }.associate { it.convId to it.pendingCount }
             autoDelete.request() // 列表发现档位变了（别端改的）也要清
             catchUpHidden(owner) // 扩展函数，见 HiddenCatchUp.kt（本文件贴 600 行硬闸）
@@ -575,8 +577,9 @@ class MessageService(
      */
     suspend fun deleteConversation(convId: String, refresh: Boolean = true) {
         val owner = ownerProvider() ?: return
-        conversationsApi.delete(convId)
-        repo.removeConversation(owner, convId)
+        val clearedAt = conversationsApi.delete(convId)
+        historyFloors.remove(convId)
+        repo.deleteConversationLocal(owner, convId, clearedAt) // 清到位点 + 移行（§6.7.1）；cleared_at 缺则取本机 head
         if (refresh) refreshConversations() // 批量删除（编辑模式）传 false，结束后调用方只拉一次
     }
 }

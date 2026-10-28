@@ -21,8 +21,32 @@ data class ConvRangeEntity(
     val hi: Long,
 )
 
+/**
+ * 本机清空位点的**独立小表**（iOS `im_conv_clear_floor_local` 的对端）：随「清除到位点」写入，**不随会话行删除**。
+ * 删除会话后行没了，但位点还得在——复现前在途的旧 sync 页、复现壳行（位点 0）都靠它不把 ≤ 位点的旧史写回/拉回。
+ * 只增不减；会话行上的 `clearedUpTo` 仍是 UI 订阅用的镜像，有效位点取两者大者。
+ */
+@Entity(tableName = "conv_clear_floor_local", primaryKeys = ["ownerUid", "convId"])
+data class ConvClearFloorEntity(
+    val ownerUid: String,
+    val convId: String,
+    val clearedUpTo: Long,
+)
+
 @Dao
 interface ConvRangeDao {
+    @Query("SELECT clearedUpTo FROM conv_clear_floor_local WHERE ownerUid = :owner AND convId = :convId")
+    suspend fun clearFloor(owner: String, convId: String): Long?
+
+    @Query("INSERT OR IGNORE INTO conv_clear_floor_local (ownerUid, convId, clearedUpTo) VALUES (:owner, :convId, 0)")
+    suspend fun ensureClearFloor(owner: String, convId: String)
+
+    @Query("UPDATE conv_clear_floor_local SET clearedUpTo = :seq WHERE ownerUid = :owner AND convId = :convId AND clearedUpTo < :seq")
+    suspend fun raiseClearFloor(owner: String, convId: String, seq: Long)
+
+    @Query("DELETE FROM conv_clear_floor_local WHERE ownerUid = :owner")
+    suspend fun clearFloorAccount(owner: String)
+
     @Query("SELECT * FROM conv_range_local WHERE ownerUid = :owner AND convId = :convId ORDER BY lo ASC")
     suspend fun forConv(owner: String, convId: String): List<ConvRangeEntity>
 

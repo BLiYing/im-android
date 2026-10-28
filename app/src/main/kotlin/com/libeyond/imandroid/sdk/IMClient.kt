@@ -555,6 +555,7 @@ class IMClient(
                 db.pending().clearAccount(owner)
                 db.conversations().clearAccount(owner)
                 db.ranges().clearAccount(owner)
+                db.ranges().clearFloorAccount(owner)
                 db.friendLocal().clear(owner)
                 db.groupLocal().clear(owner)
             }

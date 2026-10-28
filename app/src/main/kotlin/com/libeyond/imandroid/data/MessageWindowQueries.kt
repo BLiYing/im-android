@@ -34,7 +34,7 @@ suspend fun MessageRepository.windowAround(
     // **只取目标所在的那一段**：本地有缺口时，「前后各一页」不能把缺口另一侧的旧岛拼进来（C3，段内取）；
     // 本机清空位点以下的也不要
     val seg = SyncRanges.rangeContaining(ranges.ranges(owner, convId), m.convSeq)
-    val from = maxOf(seg?.lo ?: 0L, ChatTailPlan.visibleFrom(conversations.byId(owner, convId)?.clearedUpTo ?: 0L))
+    val from = maxOf(seg?.lo ?: 0L, ChatTailPlan.visibleFrom(clearedUpTo(owner, convId)))
     return ChatWindows.boundsOf(
         before = messages.pointsBefore(owner, convId, m.timestamp, m.convSeq, half).filter { it.convSeq >= from },
         atOrAfter = messages.pointsAtOrAfter(owner, convId, m.timestamp, m.convSeq, half)
@@ -56,7 +56,7 @@ suspend fun MessageRepository.extendWindowOlder(
 ): ChatWindow.Anchored {
     // 同上：只在窗口下沿所在的那一段里往上取，不跨缺口、不越过可见起点；取不到就原样返回，调用方据此去问服务端
     val seg = SyncRanges.rangeContaining(ranges.ranges(owner, convId), window.loSeq)
-    val from = maxOf(seg?.lo ?: 0L, ChatTailPlan.visibleFrom(conversations.byId(owner, convId)?.clearedUpTo ?: 0L, historyFloor))
+    val from = maxOf(seg?.lo ?: 0L, ChatTailPlan.visibleFrom(clearedUpTo(owner, convId), historyFloor))
     val older = messages.pointsBefore(owner, convId, window.loTs, window.loSeq, page).filter { it.convSeq >= from }
     val lo = older.lastOrNull() ?: return window
     return window.copy(loTs = lo.timestamp, loSeq = lo.convSeq)
@@ -174,7 +174,7 @@ suspend fun MessageRepository.isLocalComplete(owner: String, convId: String, his
     return ChatSearch.isComplete(
         ranges = ranges.ranges(owner, convId),
         tip = ChatTailPlan.tip(c?.headConvSeq ?: 0L, c?.lastConvSeq ?: 0L),
-        visibleFrom = ChatTailPlan.visibleFrom(c?.clearedUpTo ?: 0L, historyFloor),
+        visibleFrom = ChatTailPlan.visibleFrom(clearedUpTo(owner, convId), historyFloor),
     )
 }
 
@@ -192,6 +192,9 @@ suspend fun MessageRepository.conversationMediaInSegment(owner: String, convId: 
 /** [conversationMediaInSegment] 的结果：本段媒体（升序）+ 段下沿 [lo] / 上沿 [hi]（点中的不在任何段内时都是 0）。 */
 data class SegmentMedia(val items: List<MessageEntity>, val lo: Long, val hi: Long)
 
-/** 本机清空位点（设计 §6.7）；服务端的搜索 / 日历 / 媒体结果要用它滤掉位点以内的条目。没有会话行 = 0。 */
+/**
+ * 本机清空位点（设计 §6.7）；服务端的搜索 / 日历 / 媒体结果要用它滤掉位点以内的条目。
+ * = max(会话行位点, 独立位点表)——表在行被删（删除会话）后仍在，见 [ConvRanges.clearFloor]。没有行也没有表项 = 0。
+ */
 suspend fun MessageRepository.clearedUpTo(owner: String, convId: String): Long =
-    conversations.byId(owner, convId)?.clearedUpTo ?: 0L
+    ClearFloor.effective(conversations.byId(owner, convId)?.clearedUpTo ?: 0L, ranges.clearFloor(owner, convId))

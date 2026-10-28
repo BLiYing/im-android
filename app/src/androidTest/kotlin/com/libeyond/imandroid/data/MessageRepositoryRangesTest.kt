@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -194,6 +196,74 @@ class MessageRepositoryRangesTest {
         assertEquals(listOf(6L, 7L, 8L), db.messages().latestWindow(me, conv, 10).map { it.convSeq }.sorted())
     }
 
+    /** 会话列表某项 cleared_at 高过本机位点（别端删过 / 重装）：清消息与区间、位点与游标落到 cleared_at，且整行重写后仍在。 */
+    @Test
+    fun listClearedAtAboveLocalFloorRunsClearRoutine() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3, 4, 5), covered = 5)
+        val realigned = repo.applyConversationList(me, listOf(ConversationSummary(convId = conv, isGroup = true, latestConvSeq = 9, clearedAt = 7)))
+        assertEquals(listOf(conv), realigned)
+        assertEquals(0, db.messages().countIn(me, conv))
+        assertEquals(emptyList<SeqRange>(), ranges())
+        val c = db.conversations().byId(me, conv)!!
+        assertEquals(7L, c.clearedUpTo)
+        assertEquals(7L, c.syncedConvSeq)
+        // 同一 cleared_at 再来一次：不再重跑
+        assertEquals(emptyList<String>(), repo.applyConversationList(me, listOf(ConversationSummary(convId = conv, isGroup = true, latestConvSeq = 9, clearedAt = 7))))
+    }
+
+    /** 位点存独立表、不随行删：删除后在途的旧 sync 页写不进 ≤ 位点的行；新消息造的壳行带着位点与游标起步。 */
+    @Test
+    fun deleteKeepsFloorInSeparateTableSoOldPageAndShellRowRespectIt() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        repo.deleteConversationLocal(me, conv, clearedAt = 3)
+        assertEquals(null, db.conversations().byId(me, conv))
+        assertEquals(3L, repo.ranges.clearFloor(me, conv))
+        repo.onSyncPage(me, conv, page(2, 3, 4), covered = 4) // 删除瞬间在途的旧页
+        assertEquals(listOf(4L), db.messages().latestWindow(me, conv, 10).map { it.convSeq })
+        repo.onIncoming(me, md(5), bumpUnread = true) // 复现：壳行
+        val c = db.conversations().byId(me, conv)!!
+        assertEquals(3L, c.clearedUpTo)
+        assertEquals(true, c.syncedConvSeq >= 3L)
+        assertEquals(3L, repo.clearedUpTo(me, conv))
+    }
+
+    /** 与 iOS / Web 同口径：只清 ≤ cleared_at，位点之上已落库的消息保留，区间裁到 floor+1 起，游标不被拉低。 */
+    @Test
+    fun listClearedAtKeepsNewerRowsAndClipsRanges() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3, 4, 5), covered = 5)
+        repo.applyConversationList(me, listOf(ConversationSummary(convId = conv, isGroup = true, latestConvSeq = 5, clearedAt = 3)))
+        assertEquals(listOf(4L, 5L), db.messages().latestWindow(me, conv, 10).map { it.convSeq }.sorted())
+        assertEquals(listOf(SeqRange(4, 5)), ranges())
+        val c = db.conversations().byId(me, conv)!!
+        assertEquals(3L, c.clearedUpTo)
+        assertEquals(5L, c.syncedConvSeq)
+    }
+
+    /** 迟到的 conv_update(delete) 回声：会话已被新消息复现（位点之上有消息）→ 清位点以内，但不移行、不动新消息。 */
+    @Test
+    fun lateDeleteEchoDoesNotRemoveRevivedConversation() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3, 4), covered = 4)
+        repo.applyConversationList(me, listOf(ConversationSummary(convId = conv, isGroup = true, latestConvSeq = 4)))
+        repo.deleteConversationLocal(me, conv, clearedAt = 3)
+        val c = db.conversations().byId(me, conv)!!
+        assertEquals(3L, c.clearedUpTo)
+        assertEquals(listOf(4L), db.messages().latestWindow(me, conv, 10).map { it.convSeq })
+    }
+
+    /** 删除会话：清消息 + 区间 + 移行；复现时列表的 cleared_at 把位点恢复，位点以内的旧页不再落库。 */
+    @Test
+    fun deleteConversationClearsThenReappearanceRestoresFloorFromList() = runBlocking {
+        repo.onSyncPage(me, conv, page(1, 2, 3), covered = 3)
+        repo.deleteConversationLocal(me, conv, clearedAt = 3)
+        assertEquals(null, db.conversations().byId(me, conv))
+        assertEquals(0, db.messages().countIn(me, conv))
+        assertEquals(emptyList<SeqRange>(), ranges())
+        repo.applyConversationList(me, listOf(ConversationSummary(convId = conv, isGroup = true, latestConvSeq = 4, clearedAt = 3)))
+        assertEquals(3L, db.conversations().byId(me, conv)!!.clearedUpTo)
+        repo.onWindowPage(me, conv, page(2, 3, 4))
+        assertEquals(listOf(4L), db.messages().latestWindow(me, conv, 10).map { it.convSeq })
+    }
+
     /** 会话列表刷新是整行重写——位点是纯本机状态，不能被刷掉（否则清掉的历史下次进会话又拉回来）。 */
     @Test
     fun conversationListRefreshKeepsClearedFloor() = runBlocking {
@@ -219,6 +289,13 @@ class MessageRepositoryRangesTest {
         repo.onIncoming(me, MessageData(convId = conv, convSeq = 11, from = "peer", contentType = ContentType.MSG_OP, content = "{}"), bumpUnread = false)
         repo.onIncoming(me, md(12), bumpUnread = false)
         assertEquals(listOf(SeqRange(1, 12)), ranges())
+    }
+
+    /** 删过的群 / 从「我的群组」进来发的第一条：ack 造出没标题的壳，必须告诉调用方去拉列表补名字（否则显示「未命名群聊」）。 */
+    @Test
+    fun ackOnUnknownConversationReportsStubSoCallerRefreshesTitle() = runBlocking {
+        assertTrue(repo.onAck(me, AckData(clientMsgId = "c9", serverMsgId = "s9", convId = "g_unknown_stub", convSeq = 1, timestamp = 1)))
+        assertFalse(repo.onAck(me, AckData(clientMsgId = "c10", serverMsgId = "s10", convId = "g_unknown_stub", convSeq = 2, timestamp = 2)))
     }
 
     @Test

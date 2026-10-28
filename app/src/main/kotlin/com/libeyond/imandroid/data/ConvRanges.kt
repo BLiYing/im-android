@@ -38,7 +38,29 @@ class ConvRanges(private val dao: ConvRangeDao) {
         dao.clampHi(owner, convId, head)
     }
 
+    /** 清到位点但保留其上的消息：区间清单裁到 `floor+1` 起（[SyncRanges.clipAfter]），与消息删除同一事务。 */
+    suspend fun clipAfter(owner: String, convId: String, floor: Long) {
+        val cur = ranges(owner, convId)
+        val next = SyncRanges.clipAfter(cur, floor)
+        if (next == cur) return
+        dao.clearConv(owner, convId)
+        next.forEach { dao.insert(ConvRangeEntity(owner, convId, it.lo, it.hi)) }
+    }
+
     suspend fun clearConv(owner: String, convId: String) = dao.clearConv(owner, convId)
 
-    suspend fun clearAccount(owner: String) = dao.clearAccount(owner)
+    /** 独立位点表里的位点（0 = 无）。行删了仍在。 */
+    suspend fun clearFloor(owner: String, convId: String): Long = dao.clearFloor(owner, convId) ?: 0L
+
+    /** 只增不减地抬位点；调用方包在事务里。 */
+    suspend fun raiseClearFloor(owner: String, convId: String, seq: Long) {
+        if (seq <= 0) return
+        dao.ensureClearFloor(owner, convId)
+        dao.raiseClearFloor(owner, convId, seq)
+    }
+
+    suspend fun clearAccount(owner: String) {
+        dao.clearAccount(owner)
+        dao.clearFloorAccount(owner)
+    }
 }

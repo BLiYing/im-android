@@ -220,7 +220,7 @@ class MessageRepository(
         // 用户清掉的那一段不能被 sync / window 又带回来（只在有消息要落时才读这一行，空页不多花一次查询）
         if (plain.isNotEmpty()) {
             val conv = conversations.byId(owner, convId)
-            val floor = conv?.clearedUpTo ?: 0L
+            val floor = ClearFloor.effective(conv?.clearedUpTo ?: 0L, ranges.clearFloor(owner, convId))
             if (floor > 0) {
                 val kept = ClearFloor.dropCleared(plain, floor)
                 plain.clear()
@@ -323,7 +323,11 @@ class MessageRepository(
         list: List<ConversationSummary>,
         presence: PresenceStore? = null,
         groupIdsBeforeRequest: Set<String>? = null,
-    ) {
+    ): List<String> {
+        // 服务端 cleared_at 高过本机位点（离线 / 重装 / 别端删过）：先跑清除例程，下面整行重写再读到抬高后的位点（§6.7.1）
+        val realigned = list.filter { s ->
+            ClearFloor.listNeedsClear(clearedUpTo(owner, s.convId), s.clearedAt)
+        }.onEach { clearToFloor(owner, it.convId, it.clearedAt) }.map { it.convId }
         list.forEach { s ->
             if (!s.isGroup && s.peer.isNotEmpty()) {
                 presence?.seed(s.peer, s.peerPresence, s.peerOnlineUntil, s.peerLastSeen)
@@ -333,6 +337,7 @@ class MessageRepository(
             // 游标是本地状态，服务端快照里没有——**必须保留原值**，
             // 否则每次刷新会话列表都会把同步进度清零，触发全量重拉。
             val existing = conversations.byId(owner, s.convId)
+            val floor = maxOf(clearedUpTo(owner, s.convId), s.clearedAt) // 行 / 独立表 / 服务端 取大：行被删后复现靠表恢复
             ConversationEntity(
                 ownerUid = owner,
                 convId = s.convId,
@@ -365,7 +370,7 @@ class MessageRepository(
                 mentionUnread = s.mentionUnread,
                 readSeq = s.readSeq,
                 peerReadSeq = ReadTick.seed(s.isGroup, existing?.peerReadSeq ?: 0L, s.peerReadSeq, s.groupReadSeq),
-                syncedConvSeq = existing?.syncedConvSeq ?: 0,
+                syncedConvSeq = maxOf(existing?.syncedConvSeq ?: 0, floor), // 游标不低于位点：位点以内永不再要
                 pinnedAt = s.pinnedAt,
                 muted = s.muted,
                 muteUntil = s.muteUntil,
@@ -375,7 +380,8 @@ class MessageRepository(
                 isSuper = s.isSuper,
                 // head 只增不减：列表的 latest_conv_seq 与本地已记的取大（sync 的 too_long 也往这写）
                 headConvSeq = maxOf(existing?.headConvSeq ?: 0L, s.latestConvSeq),
-                clearedUpTo = existing?.clearedUpTo ?: 0L, // 纯本机状态，服务端快照里没有——整行重写会把它清零
+                // 位点 = max(本机, 服务端 cleared_at)：整行重写不能把本机位点清零；行被删后复现（existing==null）靠 cleared_at 恢复
+                clearedUpTo = floor,
             ).keepNewerLocalTail(existing).keepAutoDeleteTail(existing, System.currentTimeMillis())
         }
         conversations.upsert(rows)
@@ -385,7 +391,8 @@ class MessageRepository(
             StaleGroupRows.of(conversations.all(owner), list.mapTo(HashSet()) { it.convId }, groupIdsBeforeRequest)
                 .forEach { removeConversation(owner, it) }
         }
-        log.i("conversations_applied", "count" to rows.size)
+        log.i("conversations_applied", "count" to rows.size, "realigned" to realigned.size)
+        return realigned
     }
 
     /** 本机已有的群行 id（发会话列表请求**之前**取，供 [applyConversationList] 判陈旧用）。 */
@@ -466,7 +473,7 @@ class MessageRepository(
         // delete 帧（本端 DELETE 的回声 / 别的设备删了）：整行移走。此前对所有帧都「读行→copy→upsert」，
         // 回声帧比 removeConversation 慢半拍时把刚删的行原样写回（OPPO 复现：行不消失、重启才没）。
         if (u.action == "delete") {
-            removeConversation(owner, u.convId)
+            deleteConversationLocal(owner, u.convId, u.clearedAt)
         } else {
             sweep = applySettingsUpdate(owner, u) // MessageRepositoryAutoDelete.kt
         }
@@ -489,6 +496,11 @@ class MessageRepository(
     suspend fun applyMsgHidden(owner: String, convId: String, convSeq: Long) {
         messages.delete(owner, convId, convSeq)
         log.i("msg_hidden_applied", "convId" to convId, "seq" to convSeq)
+    }
+
+    /** 「删除会话」＝清到位点 + 移走会话行（§6.7.1）。[clearedAt] 取 DELETE 回包 / `conv_update(delete)` 的 `cleared_at`，缺则本机 head。 */
+    suspend fun deleteConversationLocal(owner: String, convId: String, clearedAt: Long) {
+        clearToFloor(owner, convId, clearedAt, removeRow = true)
     }
 
     /**
@@ -517,24 +529,8 @@ class MessageRepository(
     }
 
     suspend fun clearConversation(owner: String, convId: String) {
-        // 区间清单必须**连消息一起清**（三端契约，localStore.contract.ts 有断言）：只清消息的话，清单仍宣称
-        // 「这段齐全」、手里却一条没有——表现是会话空白且上滑/点↓都不自愈。游标 syncedConvSeq 照旧保留。
-        val conv = conversations.byId(owner, convId)
-        // 位点 = 本机所知的最新位置；之后 ≤ 它的消息不再落库、不算缺口（见 [ClearFloor]）。
-        // 游标一并推到位点：那段是用户主动不要的，sync 不必再从旧游标重拉一遍再丢掉。
-        val floor = ClearFloor.floorAtClear(
-            head = conv?.headConvSeq ?: 0, lastConvSeq = conv?.lastConvSeq ?: 0,
-            synced = conv?.syncedConvSeq ?: 0, maxLocalSeq = messages.maxConvSeq(owner, convId) ?: 0,
-        )
-        tx.run {
-            messages.clearConv(owner, convId)
-            ranges.clearConv(owner, convId)
-            if (floor > 0) {
-                conversations.raiseClearedUpTo(owner, convId, floor)
-                conversations.setSyncedConvSeq(owner, convId, maxOf(conv?.syncedConvSeq ?: 0L, floor))
-            }
-        }
-        pending.clearConv(owner, convId)
+        // 区间清单必须连消息一起清、位点与游标一并推——全在共用例程 [clearToFloor]（§6.7 / §6.7.1）。
+        clearToFloor(owner, convId, serverClearedAt = 0)
         conversations.byId(owner, convId)?.let {
             conversations.upsert(
                 it.copy(
@@ -576,7 +572,7 @@ class MessageRepository(
         // 本地没有这个会话（对方第一次给我发消息）：先造一行壳。**必须带 peerUid**——
         // 标题此时还不知道（空串），列表行靠 peerUid 去好友表取名；两样都空就一路回退成 convId
         // （`u_1000156391_u_1199353701` 露在列表上，2026-10-02 用户报）。
-        val c = existing ?: newConversationStub(owner, convId)
+        val c = existing ?: newConversationStub(owner, convId).withFloor(ranges.clearFloor(owner, convId))
         conversations.upsert(
             c.copy(
                 lastContent = MessagePreview.of(row.contentType, row.content, row.caption, viewerIsSender = row.sender == owner),

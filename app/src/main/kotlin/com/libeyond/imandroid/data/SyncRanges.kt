@@ -41,6 +41,10 @@ object SyncRanges {
         return normalize(ranges + SeqRange(maxOf(1L, lo), hi))
     }
 
+    /** 清到位点后的清单：整段在 [floor] 以内的丢掉，跨过的从 `floor+1` 起（保留位点之上已落库的消息所对应的区间）。 */
+    fun clipAfter(ranges: List<SeqRange>, floor: Long): List<SeqRange> =
+        if (floor <= 0) ranges else ranges.filter { it.hi > floor }.map { if (it.lo <= floor) SeqRange(floor + 1, it.hi) else it }
+
     fun hasSeq(ranges: List<SeqRange>, seq: Long): Boolean = ranges.any { seq in it.lo..it.hi }
 
     /** 整段 `[lo, hi]` 是否被**同一个**区间完整覆盖（跨两段说明中间有缺口，不算）。 */

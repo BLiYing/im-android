@@ -165,13 +165,16 @@ internal val cancelledSends: MutableSet<String> = java.util.concurrent.Concurren
  * **正文要从 pending 里取**——ack 只回 id/seq/时间戳，不回带正文（PROTOCOL §4.2）。
  * pending 已被清掉（重复 ack / 进程重启后重发）时只能落一条没正文的骨架，
  * 靠后续 sync 用同一 conv_seq 幂等补全。
+ *
+ * @return 本地原先没有这个会话（已删除的会话 / 从「我的群组」直接进来发的第一条），刚造了一行**没有标题的壳**——
+ *   调用方要拉一次会话列表补名字，否则群会话显示「未命名群聊」（与 [onIncoming] 同款契约）。
  */
-suspend fun MessageRepository.onAck(owner: String, ack: AckData) {
+suspend fun MessageRepository.onAck(owner: String, ack: AckData): Boolean {
     val cached = pending.byClientId(owner, ack.clientMsgId)
     // 用户取消了这条（帧已发出、ack 在路上）：不落骨架行——那会是一个空白文本气泡 + 错的会话预览，等 sync 补真身
     if (cached == null && cancelledSends.remove(ack.clientMsgId)) {
         log.i("msg_ack_after_cancel", "cid" to ack.clientMsgId, "seq" to ack.convSeq)
-        return
+        return false
     }
     if (cached == null) {
         log.w("msg_ack_without_pending", "cid" to ack.clientMsgId, "seq" to ack.convSeq)
@@ -198,8 +201,9 @@ suspend fun MessageRepository.onAck(owner: String, ack: AckData) {
         advanceSyncedIfNext(owner, ack.convId, ack.convSeq)
     }
     pending.remove(owner, ack.clientMsgId)
-    bumpConversation(owner, ack.convId, row)
+    val createdStub = bumpConversation(owner, ack.convId, row)
     log.i("msg_acked", "convId" to ack.convId, "seq" to ack.convSeq, "cid" to ack.clientMsgId)
+    return createdStub
 }
 
 /**

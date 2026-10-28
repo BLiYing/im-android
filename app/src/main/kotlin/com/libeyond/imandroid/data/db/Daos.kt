@@ -293,6 +293,10 @@ interface MessageDao {
     @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId")
     suspend fun clearConv(owner: String, convId: String)
 
+    /** 清到位点：只删 `conv_seq <= :seq` 的，位点之上的新消息保留（OFFLINE_BACKLOG_DESIGN §6.7.1）。 */
+    @Query("DELETE FROM message WHERE ownerUid = :owner AND convId = :convId AND convSeq <= :seq")
+    suspend fun deleteUpTo(owner: String, convId: String, seq: Long)
+
     @Query("DELETE FROM message WHERE ownerUid = :owner")
     suspend fun clearAccount(owner: String)
 
@@ -409,6 +413,10 @@ interface ConversationDao {
     /** 游标推进：**只由 [com.libeyond.imandroid.data.SyncCursorRule] 算出的值调用**。 */
     @Query("UPDATE conversation SET syncedConvSeq = :seq WHERE ownerUid = :owner AND convId = :convId")
     suspend fun setSyncedConvSeq(owner: String, convId: String, seq: Long)
+
+    /** 游标只增不减地抬到 [seq]（清到位点用：位点之上若还留着消息，游标不能被拉低）。 */
+    @Query("UPDATE conversation SET syncedConvSeq = :seq WHERE ownerUid = :owner AND convId = :convId AND syncedConvSeq < :seq")
+    suspend fun raiseSyncedConvSeq(owner: String, convId: String, seq: Long)
 
     /**
      * 服务端最新位点**只增不减**（[ConversationEntity.headConvSeq]）。会话行还没建时影响 0 行——
