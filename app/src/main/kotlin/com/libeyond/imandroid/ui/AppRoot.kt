@@ -102,6 +102,7 @@ fun AppRoot(client: IMClient) {
     // —— 被踢 / 被封：回登录页 ——
     LaunchedEffect(Unit) {
         client.sessionEnded.collect { reason ->
+            client.exportDownloads.cancel() // 被踢 / 被封 / 过期不走 logout()：在途导出下载与结果态不能带进下一个账号
             if (accountDeleted) return@collect
             endedNotice = when (reason) {
                 SessionEndReason.Revoked -> Str.s(R.string.login_revoked_notice)

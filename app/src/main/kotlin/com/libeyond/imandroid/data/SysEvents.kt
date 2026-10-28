@@ -127,8 +127,8 @@ object SysEvents {
         }
 
     /**
-     * 系统通知单聊（新设备登录 / 改密 / 被踢下线）→ 多行文本，行结构对齐服务端 `buildXxxNoticeText`。
-     * 非这三个事件 → null，调用方显示 `content`。
+     * 系统通知单聊（新设备登录 / 改密 / 被踢下线 / 导出完成）→ 多行文本，行结构对齐服务端 `buildXxxNoticeText`。
+     * 非这几个事件 → null，调用方显示 `content`。
      */
     fun noticeText(event: String?, argsJson: String?): String? {
         val a = parseArgs(argsJson)
@@ -175,6 +175,18 @@ object SysEvents {
                     }
                 )
                 add(Str.s(R.string.sys_notice_device_kicked_footer))
+            }
+            "export_ready" -> buildList {
+                add(Str.s(R.string.sys_notice_export_ready_headline))
+                add(
+                    Str.s(
+                        R.string.sys_notice_export_ready_summary,
+                        MediaUrl.formatSize(arg("size_bytes").toLongOrNull() ?: 0L).ifEmpty { "0 B" },
+                        arg("conv_count").toIntOrNull() ?: 0,
+                        arg("msg_count").toLongOrNull() ?: 0L,
+                    )
+                )
+                if (arg("expires_at").isNotEmpty()) add(Str.s(R.string.sys_notice_export_ready_footer, formatAt(arg("expires_at"))))
             }
             else -> return null
         }

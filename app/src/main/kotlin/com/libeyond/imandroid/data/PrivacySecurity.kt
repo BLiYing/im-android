@@ -20,7 +20,7 @@ enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, Las
 enum class PrivacyTint { Red, Blue, Gray, Purple, Teal, Orange, Green, Yellow, Pink }
 
 /** 点一行做什么。 */
-enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, ComingSoon }
+enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, ExportData, ComingSoon }
 
 data class PrivacyRow(
     val title: String,
@@ -89,7 +89,7 @@ object PrivacySecurity {
             header = Str.s(R.string.ps_section_data),
             rows = listOf(
                 PrivacyRow(Str.s(R.string.ps_row_clear_all_chats), PrivacyIcon.Trash, PrivacyTint.Gray),
-                PrivacyRow(Str.s(R.string.ps_row_export_data), PrivacyIcon.Export, PrivacyTint.Blue),
+                PrivacyRow(Str.s(R.string.ps_row_export_data), PrivacyIcon.Export, PrivacyTint.Blue, action = PrivacyAction.ExportData),
             ),
         ),
     )

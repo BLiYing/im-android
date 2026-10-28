@@ -112,6 +112,16 @@ class SysEventsTest {
     }
 
     @Test
+    fun `导出完成通知三行 缺字段不崩`() {
+        val args = SysEvents.encodeArgs(mapOf("size_bytes" to "5242880", "conv_count" to "3", "msg_count" to "120", "expires_at" to "bad"))
+        val lines = SysEvents.noticeText("export_ready", args)!!.lines()
+        assertEquals("你的数据已准备好，可在「隐私与安全 › 导出我的数据」中下载。", lines[0])
+        assertEquals("· 5.0 MB · 3 个会话 · 120 条消息", lines[1])
+        assertEquals("文件将于 bad 删除。", lines[2])
+        assertEquals(2, SysEvents.noticeText("export_ready", null)!!.lines().size)
+    }
+
+    @Test
     fun `RFC3339 时间按本地日期格式化`() {
         val text = SysEvents.noticeText("password_changed", SysEvents.encodeArgs(mapOf("at" to "2026-09-27T08:30:00Z")))!!
         // 时区随机器，只钉年份与"已格式化"（不再是原串）

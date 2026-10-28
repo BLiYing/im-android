@@ -66,7 +66,13 @@ class PrivacySecurityTest {
         val who = groups[3].rows
         assertEquals(listOf(PrivacyAction.ComingSoon, PrivacyAction.LastSeen, PrivacyAction.Avatar, PrivacyAction.ComingSoon, PrivacyAction.ComingSoon), who.map { it.action })
         assertTrue(who.filter { it.action != PrivacyAction.ComingSoon }.none { it.isPlaceholder })
-        val rest = groups.drop(1).flatMap { it.rows }.filter { it !== autoDelete && it.action != PrivacyAction.LastSeen && it.action != PrivacyAction.Avatar }
+        // 数据组：「清除所有对话」仍灰置，「导出我的数据」是活行
+        val data = groups[4].rows
+        assertEquals(listOf(PrivacyAction.ComingSoon, PrivacyAction.ExportData), data.map { it.action })
+        assertFalse(data[1].isPlaceholder)
+        val rest = groups.drop(1).flatMap { it.rows }.filter {
+            it !== autoDelete && it !== data[1] && it.action != PrivacyAction.LastSeen && it.action != PrivacyAction.Avatar
+        }
         assertTrue(rest.all { it.isPlaceholder && it.action == PrivacyAction.ComingSoon })
     }
 

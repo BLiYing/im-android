@@ -60,6 +60,7 @@ fun PrivacySecurityScreen(
     avatarLabel: String,
     onOpenLastSeen: () -> Unit,
     onOpenAvatar: () -> Unit,
+    onOpenExportData: () -> Unit,
     onComingSoon: (String) -> Unit,
 ) {
     val c = IMTheme.colors
@@ -86,6 +87,7 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.AutoDelete -> onOpenAutoDelete
                                 PrivacyAction.LastSeen -> onOpenLastSeen
                                 PrivacyAction.Avatar -> onOpenAvatar
+                                PrivacyAction.ExportData -> onOpenExportData
                                 PrivacyAction.ComingSoon -> soon
                             },
                             icon = iconOf(row.icon),

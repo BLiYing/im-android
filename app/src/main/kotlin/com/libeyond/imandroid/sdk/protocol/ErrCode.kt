@@ -34,6 +34,10 @@ object ErrCode {
      * 见 PROTOCOL §6.16（`200005 AccountPendingDeletion`，`data.delete_at` 毫秒）。
      */
     const val ACCOUNT_PENDING_DELETION = 200005
+    /** 已有进行中的数据导出任务（DATA_EXPORT_DESIGN §2）。 */
+    const val EXPORT_BUSY = 200010
+    /** 成功导出后 24 小时内再次发起；回包 `data.retry_after_sec`。 */
+    const val EXPORT_COOLDOWN = 200011
 
     // --- 好友 2001xx ---
     const val FRIEND_ALREADY_FRIENDS = 200101

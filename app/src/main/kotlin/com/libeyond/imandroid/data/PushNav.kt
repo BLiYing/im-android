@@ -75,4 +75,6 @@ enum class MePage(val depth: Int) {
     Folders(1),
     /** 注销账号二级页：从「我的资料」只读态底部进入，所以比 [Profile] 深一层；返回回资料页。 */
     DeleteAccount(2),
+    /** 导出我的数据：隐私与安全 ▸ 数据 进入，比 [Privacy] 深一层；返回回隐私与安全页。 */
+    ExportData(2),
 }

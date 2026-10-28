@@ -5,6 +5,10 @@ import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -116,6 +120,56 @@ class HttpClient(
         env.data
     }
 
+    /**
+     * 流式下载（导出 ZIP）：把响应体逐块写进 [out]，不把整个文件读进内存。
+     * [pathOrUrl] 是服务端回的相对路径（含一次性 token 查询串，已自带鉴权，故不再加 Authorization）。
+     * 日志只记不带查询串的路径（token 不落日志）。
+     *
+     * [onProgress] 每写一块回调（已写字节, Content-Length；<=0 = 未知），调用方自行节流。
+     * @return 写入字节数。
+     * @throws ApiException 传输失败 / 非 2xx（[ApiException.TRANSPORT]，`httpStatus` 带状态码）。
+     */
+    suspend fun download(pathOrUrl: String, out: java.io.OutputStream, onProgress: (done: Long, total: Long) -> Unit = { _, _ -> }): Long = withContext(Dispatchers.IO) {
+        val url = if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) pathOrUrl
+        else "${baseUrl()}${if (pathOrUrl.startsWith("/")) pathOrUrl else "/$pathOrUrl"}"
+        val logPath = pathOrUrl.substringBefore('?')
+        val requestId = newRequestId()
+        val req = try {
+            Request.Builder().url(url).header(HEADER_REQUEST_ID, requestId).get().build()
+        } catch (e: IllegalArgumentException) {
+            throw ApiException(ApiException.TRANSPORT, "下载地址无效", requestId, cause = e)
+        }
+        val call = ok.newCall(req)
+        try {
+            // 阻塞读不响应协程取消：旁路协程在取消时 Call.cancel()，让 read 立刻抛 IOException，不等 30s 读超时。
+            coroutineScope {
+                val canceller = launch { try { awaitCancellation() } finally { call.cancel() } }
+                try {
+                    call.execute().use { resp -> readDownload(resp, out, logPath, requestId, onProgress) }
+                } finally {
+                    canceller.cancel()
+                }
+            }
+        } catch (e: IOException) {
+            ensureActive() // 因取消而断开：按取消处理，不当作传输失败
+            log.w("http_transport_failed", "method" to "GET", "path" to logPath,
+                "reqId" to requestId, "err" to e.javaClass.simpleName)
+            throw ApiException(ApiException.TRANSPORT, e.message ?: "网络请求失败", requestId, cause = e)
+        }
+    }
+
+    private fun readDownload(resp: okhttp3.Response, out: java.io.OutputStream, logPath: String, requestId: String, onProgress: (Long, Long) -> Unit): Long {
+        if (!resp.isSuccessful) {
+            log.w("http_download_status", "path" to logPath, "http" to resp.code, "reqId" to requestId)
+            throw ApiException(ApiException.TRANSPORT, "下载失败（HTTP ${resp.code}）", requestId, resp.code)
+        }
+        val body = resp.body ?: throw ApiException(ApiException.TRANSPORT, "下载响应为空", requestId, resp.code)
+        val total = body.byteStream().use { input -> body.contentLength().let { len -> copyVerified(input, out, len, { done -> onProgress(done, len) }) { } } }
+        out.flush()
+        log.d("http_download_ok", "path" to logPath, "bytes" to total, "reqId" to requestId)
+        return total
+    }
+
     private fun buildUrl(path: String, query: Map<String, String>): String {
         val base = "${baseUrl()}${if (path.startsWith("/")) path else "/$path"}"
         if (query.isEmpty()) return base
@@ -127,6 +181,26 @@ class HttpClient(
 
     companion object {
         const val HEADER_REQUEST_ID = "X-Request-ID"
+        private const val DOWNLOAD_BUF = 64 * 1024
+
+        /**
+         * 把 [input] 拷到 [out]；每块先调 [onChunk]（协程取消点）。[expected] >= 0（Content-Length）时，
+         * 实际字节数不符抛 [IOException]——半截文件不能当成功。
+         */
+        internal fun copyVerified(input: java.io.InputStream, out: java.io.OutputStream, expected: Long, onBytes: (Long) -> Unit = {}, onChunk: () -> Unit): Long {
+            val buf = ByteArray(DOWNLOAD_BUF)
+            var total = 0L
+            while (true) {
+                onChunk()
+                val n = input.read(buf)
+                if (n < 0) break
+                out.write(buf, 0, n)
+                total += n
+                onBytes(total)
+            }
+            if (expected >= 0 && total != expected) throw IOException("下载不完整：$total/$expected")
+            return total
+        }
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
         /** OkHttp 规定必须带请求体的方法；给它们传 null 会当场抛 IllegalArgumentException。 */

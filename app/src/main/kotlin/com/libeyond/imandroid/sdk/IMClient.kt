@@ -65,7 +65,11 @@ import kotlinx.coroutines.flow.SharedFlow
  *
  * **UI 只跟这个类打交道**，不直接摸 OkHttp / SharedPreferences / 协议帧。
  */
-class IMClient(context: Context) {
+class IMClient(
+    context: Context,
+    /** 导出 ZIP 的落地点（SAF 在 data 包里）；测试可换。 */
+    exportSink: com.libeyond.imandroid.data.ExportSink = com.libeyond.imandroid.data.ExportSink(context.applicationContext),
+) {
 
     private val appContext = context.applicationContext
 
@@ -128,6 +132,19 @@ class IMClient(context: Context) {
     /** 注销账号 / 冷静期恢复（PROTOCOL §6.16）。 */
     val account = com.libeyond.imandroid.sdk.api.AccountApi(http)
     val qr = QrApi(http)
+    /** 导出我的数据（DATA_EXPORT_DESIGN §2）。 */
+    val dataExport = com.libeyond.imandroid.sdk.api.ExportApi(http)
+    /** 导出 ZIP 下载：挂在应用作用域，页面旋转 / 离开不中断；取消或退出登录才中断（见 [logout]）。 */
+    val exportDownloads = com.libeyond.imandroid.data.ExportDownloader(
+        scope,
+        run = { target, jobId, report ->
+            val id = jobId ?: dataExport.latest()?.id ?: throw java.io.IOException("no export job")
+            val dl = dataExport.downloadUrl(id)
+            exportSink.write(target) { dataExport.download(dl.url, it, report) }
+        },
+        discard = exportSink::discard,
+        onFailure = { log.w("export_download_failed", "err" to it.javaClass.simpleName) },
+    )
     /** im-rtc（音视频通话）换票：`RtcCall` 用它取接入票，不再本地签调试票。 */
     val rtc = RtcApi(http)
     /** 语音转文字（VOICE_TRANSCRIBE_DESIGN §3.1）：目前只有这一个接口。 */
@@ -509,6 +526,7 @@ class IMClient(context: Context) {
      * 会话标题/头像/消息摘要——`/code-review` 抓出的跨账号横幅泄露（2026-09-29）。
      */
     suspend fun logout() {
+        exportDownloads.cancel() // 退出登录中断导出下载并清半截文件
         socket.disconnect()
         tokens.logout()
         downloads.syncOpenedOwner() // 退出后「看过」回空集，下一个账号不沿用上一个人的

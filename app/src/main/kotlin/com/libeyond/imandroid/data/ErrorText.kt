@@ -20,6 +20,8 @@ object ErrorText {
         ErrCode.USER_NOT_FOUND -> R.string.err_200001
         ErrCode.WRONG_PASSWORD -> R.string.err_200002
         ErrCode.ACCOUNT_BANNED -> R.string.err_200003
+        ErrCode.EXPORT_BUSY -> R.string.err_200010
+        ErrCode.EXPORT_COOLDOWN -> R.string.err_200011
         ErrCode.USER_ALREADY_EXISTS -> R.string.err_200004
         ErrCode.RECIPIENT_NOT_FOUND -> R.string.chat_reject_recipient_deleted
         ErrCode.ACCOUNT_MUTED -> R.string.err_300004

@@ -98,7 +98,12 @@ fun MeHost(
             MePage.Folders -> ChatFoldersHost(client = client, onBack = { page = MePage.List })
             MePage.Devices -> DevicesHost(client = client, onBack = { page = MePage.List })
             MePage.DataStorage -> DataStorageHost(client = client, initialSub = sub, onBack = { page = MePage.List })
-            MePage.Privacy -> PrivacySecurityHost(client = client, initialSub = sub, onBack = { page = MePage.List })
+            MePage.Privacy -> PrivacySecurityHost(
+                client = client, initialSub = sub,
+                onBack = { page = MePage.List },
+                onOpenExportData = { sub = SettingsSub.None; page = MePage.ExportData }, // 清 sub：返回时隐私页回首层，不被深链残留的子页带走
+            )
+            MePage.ExportData -> ExportDataHost(client = client, onBack = { page = MePage.Privacy })
             MePage.Qr -> QrCardHost(client = client, me = me, onBack = { page = MePage.List })
             MePage.ShareCard -> ShareMyCardHost(client = client, me = me, onBack = { page = MePage.List })
             MePage.Language -> LanguageHost(onBack = { page = MePage.List })

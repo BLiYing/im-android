@@ -38,7 +38,13 @@ private data class PasswordForm(val old: String = "", val new: String = "", val 
  * `IMChangePasswordViewController`）。状态与副作用都在这里，三个 Screen 纯展示（CODING_STYLE §7②）。
  */
 @Composable
-fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: SettingsSub = SettingsSub.None) {
+fun PrivacySecurityHost(
+    client: IMClient,
+    onBack: () -> Unit,
+    /** 「导出我的数据」二级页由「我」页路由（`MePage.ExportData`）承载。 */
+    onOpenExportData: () -> Unit,
+    initialSub: SettingsSub = SettingsSub.None,
+) {
     val scope = rememberCoroutineScope()
 
     var page by remember { mutableStateOf((initialSub as? SettingsSub.Privacy)?.page ?: PrivacyPage.Main) }
@@ -175,6 +181,7 @@ fun PrivacySecurityHost(client: IMClient, onBack: () -> Unit, initialSub: Settin
                     avatarLabel = visRev.let { avatarField.committed?.label.orEmpty() },
                     onOpenLastSeen = { lastSeenField.resetShown(); page = PrivacyPage.LastSeen },
                     onOpenAvatar = { avatarField.resetShown(); page = PrivacyPage.Avatar },
+                    onOpenExportData = onOpenExportData,
                     onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                 )
             }
