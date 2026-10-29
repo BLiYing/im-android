@@ -1,20 +1,15 @@
 package com.libeyond.imandroid.sdk.api
 
 import com.libeyond.imandroid.sdk.http.HttpClient
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
-import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 
 /**
  * 本人资料的读写（对齐 iOS `IMHTTPService` 的 myProfile/updateProfile/updateUsername、
  * Web `imSdk.updateProfile`）。读自己用 [ContactApi.me]，写走这里。
  *
  * **昵称与用户名是两个东西、两个接口**：
- *  - 昵称（nickname）随便填，跟 avatar/phone/tags 一起走 `PUT /users/me`；
+ *  - 昵称（nickname）随便填，跟 avatar/phone/bio 一起走 `PUT /users/me`；
  *  - 用户名（username）是公开句柄，别人搜到我、也是登录名，规则严格，
  *    单独走 `POST /users/me/username`。
  */
@@ -29,13 +24,14 @@ class ProfileApi(private val http: HttpClient) {
         nickname: String,
         avatarUrl: String,
         phone: String,
-        tags: List<String>,
+        bio: String,
     ): UserCard {
+        // 不再发 tags：服务端缺省 = 保持原值，发空数组会把老标签清掉（PROFILE_BIO_DESIGN §4.2）
         val body = buildJsonObject {
             put("nickname", nickname)
             put("avatar_url", avatarUrl)
             put("phone", phone)
-            put("tags", tagsElement(tags))
+            put("bio", bio)
         }
         return decode(http.call("PUT", "/api/v1/users/me", body), UserCard.serializer())
     }
@@ -52,7 +48,4 @@ class ProfileApi(private val http: HttpClient) {
             http.call("POST", "/api/v1/users/me/username", buildJsonObject { put("username", username) }),
             UserCard.serializer(),
         )
-
-    private fun tagsElement(tags: List<String>): JsonElement =
-        ProtocolJson.encodeToJsonElement(ListSerializer(String.serializer()), tags)
 }

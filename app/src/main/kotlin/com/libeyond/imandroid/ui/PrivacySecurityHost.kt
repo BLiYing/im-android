@@ -63,11 +63,18 @@ fun PrivacySecurityHost(
     var autoDefault by remember { mutableStateOf<Int?>(null) }
     var autoShown by remember { mutableStateOf<Int?>(null) }
     var autoSaving by remember { mutableStateOf(false) }
-    /** 「谁能看到」两项（同一份 `GET /users/me/privacy`）；`visRev` 只用来在字段变化后触发重组。 */
+    /** 「谁能看到」四项（同一份 `GET /users/me/privacy`）；`visRev` 只用来在字段变化后触发重组。 */
     val lastSeenField = remember { VisibilityField() }
     val avatarField = remember { VisibilityField() }
+    val bioField = remember { VisibilityField() }
+    val phoneField = remember { VisibilityField() }
     var visRev by remember { mutableStateOf(0) }
-    fun fieldOf(k: VisibilityKind) = if (k == VisibilityKind.LastSeen) lastSeenField else avatarField
+    fun fieldOf(k: VisibilityKind) = when (k) {
+        VisibilityKind.LastSeen -> lastSeenField
+        VisibilityKind.Avatar -> avatarField
+        VisibilityKind.Bio -> bioField
+        VisibilityKind.Phone -> phoneField
+    }
 
     suspend fun reloadBlocked() {
         runCatchingCancellable { client.contacts.friends(FriendEntry.BLOCKED) }
@@ -114,6 +121,8 @@ fun PrivacySecurityHost(
                 when (kind) {
                     VisibilityKind.LastSeen -> client.privacy.setLastSeenVisibility(level.wire)
                     VisibilityKind.Avatar -> client.privacy.setAvatarVisibility(level.wire)
+                    VisibilityKind.Bio -> client.privacy.setBioVisibility(level.wire)
+                    VisibilityKind.Phone -> client.privacy.setPhoneVisibility(level.wire)
                 }
             }
             visRev++
@@ -159,11 +168,13 @@ fun PrivacySecurityHost(
     LaunchedEffect(page) { if (page == PrivacyPage.Main || page == PrivacyPage.Blocked) reloadBlocked() }
     // 进隐私页 / 选择页都取最新的账号默认档位（不推帧，别的端改了靠重新进页刷新）；失败保留已有值
     LaunchedEffect(page) {
-        if (page != PrivacyPage.Main && page != PrivacyPage.AutoDelete && page != PrivacyPage.LastSeen && page != PrivacyPage.Avatar) return@LaunchedEffect
+        if (page == PrivacyPage.Blocked || page == PrivacyPage.ChangePassword) return@LaunchedEffect
         runCatchingCancellable { client.privacy.get() }.onSuccess {
             autoDefault = it.autoDeleteDefaultSec; if (!autoSaving) autoShown = it.autoDeleteDefaultSec
             lastSeenField.load(Visibility.parse(it.lastSeenVisibility))
             avatarField.load(Visibility.parse(it.avatarVisibility))
+            bioField.load(Visibility.parse(it.bioVisibility))
+            phoneField.load(Visibility.parse(it.phoneVisibility))
             visRev++
         }
     }
@@ -181,8 +192,12 @@ fun PrivacySecurityHost(
                     onOpenAutoDelete = { autoShown = autoDefault; page = PrivacyPage.AutoDelete },
                     lastSeenLabel = visRev.let { lastSeenField.committed?.label.orEmpty() },
                     avatarLabel = visRev.let { avatarField.committed?.label.orEmpty() },
+                    bioLabel = visRev.let { bioField.committed?.label.orEmpty() },
+                    phoneLabel = visRev.let { phoneField.committed?.label.orEmpty() },
                     onOpenLastSeen = { lastSeenField.resetShown(); page = PrivacyPage.LastSeen },
                     onOpenAvatar = { avatarField.resetShown(); page = PrivacyPage.Avatar },
+                    onOpenBio = { bioField.resetShown(); page = PrivacyPage.Bio },
+                    onOpenPhone = { phoneField.resetShown(); page = PrivacyPage.Phone },
                     onOpenExportData = onOpenExportData,
                     onOpenClearAll = onOpenClearAll,
                     onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
@@ -209,12 +224,27 @@ fun PrivacySecurityHost(
                 )
             }
 
-            PrivacyPage.LastSeen, PrivacyPage.Avatar -> {
-                val kind = if (p == PrivacyPage.LastSeen) VisibilityKind.LastSeen else VisibilityKind.Avatar
+            PrivacyPage.LastSeen, PrivacyPage.Avatar, PrivacyPage.Bio, PrivacyPage.Phone -> {
+                val kind = when (p) {
+                    PrivacyPage.LastSeen -> VisibilityKind.LastSeen
+                    PrivacyPage.Avatar -> VisibilityKind.Avatar
+                    PrivacyPage.Bio -> VisibilityKind.Bio
+                    else -> VisibilityKind.Phone
+                }
                 BackHandler { page = PrivacyPage.Main }
                 VisibilityScreen(
-                    title = stringResource(if (kind == VisibilityKind.LastSeen) R.string.ps_row_last_seen else R.string.ps_row_avatar),
-                    footer = stringResource(if (kind == VisibilityKind.LastSeen) R.string.ps_visibility_last_seen_footer else R.string.ps_visibility_avatar_footer),
+                    title = stringResource(when (kind) {
+                        VisibilityKind.LastSeen -> R.string.ps_row_last_seen
+                        VisibilityKind.Avatar -> R.string.ps_row_avatar
+                        VisibilityKind.Bio -> R.string.ps_row_bio
+                        VisibilityKind.Phone -> R.string.ps_row_phone_number
+                    }),
+                    footer = stringResource(when (kind) {
+                        VisibilityKind.LastSeen -> R.string.ps_visibility_last_seen_footer
+                        VisibilityKind.Avatar -> R.string.ps_visibility_avatar_footer
+                        VisibilityKind.Bio -> R.string.ps_visibility_bio_footer
+                        VisibilityKind.Phone -> R.string.ps_visibility_phone_footer
+                    }),
                     current = visRev.let { fieldOf(kind).shown },
                     onSelect = { saveVisibility(kind, it) },
                     onBack = { page = PrivacyPage.Main },

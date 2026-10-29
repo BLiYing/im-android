@@ -70,6 +70,11 @@ internal fun ChatDetailScreen(
     subtitle: String = "",
     /** 长按「用户名」行：复制裸句柄（不带 @）并说一声（宿主做剪贴板与吐司）。 */
     onCopyUsername: () -> Unit = {},
+    /** 对端个性签名 / 手机号（对方档位允许且填了才非空；空 = 整行不占位）与长按复制。 */
+    bio: String = "",
+    phone: String = "",
+    onCopyBio: () -> Unit = {},
+    onCopyPhone: () -> Unit = {},
     remark: String,
     pinned: Boolean,
     /** 「消息免打扰」行的右值：`common_off` / `notif_mute_until_*` / `common_permanent`
@@ -203,9 +208,15 @@ internal fun ChatDetailScreen(
             }
             // 已注销对端整块不画（无备注、无用户名；§6.16.3）
             if (showBody && !conv.peerDeleted && !com.libeyond.imandroid.sdk.api.DeletedUser.has(conv.peerUid)) item(key = "info") {
-                // —— 信息（对齐 iOS 的 IMDetailSectionInfo：备注名 + 用户名）——
+                // —— 信息（对齐 iOS 的 IMDetailSectionInfo：个性签名? + 备注名 + 用户名 + 手机号?）——
                 Spacer(Modifier.height(d.cardGap))
                 Card {
+                    if (bio.isNotEmpty()) {
+                        com.libeyond.imandroid.ui.components.IMBioRow(
+                            stringResource(R.string.profile_readonly_bio_label), bio, onLongClick = onCopyBio,
+                        )
+                        Divider()
+                    }
                     Row2(
                         stringResource(R.string.chat_detail_remark_name),
                         remark.ifBlank { stringResource(R.string.settings_info_not_set) },
@@ -214,6 +225,10 @@ internal fun ChatDetailScreen(
                     if (handle.isNotEmpty()) {
                         Divider()
                         Row2(stringResource(R.string.settings_info_username), handle, onLongClick = onCopyUsername)
+                    }
+                    if (phone.isNotEmpty()) {
+                        Divider()
+                        Row2(stringResource(R.string.chat_detail_phone), phone, valueColor = IMTheme.colors.textPrimary, onLongClick = onCopyPhone)
                     }
                 }
             }
@@ -292,8 +307,10 @@ private fun Divider() {
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 private fun Row2(
     label: String, value: String = "", danger: Boolean = false, onClick: (() -> Unit)? = null,
-    /** 长按（「用户名」行复制句柄）。带触觉反馈，与 iOS 轻震一致。 */
+    /** 长按（「用户名」「手机号」行复制）。带触觉反馈，与 iOS 轻震一致。 */
     onLongClick: (() -> Unit)? = null,
+    /** 右值颜色；默认次要色，手机号行用主文字色（不可点，不用 accent）。 */
+    valueColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
 ) {
     val c = IMTheme.colors
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -318,7 +335,8 @@ private fun Row2(
         Text(label, color = if (danger) c.danger else c.textPrimary,
             style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         if (value.isNotEmpty()) {
-            Text(value, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
+            Text(value, color = if (valueColor == androidx.compose.ui.graphics.Color.Unspecified) c.textSecondary else valueColor,
+                style = MaterialTheme.typography.bodyMedium)
         }
         if (onClick != null) Text("  ›", color = c.textTertiary)
     }

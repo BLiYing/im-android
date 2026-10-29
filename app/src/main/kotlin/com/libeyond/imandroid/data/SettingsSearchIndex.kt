@@ -10,7 +10,7 @@ enum class SettingsGlyph { Bookmark, Phone, Laptop, IdCard, Bell, Lock, HardDriv
 enum class SettingsTint { Blue, Green, Orange, Red, Gray, Yellow, Purple, Teal }
 
 /** 「隐私与安全」内部页（原先是 PrivacySecurityHost 的私有枚举，搜索落点需要从外面指定）。 */
-enum class PrivacyPage { Main, Blocked, ChangePassword, AutoDelete, LastSeen, Avatar }
+enum class PrivacyPage { Main, Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone }
 
 /**
  * 二级页内的落点（[SettingsRoute.page] 之下再深的那几层）。`None` = 只开到「我」页的一级页。

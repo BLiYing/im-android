@@ -3,6 +3,7 @@ package com.libeyond.imandroid.ui.components
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -337,5 +338,34 @@ fun IMKeyValueRow(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/**
+ * 个性签名行（资料只读卡 / 对方详情页共用）：上灰小字标签（13sp）、下主文字色值（15sp），
+ * **值不限行数、不截断**；可长按复制整段（[onLongClick] 非空时）。上下 12dp、左右 16dp。
+ */
+@Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun IMBioRow(label: String, value: String, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null) {
+    val c = IMTheme.colors
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (onLongClick == null) Modifier else Modifier.combinedClickable(
+                    onClick = {},
+                    onLongClick = {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        onLongClick()
+                    },
+                ),
+            )
+            .padding(horizontal = IMTheme.dimens.space4, vertical = 12.dp),
+    ) {
+        Text(label, color = c.textSecondary, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(2.dp))
+        Text(value, color = c.textPrimary, style = MaterialTheme.typography.bodyLarge)
     }
 }

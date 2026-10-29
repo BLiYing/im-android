@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -34,7 +35,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import com.composables.icons.lucide.Camera
 import com.composables.icons.lucide.Lucide
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.ProfileEdit
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.IMBioRow
 import com.libeyond.imandroid.ui.components.IMErrorText
 import com.libeyond.imandroid.ui.components.IMKeyValueRow
 import com.libeyond.imandroid.ui.components.IMRowDivider
@@ -50,7 +53,7 @@ data class ProfileForm(
     val nickname: String = "",
     val username: String = "",
     val phone: String = "",
-    val tags: String = "",
+    val bio: String = "",
 )
 
 /**
@@ -59,8 +62,8 @@ data class ProfileForm(
  * 默认**只读**——大头像 + 昵称 + 在线态 + 信息卡；点右上角「编辑」才切到表单。
  * 从「我」页点头像进来的人多数只是想看一眼，直接给一屏输入框既突兀又容易误改。
  *
- * 只读态刻意**不显示内部 ID、不显示标签**：前者是 10 位随机数字，
- * 后者是本项目自有的次要字段，塞进来只会稀释信息密度（与 iOS 同一取舍）。
+ * 只读态刻意**不显示内部 ID**（10 位随机数字）；标签已被个性签名取代（PROFILE_BIO_DESIGN，与 iOS 同）。
+ * 信息卡顺序：个性签名（有才有）→ 用户名 → 手机号（有才有）。
  */
 @Composable
 fun MyProfileScreen(
@@ -69,6 +72,7 @@ fun MyProfileScreen(
     displayName: String,
     handle: String,
     phone: String,
+    bio: String,
     avatarUrl: String,
     seed: String,
     editing: Boolean,
@@ -85,7 +89,8 @@ fun MyProfileScreen(
     val c = IMTheme.colors
     val d = IMTheme.dimens
 
-    Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
+    // imePadding：键盘弹出时整页让出键盘高度，内部 verticalScroll 才有可滚的余量，个性签名（表单最后一格）不会被键盘盖住
+    Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding().imePadding()) {
         IMTopBar(
             title = if (editing) stringResource(R.string.settings_edit_profile) else stringResource(R.string.profile_title_view),
             onLeft = if (editing) onCancelEdit else onBack,
@@ -106,7 +111,7 @@ fun MyProfileScreen(
             if (editing) {
                 EditBody(form, onFormChange, avatarUrl, displayName, seed, onPickAvatar)
             } else {
-                ReadonlyBody(displayName, handle, phone, avatarUrl, seed, onDeleteAccount)
+                ReadonlyBody(displayName, handle, phone, bio, avatarUrl, seed, onDeleteAccount)
             }
             IMErrorText(error, Modifier.padding(top = d.space3, start = d.space4, end = d.space4))
             Spacer(Modifier.height(d.sectionGap))
@@ -119,6 +124,7 @@ private fun ReadonlyBody(
     displayName: String,
     handle: String,
     phone: String,
+    bio: String,
     avatarUrl: String,
     seed: String,
     onDeleteAccount: (() -> Unit)?,
@@ -135,9 +141,9 @@ private fun ReadonlyBody(
         Spacer(Modifier.height(24.dp))
     }
     IMSettingsGroup {
-        // 没填手机号就整行不占位（Telegram 同款），不显示「未设置」
-        if (phone.isNotEmpty()) {
-            IMKeyValueRow(stringResource(R.string.profile_readonly_phone_label), phone, valueColor = c.accent)
+        // 没写签名 / 没填手机号就整行不占位（Telegram 同款），不显示「未设置」
+        if (bio.isNotEmpty()) {
+            IMBioRow(stringResource(R.string.profile_readonly_bio_label), bio)
             IMRowDivider(insetStart = d.space4)
         }
         IMKeyValueRow(
@@ -145,6 +151,10 @@ private fun ReadonlyBody(
             handle.ifEmpty { stringResource(R.string.settings_info_not_set) },
             valueColor = c.accent,
         )
+        if (phone.isNotEmpty()) {
+            IMRowDivider(insetStart = d.space4)
+            IMKeyValueRow(stringResource(R.string.profile_readonly_phone_label), phone, valueColor = c.accent)
+        }
     }
     if (onDeleteAccount != null) {
         // 注销入口：单独一组红字居中行 + 脚注，与信息卡隔一个分组间距（DELETE_ACCOUNT_DESIGN §2）
@@ -223,7 +233,28 @@ private fun EditBody(
         onChange(form.copy(phone = it))
     }
     Spacer(Modifier.height(d.space3))
-    Field(stringResource(R.string.profile_field_tags_placeholder), form.tags) { onChange(form.copy(tags = it)) }
+    BioField(form.bio) { onChange(form.copy(bio = ProfileEdit.flattenBio(it))) }
+    }
+}
+
+/** 个性签名：多行输入 + 右下角 n/70 计数（≥60 变 danger 色）。换行已在 onChange 里折成空格，超长在保存前校验（见 ProfileEdit.bioError）。 */
+@Composable
+private fun BioField(value: String, onValueChange: (String) -> Unit) {
+    val c = IMTheme.colors
+    val n = ProfileEdit.bioRunes(value)
+    Box {
+        IMTextField(
+            value = value,
+            onValueChange = onValueChange,
+            label = stringResource(R.string.profile_field_bio_label),
+            singleLine = false,
+        )
+        Text(
+            "$n/${ProfileEdit.MAX_BIO_RUNES}",
+            color = if (n >= ProfileEdit.BIO_WARN_RUNES) c.danger else c.textSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 4.dp),
+        )
     }
 }
 

@@ -45,16 +45,22 @@ class ProfileEditTest {
     }
 
     @Test
-    fun `标签按空格与中英文逗号切分并去空去重`() {
-        assertEquals(listOf("同事", "篮球", "读书"), ProfileEdit.tagsFrom(" 同事, 篮球，读书 "))
-        assertEquals(listOf("a", "b"), ProfileEdit.tagsFrom("a\tb"))
-        assertEquals(emptyList<String>(), ProfileEdit.tagsFrom("   "))
-        assertEquals(listOf("同事"), ProfileEdit.tagsFrom("同事 同事"))
+    fun `签名按码点计长且换行折成空格`() {
+        assertEquals(70, ProfileEdit.MAX_BIO_RUNES)
+        assertEquals(2, ProfileEdit.bioRunes("😀😀")) // 代理对算一个，与服务端 rune 口径一致
+        assertEquals("a b", ProfileEdit.flattenBio("a\nb"))
+        assertEquals("a b", ProfileEdit.flattenBio("a\r\n\r\nb"))
     }
 
     @Test
-    fun `标签串回填是切分的逆操作`() {
-        val tags = listOf("同事", "篮球")
-        assertEquals(tags, ProfileEdit.tagsFrom(ProfileEdit.tagsText(tags)))
+    fun `签名超长留到保存前校验而不是输入时截断`() {
+        // 输入时截断会打断输入法组词（拼音字母被算进上限），所以只折换行
+        val long = "😀".repeat(80)
+        assertEquals(long, ProfileEdit.flattenBio(long))
+        assertNull(ProfileEdit.bioError("字".repeat(70)))
+        assertNull(ProfileEdit.bioError("  " + "字".repeat(70) + "  ")) // 保存前先 trim，首尾空白不占额度
+        assertNotNull(ProfileEdit.bioError("字".repeat(71)))
+        assertNotNull(ProfileEdit.bioError("😀".repeat(71))) // 按码点计，不是 UTF-16 单元
+        assertNull(ProfileEdit.bioError("😀".repeat(70)))
     }
 }

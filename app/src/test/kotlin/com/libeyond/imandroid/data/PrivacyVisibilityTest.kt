@@ -51,6 +51,19 @@ class PrivacyVisibilityTest {
     }
 
     @Test
+    fun bio_and_phone_levels_default_and_put_only_changed_field() {
+        // 老服务端没有这两个字段：个人简介按 everyone、手机号码按 nobody（= 既有行为）
+        val old = Json { ignoreUnknownKeys = true }.decodeFromString(PrivacySettings.serializer(), """{"auto_delete_default_sec":0}""")
+        assertEquals(Visibility.Everyone, Visibility.parse(old.bioVisibility))
+        assertEquals(Visibility.Nobody, Visibility.parse(old.phoneVisibility))
+        val bio = PrivacyApi.body(bio = "nobody")
+        assertEquals(setOf("bio_visibility"), bio.keys)
+        val phone = PrivacyApi.body(phone = "contacts")
+        assertEquals(setOf("phone_visibility"), phone.keys)
+        assertEquals("contacts", phone.getValue("phone_visibility").jsonPrimitive.content)
+    }
+
+    @Test
     fun choose_success_commits() = runBlocking {
         val f = VisibilityField(Visibility.Contacts)
         var sent: Visibility? = null

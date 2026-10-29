@@ -17,7 +17,6 @@ import com.composables.icons.lucide.Ban
 import com.composables.icons.lucide.CircleUserRound
 import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.FileUp
-import com.composables.icons.lucide.Gift
 import com.composables.icons.lucide.Key
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
@@ -55,11 +54,15 @@ fun PrivacySecurityScreen(
     /** 「自动删除消息」行的右值（账号默认档位；还没拉到为空串）与点击。 */
     autoDeleteLabel: String,
     onOpenAutoDelete: () -> Unit,
-    /** 「谁能看到」两条活行的右值（档位名；还没拉到为空串）与点击。 */
+    /** 「谁能看到」四条活行的右值（档位名；还没拉到为空串）与点击。 */
     lastSeenLabel: String,
     avatarLabel: String,
+    bioLabel: String,
+    phoneLabel: String,
     onOpenLastSeen: () -> Unit,
     onOpenAvatar: () -> Unit,
+    onOpenBio: () -> Unit,
+    onOpenPhone: () -> Unit,
     onOpenExportData: () -> Unit,
     onOpenClearAll: () -> Unit,
     onComingSoon: (String) -> Unit,
@@ -88,6 +91,8 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.AutoDelete -> onOpenAutoDelete
                                 PrivacyAction.LastSeen -> onOpenLastSeen
                                 PrivacyAction.Avatar -> onOpenAvatar
+                                PrivacyAction.Bio -> onOpenBio
+                                PrivacyAction.Phone -> onOpenPhone
                                 PrivacyAction.ExportData -> onOpenExportData
                                 PrivacyAction.ClearAll -> onOpenClearAll
                                 PrivacyAction.ComingSoon -> soon
@@ -99,6 +104,8 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.AutoDelete -> autoDeleteLabel
                                 PrivacyAction.LastSeen -> lastSeenLabel
                                 PrivacyAction.Avatar -> avatarLabel
+                                PrivacyAction.Bio -> bioLabel
+                                PrivacyAction.Phone -> phoneLabel
                                 else -> row.value
                             },
                             muted = row.isPlaceholder,
@@ -123,7 +130,6 @@ private fun iconOf(icon: PrivacyIcon): ImageVector = when (icon) {
     PrivacyIcon.LastSeen -> Lucide.Eye
     PrivacyIcon.Avatar -> Lucide.CircleUserRound
     PrivacyIcon.Bio -> Lucide.AlignLeft
-    PrivacyIcon.Birthday -> Lucide.Gift
     PrivacyIcon.Trash -> Lucide.Trash2
     PrivacyIcon.Export -> Lucide.FileUp
 }
@@ -139,5 +145,4 @@ private fun tintOf(tint: PrivacyTint, ic: IMSettingsIconColors): Color = when (t
     PrivacyTint.Orange -> ic.orange
     PrivacyTint.Green -> ic.green
     PrivacyTint.Yellow -> ic.yellow
-    PrivacyTint.Pink -> ic.pink
 }

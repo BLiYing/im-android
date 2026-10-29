@@ -35,7 +35,7 @@ class PrivacySecurityTest {
                 listOf("已屏蔽的用户", "修改密码"),
                 listOf("两步验证", "通行密钥", "邮箱登录"),
                 listOf("自动删除消息"),
-                listOf("手机号码", "上次上线", "头像", "个人简介", "生日"),
+                listOf("手机号码", "上次上线", "头像", "个人简介"),
                 listOf("清除所有对话", "导出我的数据"),
             ),
             groups.map { g -> g.rows.map { it.title } },
@@ -49,14 +49,14 @@ class PrivacySecurityTest {
         assertEquals("关闭", values["通行密钥"])
         assertEquals("", values["邮箱登录"])
         assertEquals("", values["自动删除消息"]) // 活行：右值由页面按 GET /users/me/privacy 填
-        // 上次上线 / 头像是活行：右值由页面按 GET /users/me/privacy 填，表里留空
-        assertEquals(listOf("我的联系人", "", "", "所有人", "我的联系人"), groups[3].rows.map { it.value })
+        // 谁能看到四行都是活行：右值由页面按 GET /users/me/privacy 填，表里留空（生日不做，已删）
+        assertEquals(listOf("", "", "", ""), groups[3].rows.map { it.value })
         assertEquals("", values["清除所有对话"])
     }
 
     /** 第一组两行与「自动删除消息」是真功能；其余全灰置。把某个占位行误接成活行（或反过来）都会在这里红。 */
     @Test
-    fun `只有已屏蔽、修改密码、自动删除、上次上线与头像是活行`() {
+    fun `只有已屏蔽、修改密码、自动删除、谁能看到四行与数据组是活行`() {
         val first = groups.first().rows
         assertEquals(listOf(PrivacyAction.Blocked, PrivacyAction.ChangePassword), first.map { it.action })
         assertTrue(first.none { it.isPlaceholder })
@@ -64,14 +64,14 @@ class PrivacySecurityTest {
         assertEquals(PrivacyAction.AutoDelete, autoDelete.action)
         assertFalse(autoDelete.isPlaceholder)
         val who = groups[3].rows
-        assertEquals(listOf(PrivacyAction.ComingSoon, PrivacyAction.LastSeen, PrivacyAction.Avatar, PrivacyAction.ComingSoon, PrivacyAction.ComingSoon), who.map { it.action })
-        assertTrue(who.filter { it.action != PrivacyAction.ComingSoon }.none { it.isPlaceholder })
+        assertEquals(listOf(PrivacyAction.Phone, PrivacyAction.LastSeen, PrivacyAction.Avatar, PrivacyAction.Bio), who.map { it.action })
+        assertTrue(who.none { it.isPlaceholder })
         // 数据组：「清除所有对话」「导出我的数据」都是活行
         val data = groups[4].rows
         assertEquals(listOf(PrivacyAction.ClearAll, PrivacyAction.ExportData), data.map { it.action })
         assertTrue(data.none { it.isPlaceholder })
         val rest = groups.drop(1).flatMap { it.rows }.filter {
-            it !== autoDelete && it !in data && it.action != PrivacyAction.LastSeen && it.action != PrivacyAction.Avatar
+            it !== autoDelete && it !in data && it !in who
         }
         assertTrue(rest.all { it.isPlaceholder && it.action == PrivacyAction.ComingSoon })
     }
@@ -93,7 +93,7 @@ class PrivacySecurityTest {
                 PrivacyTint.Red, PrivacyTint.Blue,
                 PrivacyTint.Gray, PrivacyTint.Purple, PrivacyTint.Teal,
                 PrivacyTint.Orange,
-                PrivacyTint.Green, PrivacyTint.Blue, PrivacyTint.Purple, PrivacyTint.Yellow, PrivacyTint.Pink,
+                PrivacyTint.Green, PrivacyTint.Blue, PrivacyTint.Purple, PrivacyTint.Yellow,
                 PrivacyTint.Danger, PrivacyTint.Blue, // 清除所有对话：danger 底（破坏性）
             ),
             groups.flatMap { g -> g.rows.map { it.tint } },

@@ -132,6 +132,9 @@ fun ChatDetailHost(
     val rel = PeerRelation.of(friend)
     val peerGone = conv.peerDeleted || com.libeyond.imandroid.sdk.api.DeletedUser.has(conv.peerUid)
     var remark by remember(conv.convId) { mutableStateOf(conv.peerRemark) }
+    // 对端个性签名 / 手机号：权威名片按对方档位下发，空串 = 不可见或没填（行不占位）
+    var peerBio by remember(conv.convId) { mutableStateOf("") }
+    var peerPhone by remember(conv.convId) { mutableStateOf("") }
     // 对端权威名片：进页拉一次，并回会话行（对方改了昵称 / 头像，信息页与会话列表都跟着新；
     // 与 IMProgram `loadPeerProfile`、im-web `loadPeerCard` 同口径）。单聊才有；自己 / 空 uid 不拉；
     // 不限好友（非好友也能开这一页）；失败静默，保持旧值。
@@ -143,6 +146,8 @@ fun ChatDetailHost(
                     // `remark` 是按打开那一刻的 `conv` 快照种下的本地状态，名片是权威值——不回填的话，
                     // 别端 / 联系人页改过的备注在这页一直显「未设置」（2026-10-03 真机）。
                     remark = it.remark
+                    peerBio = it.bio
+                    peerPhone = it.phone
                 }
                 .onFailure { IMLog.tag("IM.Detail").w("peer_card_failed") }
         }
@@ -299,6 +304,10 @@ fun ChatDetailHost(
                             toast = Str.s(R.string.chat_detail_username_copied)
                         }
                     },
+                    bio = peerBio,
+                    phone = peerPhone,
+                    onCopyBio = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(peerBio)); toast = Str.s(R.string.profile_bio_copied) },
+                    onCopyPhone = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(peerPhone)); toast = Str.s(R.string.chat_detail_phone_copied) },
                     remark = remark,
                     pinned = pinned,
                     muteValueText = if (mutedNow) MuteState.untilText(muteUntil, muteTick) else stringResource(R.string.common_off),

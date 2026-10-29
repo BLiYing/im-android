@@ -19,7 +19,10 @@ data class UserCard(
     val username: String = "",
     val nickname: String = "",
     @SerialName("avatar_url") val avatarUrl: String = "",
+    /** 本人资料有；他人资料仅在对方「手机号码」档位允许时有（PROFILE_BIO_DESIGN）；搜索 / 列表恒空。 */
     val phone: String = "",
+    /** 个性签名（≤70 字符）。可见性同 [phone]，对应「个人简介」档位。 */
+    val bio: String = "",
     val tags: List<String> = emptyList(),
     /** 查看者对该用户的私有备注名；看自己时恒空。 */
     val remark: String = "",

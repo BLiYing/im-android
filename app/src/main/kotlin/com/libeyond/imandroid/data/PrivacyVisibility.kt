@@ -21,7 +21,7 @@ enum class Visibility(val wire: String, private val labelRes: Int) {
 }
 
 /** 哪一项可见性（页标题、页脚、PUT 字段都按它选）。 */
-enum class VisibilityKind { LastSeen, Avatar }
+enum class VisibilityKind { LastSeen, Avatar, Bio, Phone }
 
 /**
  * 一项可见性的「已提交值 + 页面上显示的值」。选中即**乐观**显示新值，保存失败回滚到已提交值（设计 §4）。

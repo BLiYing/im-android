@@ -20,9 +20,6 @@ object ProfileEdit {
     /** 公开句柄形态：仅小写字母 / 数字 / 下划线，5–32 位（服务端 `usernameRe`）。 */
     private val USERNAME_RE = Regex("^[a-z0-9_]{5,32}$")
 
-    /** 标签分隔符：空格、英文逗号、中文逗号、换行、制表符（对齐 iOS `tagsFromString:`）。 */
-    private val TAG_SEPARATORS = Regex("[ ,，\\n\\t]+")
-
     /**
      * 昵称的前置校验。返回 null = 通过，否则是给用户看的原因。
      *
@@ -63,10 +60,23 @@ object ProfileEdit {
         return u.isNotEmpty() && u != loaded.trim()
     }
 
-    /** 标签串 → 列表：按分隔符切、去空白、丢空项、去重（保持输入顺序）。 */
-    fun tagsFrom(text: String): List<String> =
-        text.split(TAG_SEPARATORS).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    /** 个性签名上限（Unicode 码点，服务端 `profile.MaxBioRunes`）。 */
+    const val MAX_BIO_RUNES = 70
 
-    /** 列表 → 标签串（回填输入框用）。 */
-    fun tagsText(tags: List<String>): String = tags.joinToString(" ")
+    /** 计数达到此值开始变 danger 色（设计稿 §2.2）。 */
+    const val BIO_WARN_RUNES = 60
+
+    /** 按码点计长（emoji 代理对算一个，与服务端同口径）。 */
+    fun bioRunes(text: String): Int = text.codePointCount(0, text.length)
+
+    /**
+     * 输入框里的实时规整：只把换行折成空格（签名是单段文字）。**不在输入时截断**：
+     * 字符串版 TextField 在输入法组词期间改写文本会打断组词（拼音字母还会被算进上限），
+     * 所以超长留到保存前由 [bioError] 拦下，计数在 ≥60 时已变红提醒。
+     */
+    fun flattenBio(text: String): String = text.replace(Regex("[\\r\\n]+"), " ")
+
+    /** 保存前的签名校验：按码点超过 [MAX_BIO_RUNES] 返回提示，否则 null。 */
+    fun bioError(text: String): String? =
+        if (bioRunes(text.trim()) > MAX_BIO_RUNES) Str.s(R.string.profile_bio_too_long) else null
 }

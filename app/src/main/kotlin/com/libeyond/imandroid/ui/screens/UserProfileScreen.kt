@@ -31,6 +31,7 @@ import com.libeyond.imandroid.data.Presence
 import com.libeyond.imandroid.data.MemberProfile
 import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.ui.components.IMBioRow
 import com.libeyond.imandroid.ui.components.IMPrimaryButton
 import com.libeyond.imandroid.ui.components.IMSecondaryButton
 import com.libeyond.imandroid.ui.components.IMTopBar
@@ -104,7 +105,11 @@ fun UserProfileScreen(
             Modifier.fillMaxWidth().padding(horizontal = d.space4)
                 .clip(RoundedCornerShape(d.radiusCard)).background(c.cardBackground),
         ) {
-            // 标识行为空时**整行隐藏**——不显示「用户名：未设置」，更不回退内部 ID
+            // 个性签名在最上（有且对方档位允许才有）；标识行为空时**整行隐藏**——不显示「用户名：未设置」，更不回退内部 ID
+            if (card.bio.isNotEmpty()) {
+                IMBioRow(stringResource(R.string.profile_readonly_bio_label), card.bio)
+                if (card.handle.isNotEmpty() || isFriend) Divider()
+            }
             if (card.handle.isNotEmpty()) InfoRow(stringResource(R.string.settings_info_username), card.handle)
             if (isFriend && !card.deleted) {
                 Divider()
@@ -114,9 +119,10 @@ fun UserProfileScreen(
                     onClick = onSetRemark,
                 )
             }
-            if (card.tags.isNotEmpty()) {
+            // 手机号：对方「手机号码」档位允许且填了才有，排在用户名 / 备注名之后
+            if (card.phone.isNotEmpty()) {
                 Divider()
-                InfoRow(stringResource(R.string.profile_field_tags_label), card.tags.joinToString("、"))
+                InfoRow(stringResource(R.string.chat_detail_phone), card.phone)
             }
         }
 
