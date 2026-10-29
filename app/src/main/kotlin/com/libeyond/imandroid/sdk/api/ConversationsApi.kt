@@ -250,6 +250,10 @@ class ConversationsApi(private val http: HttpClient) {
         (http.call("DELETE", "/api/v1/conversations/$convId") as? kotlinx.serialization.json.JsonObject)
             ?.get("cleared_at")?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull() } ?: 0L
 
+    /** 清除所有对话（无 body，登录态即授权）。只返回结果，本机清理由调用方在**成功后**做（失败不半清）。 */
+    suspend fun clearAll(): ClearAllResult =
+        ClearAllResult.parse(http.call("POST", "/api/v1/users/me/conversations/clear"))
+
     suspend fun serverConfig(): ServerConfig =
         decode(http.call("GET", "/api/v1/server-config"), ServerConfig.serializer())
 

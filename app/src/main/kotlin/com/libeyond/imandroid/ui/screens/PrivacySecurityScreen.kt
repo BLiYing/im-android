@@ -61,6 +61,7 @@ fun PrivacySecurityScreen(
     onOpenLastSeen: () -> Unit,
     onOpenAvatar: () -> Unit,
     onOpenExportData: () -> Unit,
+    onOpenClearAll: () -> Unit,
     onComingSoon: (String) -> Unit,
 ) {
     val c = IMTheme.colors
@@ -88,6 +89,7 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.LastSeen -> onOpenLastSeen
                                 PrivacyAction.Avatar -> onOpenAvatar
                                 PrivacyAction.ExportData -> onOpenExportData
+                                PrivacyAction.ClearAll -> onOpenClearAll
                                 PrivacyAction.ComingSoon -> soon
                             },
                             icon = iconOf(row.icon),
@@ -126,7 +128,9 @@ private fun iconOf(icon: PrivacyIcon): ImageVector = when (icon) {
     PrivacyIcon.Export -> Lucide.FileUp
 }
 
+@Composable
 private fun tintOf(tint: PrivacyTint, ic: IMSettingsIconColors): Color = when (tint) {
+    PrivacyTint.Danger -> IMTheme.colors.danger // 破坏性入口：语义 danger 而非系统红（草图：Android 底色 danger）
     PrivacyTint.Red -> ic.red
     PrivacyTint.Blue -> ic.blue
     PrivacyTint.Gray -> ic.gray

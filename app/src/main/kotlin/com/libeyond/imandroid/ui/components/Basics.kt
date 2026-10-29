@@ -138,9 +138,9 @@ fun IMTextField(
 
 /** 错误提示行。 */
 @Composable
-fun IMErrorText(text: String, modifier: Modifier = Modifier) {
+fun IMErrorText(text: String, modifier: Modifier = Modifier, style: androidx.compose.ui.text.TextStyle = androidx.compose.material3.LocalTextStyle.current) {
     if (text.isEmpty()) return
-    Text(text = text, color = IMTheme.colors.danger, modifier = modifier)
+    Text(text = text, color = IMTheme.colors.danger, modifier = modifier, style = style)
 }
 
 /**

@@ -43,6 +43,8 @@ fun PrivacySecurityHost(
     onBack: () -> Unit,
     /** 「导出我的数据」二级页由「我」页路由（`MePage.ExportData`）承载。 */
     onOpenExportData: () -> Unit,
+    /** 「清除所有对话」二级页由「我」页路由（`MePage.ClearAllConversations`）承载。 */
+    onOpenClearAll: () -> Unit,
     initialSub: SettingsSub = SettingsSub.None,
 ) {
     val scope = rememberCoroutineScope()
@@ -182,6 +184,7 @@ fun PrivacySecurityHost(
                     onOpenLastSeen = { lastSeenField.resetShown(); page = PrivacyPage.LastSeen },
                     onOpenAvatar = { avatarField.resetShown(); page = PrivacyPage.Avatar },
                     onOpenExportData = onOpenExportData,
+                    onOpenClearAll = onOpenClearAll,
                     onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                 )
             }

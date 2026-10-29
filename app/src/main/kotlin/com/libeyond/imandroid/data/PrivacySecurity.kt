@@ -17,10 +17,10 @@ import com.libeyond.imandroid.i18n.Str
 enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, LastSeen, Avatar, Bio, Birthday, Trash, Export }
 
 /** 图标底色（iOS `UIColor.system*`）。 */
-enum class PrivacyTint { Red, Blue, Gray, Purple, Teal, Orange, Green, Yellow, Pink }
+enum class PrivacyTint { Danger, Red, Blue, Gray, Purple, Teal, Orange, Green, Yellow, Pink }
 
 /** 点一行做什么。 */
-enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, ExportData, ComingSoon }
+enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, ExportData, ClearAll, ComingSoon }
 
 data class PrivacyRow(
     val title: String,
@@ -88,7 +88,7 @@ object PrivacySecurity {
         PrivacyGroup(
             header = Str.s(R.string.ps_section_data),
             rows = listOf(
-                PrivacyRow(Str.s(R.string.ps_row_clear_all_chats), PrivacyIcon.Trash, PrivacyTint.Gray),
+                PrivacyRow(Str.s(R.string.privacy_clear_all_row), PrivacyIcon.Trash, PrivacyTint.Danger, action = PrivacyAction.ClearAll),
                 PrivacyRow(Str.s(R.string.ps_row_export_data), PrivacyIcon.Export, PrivacyTint.Blue, action = PrivacyAction.ExportData),
             ),
         ),

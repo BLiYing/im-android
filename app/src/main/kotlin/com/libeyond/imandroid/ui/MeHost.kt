@@ -102,6 +102,12 @@ fun MeHost(
                 client = client, initialSub = sub,
                 onBack = { page = MePage.List },
                 onOpenExportData = { sub = SettingsSub.None; page = MePage.ExportData }, // 清 sub：返回时隐私页回首层，不被深链残留的子页带走
+                onOpenClearAll = { sub = SettingsSub.None; page = MePage.ClearAllConversations },
+            )
+            MePage.ClearAllConversations -> ClearAllConversationsHost(
+                client = client,
+                onDone = { msg -> toast = msg; page = MePage.Privacy },
+                onBack = { page = MePage.Privacy },
             )
             MePage.ExportData -> ExportDataHost(client = client, onBack = { page = MePage.Privacy })
             MePage.Qr -> QrCardHost(client = client, me = me, onBack = { page = MePage.List })
@@ -170,5 +176,5 @@ fun MeHost(
         )
     }
 
-    if (page == MePage.List) toast?.let { IMToast(it) { toast = null } }
+    if (page == MePage.List || page == MePage.Privacy) toast?.let { IMToast(it) { toast = null } }
 }

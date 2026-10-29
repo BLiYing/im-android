@@ -302,7 +302,10 @@ class MessageService(
 
             FrameType.CONV_UPDATE -> data?.let { el ->
                 val u = ProtocolJson.decodeFromJsonElement(ConvUpdateData.serializer(), el)
-                if (u.action == "delete") historyFloors.remove(u.convId) // 删除会话＝清到位点，服务端下界缓存作废（§6.7.1）
+                if (u.action == "delete") {
+                    historyFloors.remove(u.convId) // 删除会话＝清到位点，服务端下界缓存作废（§6.7.1）
+                    _listedConversations.value = _listedConversations.value?.afterRemoteDelete()
+                }
                 if (repo.applyConvUpdate(owner, u)) autoDelete.request() // sec 或 from 变了且 >0 → 扫（不追溯，只清窗口）
                 ConvRemarkSignal.of(u)?.let { _convRemarks.tryEmit(it) }
             }

@@ -77,4 +77,6 @@ enum class MePage(val depth: Int) {
     DeleteAccount(2),
     /** 导出我的数据：隐私与安全 ▸ 数据 进入，比 [Privacy] 深一层；返回回隐私与安全页。 */
     ExportData(2),
+    /** 清除所有对话：隐私与安全 ▸ 数据 进入，同 [ExportData] 深一层；成功返回隐私页并弹 toast。 */
+    ClearAllConversations(2),
 }

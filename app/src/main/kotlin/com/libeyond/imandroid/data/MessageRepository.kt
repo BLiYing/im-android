@@ -322,7 +322,7 @@ class MessageRepository(
         owner: String,
         list: List<ConversationSummary>,
         presence: PresenceStore? = null,
-        groupIdsBeforeRequest: Set<String>? = null,
+        groupIdsBeforeRequest: Map<String, Long>? = null,
     ): List<String> {
         // 服务端 cleared_at 高过本机位点（离线 / 重装 / 别端删过）：先跑清除例程，下面整行重写再读到抬高后的位点（§6.7.1）
         val realigned = list.filter { s ->
@@ -386,18 +386,21 @@ class MessageRepository(
         }
         conversations.upsert(rows)
         AutoDeleteFloor.replaceAll(rows.filter { it.autoDeleteSec > 0 }.associate { it.convId to (it.autoDeleteSec to it.autoDeleteFrom) })
-        // 快照是全量权威：本地有、快照没有的群行 = 别端退群 / 离线时被移出 / 群已解散，直接删（见 StaleGroupRows）
+        // 快照是全量权威：本地有、快照没有的行 = 别端退群 / 离线时被移出 / 群已解散（群：整条移除），
+        // 或别端「删除会话 / 清除所有对话」时本机离线（单聊：清到位点 + 移行，位点取本机已知 head，保留待发与位点之后的新消息，见 StaleGroupRows）
         if (groupIdsBeforeRequest != null) {
             StaleGroupRows.of(conversations.all(owner), list.mapTo(HashSet()) { it.convId }, groupIdsBeforeRequest)
-                .forEach { removeConversation(owner, it) }
+                .forEach {
+                    // 单聊：位点取「请求前本机已知最新 conv_seq」（别端清除时 ≥ 它；不用 0 的 head 口径，那会连待发一起清）
+                    if (it.isGroup) removeConversation(owner, it.convId) else deleteConversationLocal(owner, it.convId, it.lastConvSeq)
+                }
         }
         log.i("conversations_applied", "count" to rows.size, "realigned" to realigned.size)
         return realigned
     }
 
-    /** 本机已有的群行 id（发会话列表请求**之前**取，供 [applyConversationList] 判陈旧用）。 */
-    suspend fun localGroupIds(owner: String): Set<String> =
-        conversations.all(owner).filter { it.isGroup }.mapTo(HashSet()) { it.convId }
+    /** 本机可判陈旧的行 id（群 + 已有过消息的单聊；发会话列表请求**之前**取，供 [applyConversationList] 判陈旧用）。 */
+    suspend fun localGroupIds(owner: String): Map<String, Long> = StaleGroupRows.snapshot(conversations.all(owner))
 
     suspend fun markRead(owner: String, convId: String, upTo: Long) {
         conversations.markRead(owner, convId, upTo)

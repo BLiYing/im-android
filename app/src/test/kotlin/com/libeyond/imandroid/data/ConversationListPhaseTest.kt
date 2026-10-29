@@ -32,4 +32,13 @@ class ConversationListPhaseTest {
     fun `本地空且服务端也说没有——才是空态`() {
         assertEquals(ConversationListPhase.Empty, ConversationListPhase.of(localCount = 0, serverCount = 0))
     }
+
+    @Test
+    fun `别端清除全部会话后，服务端计数减到 0 才出空态，不会一直空白加载`() {
+        var listed = ListedConversations("me", 2)
+        assertEquals(ConversationListPhase.Loading, ConversationListPhase.of(0, listed.count)) // 本地已空、旧结论还说有 2 条
+        listed = listed.afterRemoteDelete().afterRemoteDelete()
+        assertEquals(ConversationListPhase.Empty, ConversationListPhase.of(0, listed.count))
+        assertEquals(0, listed.afterRemoteDelete().count) // 多余的帧不会减成负数
+    }
 }

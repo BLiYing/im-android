@@ -1,7 +1,10 @@
 package com.libeyond.imandroid.data
 
 /** 一次成功的会话列表拉取：哪个账号、服务端给了几条（`MessageService.listedConversations`）。 */
-data class ListedConversations(val owner: String, val count: Int)
+data class ListedConversations(val owner: String, val count: Int) {
+    /** 别的设备删除 / 清除了一个会话：上次拉到的「N 条」随之减一，减到 0 才能出空态，否则一直是「加载中」的空白。 */
+    fun afterRemoteDelete(): ListedConversations = copy(count = maxOf(0, count - 1))
+}
 
 /**
  * 会话列表此刻该画什么：列表 / 空态 / 什么都不画。
