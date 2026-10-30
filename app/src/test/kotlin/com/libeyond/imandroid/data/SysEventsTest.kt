@@ -112,6 +112,18 @@ class SysEventsTest {
     }
 
     @Test
+    fun `恢复码登录通知 剩余数与设备行 缺设备不出该行`() {
+        val args = SysEvents.encodeArgs(mapOf("at" to "x", "left" to "7", "device" to "Pixel"))
+        val lines = SysEvents.noticeText("twostep_recovery_used", args)!!.lines()
+        assertEquals("你的账号已于 x 使用恢复码完成两步验证登录，剩余 7 个恢复码。", lines[0])
+        assertEquals("· 登录设备：Pixel", lines[1])
+        assertEquals("如非本人操作，请立即修改密码并重新生成恢复码。", lines[2])
+        val bare = SysEvents.noticeText("twostep_recovery_used", SysEvents.encodeArgs(mapOf("at" to "x", "left" to "0")))!!.lines()
+        assertEquals(2, bare.size)
+        assertEquals("你的账号已于 x 使用恢复码完成两步验证登录，剩余 0 个恢复码。", bare[0])
+    }
+
+    @Test
     fun `导出完成通知三行 缺字段不崩`() {
         val args = SysEvents.encodeArgs(mapOf("size_bytes" to "5242880", "conv_count" to "3", "msg_count" to "120", "expires_at" to "bad"))
         val lines = SysEvents.noticeText("export_ready", args)!!.lines()

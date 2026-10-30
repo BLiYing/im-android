@@ -14,6 +14,12 @@ class SettingsSearchIndexTest {
         assertTrue(hits("   ").isEmpty())
     }
 
+    @Test fun twoStepIsSearchableUnderPrivacy() {
+        assertEquals(listOf("privacy_two_step"), hits("两步验证"))
+        assertEquals(listOf("privacy_two_step"), hits("隐私与安全 › 两步验证"))
+        assertEquals("隐私与安全 › 两步验证", all.first { it.id == "privacy_two_step" }.subtitle)
+    }
+
     @Test fun noMatchIsEmpty() {
         assertTrue(hits("zzzz不存在").isEmpty())
     }
@@ -75,6 +81,7 @@ class SettingsSearchIndexTest {
         assertEquals(SettingsRoute(MePage.Notifications, SettingsSub.Notification(NotificationPage.Sound, true)), byId.getValue("notif_group_sound").route)
         assertEquals(SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.Blocked)), byId.getValue("privacy_blocked").route)
         assertEquals(SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.AutoDelete)), byId.getValue("privacy_auto_delete").route)
+        assertEquals(SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.TwoStep)), byId.getValue("privacy_two_step").route)
         assertEquals(listOf("隐私与安全", "自动删除消息"), byId.getValue("privacy_auto_delete").path)
         assertEquals(
             SettingsRoute(MePage.DataStorage, SettingsSub.Storage(DownloadNetwork.Wifi, DownloadCategory.Video)),
@@ -98,7 +105,7 @@ class SettingsSearchIndexTest {
         assertEquals("视频", v.title)
         assertEquals(listOf("数据和存储", "使用 Wi-Fi", "视频"), v.path)
         assertEquals("数据和存储 › 使用 Wi-Fi › 视频", v.subtitle)
-        assertEquals(25, all.size) // 24 + 自动删除消息（privacy_auto_delete，iOS/Web 登记表待同步）
+        assertEquals(26, all.size) // 24 + 自动删除消息（privacy_auto_delete）+ 两步验证（privacy_two_step），iOS/Web 登记表待同步
     }
 
     @Test fun searchWifiFindsNetworkPageThenItsCategories() {

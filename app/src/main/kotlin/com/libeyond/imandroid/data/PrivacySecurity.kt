@@ -20,7 +20,7 @@ enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, Las
 enum class PrivacyTint { Danger, Red, Blue, Gray, Purple, Teal, Orange, Green, Yellow }
 
 /** 点一行做什么。 */
-enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone, ExportData, ClearAll, ComingSoon }
+enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone, ExportData, ClearAll, TwoStep, ComingSoon }
 
 data class PrivacyRow(
     val title: String,
@@ -60,7 +60,8 @@ object PrivacySecurity {
             header = Str.s(R.string.ps_section_account_protection),
             footer = Str.s(R.string.ps_account_protection_footer),
             rows = listOf(
-                PrivacyRow(Str.s(R.string.ps_row_two_factor), PrivacyIcon.TwoStep, PrivacyTint.Gray, Str.s(R.string.common_off)),
+                // 活行：右值 = 开启 / 关闭，由页面按 GET /users/me/two-step 填（[TwoStepRules.rowLabel]）
+                PrivacyRow(Str.s(R.string.ps_row_two_factor), PrivacyIcon.TwoStep, PrivacyTint.Gray, action = PrivacyAction.TwoStep),
                 PrivacyRow(Str.s(R.string.ps_row_passkey), PrivacyIcon.Passkey, PrivacyTint.Purple, Str.s(R.string.common_off)),
                 PrivacyRow(Str.s(R.string.ps_row_email_login), PrivacyIcon.Mail, PrivacyTint.Teal),
             ),

@@ -164,6 +164,11 @@ object SysEvents {
                 if (arg("device").isNotEmpty()) add(Str.s(R.string.sys_notice_password_changed_device_line, arg("device")))
                 add(Str.s(R.string.sys_notice_password_changed_footer))
             }
+            "twostep_recovery_used" -> buildList {
+                add(Str.s(R.string.sys_notice_twostep_recovery_used_headline, at, arg("left").ifEmpty { "0" }))
+                if (arg("device").isNotEmpty()) add(Str.s(R.string.sys_notice_twostep_recovery_used_device_line, arg("device")))
+                add(Str.s(R.string.sys_notice_twostep_recovery_used_footer))
+            }
             "device_kicked" -> buildList {
                 val device = arg("target_device").ifEmpty { Str.s(R.string.common_unknown_device_kicked) }
                 add(Str.s(R.string.sys_notice_device_kicked_headline, device))

@@ -14,6 +14,7 @@ import com.libeyond.imandroid.data.PasswordFeedback
 import com.libeyond.imandroid.data.PrivacyPage
 import com.libeyond.imandroid.data.PrivacySecurity
 import com.libeyond.imandroid.data.SettingsSub
+import com.libeyond.imandroid.data.TwoStepRules
 import com.libeyond.imandroid.data.Visibility
 import com.libeyond.imandroid.data.VisibilityField
 import com.libeyond.imandroid.data.VisibilityKind
@@ -48,6 +49,8 @@ fun PrivacySecurityHost(
     initialSub: SettingsSub = SettingsSub.None,
 ) {
     val scope = rememberCoroutineScope()
+    /** 两步验证的状态 / 动作；留在这里（而不是 TwoStepHost 里）才能跨「进页 / 返回 / 再进」存活，请求途中返回不丢结果。 */
+    val twoStep = remember(client) { TwoStepController(client) }
 
     var page by remember { mutableStateOf((initialSub as? SettingsSub.Privacy)?.page ?: PrivacyPage.Main) }
     /** 黑名单。容器页的计数与列表页**共用这一份**：进列表页时先显上次的，拉回来再换。 */
@@ -164,11 +167,13 @@ fun PrivacySecurityHost(
         page = PrivacyPage.Main
     }
 
+    // 回到容器页都重取两步验证状态（行右值随之刷新；多端之间进页重取）；失败当关闭、不弹错
+    LaunchedEffect(page) { if (page == PrivacyPage.Main) twoStep.refresh() }
     // 每回到容器页 / 进列表页都重拉（iOS 两页的 viewWillAppear 同）
     LaunchedEffect(page) { if (page == PrivacyPage.Main || page == PrivacyPage.Blocked) reloadBlocked() }
     // 进隐私页 / 选择页都取最新的账号默认档位（不推帧，别的端改了靠重新进页刷新）；失败保留已有值
     LaunchedEffect(page) {
-        if (page == PrivacyPage.Blocked || page == PrivacyPage.ChangePassword) return@LaunchedEffect
+        if (page == PrivacyPage.Blocked || page == PrivacyPage.ChangePassword || page == PrivacyPage.TwoStep) return@LaunchedEffect
         runCatchingCancellable { client.privacy.get() }.onSuccess {
             autoDefault = it.autoDeleteDefaultSec; if (!autoSaving) autoShown = it.autoDeleteDefaultSec
             lastSeenField.load(Visibility.parse(it.lastSeenVisibility))
@@ -198,6 +203,8 @@ fun PrivacySecurityHost(
                     onOpenAvatar = { avatarField.resetShown(); page = PrivacyPage.Avatar },
                     onOpenBio = { bioField.resetShown(); page = PrivacyPage.Bio },
                     onOpenPhone = { phoneField.resetShown(); page = PrivacyPage.Phone },
+                    twoStepLabel = TwoStepRules.rowLabel(twoStep.rowEnabled),
+                    onOpenTwoStep = { page = PrivacyPage.TwoStep },
                     onOpenExportData = onOpenExportData,
                     onOpenClearAll = onOpenClearAll,
                     onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
@@ -250,6 +257,8 @@ fun PrivacySecurityHost(
                     onBack = { page = PrivacyPage.Main },
                 )
             }
+
+            PrivacyPage.TwoStep -> TwoStepHost(client, twoStep, onExit = { page = PrivacyPage.Main })
 
             PrivacyPage.ChangePassword -> {
                 BackHandler { leavePassword() }

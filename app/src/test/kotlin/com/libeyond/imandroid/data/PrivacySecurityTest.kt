@@ -45,7 +45,7 @@ class PrivacySecurityTest {
     @Test
     fun `占位行的右值`() {
         val values = groups.flatMap { it.rows }.associate { it.title to it.value }
-        assertEquals("关闭", values["两步验证"])
+        assertEquals("", values["两步验证"]) // 活行：右值由页面按 GET /users/me/two-step 填
         assertEquals("关闭", values["通行密钥"])
         assertEquals("", values["邮箱登录"])
         assertEquals("", values["自动删除消息"]) // 活行：右值由页面按 GET /users/me/privacy 填
@@ -70,8 +70,12 @@ class PrivacySecurityTest {
         val data = groups[4].rows
         assertEquals(listOf(PrivacyAction.ClearAll, PrivacyAction.ExportData), data.map { it.action })
         assertTrue(data.none { it.isPlaceholder })
+        // 账号保护组：「两步验证」是活行（不再灰置、不再 comingSoon），通行密钥 / 邮箱登录仍灰置
+        val twoStep = groups[1].rows.first()
+        assertEquals(PrivacyAction.TwoStep, twoStep.action)
+        assertFalse(twoStep.isPlaceholder)
         val rest = groups.drop(1).flatMap { it.rows }.filter {
-            it !== autoDelete && it !in data && it !in who
+            it !== autoDelete && it !in data && it !in who && it !== twoStep
         }
         assertTrue(rest.all { it.isPlaceholder && it.action == PrivacyAction.ComingSoon })
     }

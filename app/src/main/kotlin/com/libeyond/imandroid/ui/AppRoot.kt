@@ -45,6 +45,8 @@ import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.ui.screens.ChatScreen
 import com.libeyond.imandroid.ui.screens.ConversationListScreen
 import com.libeyond.imandroid.ui.screens.LoginScreen
+import com.libeyond.imandroid.ui.screens.LoginTwoStepUi
+import com.libeyond.imandroid.sdk.api.TwoStepChallenge
 import androidx.compose.runtime.CompositionLocalProvider
 import com.libeyond.imandroid.ui.components.LocalMediaGate
 import com.libeyond.imandroid.ui.components.MediaGateEnv
@@ -77,6 +79,8 @@ fun AppRoot(client: IMClient) {
     var endedNotice by remember { mutableStateOf("") }
     /** 冷静期账号登录被拒后暂存的凭据；非 null 时弹「恢复账号」。 */
     var pendingRestore by remember { mutableStateOf<PendingRestore?>(null) }
+    /** 登录第二步（两步验证）：ticket 只在内存，离开二步页即丢。 */
+    val twoStep = remember { LoginTwoStep() }
     /** 本机刚完成注销：之后到的 WS 被踢信号不能覆盖「冷静期」提示。 */
     var accountDeleted by remember { mutableStateOf(false) }
 
@@ -160,7 +164,10 @@ fun AppRoot(client: IMClient) {
                         accountDeleted = false
                         phase = Phase.Main
                     } catch (e: ApiException) {
-                        error = LoginError.friendly(e, appContext)
+                        // 恢复后的免重输登录同样可能要两步验证：转入二步页，别当普通错误吐服务端英文
+                        val challenge = TwoStepChallenge.from(e)
+                        if (challenge != null) twoStep.begin(challenge, p.username)
+                        else error = LoginError.friendly(e, appContext)
                     } finally { busy = false }
                 }
             },
@@ -181,12 +188,32 @@ fun AppRoot(client: IMClient) {
                         accountDeleted = false
                         phase = Phase.Main
                     } catch (e: ApiException) {
-                        if (e.code == ErrCode.ACCOUNT_PENDING_DELETION && p.isNotEmpty()) {
+                        val challenge = TwoStepChallenge.from(e)
+                        if (challenge != null) twoStep.begin(challenge, u)
+                        else if (e.code == ErrCode.ACCOUNT_PENDING_DELETION && p.isNotEmpty()) {
                             pendingRestore = PendingRestore(u, p, AccountApi.deleteAtMillis(e.data))
                         } else error = LoginError.friendly(e, appContext)
                     } finally { busy = false }
                 }
             },
+            twoStep = if (!twoStep.active) null else LoginTwoStepUi(
+                failTick = twoStep.failTick,
+                onBack = { twoStep.drop(); error = "" },
+                onEdit = { error = "" },
+                onSubmit = { code ->
+                    val ch = twoStep.challenge
+                    if (ch != null && !busy) scope.launch {
+                        busy = true; error = ""
+                        try {
+                            client.loginTwoStep(twoStep.username, ch.ticket, code)
+                            twoStep.drop(); endedNotice = ""; accountDeleted = false
+                            phase = Phase.Main
+                        } catch (e: ApiException) {
+                            error = twoStep.onRejected(e).message
+                        } finally { busy = false }
+                    }
+                },
+            ),
             onRegister = { u, p, n ->
                 scope.launch {
                     busy = true; error = ""

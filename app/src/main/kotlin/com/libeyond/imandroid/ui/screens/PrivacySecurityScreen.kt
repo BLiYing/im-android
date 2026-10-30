@@ -63,6 +63,9 @@ fun PrivacySecurityScreen(
     onOpenAvatar: () -> Unit,
     onOpenBio: () -> Unit,
     onOpenPhone: () -> Unit,
+    /** 「两步验证」行的右值（开启 / 关闭；还没取到为空串）与点击。 */
+    twoStepLabel: String,
+    onOpenTwoStep: () -> Unit,
     onOpenExportData: () -> Unit,
     onOpenClearAll: () -> Unit,
     onComingSoon: (String) -> Unit,
@@ -95,6 +98,7 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.Phone -> onOpenPhone
                                 PrivacyAction.ExportData -> onOpenExportData
                                 PrivacyAction.ClearAll -> onOpenClearAll
+                                PrivacyAction.TwoStep -> onOpenTwoStep
                                 PrivacyAction.ComingSoon -> soon
                             },
                             icon = iconOf(row.icon),
@@ -106,6 +110,7 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.Avatar -> avatarLabel
                                 PrivacyAction.Bio -> bioLabel
                                 PrivacyAction.Phone -> phoneLabel
+                                PrivacyAction.TwoStep -> twoStepLabel
                                 else -> row.value
                             },
                             muted = row.isPlaceholder,

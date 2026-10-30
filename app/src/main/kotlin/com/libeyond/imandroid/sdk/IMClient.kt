@@ -118,6 +118,7 @@ class IMClient(
     val conversationsApi = ConversationsApi(http)
     /** 账号级隐私设置（目前：新会话默认的自动删除档位）。 */
     val privacy = com.libeyond.imandroid.sdk.api.PrivacyApi(http)
+    val twoStep = com.libeyond.imandroid.sdk.api.TwoStepApi(http)
     val contacts = ContactApi(http)
 
     /** uid → 头像/显名 解析器（成员表给不出身份时兜底，见 [UserProfileCache]）。内存缓存。 */
@@ -475,8 +476,13 @@ class IMClient(
     suspend fun restore(): RestoreOutcome = tokens.restore()
 
     /** 账号密码登录。成功后立即连 WS。 */
-    suspend fun login(username: String, password: String?) {
-        val r = auth.login(username, password)
+    suspend fun login(username: String, password: String?) = finishLogin(auth.login(username, password), username)
+
+    /** 登录第二步（两步验证）：成功后走与 [login] 完全相同的收尾。 */
+    suspend fun loginTwoStep(username: String, ticket: String, code: String) =
+        finishLogin(auth.loginTwoStep(ticket, code), username)
+
+    private suspend fun finishLogin(r: com.libeyond.imandroid.sdk.api.LoginResult, username: String) {
         tokens.adopt(r.token, r.uid, r.refreshToken, username)
         log.i("login_ok", "uid" to r.uid)
         downloads.syncOpenedOwner() // 「看过」登记按账号换成这个账号的

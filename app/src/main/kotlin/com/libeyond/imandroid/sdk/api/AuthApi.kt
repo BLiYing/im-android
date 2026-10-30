@@ -64,6 +64,14 @@ class AuthApi(private val http: HttpClient, private val device: DeviceIdentity) 
         return decode(http.call("POST", "/api/v1/login", body, authenticated = false), LoginResult.serializer())
     }
 
+    /**
+     * 登录第二步（PROTOCOL §7.1）：`POST /login` 回 `200020` 后带 ticket + 动态码 / 恢复码。
+     * 成功体与 [login] 逐字段相同；设备字段取自第一步，这里**不再带**。
+     * 失败：`200021`（`data.attempts_left`）/ `200022`（ticket 失效）/ `100002`（限流）。
+     */
+    suspend fun loginTwoStep(ticket: String, code: String): LoginResult =
+        decode(http.call("POST", "/api/v1/login/two-step", TwoStepApi.loginBody(ticket, code), authenticated = false), LoginResult.serializer())
+
     /** 注册。`username` 须匹配 `^[a-z0-9_]{5,32}$`；`nickname` 必填 ≤32 runes。 */
     suspend fun register(username: String, password: String, nickname: String): RegisterResult {
         val body = buildJsonObject {

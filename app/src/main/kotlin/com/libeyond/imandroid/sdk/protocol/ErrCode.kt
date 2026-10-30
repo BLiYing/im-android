@@ -34,6 +34,16 @@ object ErrCode {
      * 见 PROTOCOL §6.16（`200005 AccountPendingDeletion`，`data.delete_at` 毫秒）。
      */
     const val ACCOUNT_PENDING_DELETION = 200005
+    /** 两步验证（PROTOCOL §7.1）：密码对但需第二步，`data` 带 `ticket / methods / expires_in`。 */
+    const val TWO_STEP_REQUIRED = 200020
+    /** 动态码 / 恢复码不对、已用过或重放；登录第二步带 `data.attempts_left`。 */
+    const val TWO_STEP_CODE_INVALID = 200021
+    /** ticket 过期 / 用完 / 错满，或待确认密钥超时。 */
+    const val TWO_STEP_TICKET_INVALID = 200022
+    const val TWO_STEP_NOT_ENABLED = 200023
+    const val TWO_STEP_ALREADY_ENABLED = 200024
+    /** 服务端未配置 `IM_TWOSTEP_KEY`。 */
+    const val TWO_STEP_UNAVAILABLE = 200025
     /** 已有进行中的数据导出任务（DATA_EXPORT_DESIGN §2）。 */
     const val EXPORT_BUSY = 200010
     /** 成功导出后 24 小时内再次发起；回包 `data.retry_after_sec`。 */

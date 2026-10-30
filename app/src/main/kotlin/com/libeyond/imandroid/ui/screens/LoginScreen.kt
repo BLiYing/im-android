@@ -47,6 +47,15 @@ import com.libeyond.imandroid.ui.theme.IMThemeMode
 /** 登录页的两个页签，与 Web 的「密码 / 扫码」结构对齐（扫码待 QR P1 接）。 */
 enum class LoginTab { Password, Register }
 
+/** 登录二步页的外部状态与回调（ticket 与请求在 `AppRoot`，这里只有展示所需）。 */
+class LoginTwoStepUi(
+    val failTick: Int,
+    val onSubmit: (code: String) -> Unit,
+    val onBack: () -> Unit,
+    /** 用户开始改输入 / 切换验证方式：清掉上一次的红字。 */
+    val onEdit: () -> Unit,
+)
+
 /**
  * 登录页。**纯展示 + 本地表单态**，网络动作全经参数注入（CODING_STYLE §7②）。
  *
@@ -63,6 +72,8 @@ fun LoginScreen(
     busy: Boolean,
     error: String,
     devLoginEnabled: Boolean,
+    /** 两步验证第二步：非 null 时同页换成二步内容（页签 / 免密登录 / 表单隐藏）；null = 普通登录。 */
+    twoStep: LoginTwoStepUi? = null,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -104,6 +115,11 @@ fun LoginScreen(
             style = MaterialTheme.typography.headlineSmall,
             color = c.textPrimary,
         )
+
+        if (twoStep != null) {
+            LoginTwoStepPane(busy = busy, error = error, failTick = twoStep.failTick, onSubmit = twoStep.onSubmit, onBack = twoStep.onBack, onEdit = twoStep.onEdit)
+            return@Column
+        }
 
         // —— 页签 ——
         Row(
