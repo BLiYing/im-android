@@ -70,13 +70,18 @@ class PrivacySecurityTest {
         val data = groups[4].rows
         assertEquals(listOf(PrivacyAction.ClearAll, PrivacyAction.ExportData), data.map { it.action })
         assertTrue(data.none { it.isPlaceholder })
-        // 账号保护组：「两步验证」是活行（不再灰置、不再 comingSoon），通行密钥 / 邮箱登录仍灰置
+        // 账号保护组：「两步验证」是活行（不再灰置、不再 comingSoon），通行密钥仍灰置
         val twoStep = groups[1].rows.first()
         assertEquals(PrivacyAction.TwoStep, twoStep.action)
         assertFalse(twoStep.isPlaceholder)
+        // 邮箱登录也是活行（去掉占位）；只剩通行密钥仍灰置
+        val email = groups[1].rows.last()
+        assertEquals(PrivacyAction.Email, email.action)
+        assertFalse(email.isPlaceholder)
         val rest = groups.drop(1).flatMap { it.rows }.filter {
-            it !== autoDelete && it !in data && it !in who && it !== twoStep
+            it !== autoDelete && it !in data && it !in who && it !== twoStep && it !== email
         }
+        assertEquals(listOf(PrivacyIcon.Passkey), rest.map { it.icon })
         assertTrue(rest.all { it.isPlaceholder && it.action == PrivacyAction.ComingSoon })
     }
 

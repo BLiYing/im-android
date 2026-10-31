@@ -150,7 +150,12 @@ fun LoginScreen(
             modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(d.space3),
         ) {
-            IMTextField(username, { username = it }, stringResource(R.string.settings_info_username), enabled = !busy)
+            // 登录态可填用户名或邮箱（原样发送、保持文本键盘）；注册态仍只收用户名
+            IMTextField(
+                username, { username = it },
+                stringResource(if (tab == LoginTab.Password) R.string.login_identifier_label else R.string.settings_info_username),
+                enabled = !busy,
+            )
             IMTextField(password, { password = it }, stringResource(R.string.login_password), isPassword = true, enabled = !busy)
             if (tab == LoginTab.Register) {
                 IMTextField(nickname, { nickname = it }, stringResource(R.string.login_nickname), enabled = !busy)

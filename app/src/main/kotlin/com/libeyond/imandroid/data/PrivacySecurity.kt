@@ -11,7 +11,7 @@ import com.libeyond.imandroid.i18n.Str
  * 三端这张表逐字一致，抄错一行由 `PrivacySecurityTest` 当场抓。
  * 图标与底色用语义名，到 Lucide / `IMTheme.settingsIcons` 的映射在页面里（本层不能 import 它们）。
  *
- * 第一组两行、「自动删除消息」与「谁能看到」四行是真功能；其余是**灰置占位**（点了提示开发中）。占位行照样列出来，
+ * 第一组两行、「自动删除消息」与「谁能看到」四行是真功能；其余是**灰置占位**（点了提示开发中；目前只剩通行密钥）。占位行照样列出来，
  * 理由与「我」页相同：删掉会让三端这一页长得不一样，用户换个端就找不到东西。
  */
 enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, LastSeen, Avatar, Bio, Trash, Export }
@@ -20,7 +20,7 @@ enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, Las
 enum class PrivacyTint { Danger, Red, Blue, Gray, Purple, Teal, Orange, Green, Yellow }
 
 /** 点一行做什么。 */
-enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone, ExportData, ClearAll, TwoStep, ComingSoon }
+enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone, ExportData, ClearAll, TwoStep, Email, ComingSoon }
 
 data class PrivacyRow(
     val title: String,
@@ -63,7 +63,8 @@ object PrivacySecurity {
                 // 活行：右值 = 开启 / 关闭，由页面按 GET /users/me/two-step 填（[TwoStepRules.rowLabel]）
                 PrivacyRow(Str.s(R.string.ps_row_two_factor), PrivacyIcon.TwoStep, PrivacyTint.Gray, action = PrivacyAction.TwoStep),
                 PrivacyRow(Str.s(R.string.ps_row_passkey), PrivacyIcon.Passkey, PrivacyTint.Purple, Str.s(R.string.common_off)),
-                PrivacyRow(Str.s(R.string.ps_row_email_login), PrivacyIcon.Mail, PrivacyTint.Teal),
+                // 活行：右值 = 未绑定 / 邮箱地址，由页面按 GET /users/me/email 填（[EmailRules.rowLabel]）
+                PrivacyRow(Str.s(R.string.ps_row_email_login), PrivacyIcon.Mail, PrivacyTint.Teal, action = PrivacyAction.Email),
             ),
         ),
         PrivacyGroup(

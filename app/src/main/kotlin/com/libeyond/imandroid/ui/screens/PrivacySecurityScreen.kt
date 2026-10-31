@@ -66,6 +66,9 @@ fun PrivacySecurityScreen(
     /** 「两步验证」行的右值（开启 / 关闭；还没取到为空串）与点击。 */
     twoStepLabel: String,
     onOpenTwoStep: () -> Unit,
+    /** 「邮箱登录」行的右值（未绑定 / 邮箱地址；还没取到为空串）与点击。 */
+    emailLabel: String,
+    onOpenEmail: () -> Unit,
     onOpenExportData: () -> Unit,
     onOpenClearAll: () -> Unit,
     onComingSoon: (String) -> Unit,
@@ -99,6 +102,7 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.ExportData -> onOpenExportData
                                 PrivacyAction.ClearAll -> onOpenClearAll
                                 PrivacyAction.TwoStep -> onOpenTwoStep
+                                PrivacyAction.Email -> onOpenEmail
                                 PrivacyAction.ComingSoon -> soon
                             },
                             icon = iconOf(row.icon),
@@ -111,6 +115,7 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.Bio -> bioLabel
                                 PrivacyAction.Phone -> phoneLabel
                                 PrivacyAction.TwoStep -> twoStepLabel
+                                PrivacyAction.Email -> emailLabel
                                 else -> row.value
                             },
                             muted = row.isPlaceholder,

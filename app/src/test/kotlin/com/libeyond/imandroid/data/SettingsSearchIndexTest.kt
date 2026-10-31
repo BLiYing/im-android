@@ -20,6 +20,12 @@ class SettingsSearchIndexTest {
         assertEquals("隐私与安全 › 两步验证", all.first { it.id == "privacy_two_step" }.subtitle)
     }
 
+    @Test fun emailLoginIsSearchableUnderPrivacy() {
+        assertEquals(listOf("privacy_email_login"), hits("邮箱登录"))
+        assertEquals("隐私与安全 › 邮箱登录", all.first { it.id == "privacy_email_login" }.subtitle)
+        assertEquals(SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.Email)), all.first { it.id == "privacy_email_login" }.route)
+    }
+
     @Test fun noMatchIsEmpty() {
         assertTrue(hits("zzzz不存在").isEmpty())
     }
@@ -105,7 +111,7 @@ class SettingsSearchIndexTest {
         assertEquals("视频", v.title)
         assertEquals(listOf("数据和存储", "使用 Wi-Fi", "视频"), v.path)
         assertEquals("数据和存储 › 使用 Wi-Fi › 视频", v.subtitle)
-        assertEquals(26, all.size) // 24 + 自动删除消息（privacy_auto_delete）+ 两步验证（privacy_two_step），iOS/Web 登记表待同步
+        assertEquals(27, all.size) // 24 + 自动删除消息（privacy_auto_delete）+ 两步验证（privacy_two_step）+ 邮箱登录（privacy_email_login），iOS/Web 登记表待同步
     }
 
     @Test fun searchWifiFindsNetworkPageThenItsCategories() {

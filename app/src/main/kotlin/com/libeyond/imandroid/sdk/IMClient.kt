@@ -119,6 +119,7 @@ class IMClient(
     /** 账号级隐私设置（目前：新会话默认的自动删除档位）。 */
     val privacy = com.libeyond.imandroid.sdk.api.PrivacyApi(http)
     val twoStep = com.libeyond.imandroid.sdk.api.TwoStepApi(http)
+    val email = com.libeyond.imandroid.sdk.api.EmailApi(http)
     val contacts = ContactApi(http)
 
     /** uid → 头像/显名 解析器（成员表给不出身份时兜底，见 [UserProfileCache]）。内存缓存。 */

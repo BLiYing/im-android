@@ -124,6 +124,36 @@ class SysEventsTest {
     }
 
     @Test
+    fun `邮箱绑定与更换通知 脱敏邮箱代入 设备行可缺`() {
+        val args = SysEvents.encodeArgs(mapOf("at" to "x", "email_masked" to "a***@gmail.com", "device" to "Pixel"))
+        val bound = SysEvents.noticeText("email_bound", args)!!.lines()
+        assertEquals("你的账号已于 x 绑定登录邮箱 a***@gmail.com。", bound[0])
+        assertEquals("· 操作设备：Pixel", bound[1])
+        assertEquals("如非本人操作，请立即修改密码并检查已登录设备。", bound[2])
+        val changed = SysEvents.noticeText("email_changed", args)!!.lines()
+        assertEquals("你的账号已于 x 将登录邮箱更换为 a***@gmail.com。", changed[0])
+        assertEquals(3, changed.size)
+        val bare = SysEvents.noticeText("email_bound", SysEvents.encodeArgs(mapOf("at" to "x", "email_masked" to "a***@gmail.com")))!!.lines()
+        assertEquals(2, bare.size)
+    }
+
+    @Test
+    fun `邮箱解绑通知 无邮箱参数 设备行可缺`() {
+        val lines = SysEvents.noticeText("email_unbound", SysEvents.encodeArgs(mapOf("at" to "x", "device" to "Pixel")))!!.lines()
+        assertEquals("你的账号已于 x 解除登录邮箱绑定。", lines[0])
+        assertEquals("· 操作设备：Pixel", lines[1])
+        assertEquals(3, lines.size)
+        assertEquals(2, SysEvents.noticeText("email_unbound", SysEvents.encodeArgs(mapOf("at" to "x")))!!.lines().size)
+    }
+
+    @Test
+    fun `邮箱通知英文 同一参数走英文模板`() {
+        english()
+        val text = SysEvents.noticeText("email_bound", SysEvents.encodeArgs(mapOf("at" to "x", "email_masked" to "a***@gmail.com")))!!
+        assertEquals(true, text.contains("a***@gmail.com") && !text.contains("你的账号"))
+    }
+
+    @Test
     fun `导出完成通知三行 缺字段不崩`() {
         val args = SysEvents.encodeArgs(mapOf("size_bytes" to "5242880", "conv_count" to "3", "msg_count" to "120", "expires_at" to "bad"))
         val lines = SysEvents.noticeText("export_ready", args)!!.lines()

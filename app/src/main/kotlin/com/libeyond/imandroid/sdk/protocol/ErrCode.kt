@@ -49,6 +49,19 @@ object ErrCode {
     /** 成功导出后 24 小时内再次发起；回包 `data.retry_after_sec`。 */
     const val EXPORT_COOLDOWN = 200011
 
+    // --- 邮箱登录 2000(30-37)（PROTOCOL §7.2）---
+    const val EMAIL_INVALID = 200030
+    const val EMAIL_TAKEN = 200031
+    /** 验证码不对；`data.attempts_left`。 */
+    const val EMAIL_CODE_INVALID = 200032
+    /** 过期 / 尝试耗尽 / 无待验证请求 / 邮箱不符；`data.retry_after_sec`（0 = 现在就能重发）。 */
+    const val EMAIL_CODE_EXPIRED = 200033
+    const val EMAIL_NOT_BOUND = 200034
+    const val EMAIL_UNCHANGED = 200035
+    /** 服务端未配置 SMTP / `IM_EMAIL_KEY`。 */
+    const val EMAIL_UNAVAILABLE = 200036
+    const val EMAIL_SEND_FAILED = 200037
+
     // --- 好友 2001xx ---
     const val FRIEND_ALREADY_FRIENDS = 200101
     const val FRIEND_BLOCKED = 200102
