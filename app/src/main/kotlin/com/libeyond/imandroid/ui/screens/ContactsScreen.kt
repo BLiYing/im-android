@@ -42,8 +42,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Headphones
-import com.composables.icons.lucide.Megaphone
 import com.composables.icons.lucide.UserPlus
 import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.R
@@ -77,7 +75,7 @@ fun ContactsScreen(
     /** 右上角「添加朋友」。 */
     onAddFriend: () -> Unit,
     onOpenGroups: () -> Unit,
-    /** 尚未实现的入口（公众号/服务号）——由 Host 弹「开发中」。 */
+    /** 尚未实现的入口——由 Host 弹「开发中」。公众号/服务号入口 2026-11-03 起隐藏，暂无调用方。 */
     onComingSoon: (String) -> Unit,
     onOpenFriend: (FriendEntry) -> Unit,
     /** 左滑动作（删除 / 拉黑 / 解除拉黑）。由 Host 执行并负责二次确认。 */
@@ -134,8 +132,6 @@ fun ContactsScreen(
         // 滑开第二行时第一行自动收起、敞着的行点内容只收起不进详情。
         var openedId by remember { mutableStateOf<String?>(null) }
 
-        val officialLabel = stringResource(R.string.contacts_entry_official_account)
-        val serviceLabel = stringResource(R.string.contacts_entry_service_account)
         // 不提前 return：搜索 / 清空搜索都在同一组 remember 之后分支渲染，listState 等主列表状态不会因搜索而重建
         if (query.isNotBlank()) {
             ContactsSearchResults(
@@ -156,8 +152,8 @@ fun ContactsScreen(
                         Lucide.UserPlus, ENTRY_NEW_FRIENDS,
                         stringResource(R.string.friend_requests_title), pendingCount, onOpenNewFriends,
                     )
-                    EntryRow(Lucide.Megaphone, ENTRY_OFFICIAL, officialLabel, 0) { onComingSoon(officialLabel) }
-                    EntryRow(Lucide.Headphones, ENTRY_SERVICE, serviceLabel, 0) { onComingSoon(serviceLabel) }
+                    // 公众号 / 服务号入口暂时隐藏（2026-11-03，功能未做，三端同步）。
+                    // 恢复时加回 Megaphone(#FF9500) / Headphones(#007AFF) 两行，走 onComingSoon。
                 }
                 if (friends.isEmpty()) {
                     item {
@@ -227,8 +223,6 @@ private const val ENTRY_ITEMS = 1
 
 private val ENTRY_GROUPS = Color(0xFF34C759)
 private val ENTRY_NEW_FRIENDS = Color(0xFF30B0C7)
-private val ENTRY_OFFICIAL = Color(0xFFFF9500)
-private val ENTRY_SERVICE = Color(0xFF007AFF)
 
 @Composable
 private fun EntryRow(
