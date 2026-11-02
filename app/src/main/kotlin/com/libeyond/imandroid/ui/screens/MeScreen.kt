@@ -32,6 +32,7 @@ import com.composables.icons.lucide.Folder
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.HardDrive
 import com.composables.icons.lucide.IdCard
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Laptop
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.Lucide
@@ -98,6 +99,8 @@ fun MeScreen(
     onComingSoon: (String) -> Unit,
     /** 「分享我的名片」：开会话选择页发名片（不再是占位）。 */
     onShareCard: () -> Unit = {},
+    /** 「关于我们」：隐私政策 / 服务条款 / 技术支持 / 版本的二级页。 */
+    onOpenAbout: () -> Unit = {},
     onLogout: () -> Unit,
 ) {
     val c = IMTheme.colors
@@ -114,6 +117,7 @@ fun MeScreen(
     val dataStorage = stringResource(R.string.ios_settings_row_data_storage)
     val appearance = stringResource(R.string.ios_settings_row_appearance)
     val powerSaving = stringResource(R.string.ios_settings_row_power_saving)
+    val about = stringResource(R.string.about_title)
     val logout = stringResource(R.string.settings_logout)
 
     val groups = listOf(
@@ -132,6 +136,9 @@ fun MeScreen(
             MeRow(appearance, Lucide.Contrast, ic.blue, onClick = onOpenAppearance),
             MeRow(powerSaving, Lucide.Zap, ic.yellow, rightValue = powerSavingLabel, onClick = onOpenPowerSaving),
             MeRow(stringResource(R.string.settings_language_title), Lucide.Globe, ic.purple, rightValue = languageLabel, onClick = onOpenLanguage),
+        ),
+        listOf(
+            MeRow(about, Lucide.Info, ic.gray, onClick = onOpenAbout),
         ),
         listOf(
             MeRow(logout, null, Color.Unspecified, destructive = true, onClick = onLogout),

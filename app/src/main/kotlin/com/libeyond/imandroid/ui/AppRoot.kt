@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.BuildConfig
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
@@ -121,6 +122,7 @@ fun AppRoot(client: IMClient) {
     // im-rtc 通话的生命周期跟着 IM 登录态走：进主界面上线，回登录页（退出 / 被踢 / 被封）下线。
     // 只在 Login 停、Restoring 不动：Activity 重建时 phase 会回到 Restoring，那不是退出，不能挂掉在途通话。
     val appContext = LocalContext.current.applicationContext
+    val legalOpenFailed = stringResource(R.string.about_open_failed)
     LaunchedEffect(phase) {
         when (phase) {
             Phase.Main -> {
@@ -177,7 +179,9 @@ fun AppRoot(client: IMClient) {
     when (phase) {
         Phase.Restoring -> Splash()
 
-        Phase.Login -> LoginScreen(
+        // 登录页也套一层应用内浏览器：横向滑入（与 app 页面导航同向）、showHost=false（法务页是自家后端，
+        // 标题只显示网页 <title> 不摆服务器 IP）；登录页留在底下不被换出，表单输入不会丢。
+        Phase.Login -> WebLinkHost(horizontal = true, showHost = false) { LoginScreen(
             onLogin = { u, p ->
                 scope.launch {
                     busy = true; error = ""
@@ -247,7 +251,10 @@ fun AppRoot(client: IMClient) {
             busy = busy,
             error = if (error.isNotEmpty()) error else endedNotice,
             devLoginEnabled = BuildConfig.DEBUG,
-        )
+            // 底部同意链接走应用内浏览器（LoginScreen 里读 LocalOpenLink，由上面的 WebLinkHost 提供）。
+            // host 为空/非法拼不出链接时，与 iOS/关于我们页一致地显示「无法打开」，不静默吞掉。
+            onLegalFailed = { error = legalOpenFailed },
+        ) }
 
         Phase.Main -> {
             // 自动下载策略：进主界面先拉一次，不等 WS 连上（HTTP 往往比握手先通）；

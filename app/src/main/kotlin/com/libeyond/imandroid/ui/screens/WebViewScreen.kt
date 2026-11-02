@@ -88,9 +88,14 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  *
  * 日志**只记错误码不记地址**：链接里常带着对方的私人参数（LOGGING 脱敏约定）。
  */
+/**
+ * @param showHost 顶栏是否显示站点主机名。默认显示（聊天里打开任意外链要让用户看清落在哪个域名，防钓鱼）。
+ *   打开**第一方可信页**（如登录页的服务条款/隐私政策，就在自家后端）时传 false：只显示网页 `<title>`，
+ *   不把服务器地址/IP 摆到标题上。
+ */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-internal fun WebViewScreen(url: String, onClose: () -> Unit) {
+internal fun WebViewScreen(url: String, onClose: () -> Unit, showHost: Boolean = true) {
     val c = IMTheme.colors
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -104,6 +109,9 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit) {
 
     val webView = remember(url) {
         WebView(context).apply {
+            // WebView 首帧默认白底，页面背景还没绘上来前会「闪一下白」（打开动画里尤其明显）。
+            // 置透明：加载完成前透出下层 Column 的 pageBackground，页面画好后由它自己的 body 背景接管。
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
             settings.javaScriptEnabled = true   // 绝大多数网页离了 JS 就是白屏；SFSafari 同样执行 JS
             settings.domStorageEnabled = true
             settings.allowFileAccess = false
@@ -194,8 +202,9 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit) {
         val loading = progress in 1..99
         val copiedLinkToast = stringResource(R.string.common_copied_link)
         IMTopBar(
-            title = title.ifBlank { host },
-            subtitle = if (title.isBlank()) "" else host,
+            // showHost=false：第一方可信页只用网页 <title>，不把服务器地址/IP 显示出来（加载中 <title> 未到时暂留空）。
+            title = title.ifBlank { if (showHost) host else "" },
+            subtitle = if (!showHost || title.isBlank()) "" else host,
             leftIcon = Lucide.X,
             leftDescription = stringResource(R.string.common_close),
             onLeft = onClose,

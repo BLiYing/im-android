@@ -27,10 +27,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.libeyond.imandroid.BuildConfig
+import com.libeyond.imandroid.data.AboutLinks
+import com.libeyond.imandroid.data.LanguageStore
+import com.libeyond.imandroid.ui.components.LocalOpenLink
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
 import androidx.compose.foundation.Image
@@ -72,6 +80,8 @@ fun LoginScreen(
     busy: Boolean,
     error: String,
     devLoginEnabled: Boolean,
+    /** 底部法务链接拼不出地址（host 为空/非法）时回调：宿主显示「无法打开」。正常情况下链接走应用内浏览器（LocalOpenLink）。 */
+    onLegalFailed: () -> Unit = {},
     /** 两步验证第二步：非 null 时同页换成二步内容（页签 / 免密登录 / 表单隐藏）；null = 普通登录。 */
     twoStep: LoginTwoStepUi? = null,
 ) {
@@ -210,7 +220,46 @@ fun LoginScreen(
                 )
             }
         }
+
+        // 底部隐式同意提示（三端一致，ABOUT_LEGAL_DESIGN 批②）：点「登录/注册」即视为同意，无勾选框。
+        // 二步页在上方已 return@Column，不显示。
+        LoginAgreeFooter(host = host, onFailed = onLegalFailed)
     }
+}
+
+/**
+ * 「继续即表示同意《服务条款》和《隐私政策》」：复用 about.terms / about.privacy_policy 作链接文案
+ * （中文《》在格式串里），两段用 Compose 链接注解可点，点击分流到对应法务页。
+ */
+@Composable
+private fun LoginAgreeFooter(host: String, onFailed: () -> Unit) {
+    val c = IMTheme.colors
+    // 走应用内浏览器（LocalOpenLink，由外层 WebLinkHost 提供），不跳系统浏览器——与「关于我们」页一致。
+    val openLink = LocalOpenLink.current
+    val open = { path: String ->
+        val url = AboutLinks.legalUrl(host, BuildConfig.USE_TLS, path, LanguageStore.resolved)
+        if (url != null && openLink != null) openLink(url) else onFailed()
+    }
+    val terms = stringResource(R.string.about_terms)
+    val privacy = stringResource(R.string.about_privacy_policy)
+    val full = stringResource(R.string.about_agree_footer, terms, privacy)
+    val linkStyles = TextLinkStyles(style = SpanStyle(color = c.accent))
+    val text = buildAnnotatedString {
+        append(full)
+        full.indexOf(terms).takeIf { it >= 0 }?.let {
+            addLink(LinkAnnotation.Clickable("terms", linkStyles) { open(AboutLinks.PATH_TERMS) }, it, it + terms.length)
+        }
+        full.indexOf(privacy).takeIf { it >= 0 }?.let {
+            addLink(LinkAnnotation.Clickable("privacy", linkStyles) { open(AboutLinks.PATH_PRIVACY) }, it, it + privacy.length)
+        }
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = c.textSecondary,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth(),
+    )
 }
 
 @Preview(name = "登录·浅色", showBackground = true)

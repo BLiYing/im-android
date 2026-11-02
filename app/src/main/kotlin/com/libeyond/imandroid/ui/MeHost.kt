@@ -115,6 +115,7 @@ fun MeHost(
             MePage.Language -> LanguageHost(onBack = { page = MePage.List })
             MePage.Appearance -> AppearanceHost(onBack = { page = MePage.List })
             MePage.PowerSaving -> PowerSavingHost(client = client, onBack = { page = MePage.List })
+            MePage.About -> AboutHost(client = client, onBack = { page = MePage.List })
             MePage.DeleteAccount -> DeleteAccountHost(
                 client = client,
                 onDeleted = onAccountDeleted,
@@ -158,6 +159,7 @@ fun MeHost(
                         onOpenPowerSaving = { page = MePage.PowerSaving },
                         powerSavingLabel = powerSavingEntryLabel(),
                         onShareCard = { page = MePage.ShareCard },
+                        onOpenAbout = { page = MePage.About },
                         onComingSoon = { toast = Str.s(R.string.common_coming_soon, it) },
                         onLogout = { confirmLogout = true },
                     )

@@ -4,7 +4,7 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
 
 /** 设置项图标（纯数据；UI 层映射到 Lucide 图标，与「我」页同款）。 */
-enum class SettingsGlyph { Bookmark, Phone, Laptop, IdCard, Bell, Lock, HardDrive, Contrast, Zap, Globe, Ban, Key, Volume, Smartphone, Wifi, Image, Video, File, Timer, ShieldCheck, Mail }
+enum class SettingsGlyph { Bookmark, Phone, Laptop, IdCard, Bell, Lock, HardDrive, Contrast, Zap, Globe, Ban, Key, Volume, Smartphone, Wifi, Image, Video, File, Timer, ShieldCheck, Mail, Info }
 
 /** 设置项图标底色（UI 层映射到 `IMTheme.settingsIcons`）。 */
 enum class SettingsTint { Blue, Green, Orange, Red, Gray, Yellow, Purple, Teal }
@@ -82,6 +82,11 @@ object SettingsSearchIndex {
         top("appearance", R.string.ios_settings_row_appearance, SettingsGlyph.Contrast, SettingsTint.Blue, MePage.Appearance)
         top("power_saving", R.string.ios_settings_row_power_saving, SettingsGlyph.Zap, SettingsTint.Yellow, MePage.PowerSaving)
         top("language", R.string.settings_language_title, SettingsGlyph.Globe, SettingsTint.Purple, MePage.Language)
+        // 关于我们：二级页里的隐私政策 / 条款 / 支持 / 版本不单独登记，靠别名命中本入口（同 iOS）
+        Str.s(R.string.about_title).let {
+            add(SettingsSearchEntry("about", it, listOf(it), SettingsGlyph.Info, SettingsTint.Gray, SettingsRoute(MePage.About),
+                aliases = aliasesOf(Str.s(R.string.search_alias_about))))
+        }
 
         // 通知：私聊 / 群聊两个类型页，各自下面一个「提示音」选择页
         for (group in listOf(false, true)) {

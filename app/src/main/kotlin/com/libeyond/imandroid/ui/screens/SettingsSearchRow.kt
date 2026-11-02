@@ -26,6 +26,7 @@ import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.HardDrive
 import com.composables.icons.lucide.IdCard
 import com.composables.icons.lucide.Image
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Key
 import com.composables.icons.lucide.Mail
 import com.composables.icons.lucide.ShieldCheck
@@ -96,6 +97,7 @@ private fun glyphOf(g: SettingsGlyph): ImageVector = when (g) {
     SettingsGlyph.Timer -> Lucide.Timer
     SettingsGlyph.ShieldCheck -> Lucide.ShieldCheck
     SettingsGlyph.Mail -> Lucide.Mail
+    SettingsGlyph.Info -> Lucide.Info
 }
 
 private fun tintOf(t: SettingsTint, ic: IMSettingsIconColors): Color = when (t) {

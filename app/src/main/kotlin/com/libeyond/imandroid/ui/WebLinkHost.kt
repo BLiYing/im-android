@@ -2,7 +2,9 @@ package com.libeyond.imandroid.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
@@ -27,38 +29,48 @@ private const val WEB_ANIM_MS = 300
  * 包在整个主界面外面（AppRoot）：聊天页、单聊详情、群资料、聊天记录里点开的链接都走这一个，
  * 浏览器页恒在最上层——iOS 的 SFSafariViewController 也是从当前最上层 present 的。
  * 返回键：浏览器页后进组合，它的 BackHandler 后注册、先吃到，底下各页的返回判定不必知道它。
+ *
+ * @param horizontal true：浏览器页从右侧横向滑入（与 app 页面导航 [PushTransition] 同向，登录页法务链接用）；
+ *   false（默认）：从底部竖向弹出（模仿 iOS SFSafari 的 modal present，聊天里打开任意链接用）。
+ * @param showHost 透传给 [WebViewScreen]：顶栏是否显示主机名（第一方可信页传 false，不露服务器 IP）。
  */
 @Composable
-internal fun WebLinkHost(content: @Composable () -> Unit) {
+internal fun WebLinkHost(horizontal: Boolean = false, showHost: Boolean = true, content: @Composable () -> Unit) {
     var url by remember { mutableStateOf<String?>(null) }
     // 非 http/https 的地址不在 App 内打开（iOS `openLink:` 同样直接 return）
     val open: (String) -> Unit = remember { { raw -> WebLinks.entryUrl(raw)?.let { url = it } } }
     CompositionLocalProvider(LocalOpenLink provides open) {
         Box(Modifier.fillMaxSize()) {
             content()
-            WebPageLayer(url = url, onClose = { url = null })
+            WebPageLayer(url = url, horizontal = horizontal, showHost = showHost, onClose = { url = null })
         }
     }
 }
 
 /**
- * 用 AnimatedContent 而不是 `if (url != null)`：关掉时地址已经置空，要靠它把旧页留到滑下去为止。
+ * 用 AnimatedContent 而不是 `if (url != null)`：关掉时地址已经置空，要靠它把旧页留到滑走为止。
  * 目标是 null 时这一层是个空盒子，不接触摸，底下的页照常可点。
  */
 @Composable
-private fun WebPageLayer(url: String?, onClose: () -> Unit) {
+private fun WebPageLayer(url: String?, horizontal: Boolean, showHost: Boolean, onClose: () -> Unit) {
     AnimatedContent(
         targetState = url,
         modifier = Modifier.fillMaxSize(),
         transitionSpec = {
-            val t = slideInVertically(tween(WEB_ANIM_MS)) { it } togetherWith
-                slideOutVertically(tween(WEB_ANIM_MS)) { it }
+            // 横向：从右滑入 / 向右滑出；竖向：从底部弹入 / 向底部落下。
+            val t = if (horizontal) {
+                slideInHorizontally(tween(WEB_ANIM_MS)) { it } togetherWith
+                    slideOutHorizontally(tween(WEB_ANIM_MS)) { it }
+            } else {
+                slideInVertically(tween(WEB_ANIM_MS)) { it } togetherWith
+                    slideOutVertically(tween(WEB_ANIM_MS)) { it }
+            }
             // 进场时浏览器页在上；退场时它是进场那一刻记下的 zIndex=1，仍在「空」之上滑走
             t.targetContentZIndex = if (targetState == null) 0f else 1f
             t using null
         },
         label = "web",
     ) { u ->
-        if (u != null) WebViewScreen(url = u, onClose = onClose)
+        if (u != null) WebViewScreen(url = u, onClose = onClose, showHost = showHost)
     }
 }

@@ -111,7 +111,7 @@ class SettingsSearchIndexTest {
         assertEquals("视频", v.title)
         assertEquals(listOf("数据和存储", "使用 Wi-Fi", "视频"), v.path)
         assertEquals("数据和存储 › 使用 Wi-Fi › 视频", v.subtitle)
-        assertEquals(27, all.size) // 24 + 自动删除消息（privacy_auto_delete）+ 两步验证（privacy_two_step）+ 邮箱登录（privacy_email_login），iOS/Web 登记表待同步
+        assertEquals(28, all.size) // 24 + 自动删除消息（privacy_auto_delete）+ 两步验证（privacy_two_step）+ 邮箱登录（privacy_email_login）+ 关于我们（about），iOS/Web 登记表待同步
     }
 
     @Test fun searchWifiFindsNetworkPageThenItsCategories() {
