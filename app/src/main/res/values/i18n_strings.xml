@@ -1006,6 +1006,8 @@
     <plurals name="forward_picker_title">
         <item quantity="other">转发到（%1$d 条）</item>
     </plurals>
+    <string name="forward_toast_forwarded_to_name">已转发到 %1$s</string>
+    <string name="forward_toast_sent_to_name">已发送到 %1$s</string>
     <string name="friend_block_confirm">拉黑该联系人？拉黑后将不再收到对方消息。</string>
     <string name="friend_block_done">已拉黑</string>
     <string name="friend_block_failed_toast">拉黑失败</string>
@@ -1963,6 +1965,31 @@
     <string name="settings_row_privacy">隐私与安全</string>
     <string name="settings_row_stickers">贴纸与表情</string>
     <string name="settings_title">设置</string>
+    <string name="share_group_invite_text">邀请你加入群聊「%1$s」</string>
+    <string name="share_method_other_apps">其他应用…</string>
+    <string name="share_method_title_card">分享我的名片</string>
+    <string name="share_method_title_group">分享群聊邀请</string>
+    <string name="share_method_to_friends">发送给朋友</string>
+    <plurals name="share_picker_bar_hint">
+        <item quantity="other">选择最多 %1$d 个好友或群聊</item>
+    </plurals>
+    <plurals name="share_picker_confirm_title">
+        <item quantity="other">分别发送给（%1$d）</item>
+    </plurals>
+    <string name="share_picker_load_failed_retry">加载失败，点击重试</string>
+    <string name="share_picker_my_friends">我的好友</string>
+    <string name="share_picker_my_groups">我的群聊</string>
+    <string name="share_picker_no_friends">没有可选的好友</string>
+    <string name="share_picker_no_groups">暂无群聊</string>
+    <string name="share_picker_recent">最近聊天</string>
+    <string name="share_picker_search_friends">搜索好友</string>
+    <string name="share_picker_search_groups">搜索群聊</string>
+    <string name="share_picker_section_friends">好友</string>
+    <string name="share_picker_section_groups">群聊</string>
+    <string name="share_picker_selected_of_max">已选 %1$d/%2$d</string>
+    <plurals name="share_preview_each_messages">
+        <item quantity="other">[逐条转发] %1$d 条消息</item>
+    </plurals>
     <string name="sidebar_tab_chats">消息</string>
     <string name="sidebar_tab_unread_aria">有未读消息</string>
     <string name="storage_clear_cache_failed">清除缓存失败</string>

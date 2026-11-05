@@ -1050,6 +1050,8 @@
         <item quantity="one">Forward to (%1$d message)</item>
         <item quantity="other">Forward to (%1$d messages)</item>
     </plurals>
+    <string name="forward_toast_forwarded_to_name">Forwarded to %1$s</string>
+    <string name="forward_toast_sent_to_name">Sent to %1$s</string>
     <string name="friend_block_confirm">Block this contact? You won’t receive their messages anymore.</string>
     <string name="friend_block_done">Blocked</string>
     <string name="friend_block_failed_toast">Couldn\'t block this user</string>
@@ -2019,6 +2021,34 @@
     <string name="settings_row_privacy">Privacy &amp; security</string>
     <string name="settings_row_stickers">Stickers &amp; emoji</string>
     <string name="settings_title">Settings</string>
+    <string name="share_group_invite_text">You\'re invited to join the group \"%1$s\"</string>
+    <string name="share_method_other_apps">Other apps…</string>
+    <string name="share_method_title_card">Share my card</string>
+    <string name="share_method_title_group">Share group invite</string>
+    <string name="share_method_to_friends">Send to friends</string>
+    <plurals name="share_picker_bar_hint">
+        <item quantity="one">Select up to %1$d friend or group</item>
+        <item quantity="other">Select up to %1$d friends or groups</item>
+    </plurals>
+    <plurals name="share_picker_confirm_title">
+        <item quantity="one">Send separately to (%1$d)</item>
+        <item quantity="other">Send separately to (%1$d)</item>
+    </plurals>
+    <string name="share_picker_load_failed_retry">Failed to load. Tap to retry.</string>
+    <string name="share_picker_my_friends">My Friends</string>
+    <string name="share_picker_my_groups">My Groups</string>
+    <string name="share_picker_no_friends">No friends to choose</string>
+    <string name="share_picker_no_groups">No groups</string>
+    <string name="share_picker_recent">Recent Chats</string>
+    <string name="share_picker_search_friends">Search friends</string>
+    <string name="share_picker_search_groups">Search groups</string>
+    <string name="share_picker_section_friends">Friends</string>
+    <string name="share_picker_section_groups">Groups</string>
+    <string name="share_picker_selected_of_max">%1$d/%2$d selected</string>
+    <plurals name="share_preview_each_messages">
+        <item quantity="one">[Forward individually] %1$d message</item>
+        <item quantity="other">[Forward individually] %1$d messages</item>
+    </plurals>
     <string name="sidebar_tab_chats">Messages</string>
     <string name="sidebar_tab_unread_aria">Unread messages</string>
     <string name="storage_clear_cache_failed">Couldn\'t clear the cache</string>

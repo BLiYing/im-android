@@ -1,12 +1,18 @@
 package com.libeyond.imandroid.ui
 
+import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.CardContent
 import com.libeyond.imandroid.data.DownloadPhase
 import com.libeyond.imandroid.data.FavoritePick
 import com.libeyond.imandroid.data.Forward
+import com.libeyond.imandroid.data.MediaUrl
+import com.libeyond.imandroid.data.MessagePreview
 import com.libeyond.imandroid.data.SelectionActions
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.protocol.ContentType
 import java.util.UUID
 
 /**
@@ -65,4 +71,21 @@ internal suspend fun sendFavoritesTo(client: IMClient, msgs: List<MessageEntity>
         client.messages.forward(msg = m, toConvId = conv.convId, to = to, origin = Forward.originOf(m, owner, myName))
     }
     return FavoritePick.sentText(live.size, msgs.size - live.size)
+}
+
+/**
+ * 分享选择页确认面板里的内容预览（SHARE_PICKER_UX_SKETCH ④），复用已有摘要口径：
+ * 合并转发 = 「[聊天记录]」；逐条转发多条 = 「[逐条转发] N 条消息」；单条 = 这一条的摘要——
+ * 文件写文件名、名片写「[个人名片] 昵称」、聊天记录写记录标题，其余同会话列表预览（[MessagePreview]）。
+ */
+internal fun forwardPreview(msgs: List<MessageEntity>, record: String?, owner: String): String {
+    if (record != null) return Str.s(R.string.preview_chat_record)
+    if (msgs.size > 1) return Str.p(R.plurals.share_preview_each_messages, msgs.size, msgs.size)
+    val m = msgs.singleOrNull() ?: return ""
+    return when (m.contentType) {
+        ContentType.FILE -> Str.s(R.string.quote_snapshot_file_named, MediaUrl.displayFileName(m.content, m.fileName.orEmpty()))
+        ContentType.CONTACT -> CardContent.contactPreview(m.content)
+        ContentType.CHAT_RECORD -> CardContent.parseRecord(m.content, maxLines = 0)?.title ?: Str.s(R.string.preview_chat_record)
+        else -> MessagePreview.of(m.contentType, m.content, m.caption, viewerIsSender = m.sender == owner)
+    }
 }

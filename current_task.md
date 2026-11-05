@@ -6,10 +6,13 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **分享选择页：好友/群聊入口 + 底部已选栏 + 发送确认（2026-11-05，编译 + 单测绿，未装机目测）**：规格 `../IMServer/docs/design/sketches/SHARE_PICKER_UX_SKETCH.html`。共用页仍是 `ui/screens/ForwardPickerScreen.kt`，新参数 `sources`（传了才出入口行/底栏/三源搜索，「添加例外」不传，行为不变）/`preview`/`exclude`；选择模型 `data/SharePick.kt`（按 convId 共用一份已选、合计 9、好友 convId 走 `data/ConvIds.kt`，`IMClient.conversationStubFor` 也改用它），单测 `SharePickTest`；数据 `ui/SharePickSourcesLoader.kt`（离线快照→网络）；子页 `SharePickSubPage`、底栏 `SharePickBottomBar`、确认面板 `SharePickConfirmSheet`（ModalBottomSheet）；建群资料页成员条抽成 `ui/components/SelectedAvatarStrip.kt`（`SelectedAvatarChip` 一份实现，建群条 / 分享底栏 / 确认面板网格共用）；好友/群拉取失败且无快照 → 子页「加载失败，点击重试」。`Forward.toggleTarget`/`targetsInOrder` 已删，勾选判据只在 `SharePickSelection`。二维码页「分享」先选「发送给朋友 / 其他应用…」（`ui/QrShareToFriends.kt`）：名片码走 `ShareMyCardHost`，群码/群链接发「邀请你加入群聊「X」\n链接」文本。
 - 近期功能（邮箱登录、两步验证、清除所有对话、删除会话统一口径、导出我的数据、自动删除 v2、会话列表编辑模式、注销账号、置顶面板、聊天文件夹、失效媒体口径等）均已落地并推送，详情见 `current_task.archive.md` 末段。
 - 真机目测欠账：邮箱登录、导出我的数据、自动删除 v2、置顶面板、气泡尾角/会话列表待审行/转文字文案、好友成立系统消息/收藏页/发名片确认（均未装机或未目测）。原文见 archive。
 
 ## 下一步
+
+00. **分享选择页真机目测**（浅/深色）：转发单条/多条/合并、收藏转发、归档转发、资料页推荐名片、我→分享我的名片、我的二维码/群二维码/群链接「分享 → 发送给朋友」；子页返回保留已选、选满 9 吐司、底栏 × 与确认面板 × 同步、发给没聊过的好友后会话列表出现（靠 ack 的 `bumpConversation` 造行，非发送瞬间乐观插行）。子页切换无转场动画（同卡片内直接换内容）。
 
 0a. **清除所有对话真机目测**（OPPO：N 文案/ toast / 失败红字 / 聊天页停留中被清保持打开且为空 / 清后新消息会话复现 / 杀进程重进不拉回历史 / 另一台在线设备同步）。
 0. **置顶面板真机目测**（浅/深色；各类型各置顶一条：文本长文 / 图 / 视频 / 语音 / 文件 / 引用 / 转发 / 名片；半屏 ↔ 全屏拖动时底栏位置、长按菜单位置、定位跳转、取消所有后横幅消失、无权限成员视图）。

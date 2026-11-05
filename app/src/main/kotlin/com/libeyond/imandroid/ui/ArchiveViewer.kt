@@ -223,14 +223,17 @@ internal fun ArchiveForwardPicker(
 ) {
     val owner = client.uid.orEmpty()
     val convs by client.repo.observeConversations(owner).collectAsState(initial = emptyList())
+    val msg = remember(target, owner, convId) { target.toMessageEntity(owner, convId) }
     ForwardPickerScreen(
         conversations = convs,
         onCancel = onDismiss,
         onToast = onToast,
+        sources = rememberSharePickSources(client),
+        preview = remember(msg) { forwardPreview(listOf(msg), null, owner) },
         onConfirm = { targets ->
             onDismiss()
             scope.launch {
-                onToast(forwardMessages(client, listOf(target.toMessageEntity(owner, convId)), targets))
+                onToast(forwardMessages(client, listOf(msg), targets))
             }
         },
     )

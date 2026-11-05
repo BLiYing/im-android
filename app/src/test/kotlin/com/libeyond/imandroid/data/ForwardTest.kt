@@ -5,7 +5,6 @@ import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.protocol.ContentType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -91,11 +90,8 @@ class ForwardTest {
 
     @Test
     fun `转发目标上限 9，与 iOS Web 同值`() {
-        val full = (1..9).map { "c$it" }.toSet()
+        // 勾选 / 上限 / 发送顺序的行为测试在 SharePickTest（SharePickSelection 是唯一的写入口）
         assertEquals(9, Forward.MAX_TARGETS)
-        assertNull(Forward.toggleTarget(full, "c10"))
-        assertEquals(8, Forward.toggleTarget(full, "c3")?.size)
-        assertEquals(1, Forward.toggleTarget(emptySet(), "c1")?.size)
     }
 
     // ——— 「添加例外」选择页过滤（NOTIFICATIONS_P1_DESIGN §2） ———

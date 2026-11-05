@@ -42,6 +42,11 @@ fun ShareMyCardHost(client: IMClient, me: UserCard?, onBack: () -> Unit) {
             conversations = conversations,
             onCancel = onBack,
             onToast = { toast = it },
+            sources = rememberSharePickSources(client),
+            // remember：cachedMyProfile 每次都解一遍 JSON，别在每次重组（会话列表变动、吐司）里重算
+            preview = remember(me) {
+                Str.s(R.string.quote_snapshot_contact_named, (me ?: client.cachedMyProfile())?.nickname.orEmpty().ifBlank { client.myPublicName() })
+            },
             onConfirm = { picked ->
                 if (sending) return@ForwardPickerScreen
                 val card = me ?: client.cachedMyProfile()

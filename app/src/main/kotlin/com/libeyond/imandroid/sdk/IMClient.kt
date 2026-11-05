@@ -342,10 +342,9 @@ class IMClient(
      */
     fun conversationStubFor(peerUid: String, title: String, avatarUrl: String): ConversationEntity {
         val me = session.uid.orEmpty()
-        val (a, b) = if (me <= peerUid) me to peerUid else peerUid to me
         return ConversationEntity(
             ownerUid = me,
-            convId = "u_${a}_u_$b",
+            convId = com.libeyond.imandroid.data.ConvIds.privateOf(me, peerUid),
             isGroup = false,
             peerUid = peerUid,
             title = title,

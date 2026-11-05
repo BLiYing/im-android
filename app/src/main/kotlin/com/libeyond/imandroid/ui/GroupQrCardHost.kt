@@ -7,6 +7,8 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -15,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -67,6 +70,9 @@ fun GroupQrCardHost(
     var toast by remember(convId) { mutableStateOf<String?>(null) }
     var confirmReset by remember(convId) { mutableStateOf(false) }
     var pendingSave by remember(convId) { mutableStateOf(false) }
+    /** 「分享」先选方式；「发送给朋友」开分享选择页发群邀请文字（SHARE_PICKER_UX_SKETCH ⑤）。 */
+    var choosingShare by remember(convId) { mutableStateOf(false) }
+    var sendingInvite by remember(convId) { mutableStateOf(false) }
 
     LaunchedEffect(convId) {
         runCatchingCancellable { client.qr.groupQR(convId) }
@@ -110,6 +116,28 @@ fun GroupQrCardHost(
         if (granted) saveNow() else toast = Str.s(R.string.media_storage_permission_denied_save)
     }
 
+    fun shareToOtherApps() {
+        val code = card?.codeString.orEmpty()
+        if (asLink) {
+            // 链接页只分享文字链接，不带图。
+            if (code.isEmpty()) toast = Str.s(R.string.qr_card_link_not_ready)
+            else ImageExport.shareText(context, code)?.let { toast = it }
+            return
+        }
+        val matrix = QrEncode.encode(code)
+        if (matrix == null) {
+            toast = Str.s(R.string.qr_card_not_ready)
+        } else {
+            scope.launch {
+                val err = withContext(Dispatchers.IO) {
+                    ImageExport.shareImage(context, qrToBitmap(matrix), code, "im_group_qr.png")
+                }
+                err?.let { toast = it }
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
     QrCardScreen(
         card = card,
         title = if (asLink) stringResource(R.string.qr_card_group_title_link) else stringResource(R.string.qr_card_group_title_code),
@@ -142,26 +170,7 @@ fun GroupQrCardHost(
         linkMode = asLink,
         resetText = stringResource(R.string.qr_card_reset_group),
         onViewCode = onViewCode,
-        onShare = {
-            val code = card?.codeString.orEmpty()
-            if (asLink) {
-                // 链接页只分享文字链接，不带图。
-                if (code.isEmpty()) toast = Str.s(R.string.qr_card_link_not_ready)
-                else ImageExport.shareText(context, code)?.let { toast = it }
-                return@QrCardScreen
-            }
-            val matrix = QrEncode.encode(code)
-            if (matrix == null) {
-                toast = Str.s(R.string.qr_card_not_ready)
-            } else {
-                scope.launch {
-                    val err = withContext(Dispatchers.IO) {
-                        ImageExport.shareImage(context, qrToBitmap(matrix), code, "im_group_qr.png")
-                    }
-                    err?.let { toast = it }
-                }
-            }
-        },
+        onShare = { choosingShare = true },
         onReset = if (canReset && !asLink) { { confirmReset = true } } else null, // 链接页不放重置（重置只在二维码页）
         onBack = onBack,
     )
@@ -182,7 +191,26 @@ fun GroupQrCardHost(
         )
     }
 
+    if (choosingShare) {
+        QrShareMethodSheet(
+            title = stringResource(R.string.share_method_title_group),
+            onToFriends = {
+                // 码还没取到就没有链接可发
+                if (card?.codeString.isNullOrEmpty()) toast = Str.s(R.string.qr_card_link_not_ready) else sendingInvite = true
+            },
+            onOtherApps = { shareToOtherApps() },
+            onDismiss = { choosingShare = false },
+        )
+    }
+    if (sendingInvite) {
+        GroupInviteSendPicker(
+            client = client, convId = convId, groupName = groupName, link = card?.codeString.orEmpty(), scope = scope,
+            onClose = { sendingInvite = false }, onToast = { toast = it },
+        )
+    }
+
     toast?.let { IMToast(it) { toast = null } }
+    }
 }
 
 /** 码页/链接页底部提示：有到期时间就写具体日期（与 iOS 同一套文案），没有则退回固定 7 天口径。 */

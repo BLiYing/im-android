@@ -7,6 +7,8 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -15,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -58,6 +61,9 @@ fun QrCardHost(
     var error by remember { mutableStateOf("") }
     var toast by remember { mutableStateOf<String?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
+    /** 「分享」先选方式（发送给朋友 / 其他应用…），选了「发送给朋友」再开名片分享选择页。 */
+    var choosingShare by remember { mutableStateOf(false) }
+    var sendingCard by remember { mutableStateOf(false) }
     /** true = 权限拿到后立刻继续保存（Android 9 及更早才会走到）。 */
     var pendingSave by remember { mutableStateOf(false) }
 
@@ -105,6 +111,26 @@ fun QrCardHost(
         if (granted) saveNow() else toast = Str.s(R.string.media_storage_permission_denied_save)
     }
 
+    fun shareToOtherApps() {
+        val code = card?.codeString.orEmpty()
+        val matrix = QrEncode.encode(code)
+        if (matrix == null) {
+            toast = Str.s(R.string.qr_card_not_ready)
+        } else {
+            scope.launch {
+                // 出图 **和写文件** 都在 IO 上：shareImage 会压一张 PNG 落到 cacheDir，
+                // 留在主线程是实打实的磁盘写（存相册那条路本来就在 IO，两条要一致）。
+                // startActivity 本身不限线程。
+                val err = withContext(Dispatchers.IO) {
+                    ImageExport.shareImage(context, qrToBitmap(matrix), code, "im_qr.png")
+                }
+                err?.let { toast = it }
+            }
+        }
+    }
+
+    // 外包一层 Box：分享方式菜单与名片选择页是叠在本页之上的浮层，嵌在扫一扫页签里时也要有个能叠的父布局
+    Box(Modifier.fillMaxSize()) {
     QrCardScreen(
         showTopBar = !embedded,
         card = card,
@@ -135,23 +161,7 @@ fun QrCardHost(
                 saveNow()
             }
         },
-        onShare = {
-            val code = card?.codeString.orEmpty()
-            val matrix = QrEncode.encode(code)
-            if (matrix == null) {
-                toast = Str.s(R.string.qr_card_not_ready)
-            } else {
-                scope.launch {
-                    // 出图 **和写文件** 都在 IO 上：shareImage 会压一张 PNG 落到 cacheDir，
-                    // 留在主线程是实打实的磁盘写（存相册那条路本来就在 IO，两条要一致）。
-                    // startActivity 本身不限线程。
-                    val err = withContext(Dispatchers.IO) {
-                        ImageExport.shareImage(context, qrToBitmap(matrix), code, "im_qr.png")
-                    }
-                    err?.let { toast = it }
-                }
-            }
-        },
+        onShare = { choosingShare = true },
         onReset = { confirmReset = true },
         onBack = onBack,
     )
@@ -173,5 +183,17 @@ fun QrCardHost(
         )
     }
 
+    if (choosingShare) {
+        QrShareMethodSheet(
+            title = stringResource(R.string.share_method_title_card),
+            onToFriends = { sendingCard = true },
+            onOtherApps = { shareToOtherApps() },
+            onDismiss = { choosingShare = false },
+        )
+    }
+    // 「发送给朋友」= 与「我 → 分享我的名片」同一条（名片消息）
+    if (sendingCard) ShareMyCardHost(client = client, me = me, onBack = { sendingCard = false })
+
     toast?.let { IMToast(it) { toast = null } }
+    }
 }

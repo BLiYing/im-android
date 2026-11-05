@@ -261,6 +261,8 @@ internal fun ForwardPickerLayer(
         conversations = convs,
         onCancel = onClose,
         onToast = onToast,
+        sources = rememberSharePickSources(client),
+        preview = remember(job) { forwardPreview(job.msgs, job.record, client.uid.orEmpty()) },
         onConfirm = { targets ->
             onClose()
             if (job.fromSelection) sel.cancel()

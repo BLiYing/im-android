@@ -30,12 +30,6 @@ class ForwardTargetsTest {
     }
 
     @Test
-    fun `发送顺序是勾选顺序，已不在列表里的目标跳过`() {
-        val all = listOf(alice, team)
-        assertEquals(listOf(team, alice), Forward.targetsInOrder(listOf("g_1", "gone", "p_a"), all))
-    }
-
-    @Test
     fun `没有标题时不落内部 ID`() {
         assertEquals("未命名群聊", Forward.titleOf(conv("g_2", group = true)))
         assertEquals(DisplayName.UNNAMED, Forward.titleOf(conv("p_2", peer = "1000000002")))

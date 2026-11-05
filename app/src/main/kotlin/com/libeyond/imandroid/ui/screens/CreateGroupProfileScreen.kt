@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -28,23 +25,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Camera
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.X
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.GroupNameDefault
 import com.libeyond.imandroid.data.MediaUrl
 import com.libeyond.imandroid.ui.theme.LocalMediaHost
 import com.libeyond.imandroid.sdk.api.FriendEntry
-import com.libeyond.imandroid.ui.components.IMAvatar
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.ui.components.IMErrorText
 import com.libeyond.imandroid.ui.components.IMTextField
 import com.libeyond.imandroid.ui.components.IMTopBar
+import com.libeyond.imandroid.ui.components.SelectedAvatarStrip
+import com.libeyond.imandroid.ui.components.StripItem
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
@@ -123,17 +120,14 @@ fun CreateGroupProfileScreen(
             modifier = Modifier.padding(horizontal = d.space4, vertical = d.space2),
         )
         Row(Modifier.fillMaxWidth().background(c.pageBackground).padding(vertical = 10.dp), verticalAlignment = Alignment.Top) {
-            val shown = members.take(MAX_CHIPS)
-            LazyRow(Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = d.space3)) {
-                items(shown, key = { it.userId }) { f -> MemberChip(f, onRemove = { onRemove(f.userId) }) }
-                if (members.size > MAX_CHIPS) {
-                    item {
-                        Box(Modifier.size(width = 54.dp, height = 44.dp), contentAlignment = Alignment.Center) {
-                            Text("+${members.size - MAX_CHIPS}", color = c.textSecondary, fontSize = 13.sp)
-                        }
-                    }
-                }
-            }
+            SelectedAvatarStrip(
+                items = members.map { StripItem(it.userId, it.displayName, it.userId, it.avatarUrl) },
+                onRemove = onRemove,
+                removeDescription = { name -> Str.s(R.string.group_create_remove_member, name) },
+                modifier = Modifier.weight(1f),
+                maxChips = MAX_CHIPS,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = d.space3),
+            )
             // 固定在右缘、不随条滚走
             Column(
                 Modifier.padding(horizontal = d.space3).clickable(onClick = onAddMore),
@@ -152,25 +146,6 @@ fun CreateGroupProfileScreen(
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = d.space4, vertical = d.space2),
             )
         }
-    }
-}
-
-/** 一个成员：44dp 头像 + 右上 ✕ + 下面 11sp 名字（本机显示名，含备注）。 */
-@Composable
-private fun MemberChip(f: FriendEntry, onRemove: () -> Unit) {
-    val c = IMTheme.colors
-    Column(Modifier.width(54.dp).padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box {
-            IMAvatar(f.displayName, seed = f.userId, avatarUrl = f.avatarUrl, size = 44.dp)
-            Box(
-                Modifier.align(Alignment.TopEnd).size(16.dp).clip(CircleShape).background(c.neutralControl)
-                    .clickable(onClick = onRemove),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(Lucide.X, stringResource(R.string.group_create_remove_member, f.displayName), Modifier.size(10.dp), colorFilter = ColorFilter.tint(c.textSecondary))
-            }
-        }
-        Text(f.displayName, color = c.textSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

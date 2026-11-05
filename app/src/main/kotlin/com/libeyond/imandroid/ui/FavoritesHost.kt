@@ -378,6 +378,9 @@ internal fun FavoritesHost(
             conversations = convs,
             onCancel = { forwarding = null },
             onToast = { toast = it },
+            sources = rememberSharePickSources(client),
+            // toMessages 是挂起的（要补发送者公开名），预览随它异步到位
+            preview = androidx.compose.runtime.produceState("", f) { value = forwardPreview(toMessages(listOf(f)), null, client.uid.orEmpty()) }.value,
             onConfirm = { targets ->
                 forwarding = null
                 // 挂宿主作用域：选择页先关掉自己再回调，挂它自己身上的协程会当场被取消

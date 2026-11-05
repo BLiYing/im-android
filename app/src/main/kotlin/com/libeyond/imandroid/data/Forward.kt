@@ -28,7 +28,7 @@ object Forward {
     /** 服务端对 `forward_from` 限长 40（§4.3）；超长在端上先截，别等服务端拒。 */
     const val MAX_LEN = 40
 
-    /** 一次最多选几个转发目标会话。与 iOS/Web 同为 9。 */
+    /** 一次最多选几个转发目标会话。与 iOS/Web 同为 9。勾选 / 上限 / 发送顺序的判据在 [SharePickSelection]。 */
     const val MAX_TARGETS = 9
 
     /**
@@ -53,14 +53,6 @@ object Forward {
             else -> msg.sender                                       // ③ 末级兜底
         }
         return raw.take(MAX_LEN)
-    }
-
-    /** 多选一个转发目标会话：到上限就拒（返回 null）。**取消选择永远允许**——
-     *  已经选满时若连取消都拒，用户就被卡死在选满了又改不了。 */
-    fun toggleTarget(selected: Set<String>, convId: String, max: Int = MAX_TARGETS): Set<String>? {
-        if (convId in selected) return selected - convId
-        if (selected.size >= max) return null
-        return selected + convId
     }
 
     /**
@@ -96,15 +88,6 @@ object Forward {
     /** 行上显示的名字。末级**不落内部 ID**（10 位随机数字对人没有意义，见 [DisplayName]）。 */
     fun titleOf(c: ConversationEntity, localNameOf: (String) -> String? = { null }): String =
         c.title.ifBlank { if (c.isGroup) DisplayName.UNNAMED_GROUP else localNameOf(c.peerUid) ?: DisplayName.UNNAMED }
-
-    /**
-     * 按**勾选顺序**取回目标会话（iOS `_selected` 是有序数组，发送顺序即勾选顺序）。
-     * 搜索只影响看得见哪些行、不影响已选——所以从全量里找，不从当前可见的行里找。
-     */
-    fun targetsInOrder(selectedIds: List<String>, convs: List<ConversationEntity>): List<ConversationEntity> {
-        val byId = convs.associateBy { it.convId }
-        return selectedIds.mapNotNull { byId[it] }
-    }
 
     /**
      * 转发时必须跟着走的媒体元数据（对端 iOS `IMMediaAttributes`、im-web `useForward.ts` 的

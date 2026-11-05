@@ -501,9 +501,12 @@ fun ChatDetailHost(
     if (sharing) {
         val convs by client.repo.observeConversations(owner).collectAsState(initial = emptyList())
         ForwardPickerScreen(
-            conversations = convs.filter { it.convId != conv.convId },
+            conversations = convs,
             onCancel = { sharing = false },
             onToast = { toast = it },
+            sources = rememberSharePickSources(client),
+            exclude = setOf(conv.convId),
+            preview = Str.s(R.string.quote_snapshot_contact_named, friend?.let { DisplayName.publicNameOfFriend(it) }.orEmpty().ifBlank { conv.title }),
             onConfirm = { targets ->
                 sharing = false
                 scope.launch {
