@@ -3,6 +3,7 @@
 <resources>
     <string name="about_agree_footer">继续即表示同意《%1$s》和《%2$s》</string>
     <string name="about_copy_failed">无法复制，请手动记录版本号</string>
+    <string name="about_customer_service">在线客服</string>
     <string name="about_open_failed">无法打开页面，请稍后重试</string>
     <string name="about_privacy_policy">隐私政策</string>
     <string name="about_support">技术支持</string>

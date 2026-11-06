@@ -121,6 +121,8 @@ class IMClient(
     val twoStep = com.libeyond.imandroid.sdk.api.TwoStepApi(http)
     val email = com.libeyond.imandroid.sdk.api.EmailApi(http)
     val contacts = ContactApi(http)
+    /** 关于我们四个链接（后台可配置）。 */
+    val aboutLinks = com.libeyond.imandroid.sdk.api.AboutLinksApi(http)
 
     /** uid → 头像/显名 解析器（成员表给不出身份时兜底，见 [UserProfileCache]）。内存缓存。 */
     val profiles = com.libeyond.imandroid.data.UserProfileCache(

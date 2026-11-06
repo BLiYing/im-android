@@ -3,6 +3,7 @@
 <resources>
     <string name="about_agree_footer">By continuing you agree to the %1$s and %2$s</string>
     <string name="about_copy_failed">Couldn\'t copy. Please note the version manually.</string>
+    <string name="about_customer_service">Customer Service</string>
     <string name="about_open_failed">Can\'t open the page. Please try again later.</string>
     <string name="about_privacy_policy">Privacy Policy</string>
     <string name="about_support">Support</string>

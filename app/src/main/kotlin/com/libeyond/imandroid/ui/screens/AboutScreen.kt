@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.composables.icons.lucide.FileText
+import com.composables.icons.lucide.Headset
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.LifeBuoy
 import com.composables.icons.lucide.Lucide
@@ -24,7 +25,7 @@ import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
- * 关于我们（对齐 iOS `IMAboutViewController` / Web `AboutPanel`）：隐私政策 / 服务条款 / 技术支持 / 版本。
+ * 关于我们（对齐 iOS `IMAboutViewController` / Web `AboutPanel`）：隐私政策 / 服务条款 / 技术支持 / 在线客服（后台未配置则隐藏）/ 版本。
  * 版本行**无 chevron、有右值、整行可点（复制）**——`IMSettingsRow` 的 `onClick != null` 会画 chevron，
  * 所以这里把点击挂在外层 Box、行本身传 null。
  */
@@ -34,6 +35,8 @@ fun AboutScreen(
     onPrivacy: () -> Unit,
     onTerms: () -> Unit,
     onSupport: () -> Unit,
+    showCustomerService: Boolean,
+    onCustomerService: () -> Unit,
     onCopyVersion: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -51,6 +54,10 @@ fun AboutScreen(
             IMRowDivider(insetStart = d.settingsSeparatorInset)
             IMSettingsRow(stringResource(R.string.about_support), onSupport, icon = Lucide.LifeBuoy, iconBackground = ic.green)
             IMRowDivider(insetStart = d.settingsSeparatorInset)
+            if (showCustomerService) {
+                IMSettingsRow(stringResource(R.string.about_customer_service), onCustomerService, icon = Lucide.Headset, iconBackground = ic.orange)
+                IMRowDivider(insetStart = d.settingsSeparatorInset)
+            }
             Box(Modifier.clickable(onClick = onCopyVersion)) {
                 IMSettingsRow(
                     stringResource(R.string.about_version), onClick = null,

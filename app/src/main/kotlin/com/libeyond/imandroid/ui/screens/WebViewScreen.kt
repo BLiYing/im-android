@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui.screens
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -8,12 +9,15 @@ import android.net.Uri
 import android.net.http.SslError
 import android.view.ViewGroup
 import android.webkit.SslErrorHandler
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,6 +30,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -62,7 +67,10 @@ import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RotateCw
 import com.composables.icons.lucide.X
+import com.libeyond.imandroid.BuildConfig
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.AboutLinks
+import com.libeyond.imandroid.data.AboutLinksStore
 import com.libeyond.imandroid.data.LinkDetect
 import com.libeyond.imandroid.data.WebLinks
 import com.libeyond.imandroid.i18n.Str
@@ -80,7 +88,8 @@ import com.libeyond.imandroid.ui.theme.IMTheme
  * 是甩给系统浏览器（2026-09-16 用户报，根因分析见 im-android `current_task.md`）。
  *
  * ### 安全边界（WebView 的几个经典坑，一条都不能松）
- * - 不开 `addJavascriptInterface`，不开文件 / content 访问：网页拿不到本机任何东西；
+ * - 不开 `addJavascriptInterface`，不开文件 / content 访问：网页拿不到本机任何东西
+ *   （`<input type=file>` 走 `onShowFileChooser` 由系统选择器交付，网页只拿到用户选中的那几个 Uri）；
  * - 页内跳转只放行 http/https；拉起应用的 scheme 只在**用户点出来**时交给系统，`intent://` 清掉显式组件
  *   （判据在 [WebLinks.navigationFor]，有单测）；
  * - 证书错误一律 `cancel()`，不给「继续访问」；
@@ -107,13 +116,31 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit, showHost: Boolean =
     var menuOpen by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
 
+    // 网页 <input type=file> 的选择器回调（Beacon 客服页「发送图片」走它；不实现则点了没反应）。
+    // 一次只会有一个挂起的回调：新请求来时旧的必须以 null 收尾，否则那个 input 永远卡死。
+    val fileChooser = remember { FileChooserHolder() }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        fileChooser.finish(WebChromeClient.FileChooserParams.parseResult(res.resultCode, res.data))
+    }
+
     val webView = remember(url) {
         WebView(context).apply {
+            // 必须显式撑满：WebView 默认 WRAP_CONTENT，页面里的 100vh / height:100% 会按「内容高度」算，
+            // 客服（Beacon 访客页）这类整页布局会被压在顶部、下面一片空白。
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            )
             // WebView 首帧默认白底，页面背景还没绘上来前会「闪一下白」（打开动画里尤其明显）。
             // 置透明：加载完成前透出下层 Column 的 pageBackground，页面画好后由它自己的 body 背景接管。
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
             settings.javaScriptEnabled = true   // 绝大多数网页离了 JS 就是白屏；SFSafari 同样执行 JS
-            settings.domStorageEnabled = true
+            settings.domStorageEnabled = true   // 客服访客身份存在 localStorage：不能关，也不要在进入时清缓存
+            // 打开的是后台配置的在线客服页（Beacon 访客页）时，UA 末尾声明 App 身份。只对该源追加：
+            // 聊天里随手点开的任意外链不该被告知本 App 的名字与版本。
+            if (AboutLinksStore.isCustomerServiceUrl(url, BuildConfig.USE_TLS)) {
+                settings.userAgentString = AboutLinks.beaconUserAgent(settings.userAgentString, BuildConfig.VERSION_NAME)
+            }
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             // 不支持多窗口：target=_blank 就在本页打开，不会凭空冒出一个接不住的新窗口
@@ -159,6 +186,23 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit, showHost: Boolean =
                     progress = newProgress
                 }
 
+                override fun onShowFileChooser(
+                    view: WebView,
+                    callback: ValueCallback<Array<Uri>>,
+                    params: FileChooserParams,
+                ): Boolean {
+                    fileChooser.finish(null)
+                    fileChooser.callback = callback
+                    return try {
+                        pickFile.launch(params.createIntent())
+                        true
+                    } catch (e: ActivityNotFoundException) {
+                        log.w("web_file_chooser_unavailable")
+                        fileChooser.finish(null)
+                        true
+                    }
+                }
+
                 override fun onReceivedTitle(view: WebView, received: String?) {
                     // 没有 <title> 的页面这里给的是地址本身，当标题显示就是一长串，不如退回站点名
                     title = received?.takeIf { it != view.url }.orEmpty()
@@ -169,6 +213,7 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit, showHost: Boolean =
     }
     DisposableEffect(webView) {
         onDispose {
+            fileChooser.finish(null)
             webView.stopLoading()
             (webView.parent as? ViewGroup)?.removeView(webView)
             webView.destroy()
@@ -229,7 +274,9 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit, showHost: Boolean =
                 trackColor = c.separator,
             )
         }
-        Box(Modifier.fillMaxWidth().weight(1f)) {
+        // imePadding：边到边下系统不会替我们缩窗口，软键盘弹出时 WebView 不跟着变矮，
+        // 页面底部的输入栏（客服页「输入消息」）就被键盘盖住。让容器让出键盘高度，页面的 100vh 随之缩小。
+        Box(Modifier.fillMaxWidth().weight(1f).imePadding()) {
             AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
             failure?.let { msg ->
                 WebFailure(
@@ -241,6 +288,17 @@ internal fun WebViewScreen(url: String, onClose: () -> Unit, showHost: Boolean =
         }
     }
     toast?.let { t -> IMToast(t) { toast = null } }
+}
+
+/** 持有网页文件选择器的待回调；[finish] 幂等，交付结果（或 null=取消）后清空。 */
+private class FileChooserHolder {
+    var callback: ValueCallback<Array<Uri>>? = null
+
+    fun finish(result: Array<Uri>?) {
+        val cb = callback ?: return
+        callback = null
+        cb.onReceiveValue(result)
+    }
 }
 
 @Composable

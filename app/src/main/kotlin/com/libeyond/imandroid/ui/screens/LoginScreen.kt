@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,9 +37,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.BuildConfig
+import com.libeyond.imandroid.data.AboutLinkValues
 import com.libeyond.imandroid.data.AboutLinks
+import com.libeyond.imandroid.data.AboutLinksStore
 import com.libeyond.imandroid.data.LanguageStore
+import com.libeyond.imandroid.sdk.api.AboutLinksApi
 import com.libeyond.imandroid.ui.components.LocalOpenLink
+import kotlinx.coroutines.delay
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
 import androidx.compose.foundation.Image
@@ -227,6 +232,8 @@ fun LoginScreen(
     }
 }
 
+private const val LINKS_FETCH_DEBOUNCE_MS = 600L
+
 /**
  * 「继续即表示同意《服务条款》和《隐私政策》」：复用 about.terms / about.privacy_policy 作链接文案
  * （中文《》在格式串里），两段用 Compose 链接注解可点，点击分流到对应法务页。
@@ -236,8 +243,18 @@ private fun LoginAgreeFooter(host: String, onFailed: () -> Unit) {
     val c = IMTheme.colors
     // 走应用内浏览器（LocalOpenLink，由外层 WebLinkHost 提供），不跳系统浏览器——与「关于我们」页一致。
     val openLink = LocalOpenLink.current
-    val open = { path: String ->
-        val url = AboutLinks.legalUrl(host, BuildConfig.USE_TLS, path, LanguageStore.resolved)
+    // 链接由后台配置：host 输入框每敲一个字都会变，防抖后再匿名拉取；拉不到退回内置路径。
+    var links by remember { mutableStateOf(AboutLinkValues.FALLBACK) }
+    LaunchedEffect(host) {
+        if (host.isBlank()) return@LaunchedEffect
+        val key = AboutLinksStore.key(host, authenticated = false)
+        // 换了 host：先退回该 host 的缓存/内置路径，别让上一个 host 的绝对链接残留到防抖窗口里
+        links = AboutLinksStore.cached(key) ?: AboutLinkValues.FALLBACK
+        delay(LINKS_FETCH_DEBOUNCE_MS)
+        links = AboutLinksStore.load(key) { AboutLinksApi.anonymous(host, BuildConfig.USE_TLS).fetch() }
+    }
+    val open = { value: String ->
+        val url = AboutLinks.resolve(value, host, BuildConfig.USE_TLS, LanguageStore.resolved)
         if (url != null && openLink != null) openLink(url) else onFailed()
     }
     val terms = stringResource(R.string.about_terms)
@@ -247,10 +264,10 @@ private fun LoginAgreeFooter(host: String, onFailed: () -> Unit) {
     val text = buildAnnotatedString {
         append(full)
         full.indexOf(terms).takeIf { it >= 0 }?.let {
-            addLink(LinkAnnotation.Clickable("terms", linkStyles) { open(AboutLinks.PATH_TERMS) }, it, it + terms.length)
+            addLink(LinkAnnotation.Clickable("terms", linkStyles) { open(links.terms) }, it, it + terms.length)
         }
         full.indexOf(privacy).takeIf { it >= 0 }?.let {
-            addLink(LinkAnnotation.Clickable("privacy", linkStyles) { open(AboutLinks.PATH_PRIVACY) }, it, it + privacy.length)
+            addLink(LinkAnnotation.Clickable("privacy", linkStyles) { open(links.privacy) }, it, it + privacy.length)
         }
     }
     Text(
