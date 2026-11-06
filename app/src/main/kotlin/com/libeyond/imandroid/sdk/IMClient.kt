@@ -549,7 +549,7 @@ class IMClient(
         fcmTokenStore.forget()
         InAppBannerStore.dismiss()
         com.libeyond.imandroid.fcm.FcmNotifications.clearForSessionEnd()
-        pendingLogoutRunner.scheduleRetry() // tokens.logout() 已试过一次；没成功的稍后再试
+        pendingLogoutRunner.flush() // 后台发送，不等网络；没成功的由它定时重试
         profiles.clear() // 资料解析缓存属于上一个账号
         com.libeyond.imandroid.sdk.api.AutoDeleteFloor.clear() // 档位镜像属于上一个账号
         com.libeyond.imandroid.sdk.api.DeletedUser.clear() // 已注销登记是内存态，换号后由新账号的数据重新登记

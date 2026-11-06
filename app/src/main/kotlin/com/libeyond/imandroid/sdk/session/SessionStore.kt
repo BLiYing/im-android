@@ -73,11 +73,11 @@ class SessionStore(context: Context) {
      * 待吊销的续期凭据（JSON，见 [PendingLogoutQueue]）。**[clear] 刻意不清**：它正是要活过退出登录。
      * 用 commit 同步落盘：退出后进程随时可能被杀，丢了就再也没法补吊销。
      */
-    var pendingLogoutJson: String?
-        get() = prefs.getString(KEY_PENDING_LOGOUT, null)
-        set(v) {
-            prefs.edit().apply { if (v == null) remove(KEY_PENDING_LOGOUT) else putString(KEY_PENDING_LOGOUT, v) }.commit()
-        }
+    val pendingLogoutJson: String? get() = prefs.getString(KEY_PENDING_LOGOUT, null)
+
+    /** 返回是否写成功（磁盘满等会失败）；调用方失败时仍保留内存里的那份，见 [PendingLogoutQueue]。 */
+    fun writePendingLogoutJson(v: String?): Boolean =
+        prefs.edit().apply { if (v == null) remove(KEY_PENDING_LOGOUT) else putString(KEY_PENDING_LOGOUT, v) }.commit()
 
     /**
      * 本人资料的本地副本（「我」页头部）：断网/断连时 `GET /users/me` 拿不到，头部不能退回「未命名用户」+ 首字母圈。

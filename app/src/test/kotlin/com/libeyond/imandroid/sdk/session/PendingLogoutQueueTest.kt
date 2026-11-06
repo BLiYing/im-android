@@ -3,6 +3,9 @@ package com.libeyond.imandroid.sdk.session
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ErrCode
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,7 +29,7 @@ class PendingLogoutQueueTest {
 
     private fun queue() = PendingLogoutQueue(
         read = { stored },
-        write = { stored = it },
+        write = { stored = it; true },
         send = { entry ->
             sent += entry
             val f = failure
@@ -141,7 +144,7 @@ class PendingLogoutQueueTest {
     fun `地址非法时丢弃这条并继续`() = runTest {
         val q = PendingLogoutQueue(
             read = { stored },
-            write = { stored = it },
+            write = { stored = it; true },
             send = { entry ->
                 sent += entry
                 if (entry.token == "bad") throw IllegalArgumentException("bad url")
@@ -164,5 +167,83 @@ class PendingLogoutQueueTest {
         q.enqueue("t1", url)
         assertFalse(q.flush())
         assertEquals(listOf("t1"), sent.map { it.token })
+    }
+
+    /** 磁盘满等写盘失败：不能因此丢掉凭据，进程活着时照样发送（与 iOS 一致）。 */
+    @Test
+    fun `写盘失败时仍在内存里保留并发送`() = runTest {
+        failure = transportError()
+        val q = PendingLogoutQueue(
+            read = { stored },
+            write = { false },
+            send = { entry ->
+                sent += entry
+                failure?.let { throw it }
+            },
+            now = { nowMs },
+        )
+        q.enqueue("t1", url)
+        assertNull("前提：写盘确实失败了", stored)
+        assertTrue(q.flush())
+        assertEquals(1, q.pendingCount())
+
+        failure = null
+        assertFalse(q.flush())
+        assertEquals(listOf("t1", "t1"), sent.map { it.token })
+        assertEquals(0, q.pendingCount())
+    }
+
+    /** 一轮发送进行中又退出一次：新条目在同一次 flush 里补发，不能等到下一个触发点。 */
+    @Test
+    fun `发送途中新入队的条目也会被发出`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val q = PendingLogoutQueue(
+            read = { stored },
+            write = { stored = it; true },
+            send = { entry ->
+                sent += entry
+                if (entry.token == "t1") gate.await()
+            },
+            now = { nowMs },
+        )
+        q.enqueue("t1", url)
+        val flushing = launch { q.flush() }
+        advanceUntilIdle()
+        assertEquals(listOf("t1"), sent.map { it.token })
+
+        q.enqueue("t2", url) // 此时 t1 的请求还在途
+        gate.complete(Unit)
+        flushing.join()
+        assertEquals(listOf("t1", "t2"), sent.map { it.token })
+        assertEquals(0, q.pendingCount())
+    }
+
+    /** 同一次 flush 里已试过的不重复发：否则一个连不上的服务器会被连环请求。 */
+    @Test
+    fun `同一次 flush 不重复发已试过的条目`() = runTest {
+        failure = transportError()
+        val q = queue()
+        q.enqueue("t1", url)
+        q.flush()
+        assertEquals(1, sent.size)
+    }
+
+    /** 重试在同一个协程里循环：失败两次后成功，期间不丢定时器。 */
+    @Test
+    fun `定时重试直到发送成功`() = runTest {
+        var attempts = 0
+        val q = PendingLogoutQueue(
+            read = { stored },
+            write = { stored = it; true },
+            send = { attempts++; if (attempts < 3) throw transportError() },
+            now = { nowMs },
+        )
+        val runner = PendingLogoutRunner(this, q, retryIntervalMs = 1_000)
+        q.enqueue("t1", url)
+        runner.flush()
+        advanceUntilIdle()
+        assertEquals(3, attempts)
+        assertEquals(0, q.pendingCount())
+        assertNull(stored)
     }
 }
