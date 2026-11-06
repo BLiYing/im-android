@@ -10,6 +10,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
+private const val LOGOUT_REFRESH_PATH = "/api/v1/logout/refresh"
+
 /** `POST /login` 与 `POST /token/refresh` 的返回。 */
 @Serializable
 data class LoginResult(
@@ -105,6 +107,18 @@ class AuthApi(private val http: HttpClient, private val device: DeviceIdentity) 
      */
     suspend fun logout() {
         http.call("POST", "/api/v1/logout")
+    }
+
+    /** 当前服务器的补吊销地址。随凭据一起存（见 [com.libeyond.imandroid.sdk.session.PendingLogoutQueue]）。 */
+    fun logoutByRefreshUrl(): String = "${http.baseUrl()}$LOGOUT_REFRESH_PATH"
+
+    /**
+     * 凭续期凭据吊销它所属的会话（免鉴权：补吊销时 access token 可能早已过期）。
+     * 凭据不存在 / 已吊销也回成功；只有网络失败、限流、服务端内部错误才值得再试。
+     */
+    suspend fun logoutByRefresh(url: String, refreshToken: String) {
+        val body = buildJsonObject { put("refresh_token", refreshToken) }
+        http.call("POST", LOGOUT_REFRESH_PATH, body, authenticated = false, absoluteUrl = url)
     }
 
     /**

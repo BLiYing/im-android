@@ -58,8 +58,12 @@ class IMApp : Application(), coil.ImageLoaderFactory {
         }
         com.libeyond.imandroid.sdk.logging.PerfMarks.appLaunched()
         setUpPowerSaving()
-        network = NetworkMonitor(this) { client.wake("network_available") }
+        network = NetworkMonitor(this) {
+            client.wake("network_available")
+            client.pendingLogoutRunner.flush()
+        }
         network.start()
+        client.pendingLogoutRunner.flush()
         IMLog.tag("IM.App").i("app_start", "versionName" to BuildConfig.VERSION_NAME)
     }
 

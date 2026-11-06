@@ -61,9 +61,11 @@ class HttpClient(
         query: Map<String, String> = emptyMap(),
         /** 免鉴权接口（register/login/token refresh/qr login）置 false。 */
         authenticated: Boolean = true,
+        /** 非空时发到这个完整地址而不是当前服务器（补吊销要发往当初登录的那台），[path] 只用于日志。 */
+        absoluteUrl: String? = null,
     ): JsonElement? = withContext(Dispatchers.IO) {
         val requestId = newRequestId()
-        val url = buildUrl(path, query)
+        val url = absoluteUrl ?: buildUrl(path, query)
 
         val builder = Request.Builder()
             .url(url)

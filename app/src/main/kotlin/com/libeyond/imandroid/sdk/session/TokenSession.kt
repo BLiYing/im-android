@@ -6,6 +6,7 @@ import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ErrCode
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** 恢复会话的结果。 */
 sealed interface RestoreOutcome {
@@ -47,6 +48,13 @@ class TokenSession(
     private val probe: suspend () -> Unit,
 ) {
     private val log = IMLog.tag("IM.Session")
+
+    /** 退出时吊销没成功就留着重试，见 [PendingLogoutQueue]。 */
+    val pendingLogouts = PendingLogoutQueue(
+        read = { store.pendingLogoutJson },
+        write = { store.pendingLogoutJson = it },
+        send = { auth.logoutByRefresh(it.url, it.token) },
+    )
 
     /** 并发续期串行化：多个请求同时撞 100102 时只真发一次。 */
     private val refreshLock = Mutex()
@@ -175,23 +183,33 @@ class TokenSession(
     /**
      * 退出登录：**先调服务端吊销，再清本地**。
      * 反过来（先清本地）会让 `logout` 拿不到 token，服务端会话就留在那里了。
-     * 服务端调用失败也照样清本地——用户点了退出就得退出。
+     * 服务端调用失败也照样清本地——用户点了退出就得退出；凭据进 [pendingLogouts]，之后会继续重试。
+     * 没有续期凭据的老会话没法排队，退回只发一次 `/logout`。
      *
      * **清空要拿 [refreshLock]**：在途的续期（[refreshNow] 锁内落盘 token+uid）或改密轮换
      * （[adoptRotatedRefreshToken]）若晚于清空才写，会把刚退出的会话写回本机。拿锁后清空一定是最后一次写；
      * 代价是遇上在途续期要等它的请求回来。
      */
     suspend fun logout() {
-        try {
-            auth.logout()
-        } catch (e: ApiException) {
-            log.w("logout_server_call_failed", "code" to e.code)
+        val refreshToken = store.refreshToken
+        if (!refreshToken.isNullOrEmpty()) {
+            pendingLogouts.enqueue(refreshToken, auth.logoutByRefreshUrl())
+            // 只等一小会儿：断网时队列里每条都要等连接超时，不能把用户卡在「退不出去」。没发完的之后重试。
+            withTimeoutOrNull(LOGOUT_WAIT_MS) { pendingLogouts.flush() }
+        } else {
+            try {
+                auth.logout()
+            } catch (e: ApiException) {
+                log.w("logout_server_call_failed", "code" to e.code)
+            }
         }
         refreshLock.withLock { store.clear() }
         IMLog.currentUid = "-"
     }
 
     internal companion object {
+        private const val LOGOUT_WAIT_MS = 10_000L
+
         /**
          * 改密轮换出的凭据该不该落盘：有新凭据，且发起时与此刻是**同一个已登录账号**。
          * 此刻 uid 为空 = 期间退出了；uid 变了 = 期间换号了——两种都不能写。

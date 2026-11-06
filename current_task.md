@@ -6,6 +6,7 @@
 > 工程规范见 `CLAUDE.md` 与 `CODING_STYLE.md`。
 
 ## 当前焦点
+- **退出后不再收离线通知（2026-11-06，未提交）**：`sdk/session/PendingLogoutQueue` 持久化待吊销凭据并重试，`FcmNotifications.clearForSessionEnd` 清已显示通知。设计与真机清单：`../IMServer/docs/design/LOGOUT_REVOKE_RETRY_DESIGN.md`。**待真机验证**。
 - **分享选择页：好友/群聊入口 + 底部已选栏 + 发送确认（2026-11-05，编译 + 单测绿，未装机目测）**：规格 `../IMServer/docs/design/sketches/SHARE_PICKER_UX_SKETCH.html`。共用页仍是 `ui/screens/ForwardPickerScreen.kt`，新参数 `sources`（传了才出入口行/底栏/三源搜索，「添加例外」不传，行为不变）/`preview`/`exclude`；选择模型 `data/SharePick.kt`（按 convId 共用一份已选、合计 9、好友 convId 走 `data/ConvIds.kt`，`IMClient.conversationStubFor` 也改用它），单测 `SharePickTest`；数据 `ui/SharePickSourcesLoader.kt`（离线快照→网络）；子页 `SharePickSubPage`、底栏 `SharePickBottomBar`、确认面板 `SharePickConfirmSheet`（ModalBottomSheet）；建群资料页成员条抽成 `ui/components/SelectedAvatarStrip.kt`（`SelectedAvatarChip` 一份实现，建群条 / 分享底栏 / 确认面板网格共用）；好友/群拉取失败且无快照 → 子页「加载失败，点击重试」。`Forward.toggleTarget`/`targetsInOrder` 已删，勾选判据只在 `SharePickSelection`。二维码页「分享」先选「发送给朋友 / 其他应用…」（`ui/QrShareToFriends.kt`）：名片码走 `ShareMyCardHost`，群码/群链接发「邀请你加入群聊「X」\n链接」文本。
 - 近期功能（邮箱登录、两步验证、清除所有对话、删除会话统一口径、导出我的数据、自动删除 v2、会话列表编辑模式、注销账号、置顶面板、聊天文件夹、失效媒体口径等）均已落地并推送，详情见 `current_task.archive.md` 末段。
 - 真机目测欠账：邮箱登录、导出我的数据、自动删除 v2、置顶面板、气泡尾角/会话列表待审行/转文字文案、好友成立系统消息/收藏页/发名片确认（均未装机或未目测）。原文见 archive。
@@ -29,6 +30,7 @@
 8. 小尾巴（均不影响行为）：「刷新补名失败不重试」靠下次连接/刷新自愈；`resolveKind` 对畸形 convId 当群聊（测试已钉住）；`VoiceLocalStore.putText` 每次重写整份 FIFO 顺序表；`PendingVoiceBubble` 里多余的 `coerceAtLeast(160.dp)`；`applySync` 对全是 `msg_op`/墓碑的一页也调 `bumpConversationFromLatest`（白多一次索引 SELECT）。
 
 ## 已知坑 / 限制
+- **退出吊销重试**：待吊销凭据存在 `SessionStore` 的私有 SP（`allowBackup=false`，未额外加密，与在用凭据同级）；重试依赖 App 被再次打开；队列随卸载删除。全部限制见 `LOGOUT_REVOKE_RETRY_DESIGN.md` §4。
 - **非群成员发送者卡片缓存无过期（2026-10-26）**：`UserProfileCache` 仅内存、无 TTL，只兜底「本地无好友也无群成员记录」的发送者（如超级群发言者）。对方改头像可见性（隐私「谁能看到」）后，这类人的旧头像要等重启 / 切换账号才更新；好友 / 群成员 / 会话列表都是整表覆盖，不受影响。要补：给缓存加短 TTL 或会话列表刷新时清。设计见 `IMServer/docs/design/PRIVACY_VISIBILITY_DESIGN.md` §5。
 
 - **自动删除**：本机时钟决定清理时机，后台不扫（回前台补扫）；关闭/放宽不复活已清的本机消息；前台 30s tick 与到点消失未能在真机造「差几十秒满 1 天」的消息实测（服务端无法造旧时间戳），靠 `AutoDeletePurgeTest` + 判据向量覆盖；`MessageRepository.kt` 593 / `MessageService.kt` 583 行贴线。

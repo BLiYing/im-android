@@ -108,6 +108,12 @@ object FcmNotifications {
         }.onFailure { log.w("fcm_cancel_failed", "event" to "open", "err" to it.javaClass.simpleName) }
     }
 
+    /** 退出 / 被踢 / 被封：通知栏里可能还有这个账号的消息和来电，人已退出就不该再留着。 */
+    fun clearForSessionEnd() {
+        clearAll()
+        appContext?.let { CallNotifications.clearAll(it) }
+    }
+
     /** 去掉若干行：没变就不动；一行不剩取消；还有剩就静默重发。 */
     private fun rewrite(convId: String, event: String, seq: Long, change: (ConversationLines) -> ConversationLines) {
         val ctx = appContext ?: return

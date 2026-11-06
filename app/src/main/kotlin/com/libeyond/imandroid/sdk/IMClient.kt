@@ -25,6 +25,7 @@ import com.libeyond.imandroid.data.AppActive
 import com.libeyond.imandroid.data.reportAppState
 import com.libeyond.imandroid.data.FcmPreference
 import com.libeyond.imandroid.data.FcmTokenStore
+import com.libeyond.imandroid.sdk.session.PendingLogoutRunner
 import com.libeyond.imandroid.data.InAppBannerStore
 import com.libeyond.imandroid.data.LanguageStore
 import com.libeyond.imandroid.data.MediaCache
@@ -276,6 +277,8 @@ class IMClient(
     val presence = PresenceStore()
 
     val tokens = TokenSession(session, auth, probe = { devices.probe() })
+    /** 补发没成功的退出吊销，与当前是否登录无关。 */
+    val pendingLogoutRunner = PendingLogoutRunner(scope, tokens.pendingLogouts)
 
     /**
      * 服务器地址。debug 默认 `10.0.2.2:8080`（模拟器指向宿主机）。
@@ -545,6 +548,8 @@ class IMClient(
         // 明确约定），客户端不必每次登出都补一刀；forget() 只复位本地"已上报"状态，见其类注释。
         fcmTokenStore.forget()
         InAppBannerStore.dismiss()
+        com.libeyond.imandroid.fcm.FcmNotifications.clearForSessionEnd()
+        pendingLogoutRunner.scheduleRetry() // tokens.logout() 已试过一次；没成功的稍后再试
         profiles.clear() // 资料解析缓存属于上一个账号
         com.libeyond.imandroid.sdk.api.AutoDeleteFloor.clear() // 档位镜像属于上一个账号
         com.libeyond.imandroid.sdk.api.DeletedUser.clear() // 已注销登记是内存态，换号后由新账号的数据重新登记
