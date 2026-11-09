@@ -73,6 +73,8 @@ class MessageService(
 ) {
     /** 「按锚点开窗」的一问一答（MESSAGE_WINDOW_DESIGN §3.2），实现在 [WindowRequester]。 */
     internal val windows = WindowRequester(socket, scope)
+    /** 发出未回音的 msg_op；error 帧命中 = 操作被拒（不是 send_msg 被拒），见 [PendingMsgOps]。 */
+    val pendingOps = PendingMsgOps()
     /** 群帧触发的会话列表重拉：窗口合并，见 [RefreshCoalescer]。 */
     private val groupListRefresh = RefreshCoalescer(scope, GROUP_LIST_REFRESH_MS) { refreshConversations() }
     /** 自动删除全量扫（AUTO_DELETE_DESIGN §3.2）；清掉东西后走 [msgOps] 的 HIDE 信号，置顶横幅 / 面板据此对齐。 */
@@ -372,7 +374,9 @@ class MessageService(
 
             FrameType.ERROR -> data?.let {
                 val e = ProtocolJson.decodeFromJsonElement(ErrorData.serializer(), it)
-                if (e.clientMsgId != null) {
+                if (pendingOps.reject(e)) {
+                    log.w("msg_op_rejected", "code" to e.code) // 我发起的 msg_op 被拒（如编辑命中敏感词 100004），界面经 pendingOps 收
+                } else if (e.clientMsgId != null) {
                     // 带 client_msg_id = 对某条发送的拒绝，把那条标失败
                     ackTimeouts.cancel(e.clientMsgId)
                     repo.onSendRejected(owner, e)

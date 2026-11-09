@@ -120,7 +120,7 @@ internal fun GroupInfoSettingsDialogs(
 ) {
     if (settings.editingMyNickname) {
         IMTextPrompt(
-            title = stringResource(R.string.chat_detail_my_group_nickname), initial = myNickname,
+            title = stringResource(R.string.chat_detail_my_group_nickname), initial = settings.drafts.initial(MY_NICKNAME_DRAFT, myNickname),
             maxLen = MY_NICKNAME_MAX_LEN,
             hint = stringResource(R.string.group_info_my_nickname_hint),
             onDismiss = settings::dismissMyNicknameEditor,
@@ -166,27 +166,30 @@ internal fun GroupManagePrompts(
     val nameLimit = GroupTextLimits.name(limits)
     val introLimit = GroupTextLimits.intro()
     val announcementLimit = GroupTextLimits.announcement(limits)
+    // 被敏感词拦下（100004）的字留到下次打开同一编辑框（弹窗确认即关，不留草稿就丢了）
+    val drafts = remember(convId) { BlockedDrafts() }
+    fun keep(a: GroupManageAction, v: String, block: suspend () -> Unit): suspend () -> Unit = { drafts.keepIfBlocked(a.name, v, block) }
     when (action) {
         GroupManageAction.EditName -> IMTextPrompt(
-            title = stringResource(R.string.group_create_name_label), initial = g.name, maxLen = nameLimit.maxLen, countByCodePoint = nameLimit.countByCodePoint,
+            title = stringResource(R.string.group_create_name_label), initial = drafts.initial(action.name, g.name), maxLen = nameLimit.maxLen, countByCodePoint = nameLimit.countByCodePoint,
             onDismiss = { onDismiss() },
             onConfirm = { v ->
                 onDismiss()
                 // 改群资料是**整体替换**：只改名字也要把头像和简介原样带回去，
                 // 否则会把它们清空（PROTOCOL §11 明说整体替换）。
-                runManage(Str.s(R.string.group_info_rename_title)) { client.groups.updateInfo(convId, v, g.avatarUrl, g.intro) }
+                runManage(Str.s(R.string.group_info_rename_title), keep(action, v) { client.groups.updateInfo(convId, v, g.avatarUrl, g.intro) })
             },
         )
         GroupManageAction.EditIntro -> IMTextPrompt(
-            title = stringResource(R.string.group_text_intro), initial = g.intro, maxLen = introLimit.maxLen, multiline = true, countByCodePoint = introLimit.countByCodePoint,
+            title = stringResource(R.string.group_text_intro), initial = drafts.initial(action.name, g.intro), maxLen = introLimit.maxLen, multiline = true, countByCodePoint = introLimit.countByCodePoint,
             onDismiss = { onDismiss() },
             onConfirm = { v ->
                 onDismiss()
-                runManage(Str.s(R.string.group_info_edit_intro_label)) { client.groups.updateInfo(convId, g.name, g.avatarUrl, v) }
+                runManage(Str.s(R.string.group_info_edit_intro_label), keep(action, v) { client.groups.updateInfo(convId, g.name, g.avatarUrl, v) })
             },
         )
         GroupManageAction.EditAnnouncement -> IMTextPrompt(
-            title = stringResource(R.string.group_text_announcement), initial = g.announcement, maxLen = announcementLimit.maxLen, multiline = true,
+            title = stringResource(R.string.group_text_announcement), initial = drafts.initial(action.name, g.announcement), maxLen = announcementLimit.maxLen, multiline = true,
             countByCodePoint = announcementLimit.countByCodePoint,
             hint = stringResource(R.string.group_manage_announcement_hint),
             clearActionText = stringResource(R.string.group_ops_announcement_retract),
@@ -195,9 +198,8 @@ internal fun GroupManagePrompts(
                 onDismiss()
                 runManage(
                     if (v.isBlank()) Str.s(R.string.group_ops_announcement_retract) else Str.s(R.string.group_manage_announcement_publish_label),
-                ) {
-                    client.groups.setAnnouncement(convId, v)
-                }
+                    keep(action, v) { client.groups.setAnnouncement(convId, v) },
+                )
             },
         )
         // 全员禁言不走弹层：开关直接切换（对齐 iOS / Web），入口在 GroupInfoHost 的 onManage

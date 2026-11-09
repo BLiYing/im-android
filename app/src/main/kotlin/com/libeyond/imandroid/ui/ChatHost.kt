@@ -262,6 +262,7 @@ fun ChatHost(
     val ops = remember(conv.convId) { ChatMessageOps(client, conv, scope) }.also {
         it.toast = { m -> toast = m }
         it.prefill = { t -> replyTo = null; input = TextFieldValue(t, androidx.compose.ui.text.TextRange(t.length)) }
+        it.inputBlank = { input.text.isBlank() }
     }
 
     // 点被拒收行的「发送好友申请」→ 验证消息弹窗（FriendRequestPrompt）

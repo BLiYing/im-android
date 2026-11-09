@@ -153,7 +153,7 @@ fun CreateGroupHost(
                             client.messages.refreshConversations()
                             onCreated(group)
                         } catch (e: ApiException) {
-                            error = if (e.isTransport) Str.s(R.string.net_error_generic) else e.message
+                            error = if (e.isTransport) Str.s(R.string.net_error_generic) else e.userMessage(e.message) // 收录的码（如 100004 敏感词）走本地化
                         } finally { creating = false }
                     }
                 },

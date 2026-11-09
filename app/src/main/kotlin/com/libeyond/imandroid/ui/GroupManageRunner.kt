@@ -6,6 +6,7 @@ import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.logging.IMLog
+import com.libeyond.imandroid.sdk.protocol.ErrCode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -36,10 +37,7 @@ internal fun runGroupManage(
         r.onFailure { e ->
             val code = (e as? ApiException)?.code
             // 端上放行了但服务端拒——把码带出来，别只说「失败」
-            setToast(
-                if (code != null) Str.s(R.string.group_manage_op_failed_with_code, label, code)
-                else Str.s(R.string.group_manage_op_failed, label),
-            )
+            setToast(groupManageFailureText(label, code))
             IMLog.tag("IM.Group").w("group_manage_failed", "op" to label, "code" to (code ?: -1))
         }
         if (r.isSuccess && !silentOnSuccess) {
@@ -48,6 +46,16 @@ internal fun runGroupManage(
         runCatching { client.groups.info(convId) }.onSuccess(setInfo)
         refreshMembers()
     }
+}
+
+/**
+ * 群管理动作失败的提示。默认「X 失败（码）」；敏感词拦截（100004）直接说原因（SENSITIVE_WORDS_DESIGN §3），
+ * 「改群名失败（100004）」用户看不懂、也不知道该改字。
+ */
+internal fun groupManageFailureText(label: String, code: Int?): String = when (code) {
+    ErrCode.CONTENT_BLOCKED -> Str.s(R.string.err_100004)
+    null -> Str.s(R.string.group_manage_op_failed, label)
+    else -> Str.s(R.string.group_manage_op_failed_with_code, label, code)
 }
 
 /** 全员禁言开关的文案与取值：-1 = 永久禁言，0 = 解除。 */

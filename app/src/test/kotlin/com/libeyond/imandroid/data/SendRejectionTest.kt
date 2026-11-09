@@ -36,6 +36,12 @@ class SendRejectionTest {
         assertNull(SendRejection.noteText(0))
     }
 
+    @Test fun `敏感词拦截（100004）给专用说明且不可重发、无自助动作`() {
+        assertEquals(R.string.chat_reject_sensitive, SendRejection.noteRes(ErrCode.CONTENT_BLOCKED))
+        assertEquals("内容包含不允许发送的词语", SendRejection.noteText(ErrCode.CONTENT_BLOCKED))
+        assertFalse(SendRejection.isActionable(ErrCode.CONTENT_BLOCKED))
+    }
+
     @Test fun `超时网络等未知码不给说明，仍走重发`() {
         assertNull(SendRejection.noteRes(0))
         assertNull(SendRejection.noteRes(100003))

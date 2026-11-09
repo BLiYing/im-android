@@ -60,7 +60,9 @@ fun MessageService.sendMsgOp(
     targetConvSeq: Long,
     content: String? = null,
     pinned: Boolean? = null,
-) {
+): String {
+    val cid = java.util.UUID.randomUUID().toString()
+    pendingOps.register(cid, op, convId, targetConvSeq) // 被拒时 error 帧带回这个 cid
     socket.send(
         FrameType.MSG_OP,
         ProtocolJson.encodeToJsonElement(
@@ -69,13 +71,14 @@ fun MessageService.sendMsgOp(
                 op = op,
                 convId = convId,
                 targetConvSeq = targetConvSeq,
-                clientMsgId = java.util.UUID.randomUUID().toString(),
+                clientMsgId = cid,
                 content = content,
                 pinned = pinned,
             ),
         ),
     )
     log.i("msg_op_sent", "op" to op, "convId" to convId, "target" to targetConvSeq)
+    return cid
 }
 
 fun MessageService.sendReceipt(convId: String, status: String, upTo: Long) {

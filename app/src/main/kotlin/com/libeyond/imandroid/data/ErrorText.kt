@@ -63,6 +63,7 @@ object ErrorText {
         ErrCode.TRANSCRIBE_FAILED -> R.string.err_500102
         ErrCode.TRANSCRIBE_BUSY -> R.string.err_500103
         ErrCode.RATE_LIMITED -> R.string.err_100002
+        ErrCode.CONTENT_BLOCKED -> R.string.err_100004
         else -> null
     }
 

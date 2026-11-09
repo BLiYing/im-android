@@ -3,6 +3,7 @@ package com.libeyond.imandroid.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
@@ -35,6 +36,8 @@ fun FriendRequestPrompt(
     // scope 必须在早退**之前**取：确认时会先把 target 置空（弹窗关闭），早退之后 remember 被丢弃，
     // 正在发的请求连同「已发送」提示与 onSent 一起被取消（/code-review：请求发出去了但界面毫无反应）
     val scope = rememberCoroutineScope()
+    // 附言被敏感词拦下（100004）时留住，下次对同一人再弹用它当初值（弹窗确认即关，不留就丢了）
+    val drafts = remember { BlockedDrafts() }
     if (target == null) return
     // 预填要用我的公开昵称，而本机副本只有进过「我」页才有：没有就先拉一次（拉不到按空预填），再弹窗——
     // IMTextPrompt 的初值只在首次组合时读，不能先弹后补。
@@ -46,7 +49,7 @@ fun FriendRequestPrompt(
     val shown = target.name.ifBlank { stringResource(R.string.friend_request_peer_fallback) }
     IMTextPrompt(
         title = stringResource(R.string.common_add_friend),
-        initial = if (nick.isNotBlank()) Str.s(R.string.friend_request_hello_prefill, nick) else "",
+        initial = drafts.initial(target.userId, if (nick.isNotBlank()) Str.s(R.string.friend_request_hello_prefill, nick) else ""),
         label = stringResource(R.string.friend_request_placeholder),
         maxLen = HELLO_MAX,
         countByCodePoint = true,
@@ -55,7 +58,7 @@ fun FriendRequestPrompt(
         onConfirm = { hello ->
             onDismiss()
             scope.launch {
-                runCatchingCancellable { client.contacts.request(target.userId, hello.trim()) }
+                runCatchingCancellable { drafts.keepIfBlocked(target.userId, hello) { client.contacts.request(target.userId, hello.trim()) } }
                     .onSuccess { became ->
                         onToast(Str.s(if (became) R.string.friend_request_became_friends else R.string.friend_request_sent))
                         onSent(became)

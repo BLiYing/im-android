@@ -553,7 +553,7 @@ fun GroupInfoHost(
         settings = settings,
         myNickname = g.myNickname,
         groupName = g.name,
-        onConfirmMyNickname = { v -> runManage(Str.s(R.string.group_manage_edit_my_nickname)) { client.groups.setMyNickname(convId, v) } },
+        onConfirmMyNickname = { v -> runManage(Str.s(R.string.group_manage_edit_my_nickname)) { settings.setMyNickname(v) } },
     )
 
     // 转让的二次确认（文案在 GroupInfoDialogs.kt，与「更多」那三个确认框同住）

@@ -20,6 +20,11 @@ class ErrorTextTest {
         assertEquals(R.string.common_login_expired, ErrorText.friendlyRes(ErrCode.TOKEN_EXPIRED))
     }
 
+    @Test fun `敏感词拦截（100004）走本地化，资料、群、好友申请表单都经这里`() {
+        assertEquals(R.string.err_100004, ErrorText.friendlyRes(ErrCode.CONTENT_BLOCKED))
+        assertEquals("内容包含不允许发送的词语", ErrorText.friendlyText(ApiException(ErrCode.CONTENT_BLOCKED, "content blocked")))
+    }
+
     @Test fun `被拉黑用模糊文案`() = assertEquals(R.string.err_200102, ErrorText.friendlyRes(ErrCode.FRIEND_BLOCKED))
 
     @Test fun `无权限与入群待审刻意不映射`() {

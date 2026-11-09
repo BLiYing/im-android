@@ -18,6 +18,11 @@ object ErrCode {
     const val PARAM_INVALID = 100001
     const val RATE_LIMITED = 100002
     const val INTERNAL = 100003
+    /**
+     * 内容命中后台敏感词（「拦截」档，SENSITIVE_WORDS_DESIGN §0）：发消息 / 编辑 / 资料 / 群资料 / 好友申请附言都可能回。
+     * 服务端**不告诉是哪个词**；原样重发必然再被拒。
+     */
+    const val CONTENT_BLOCKED = 100004
 
     // --- 认证鉴权 1001xx（映射 HTTP 401，NO_PERMISSION 除外映射 403）---
     const val TOKEN_INVALID = 100101

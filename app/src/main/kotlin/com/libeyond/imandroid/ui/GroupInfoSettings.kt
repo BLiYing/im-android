@@ -134,6 +134,12 @@ class GroupInfoSettingsState internal constructor(
     }
 
     fun openMyNicknameEditor() { editingMyNicknameState.value = true }
+
+    /** 编辑框被敏感词拦下（100004）时留住用户写的字，见 [BlockedDrafts]。 */
+    internal val drafts = BlockedDrafts()
+
+    /** 改「我在本群的昵称」；被 100004 拦下时下次打开编辑框还是这段字。失败照抛，由 runManage 提示。 */
+    suspend fun setMyNickname(v: String) = drafts.keepIfBlocked(MY_NICKNAME_DRAFT, v) { client.groups.setMyNickname(convId, v) }
     fun dismissMyNicknameEditor() { editingMyNicknameState.value = false }
     fun openRemarkEditor() { editingRemarkState.value = true }
     fun dismissRemarkEditor() { editingRemarkState.value = false }
@@ -178,3 +184,5 @@ fun GroupMuteSheet(settings: GroupInfoSettingsState, title: String) {
         onDismiss = settings::dismissMuteSheet,
     )
 }
+
+internal const val MY_NICKNAME_DRAFT = "my_nickname"

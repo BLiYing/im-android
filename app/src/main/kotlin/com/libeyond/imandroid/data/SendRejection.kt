@@ -25,6 +25,7 @@ object SendRejection {
         ErrCode.RECIPIENT_NOT_FOUND -> R.string.chat_reject_recipient_deleted // 对端已注销（§6.16.3）：重发必然再失败，不可点
         ErrCode.ACCOUNT_MUTED -> R.string.err_300004
         ErrCode.MSG_TOO_LONG -> R.string.chat_reject_too_large
+        ErrCode.CONTENT_BLOCKED -> R.string.chat_reject_sensitive // 敏感词拦截：重发必再被拒，文本留在气泡里可复制改了再发
         ErrCode.NOT_GROUP_MEMBER -> R.string.err_300203
         ErrCode.GROUP_MUTED -> R.string.chat_input_disabled_mute_all
         ErrCode.GROUP_MEMBER_MUTED -> R.string.chat_input_disabled_muted

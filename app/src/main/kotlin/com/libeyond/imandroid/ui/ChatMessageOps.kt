@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -8,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.db.ConversationEntity
+import com.libeyond.imandroid.data.MsgOpRejection
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.sendMsgOp
 import com.libeyond.imandroid.i18n.Str
@@ -63,6 +65,8 @@ class ChatMessageOps(
     /** 宿主每次重组刷新：弹提示、把文字填进输入框（并清掉回复态）。 */
     var toast: (String) -> Unit = {}
     var prefill: (String) -> Unit = {}
+    /** 宿主每次重组刷新：输入框当前是否为空（编辑被拒要还原文字时，用户已另打了字就别覆盖）。 */
+    var inputBlank: () -> Boolean = { true }
 
     fun translate(m: MessageEntity) {
         scope.launch {
@@ -93,9 +97,28 @@ class ChatMessageOps(
     fun commitEdit(text: String): Boolean {
         val m = editing ?: return false
         if (text.isBlank()) return false
-        client.messages.sendMsgOp(conv.convId, MsgOp.EDIT, m.convSeq, content = text)
+        val cid = client.messages.sendMsgOp(conv.convId, MsgOp.EDIT, m.convSeq, content = text)
+        if (inflightEdits.size >= MAX_INFLIGHT_EDITS) inflightEdits.remove(inflightEdits.keys.first()) // 成功无应答不会摘，封顶防积累
+        inflightEdits[cid] = m to text
         editing = null
         return true
+    }
+
+    /** 已发出的编辑（cid → 原消息 + 改后的文字）：被拒时要把用户改的字还回输入框。只在内存。 */
+    private val inflightEdits = LinkedHashMap<String, Pair<MessageEntity, String>>()
+
+    /**
+     * 我发起的编辑被服务端拒（如 100004 敏感词，SENSITIVE_WORDS_DESIGN §3）：吐司说原因，
+     * 并**回到编辑态、把改过的字填回去**——否则用户刚打的字就没了（发送时输入框已清空）。
+     * 用户已经又进了别的编辑态、或输入框里已有新打的字就只吐司，不抢输入框。其它操作（撤回/置顶/删除）的拒绝维持原样不提示。
+     */
+    internal fun onOpRejected(r: MsgOpRejection) {
+        val (m, text) = inflightEdits.remove(r.clientMsgId) ?: return
+        toast(r.userText())
+        if (editing == null && inputBlank()) {
+            editing = m
+            prefill(text)
+        }
     }
 
     private fun submitReport(m: MessageEntity, reason: String) {
@@ -109,6 +132,7 @@ class ChatMessageOps(
     /** 已读详情卡片 + 举报理由框。 */
     @Composable
     fun Layers(chatFontSize: Float, nameOf: (String) -> String, avatarOf: (String) -> String, roleOf: (String) -> String?, onOpenUser: (String) -> Unit) {
+        LaunchedEffect(this) { client.messages.pendingOps.rejections.collect { onOpRejected(it) } }
         readReceipts?.let { rb ->
             ReadReceiptsSheet(rb, nameOf, avatarOf, roleOf, onOpenUser, onDismissed = { readReceipts = null })
         }
@@ -131,3 +155,5 @@ class ChatMessageOps(
 
 /** 举报理由上限（服务端同，500 字）。 */
 private const val REPORT_REASON_MAX = 500
+
+private const val MAX_INFLIGHT_EDITS = 16
