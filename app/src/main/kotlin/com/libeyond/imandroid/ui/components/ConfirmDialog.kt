@@ -54,7 +54,7 @@ fun IMConfirmDialog(
 /**
  * 单行/多行文本输入对话框（改群名、群简介、群公告…）。
  *
- * **带字数上限并当场挡住**：服务端对这几个字段各有上限（群名 30 / 简介 200 / 公告 500），
+ * **带字数上限并当场挡住**：服务端对这几个字段各有上限（群名 / 公告读 server-config，默认 30 / 500；简介 200），
  * 超了会回业务码。让用户打完一大段再被拒，不如根本打不进去。
  */
 @Composable
@@ -82,7 +82,7 @@ fun IMTextPrompt(
     countByCodePoint: Boolean = false,
 ) {
     val c = IMTheme.colors
-    fun len(s: String) = if (countByCodePoint) s.codePointCount(0, s.length) else s.length
+    fun len(s: String) = TextPromptRules.length(s, countByCodePoint)
     var value by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -95,7 +95,8 @@ fun IMTextPrompt(
                 }
                 IMTextField(
                     value = value,
-                    onValueChange = { if (len(it) <= maxLen) value = it },
+                    // 变短永远放行、超限且改过不让确认：判据见 TextPromptRules
+                    onValueChange = { if (TextPromptRules.acceptsEdit(it, value, maxLen, countByCodePoint)) value = it },
                     label = label,
                     singleLine = !multiline,
                 )
@@ -113,7 +114,10 @@ fun IMTextPrompt(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(value.trim()) }) { Text(confirmText, color = c.accent) }
+            val canConfirm = TextPromptRules.canConfirm(value, initial, maxLen, countByCodePoint)
+            TextButton(onClick = { onConfirm(value.trim()) }, enabled = canConfirm) {
+                Text(confirmText, color = if (canConfirm) c.accent else c.textTertiary)
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel), color = c.textSecondary) }

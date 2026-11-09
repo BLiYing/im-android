@@ -47,6 +47,8 @@ fun MediaPickerHost(
     onToast: (String) -> Unit,
     log: MediaPickerLog = MediaPickerLog.None,
     includeVideo: Boolean = true,
+    /** 单文件上限（字节）：app 侧传服务端下发的 `upload_max_file_bytes`（已归一）；≤0 按 [MediaPick.DEFAULT_MAX_BYTES]。 */
+    maxBytes: Long = MediaPick.DEFAULT_MAX_BYTES,
 ) {
     val context = LocalContext.current
     val sdk = android.os.Build.VERSION.SDK_INT
@@ -144,6 +146,7 @@ fun MediaPickerHost(
             bucketId = bucketId,
             onBucketChange = { bucketId = it },
             selected = selected,
+            maxBytes = maxBytes.takeIf { it > 0 } ?: MediaPick.DEFAULT_MAX_BYTES,
             onToggle = { a ->
                 val next = MediaPick.toggle(selected, a.id)
                 if (next == null) onToast(limitMsg) else selected = next

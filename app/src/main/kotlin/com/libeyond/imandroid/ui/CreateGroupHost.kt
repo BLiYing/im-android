@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.data.GroupNameDefault
+import com.libeyond.imandroid.data.ServerConfigStore
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
@@ -61,6 +63,8 @@ fun CreateGroupHost(
     var myPublicName by remember { mutableStateOf("") } // 预填群名要带上"我"，与 iOS 起手一致
     // **群上限读服务端配置，不硬编码**（要装更多人走大群，不是调大这个数）
     var maxMembers by remember { mutableStateOf(0) }
+    // 群名上限（Unicode 码点）：后台「系统设置」可改，服务端同值校验；没拉到时是内置默认 30
+    val nameMaxLen = ServerConfigStore.limits.collectAsState().value.groupNameMaxLen
 
     var avatarUrl by remember { mutableStateOf("") }
     var avatarUploading by remember { mutableStateOf(false) }
@@ -75,7 +79,7 @@ fun CreateGroupHost(
     }
 
     // 选人变化时重算预填群名——手改过就不再覆盖（同 iOS applySuggestedNameIfNeeded）
-    LaunchedEffect(picks, myPublicName) {
+    LaunchedEffect(picks, myPublicName, nameMaxLen) {
         if (nameEdited) return@LaunchedEffect
         val names = buildList {
             add(myPublicName)
@@ -84,7 +88,7 @@ fun CreateGroupHost(
                 add(DisplayName.publicNameOfFriend(f))
             }
         }
-        name = GroupNameDefault.defaultName(names)
+        name = GroupNameDefault.defaultName(names, nameMaxLen)
     }
 
     val avatarPicker = rememberLauncherForActivityResult(
@@ -126,7 +130,7 @@ fun CreateGroupHost(
                 name = name,
                 onNameChange = { input ->
                     nameEdited = true
-                    name = GroupNameDefault.truncateToRunes(input, GroupNameDefault.MAX_LENGTH)
+                    name = GroupNameDefault.truncateToRunes(input, nameMaxLen)
                 },
                 members = friends.filter { it.userId in picks },
                 onRemove = { id ->
@@ -135,6 +139,7 @@ fun CreateGroupHost(
                 },
                 onAddMore = { step = 0 },
                 maxMembers = maxMembers,
+                nameMaxLen = nameMaxLen,
                 busy = creating,
                 error = error,
                 avatarUrl = avatarUrl,

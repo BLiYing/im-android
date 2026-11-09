@@ -79,6 +79,19 @@ data class ServerConfig(
     @SerialName("max_supergroup_members") val maxSupergroupMembers: Int = 0,
     /** 部署级：服务端是否配了 FCM 凭据（省电模式「后台保持连接」的前提之一）。老服务端无此字段 = false。 */
     @SerialName("fcm_enabled") val fcmEnabled: Boolean = false,
+    // 以下六项是后台「系统设置」S2，运行中可变（PROTOCOL `GET /server-config`）。**一律可空**：
+    // 缺失（老服务端）≠ 0——撤回窗口缺失若读成 0 就成了「永远可撤回」。归一与默认值见 [ServerLimits.of]。
+    @SerialName("recall_window_sec") val recallWindowSec: Long? = null,
+    @SerialName("edit_window_sec") val editWindowSec: Long? = null,
+    @SerialName("forward_max_targets") val forwardMaxTargets: Int? = null,
+    @SerialName("merge_forward_max") val mergeForwardMax: Int? = null,
+    @SerialName("group_name_max_len") val groupNameMaxLen: Int? = null,
+    @SerialName("group_announcement_max_len") val groupAnnouncementMaxLen: Int? = null,
+    // 以下三项是 S3a 上传策略（IMServer `cmd/imserver/upload_policy.go`），同样**一律可空**、缺失走默认：
+    // 开关缺失 = 开；单文件上限缺失 / ≤0 = 2 GiB；禁用扩展名缺失 = 空表。归一见 [ServerLimits.of]。
+    @SerialName("upload_enabled") val uploadEnabled: Boolean? = null,
+    @SerialName("upload_max_file_bytes") val uploadMaxFileBytes: Long? = null,
+    @SerialName("upload_blocked_extensions") val uploadBlockedExtensions: List<String>? = null,
 )
 
 @Serializable

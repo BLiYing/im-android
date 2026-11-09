@@ -4,6 +4,7 @@ import com.libeyond.imandroid.sdk.api.UploadResult
 import com.libeyond.imandroid.sdk.api.UploadSession
 import com.libeyond.imandroid.sdk.api.UploadTransport
 import com.libeyond.imandroid.sdk.http.ApiException
+import com.libeyond.imandroid.sdk.protocol.ErrCode
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -36,7 +37,7 @@ class ChunkedUploaderTest {
         override suspend fun sessionStatus(id: String): Long {
             calls += "status"
             failStatusWith?.let { throw it() }
-            if (!sessionAlive) throw ApiException(500001, "gone")
+            if (!sessionAlive) throw ApiException(ErrCode.PARAM_INVALID, "gone")
             return received.size().toLong()
         }
         override suspend fun sessionChunk(id: String, offset: Long, bytes: ByteArray, len: Int, mime: String): Long {
@@ -88,10 +89,36 @@ class ChunkedUploaderTest {
         assertTrue(s.calls.contains("init"))
 
         // init 也一直业务错：首次 + 重开 2 次 = 3 次 init，之后抛出（别无限循环——iOS 踩过的死循环）
-        val s2 = FakeServer(); s2.failInitWith = { ApiException(500001, "gone") }
+        val s2 = FakeServer(); s2.failInitWith = { ApiException(ErrCode.PARAM_INVALID, "gone") }
         try { TestScopeUploader(s2, f).run(); fail() } catch (e: ApiException) {
-            assertEquals(500001, e.code)
+            assertEquals(ErrCode.PARAM_INVALID, e.code)
             assertEquals(3, s2.calls.count { it == "init" })
+        }
+    }
+
+    @Test fun `上传策略拒绝（500001 2 3）不重开会话，立刻抛出`() = runTest {
+        for (code in listOf(ErrCode.FILE_TOO_LARGE, ErrCode.FILE_TYPE_INVALID, ErrCode.UPLOAD_DISABLED)) {
+            // init 被拒
+            val s1 = FakeServer(); val f = file(8)
+            s1.failInitWith = { ApiException(code, "policy") }
+            try { TestScopeUploader(s1, f).run(); fail() } catch (e: ApiException) { assertEquals(code, e.code) }
+            assertEquals("code=$code 只 init 一次", 1, s1.calls.count { it == "init" })
+            // 分片中途被拒
+            val s2 = FakeServer(); s2.failChunksWith = { ApiException(code, "policy") }
+            try { TestScopeUploader(s2, f).run(); fail() } catch (e: ApiException) { assertEquals(code, e.code) }
+            assertEquals(1, s2.calls.count { it == "init" })
+            assertEquals(1, s2.calls.count { it.startsWith("chunk") })
+            // complete 复检被拒（在途上传收尾时策略已变）
+            val s3 = FakeServer(); var completes = 0
+            val atComplete = object : UploadTransport by s3 {
+                override suspend fun sessionComplete(id: String): UploadResult { completes++; throw ApiException(code, "policy") }
+            }
+            try {
+                ChunkedUploader(atComplete, f, "a", "x", null, {}, { _, _ -> }, backoff = {}, io = kotlinx.coroutines.Dispatchers.Unconfined).run()
+                fail()
+            } catch (e: ApiException) { assertEquals(code, e.code) }
+            assertEquals(1, completes)
+            assertEquals(1, s3.calls.count { it == "init" })
         }
     }
 

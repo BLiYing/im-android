@@ -37,7 +37,8 @@ internal fun sendComposerInput(
     val text = input.text.trim()
     // 恰好一张粘贴图 + 有文字 + 不是回复态 → **一条 caption 消息**（iOS 同：Telegram 模型，配文 @ 随之生效）。
     // 回复态不合并：引用与图说在协议里不共存，仍走「先图后字」两条。
-    if (mergesIntoCaption(paste.items.size, text, replyTo != null)) {
+    // 图会被上传策略挡下（S3a）就不合并：图那边吐司不发，文字照常作为一条文本发出去，不随图一起丢
+    if (mergesIntoCaption(paste.items.size, text, replyTo != null) && !mediaSend.anyRejected(paste.items, sendOriginal = false)) {
         val img = paste.items
         val at = mention.resolve(text)
         paste.clear(); clearInput(); mention.clear()

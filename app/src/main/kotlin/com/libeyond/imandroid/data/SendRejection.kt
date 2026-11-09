@@ -2,6 +2,7 @@ package com.libeyond.imandroid.data
 
 import androidx.annotation.StringRes
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ErrCode
 
 /**
@@ -27,7 +28,26 @@ object SendRejection {
         ErrCode.NOT_GROUP_MEMBER -> R.string.err_300203
         ErrCode.GROUP_MUTED -> R.string.chat_input_disabled_mute_all
         ErrCode.GROUP_MEMBER_MUTED -> R.string.chat_input_disabled_muted
+        // 上传策略（S3a）：媒体在上传阶段被拒（发送前预检之后管理员又改了策略，或分片 complete 复检）。
+        // 原样重发必然再被拒，与禁言同理不给重发。超限是**带参文案**（上限值），显示一律走 [noteText]
+        ErrCode.FILE_TOO_LARGE -> R.string.upload_precheck_too_large
+        ErrCode.FILE_TYPE_INVALID -> R.string.upload_precheck_blocked_type
+        ErrCode.UPLOAD_DISABLED -> R.string.err_500003
         else -> null
+    }
+
+    /**
+     * 说明行的**显示文案**（调用时刻取，跟随当前语言）；null = 不是明确拒收。
+     * 500001 填**当前**单文件上限（拒的那一刻的值客户端不可知，当前值是最好的近似，与发送前预检同一文案同一格式）——
+     * 不能用 `chat_reject_too_large`（「消息内容过大」是文本超长 300xxx 的措辞，放在文件上是错的）。
+     */
+    fun noteText(code: Int, limits: ServerLimits = ServerConfigStore.current): String? {
+        val res = noteRes(code) ?: return null
+        return if (code == ErrCode.FILE_TOO_LARGE) {
+            Str.s(res, UploadPrecheck.sizeLabel(limits.uploadMaxFileBytes))
+        } else {
+            Str.s(res)
+        }
     }
 
     /** 这条拒收是否带「发送好友申请」动作。 */

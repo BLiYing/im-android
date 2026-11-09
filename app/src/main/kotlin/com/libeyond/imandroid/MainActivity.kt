@@ -38,6 +38,7 @@ import com.libeyond.imandroid.data.PowerSavingStore
 import com.libeyond.imandroid.ui.theme.MediaHost
 import com.libeyond.imandroid.fcm.CallNotifications
 import com.libeyond.imandroid.rtc.RtcCall
+import com.libeyond.imandroid.sdk.refreshServerConfigOnForeground
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
@@ -95,6 +96,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 client.pendingLogoutRunner.flush()
+                client.refreshServerConfigOnForeground() // 后台「系统设置」可能改过撤回窗口等（节流在 store 里）
                 FcmNotifications.clearAll() // 进了 App 通知栏就不再挂消息通知（iOS sceneDidBecomeActive 同款）
                 RtcCall.onForeground() // 正在响的来电由 Kit 的来电界面接手，收掉它的离线推送横幅
                 try {

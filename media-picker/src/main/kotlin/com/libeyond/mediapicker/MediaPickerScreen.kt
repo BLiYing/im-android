@@ -78,6 +78,8 @@ fun MediaPickerScreen(
     onToast: (String) -> Unit,
     /** Android 14 部分授权时的「管理选中的照片」入口；其余情况传 null。 */
     onManagePhotos: (() -> Unit)? = null,
+    /** 单文件上限（字节），见 [MediaPickerHost] 的同名参数。 */
+    maxBytes: Long = MediaPick.DEFAULT_MAX_BYTES,
 ) {
     val s = LocalMediaPickerSkin.current
     var bucketOpen by remember { mutableStateOf(false) }
@@ -85,7 +87,7 @@ fun MediaPickerScreen(
     var preview by remember { mutableStateOf<PreviewTarget?>(null) }
 
     val title = buckets.firstOrNull { it.id == bucketId }?.name ?: stringResource(R.string.mp_all)
-    val tooLargeMsg = stringResource(R.string.mp_too_large, MediaPick.sizeLabel(MediaPick.MAX_BYTES))
+    val tooLargeMsg = stringResource(R.string.mp_too_large, MediaPick.sizeLabel(maxBytes))
     val unreadableMsg = stringResource(R.string.mp_unreadable)
     val gridState = rememberLazyGridState()
 
@@ -126,10 +128,12 @@ fun MediaPickerScreen(
                         MediaTile(
                             asset = a,
                             index = MediaPick.indexOf(selected, a.id),
+                            usable = MediaPick.selectable(a, maxBytes, sendOriginal),
                             onClick = {
-                                if (!MediaPick.selectable(a)) {
+                                // 已选中的永远可以取消（勾「原图」后已选的大图会变成不可选，得留条路把它拿掉）
+                                if (MediaPick.indexOf(selected, a.id) == 0 && !MediaPick.selectable(a, maxBytes, sendOriginal)) {
                                     onToast(
-                                        if (a.sizeBytes > MediaPick.MAX_BYTES) {
+                                        if (MediaPick.tooLarge(a, maxBytes, sendOriginal)) {
                                             tooLargeMsg
                                         } else {
                                             unreadableMsg
@@ -180,6 +184,7 @@ fun MediaPickerScreen(
             sendOriginal = sendOriginal,
             onOriginalChange = onOriginalChange,
             onSend = { preview = null; onSend() },
+            maxBytes = maxBytes,
         )
     }
 }
@@ -223,11 +228,11 @@ internal fun PickerTopBar(
 private fun MediaTile(
     asset: MediaAsset,
     index: Int,
+    usable: Boolean,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
     val s = LocalMediaPickerSkin.current
-    val usable = MediaPick.selectable(asset)
     Box(
         modifier = Modifier
             .aspectRatio(1f)

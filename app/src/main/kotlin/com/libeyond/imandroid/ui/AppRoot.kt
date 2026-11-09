@@ -33,6 +33,7 @@ import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.rtc.RtcCall
 import com.libeyond.imandroid.rtc.RtcProfileResolver
 import com.libeyond.imandroid.sdk.IMClient
+import com.libeyond.imandroid.sdk.refreshServerConfig
 import com.libeyond.imandroid.sdk.session.DeviceIdentity
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.session.RestoreOutcome
@@ -262,11 +263,9 @@ fun AppRoot(client: IMClient) {
             // 之后「连上即重拉」与 capabilities_update 由 IMClient 负责（DownloadSettingsStore）。
             // **拉不到就按出厂默认走**，不是全关——全关会让所有图片都要手点。
             LaunchedEffect(Unit) { client.refreshDownloadSettings() }
-            // 部署级 fcm_enabled（省电「后台保持连接」前提）：拉不到保持未知 = 不断连
-            LaunchedEffect(Unit) {
-                runCatchingCancellable { client.conversationsApi.serverConfig() }
-                    .onSuccess { com.libeyond.imandroid.data.PowerSavingStore.setFcmEnabled(it.fcmEnabled) }
-            }
+            // 部署级配置（ServerConfigStore）：进主界面先拉一次，不等 WS 连上；之后连上 / 回前台重拉。
+            // 拉到的 fcm_enabled 喂给省电（「后台保持连接」前提），拉不到保持未知 = 不断连
+            LaunchedEffect(Unit) { client.refreshServerConfig("app_main") }
             // 账号级通知设置（M5）：同理先拉一次跑迁移判定（exists=false 时把本地现值传上去）；
             // 之后「连上即重拉」与 notify_settings_update 由 IMClient 负责（AccountNotifySettingsStore）。
             LaunchedEffect(Unit) { client.refreshAccountNotifySettings() }

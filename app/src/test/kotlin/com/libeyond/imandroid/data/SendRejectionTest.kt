@@ -20,6 +20,22 @@ class SendRejectionTest {
         assertEquals(R.string.chat_reject_blocked, SendRejection.noteRes(ErrCode.FRIEND_BLOCKED))
     }
 
+    @Test fun `上传策略拒绝给说明（重发必再被拒），不给自助动作`() {
+        assertEquals(R.string.err_500003, SendRejection.noteRes(ErrCode.UPLOAD_DISABLED))
+        assertEquals(R.string.upload_precheck_blocked_type, SendRejection.noteRes(ErrCode.FILE_TYPE_INVALID))
+        assertEquals(R.string.upload_precheck_too_large, SendRejection.noteRes(ErrCode.FILE_TOO_LARGE))
+        assertFalse(SendRejection.isActionable(ErrCode.UPLOAD_DISABLED))
+    }
+
+    @Test fun `文件超限说明行写当前上限（不是「消息内容过大」）`() {
+        val mb = 1L shl 20
+        assertEquals("文件超过 100 MB，无法发送", SendRejection.noteText(ErrCode.FILE_TOO_LARGE, ServerLimits(uploadMaxFileBytes = 100 * mb)))
+        assertEquals("文件超过 2 GB，无法发送", SendRejection.noteText(ErrCode.FILE_TOO_LARGE, ServerLimits()))
+        assertEquals("消息内容过大，无法发送", SendRejection.noteText(ErrCode.MSG_TOO_LONG))
+        assertEquals("管理员已暂停发送文件", SendRejection.noteText(ErrCode.UPLOAD_DISABLED))
+        assertNull(SendRejection.noteText(0))
+    }
+
     @Test fun `超时网络等未知码不给说明，仍走重发`() {
         assertNull(SendRejection.noteRes(0))
         assertNull(SendRejection.noteRes(100003))

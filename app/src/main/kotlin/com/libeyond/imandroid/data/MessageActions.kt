@@ -46,9 +46,6 @@ enum class MessageAction(@StringRes private val labelRes: Int, val destructive: 
  */
 object MessageActions {
 
-    /** 撤回时间窗，服务端权威（默认 2 分钟）。端上先挡一道，避免明知会失败还发。 */
-    const val RECALL_WINDOW_MS = 2 * 60 * 1000L
-
     /**
      * @param msg 目标消息
      * @param myUid 我
@@ -75,6 +72,13 @@ object MessageActions {
          * 带图说的失效图仍可复制——复制的是文字。
          */
         mediaGone: Boolean = false,
+        /**
+         * 撤回 / 编辑时间窗（秒，**0 = 不限**），来自 server-config（[ServerLimits]，后台「系统设置」可改）。
+         * 服务端权威（超窗回 300008 / 300007）；端上只是先挡一道，避免明知会失败还发。
+         * 默认值 = 老服务端不下发时的内置默认（撤回 2 分钟、编辑不限）。
+         */
+        recallWindowSec: Long = ServerLimits.DEFAULT_RECALL_WINDOW_SEC,
+        editWindowSec: Long = ServerLimits.DEFAULT_EDIT_WINDOW_SEC,
     ): List<MessageAction> {
         val pin = PinnedBanner.pinAction(msg, canPin)
         // 撤回墓碑上什么都不给——正文已被服务端脱敏，复制/引用都没有意义。
@@ -116,14 +120,16 @@ object MessageActions {
         // 此前本端长按菜单没有这一项（2026-09-17 用户报），只能先进多选再收藏。
         if (!mediaGone && SelectionActions.favoritable(listOf(msg)).isNotEmpty()) out += MessageAction.Favorite
 
-        // 撤回：仅本人，且在时间窗内。服务端超窗回 300008
-        if (mine && now - msg.timestamp <= RECALL_WINDOW_MS) out += MessageAction.Recall
+        // 撤回：仅本人，且在时间窗内（0 = 不限）。服务端超窗回 300008
+        if (mine && ServerLimits.withinWindow(msg.timestamp, now, recallWindowSec)) out += MessageAction.Recall
 
         // 置顶 / 取消置顶：排在撤回之后（对齐 iOS 菜单顺序：… 撤回 · 置顶 · 编辑 · 多选 · 翻译 · 举报 · 删除）
         pin?.let { out += it }
-        // 编辑：仅本人文本消息，无时间窗（服务端同判：非本人 300006、非文本/已撤回 300007）。
-        // convSeq>0 必须——待确认行走编辑会落到「发新消息」分支（iOS 注释）
-        if (mine && msg.contentType == ContentType.TEXT && msg.content.isNotBlank()) out += MessageAction.Edit
+        // 编辑：仅本人文本消息，且在编辑时间窗内（默认 0 = 不限；服务端同判：非本人 300006、
+        // 非文本/已撤回/超窗 300007）。convSeq>0 必须——待确认行走编辑会落到「发新消息」分支（iOS 注释）
+        if (mine && msg.contentType == ContentType.TEXT && msg.content.isNotBlank() &&
+            ServerLimits.withinWindow(msg.timestamp, now, editWindowSec)
+        ) out += MessageAction.Edit
 
         // 多选（顺序对齐 iOS：… 撤回 · 置顶 · 编辑 · 多选 · 翻译 · 举报 · 删除；此前排在撤回之前）。
         // 判据比转发**宽一档**（走 ChatSelection.selectable），因为进多选后还能勾上

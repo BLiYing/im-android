@@ -876,7 +876,7 @@
     <string name="err_200110">This QR code is no longer valid. Ask for a new one.</string>
     <string name="err_300004">This account has been muted</string>
     <string name="err_300201">Group not found</string>
-    <string name="err_300202">The group name can’t be empty or longer than 30 characters</string>
+    <string name="err_300202">The group name can’t be empty or exceed the length limit</string>
     <string name="err_300203">You’re not in this group</string>
     <string name="err_300205">The group has reached its member limit</string>
     <string name="err_300211">Your join request was just declined. Try again later.</string>
@@ -886,6 +886,7 @@
     <string name="err_300303">Folder name can\'t be empty or too long</string>
     <string name="err_300304">A folder with this name already exists</string>
     <string name="err_300305">Folder not found</string>
+    <string name="err_500003">Sending files has been paused by the administrator</string>
     <string name="err_500101">Voice-to-text isn’t enabled (the server has no speech engine configured)</string>
     <string name="err_500102">Recognition failed. Try again later.</string>
     <string name="err_500103">Voice-to-text is busy. Try again later.</string>
@@ -1028,6 +1029,10 @@
     <string name="folder_toast_created">Created “%1$s” and added</string>
     <string name="folder_toast_failed">Something went wrong. Please try again.</string>
     <string name="folder_toast_removed">Removed from “%1$s”</string>
+    <plurals name="forward_merge_max">
+        <item quantity="one">You can merge-forward up to %1$d message. Select fewer or forward them one by one</item>
+        <item quantity="other">You can merge-forward up to %1$d messages. Select fewer or forward them one by one</item>
+    </plurals>
     <string name="forward_mode_each">One by one</string>
     <string name="forward_mode_merged">Combined</string>
     <string name="forward_picker_confirm_single">Send to \"%1$s\"?</string>
@@ -1180,7 +1185,7 @@
     <string name="group_info_my_nickname_hint">Visible to everyone in this group. Leave empty to clear it and show your global nickname.</string>
     <string name="group_info_reinvite_blocked">This member was removed from the group and can’t be invited again for now</string>
     <string name="group_info_remark_hint">Only visible to you, to tell apart chats with the same name. Other members won\'t be notified.</string>
-    <string name="group_info_rename_hint">1–30 characters</string>
+    <string name="group_info_rename_hint">1–%1$d characters</string>
     <string name="group_info_rename_title">Rename group</string>
     <string name="group_info_super_note">Large group · 3 features are off: typing indicators, read receipts, and member online status. At 20,000 members they would flood everyone with useless updates.</string>
     <string name="group_info_title">Group info</string>
@@ -1281,7 +1286,7 @@
     <string name="group_ops_leave_confirm_message">Leave this group chat?</string>
     <string name="group_ops_leave_failed">Couldn\'t leave: %1$s</string>
     <string name="group_ops_list_load_failed">Couldn\'t load the group list: %1$s</string>
-    <string name="group_ops_name_placeholder">Group name (1–30 characters)</string>
+    <string name="group_ops_name_placeholder">Group name (1–%1$d characters)</string>
     <string name="group_ops_name_required">Please enter a group name</string>
     <string name="group_ops_remark_save_failed">Couldn\'t save the remark: %1$s</string>
     <string name="group_ops_revoke_admin_confirm">Revoke %1$s\'s admin role?</string>
@@ -2180,6 +2185,8 @@
     <string name="twostep_use_recovery">Use a recovery code</string>
     <string name="twostep_verify_pw_footer">To protect your account, please confirm your password before turning this on.</string>
     <string name="twostep_verify_pw_title">Verify password</string>
+    <string name="upload_precheck_blocked_type">The administrator doesn’t allow sending installers or executable files</string>
+    <string name="upload_precheck_too_large">This file is larger than %1$s and can’t be sent</string>
     <string name="web_conv_menu_mute">Mute</string>
     <string name="web_conv_menu_unmute">Unmute</string>
     <string name="web_login_nickname_placeholder">For sign-up only; up to 32 characters</string>

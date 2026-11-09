@@ -116,6 +116,15 @@ object ErrCode {
     // --- 文件 5000xx ---
     const val FILE_TOO_LARGE = 500001
     const val FILE_TYPE_INVALID = 500002
+    /** 管理员在后台「系统设置 ▸ 上传与媒体」暂停了聊天文件上传（头像不受影响；S3a）。 */
+    const val UPLOAD_DISABLED = 500003
+
+    /**
+     * 上传策略拒绝（S3a）：超限 / 类型禁用 / 总开关关。**确定性的业务错**——换会话从 0 重传也必然再被拒，
+     * 分片上传遇到它不重开会话（[com.libeyond.imandroid.data.ChunkedUploader]）。
+     */
+    fun isUploadPolicyReject(code: Int): Boolean =
+        code == FILE_TOO_LARGE || code == FILE_TYPE_INVALID || code == UPLOAD_DISABLED
 
     // --- 语音转文字 5001xx（VOICE_TRANSCRIBE_DESIGN §3.3）---
     /** 服务端没配识别引擎。重试无意义，要明说。 */

@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +26,7 @@ import com.composables.icons.lucide.User
 import com.composables.icons.lucide.Users
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.Forward
+import com.libeyond.imandroid.data.ServerConfigStore
 import com.libeyond.imandroid.data.SharePick
 import com.libeyond.imandroid.data.SharePickSelection
 import com.libeyond.imandroid.data.SharePickSources
@@ -46,7 +48,7 @@ private enum class SharePage { Main, Friends, Groups }
  *
  * - **卡片式弹层**（[IMCardSheet]，iOS pageSheet）：可下拉关闭，标题「转发到」居中；
  * - **默认单选**：点一行弹「发送给「X」？」确认后发送；右上「多选」进多选，行首出勾选圈，
- *   上限 [Forward.MAX_TARGETS]，超限吐司而不是静默丢弃（未勾的行**不置灰**）；
+ *   上限 server-config 的 `forward_max_targets`（[com.libeyond.imandroid.data.ServerLimits.forwardMaxTargets]，缺失 = 9），超限吐司而不是静默丢弃（未勾的行**不置灰**）；
  * - **搜索框**：按显示名 + 单聊对端 uid 过滤，只影响看得见哪些行、已选不丢（[Forward.pickable]）；
  * - 剔除系统通知单聊。
  *
@@ -105,7 +107,9 @@ fun ForwardPickerScreen(
         if (shareMode && query.isNotBlank()) SharePick.searchSections(rows, sources ?: SharePickSources(), query, exclude) else null
     }
     val targets = remember(selection, conversations) { selection.targets(conversations) }
-    val subtitle = if (multi && shareMode) stringResource(R.string.share_picker_selected_of_max, selection.size, Forward.MAX_TARGETS) else ""
+    // 后台「系统设置」可改（只由端上执行，服务端不校验）；没拉到时是内置默认 9
+    val maxTargets = ServerConfigStore.limits.collectAsState().value.forwardMaxTargets
+    val subtitle = if (multi && shareMode) stringResource(R.string.share_picker_selected_of_max, selection.size, maxTargets) else ""
 
     IMCardSheet(onDismissed = onCancel) { sheet ->
         val onTap: (ConversationEntity) -> Unit = { conv ->
@@ -113,9 +117,9 @@ fun ForwardPickerScreen(
             if (!multi) {
                 if (confirmSingleTap) confirming = conv else sheet.dismiss { onConfirm(listOf(conv)) }
             } else {
-                val next = selection.toggle(conv)
+                val next = selection.toggle(conv, maxTargets)
                 if (next == null) {
-                    onToast(Str.p(R.plurals.forward_picker_max_selection, Forward.MAX_TARGETS, Forward.MAX_TARGETS))
+                    onToast(Str.p(R.plurals.forward_picker_max_selection, maxTargets, maxTargets))
                 } else {
                     selection = next
                 }
@@ -224,6 +228,7 @@ fun ForwardPickerScreen(
         if (shareMode && multi) {
             SharePickBottomBar(
                 selected = targets,
+                maxTargets = maxTargets,
                 onRemove = { selection = selection.remove(it) },
                 onSend = { focus.clearFocus(); reviewing = true },
             )

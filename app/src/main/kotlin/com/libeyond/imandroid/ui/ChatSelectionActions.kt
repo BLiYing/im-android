@@ -127,6 +127,14 @@ internal class SelectionActionsController(
             toast(if (picked.any(::expired)) Str.s(R.string.chat_forward_all_expired_merge) else Str.s(R.string.chat_forward_none_forwardable))
             return
         }
+        // 合并转发条数上限 = min(多选上限 100, server-config merge_forward_max)（只由端上执行）。
+        // 只卡合并这一条路：逐条转发 / 举报 / 收藏 / 删除仍是多选的 100（SYMMETRY「共用多选栏与 100 条上限」）。
+        // 超了留在多选里让用户减勾，不静默截断（截掉哪几条用户看不见）
+        val mergeMax = com.libeyond.imandroid.data.ServerConfigStore.current.mergeForwardMax
+        if (kept.size > mergeMax) {
+            toast(Str.p(R.plurals.forward_merge_max, mergeMax, mergeMax))
+            return
+        }
         val p = people()
         val peer = if (c.isGroup) null else p.friends[c.peerUid]
         val peerPublic = if (c.isGroup) "" else SelectionActions.peerPublicName(

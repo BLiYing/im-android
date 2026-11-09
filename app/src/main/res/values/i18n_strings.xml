@@ -842,7 +842,7 @@
     <string name="err_200110">二维码已失效，请向对方索取新的</string>
     <string name="err_300004">账号已被禁言</string>
     <string name="err_300201">群不存在</string>
-    <string name="err_300202">群名不能为空且不超过 30 字</string>
+    <string name="err_300202">群名不能为空，也不能超过长度上限</string>
     <string name="err_300203">你不在该群中</string>
     <string name="err_300205">群成员已达上限</string>
     <string name="err_300211">你的入群申请刚被拒绝，请稍后再试</string>
@@ -852,6 +852,7 @@
     <string name="err_300303">文件夹名不能为空，且不能太长</string>
     <string name="err_300304">已有同名文件夹</string>
     <string name="err_300305">文件夹不存在</string>
+    <string name="err_500003">管理员已暂停发送文件</string>
     <string name="err_500101">转文字暂未开启（服务端未配置识别引擎）</string>
     <string name="err_500102">识别失败，请稍后重试</string>
     <string name="err_500103">转文字服务繁忙，请稍后再试</string>
@@ -987,6 +988,9 @@
     <string name="folder_toast_created">已创建「%1$s」并添加</string>
     <string name="folder_toast_failed">操作失败，请重试</string>
     <string name="folder_toast_removed">已从「%1$s」移出</string>
+    <plurals name="forward_merge_max">
+        <item quantity="other">合并转发最多 %1$d 条，请减少所选消息或改为逐条转发</item>
+    </plurals>
     <string name="forward_mode_each">逐条转发</string>
     <string name="forward_mode_merged">合并转发</string>
     <string name="forward_picker_confirm_single">发送给「%1$s」？</string>
@@ -1135,7 +1139,7 @@
     <string name="group_info_my_nickname_hint">群内所有人可见；留空即清除，显示你的全局昵称。</string>
     <string name="group_info_reinvite_blocked">该成员已被移出本群，暂时无法再次邀请</string>
     <string name="group_info_remark_hint">仅你自己可见，用于区分同名群聊，不会通知其他成员。</string>
-    <string name="group_info_rename_hint">1~30 字</string>
+    <string name="group_info_rename_hint">1~%1$d 字</string>
     <string name="group_info_rename_title">修改群名</string>
     <string name="group_info_super_note">大群 · 已关闭 3 项能力：不显示「正在输入」、不显示已读双勾、不显示成员在线态。这些能力在两万人规模下会产生海量无效推送。</string>
     <string name="group_info_title">群资料</string>
@@ -1236,7 +1240,7 @@
     <string name="group_ops_leave_confirm_message">确定退出该群聊？</string>
     <string name="group_ops_leave_failed">退出失败：%1$s</string>
     <string name="group_ops_list_load_failed">加载群列表失败：%1$s</string>
-    <string name="group_ops_name_placeholder">群名（1~30 字）</string>
+    <string name="group_ops_name_placeholder">群名（1~%1$d 字）</string>
     <string name="group_ops_name_required">请输入群名</string>
     <string name="group_ops_remark_save_failed">保存备注失败：%1$s</string>
     <string name="group_ops_revoke_admin_confirm">撤销 %1$s 的管理员身份？</string>
@@ -2121,6 +2125,8 @@
     <string name="twostep_use_recovery">改用恢复码</string>
     <string name="twostep_verify_pw_footer">为保护账号，开启前需要确认你的密码。</string>
     <string name="twostep_verify_pw_title">验证密码</string>
+    <string name="upload_precheck_blocked_type">管理员已禁止发送安装包和可执行文件</string>
+    <string name="upload_precheck_too_large">文件超过 %1$s，无法发送</string>
     <string name="web_conv_menu_mute">免打扰</string>
     <string name="web_conv_menu_unmute">取消免打扰</string>
     <string name="web_login_nickname_placeholder">注册用，可中文，≤32 字</string>

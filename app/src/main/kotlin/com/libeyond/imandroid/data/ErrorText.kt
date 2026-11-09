@@ -47,6 +47,9 @@ object ErrorText {
         ErrCode.FOLDER_NAME_INVALID -> R.string.err_300303
         ErrCode.FOLDER_NAME_DUPLICATE -> R.string.err_300304
         ErrCode.FOLDER_NOT_FOUND -> R.string.err_300305
+        // 500001/500002 刻意不映射：头像接口也回这两个码（>2MB / 非 jpg·png），聊天上传的「安装包」文案放到头像上是错的；
+        // 聊天消息的拒收说明走 [SendRejection]。500003 只有聊天上传会回。
+        ErrCode.UPLOAD_DISABLED -> R.string.err_500003
         ErrCode.TRANSCRIBE_DISABLED -> R.string.err_500101
         ErrCode.TRANSCRIBE_FAILED -> R.string.err_500102
         ErrCode.TRANSCRIBE_BUSY -> R.string.err_500103

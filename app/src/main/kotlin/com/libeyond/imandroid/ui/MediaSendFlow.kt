@@ -16,6 +16,7 @@ import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.sdk.api.FriendEntry
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.Mention
+import com.libeyond.imandroid.data.UploadPrecheck
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.logging.IMLog
@@ -42,7 +43,10 @@ import java.util.UUID
  * 相册选择页、相机拍照共用这一个出口——「≥2 个才带 group_id」这条聚簇判据只留一份，
  * 不然迟早分叉成「相册发的成宫格、别处发的散成单张」。
  *
- * 图片压缩后整包上传（几百 KB）；**视频与「原图」走流式/分片**（服务端上限 2GB，整包读进内存就是 OOM）。
+ * 图片压缩后整包上传（几百 KB）；**视频与「原图」走流式/分片**（服务端上限默认 2GB，整包读进内存就是 OOM）。
+ *
+ * **上传策略预检**（S3a，[UploadPrecheck]）在每个入口**落待发行之前**做：命中就吐司、那一件不落行不上传。
+ * 压缩图此刻还不知道真实字节数，只预检开关与扩展名（按发出去的 .jpg 名），大小由流水线在压完后再判。
  */
 internal class MediaSendFlow(
     private val context: Context,
@@ -57,10 +61,11 @@ internal class MediaSendFlow(
      * 配文 @ 在发送那一刻已按文本复核好（[MentionComposer.resolve]），随待发行落库。
      */
     suspend fun send(
-        items: List<PickedMedia>, sendOriginal: Boolean,
+        picked: List<PickedMedia>, sendOriginal: Boolean,
         caption: String? = null, at: MentionComposer.Resolved? = null,
         onToast: (String) -> Unit,
     ) {
+        val items = admit(picked, sendOriginal, onToast)
         if (items.isEmpty()) return
         // ≥2 个共享一个 group_id → 两端聚簇成宫格；1 个不带（普通媒体气泡）。
         // 前缀 `alb-` 与 iOS 一致，便于日志里一眼认出。
@@ -120,6 +125,33 @@ internal class MediaSendFlow(
             }
         }
     }
+
+    /**
+     * 按当前上传策略筛掉注定被拒的那几件（对齐 im-web `useMediaSend`：命中的不上屏，其余照发，吐司只说第一个原因）。
+     * 视频 / 原图按原字节判；压缩图按发出去的 .jpg 名只判开关与类型（压缩后才知道大小，见类注释）。
+     */
+    private fun admit(items: List<PickedMedia>, sendOriginal: Boolean, onToast: (String) -> Unit): List<PickedMedia> {
+        var first: UploadPrecheck.Failure? = null
+        val kept = items.filter { m ->
+            val f = precheck(m, sendOriginal)
+            if (f != null) {
+                if (first == null) first = f
+                log.i("upload_precheck_rejected", "reason" to UploadPrecheck.reason(f), "bytes" to m.sizeBytes, "is_video" to m.isVideo)
+            }
+            f == null
+        }
+        first?.let { onToast(UploadPrecheck.message(it)) }
+        return kept
+    }
+
+    private fun precheck(m: PickedMedia, sendOriginal: Boolean): UploadPrecheck.Failure? {
+        val compressed = !m.isVideo && !sendOriginal
+        val name = if (compressed) MediaCompressor.jpegNameFor(m.displayName) else m.displayName
+        return UploadPrecheck.checkCurrent(name, if (compressed) 0L else m.sizeBytes, isVoice = false)
+    }
+
+    /** 这批里有没有会被上传策略挡下的（不吐司）。粘贴单图 + 文字合并成 caption 前据此判断：图发不出去时别把文字一起吞了。 */
+    fun anyRejected(items: List<PickedMedia>, sendOriginal: Boolean): Boolean = items.any { precheck(it, sendOriginal) != null }
 
     /** 落行前的廉价探测：视频读容器头（含旋转换算），图片读 bounds（含 EXIF 换算）。限时 [PROBE_TIMEOUT_MS]。 */
     private suspend fun probeSize(m: PickedMedia): VideoInfo? = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
@@ -307,8 +339,13 @@ internal class MediaSendFlow(
             onToast(Str.s(R.string.chat_media_file_read_failed))
             return
         }
-        // **一律走分片**：文件上限同样是 2GB，整包读进内存不行。
-        // 小文件多一次 init/complete 往返，换来的是「多大都不会 OOM」，值。
+        UploadPrecheck.checkCurrent(name, size, isVoice = false)?.let { f ->
+            log.i("upload_precheck_rejected", "reason" to UploadPrecheck.reason(f), "bytes" to size)
+            onToast(UploadPrecheck.message(f))
+            return
+        }
+        // 走流式：≥ 8MB（[com.libeyond.imandroid.data.ChunkedUploader.DEFAULT_CHUNK]）落私有副本走分片（可暂停续传），
+        // 更小的一次读进内存整包直传（不可暂停）——见 MediaSendPipeline.sendStream。大文件因此不会整包进内存 OOM。
         client.messages.sendMediaStream(
             convId = conv.convId,
             to = to,
@@ -329,9 +366,16 @@ internal class MediaSendFlow(
      * 上传成功后 [com.libeyond.imandroid.data.MediaSendPipeline.sendBytes] 自会换成服务端 url。
      * 时长/波形录完当场就有，不用像图片宽高那样等异步解码。
      */
-    suspend fun sendVoice(file: java.io.File, durationMs: Int, waveform: String?) {
+    suspend fun sendVoice(file: java.io.File, durationMs: Int, waveform: String?, onToast: (String) -> Unit = {}) {
         if (!file.exists() || file.length() <= 0) {
             log.w("voice_send_missing_file")
+            return
+        }
+        // 语音只受总开关约束（服务端另有固定 16MB 上限、不查扩展名）
+        UploadPrecheck.checkCurrent(file.name, file.length(), isVoice = true)?.let { f ->
+            log.i("upload_precheck_rejected", "reason" to UploadPrecheck.reason(f), "bytes" to file.length(), "is_voice" to true)
+            onToast(UploadPrecheck.message(f))
+            if (!file.delete()) log.w("voice_pending_delete_failed") // 不落行就没人再引用这份录音
             return
         }
         val localUri = "file://" + file.path

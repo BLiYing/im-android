@@ -20,6 +20,7 @@ class MediaPickTest {
         bucketName: String = "Camera",
         date: Long = 1000,
         size: Long = 1024,
+        video: Boolean = false,
     ) = MediaAsset(
         id = id,
         uri = "content://media/$id",
@@ -29,6 +30,7 @@ class MediaPickTest {
         dateAddedSec = date,
         bucketId = bucket,
         bucketName = bucketName,
+        isVideo = video,
     )
 
     // —— 选中顺序 ——
@@ -68,12 +70,36 @@ class MediaPickTest {
     // —— 大小闸门 ——
 
     @Test
-    fun `超服务端上限与零字节都不可选`() {
-        // 上限跟服务端 uploadLimitByKind 走（2GB，图片/视频同档）
-        assertTrue(MediaPick.selectable(asset(1, size = MediaPick.MAX_BYTES)))
-        assertFalse(MediaPick.selectable(asset(2, size = MediaPick.MAX_BYTES + 1)))
-        // size=0 是 MediaStore 里的坏行（文件已删/正在写入），选了必然发失败
+    fun `视频超服务端上限与零字节都不可选`() {
+        // 上限跟服务端 upload_max_file_bytes 走（缺失 2GB）
+        assertTrue(MediaPick.selectable(asset(1, size = MediaPick.DEFAULT_MAX_BYTES, video = true)))
+        assertFalse(MediaPick.selectable(asset(2, size = MediaPick.DEFAULT_MAX_BYTES + 1, video = true)))
+        // size=0 是 MediaStore 里的坏行（文件已删/正在写入），选了必然发失败——图片视频都一样
         assertFalse(MediaPick.selectable(asset(3, size = 0)))
+        assertFalse(MediaPick.selectable(asset(4, size = 0, video = true)))
+    }
+
+    @Test
+    fun `上限可由调用方传入（服务端下发），默认仍是 2GB`() {
+        assertEquals(2L shl 30, MediaPick.DEFAULT_MAX_BYTES)
+        val limit = 10L shl 20
+        assertTrue(MediaPick.selectable(asset(1, size = limit, video = true), limit))
+        assertFalse(MediaPick.selectable(asset(2, size = limit + 1, video = true), limit))
+        assertTrue(MediaPick.tooLarge(asset(2, size = limit + 1, video = true), limit))
+        assertFalse(MediaPick.selectable(asset(3, size = 0), limit))
+        assertFalse(MediaPick.tooLarge(asset(3, size = 0), limit))
+    }
+
+    @Test
+    fun `压缩发的图片不按原字节置灰，勾原图才按原字节判`() {
+        // 后台把上限调到 10MB：一张 30MB 的原片压完只有几百 KB，不能在选择器里就被挡掉
+        val limit = 10L shl 20
+        val bigPhoto = asset(1, size = 30L shl 20)
+        assertTrue(MediaPick.selectable(bigPhoto, limit))
+        assertFalse(MediaPick.tooLarge(bigPhoto, limit))
+        // 勾了「原图」= 原字节上传，超限就置灰
+        assertFalse(MediaPick.selectable(bigPhoto, limit, original = true))
+        assertTrue(MediaPick.tooLarge(bigPhoto, limit, original = true))
     }
 
     // —— 分桶 ——

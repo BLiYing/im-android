@@ -3,6 +3,7 @@ package com.libeyond.imandroid.data
 import com.libeyond.imandroid.sdk.api.UploadResult
 import com.libeyond.imandroid.sdk.api.UploadTransport
 import com.libeyond.imandroid.sdk.http.ApiException
+import com.libeyond.imandroid.sdk.protocol.ErrCode
 import java.io.File
 import java.io.RandomAccessFile
 import kotlinx.coroutines.CancellationException
@@ -36,6 +37,8 @@ import kotlinx.coroutines.Dispatchers
  * ### 出错分流（`handle`）
  * - 业务错（会话过期/不存在等，24h 服务端回收）：清掉 `upload_id`、`init` 新会话、从 0 重来，**最多 [MAX_RESTARTS] 次**
  *   （iOS 踩过「重试 → status 400 → 标失败 → 再重试」的死循环）；
+ * - **上传策略拒绝**（500001 超限 / 500002 类型禁用 / 500003 管理员暂停，S3a）：确定性业务错，换会话也必然再拒，
+ *   **不重开、直接抛出**（`complete` 按当前策略复检，在途上传可能在收尾才被拒）；
  * - 网络错：会话还在、offset 在服务端，等 [NET_BACKOFF_MS] 后接着传，**连续最多 [MAX_NET_RETRIES] 次**
  *   （任一片成功就清零），再失败就抛出去让用户点重试（重试仍从服务端 offset 续）；
  * - 本地读文件失败 / 0 字节：终态。
@@ -96,6 +99,7 @@ class ChunkedUploader(
                     netRetries++
                     backoff(NET_BACKOFF_MS) // 会话与 offset 都还在服务端，接着传
                 } else {
+                    if (ErrCode.isUploadPolicyReject(e.code)) throw e // 换会话从 0 重传也必然再拒，别白传 2 遍
                     if (restarts >= MAX_RESTARTS) throw e
                     restarts++
                     uploadId = null

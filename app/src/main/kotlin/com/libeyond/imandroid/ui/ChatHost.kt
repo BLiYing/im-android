@@ -386,7 +386,7 @@ fun ChatHost(
             )
         },
         onSendVoice = { file, durationMs, waveform ->
-            scope.launch { mediaSend.sendVoice(file, durationMs, waveform) }
+            scope.launch { mediaSend.sendVoice(file, durationMs, waveform) { toast = it } }
         },
         onToast = { toast = it },
         onBack = onBack,

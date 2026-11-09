@@ -1,6 +1,8 @@
 package com.libeyond.imandroid.ui
 import com.libeyond.imandroid.ui.screens.GroupManageAction
 import com.libeyond.imandroid.data.GroupPermissions
+import com.libeyond.imandroid.data.GroupTextLimits
+import com.libeyond.imandroid.data.ServerConfigStore
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.GroupInfo
 import com.libeyond.imandroid.sdk.api.GroupMember
@@ -18,6 +20,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -157,9 +160,15 @@ internal fun GroupManagePrompts(
     runManage: (String, suspend () -> Unit) -> Unit,
 ) {
     val g = info
+    // 群名 / 群公告上限：后台「系统设置」可改（服务端同值校验），没拉到时是内置默认 30 / 500；
+    // 三个字段一律按码点计（GroupTextLimits）
+    val limits = ServerConfigStore.limits.collectAsState().value
+    val nameLimit = GroupTextLimits.name(limits)
+    val introLimit = GroupTextLimits.intro()
+    val announcementLimit = GroupTextLimits.announcement(limits)
     when (action) {
         GroupManageAction.EditName -> IMTextPrompt(
-            title = stringResource(R.string.group_create_name_label), initial = g.name, maxLen = 30,
+            title = stringResource(R.string.group_create_name_label), initial = g.name, maxLen = nameLimit.maxLen, countByCodePoint = nameLimit.countByCodePoint,
             onDismiss = { onDismiss() },
             onConfirm = { v ->
                 onDismiss()
@@ -169,7 +178,7 @@ internal fun GroupManagePrompts(
             },
         )
         GroupManageAction.EditIntro -> IMTextPrompt(
-            title = stringResource(R.string.group_text_intro), initial = g.intro, maxLen = 200, multiline = true,
+            title = stringResource(R.string.group_text_intro), initial = g.intro, maxLen = introLimit.maxLen, multiline = true, countByCodePoint = introLimit.countByCodePoint,
             onDismiss = { onDismiss() },
             onConfirm = { v ->
                 onDismiss()
@@ -177,7 +186,8 @@ internal fun GroupManagePrompts(
             },
         )
         GroupManageAction.EditAnnouncement -> IMTextPrompt(
-            title = stringResource(R.string.group_text_announcement), initial = g.announcement, maxLen = 500, multiline = true,
+            title = stringResource(R.string.group_text_announcement), initial = g.announcement, maxLen = announcementLimit.maxLen, multiline = true,
+            countByCodePoint = announcementLimit.countByCodePoint,
             hint = stringResource(R.string.group_manage_announcement_hint),
             clearActionText = stringResource(R.string.group_ops_announcement_retract),
             onDismiss = { onDismiss() },

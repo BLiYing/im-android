@@ -33,8 +33,12 @@ object MediaPick {
     /** 「全部」这个伪相册的桶 ID（不是 MediaStore 的真实 bucket）。 */
     const val ALL_BUCKET = "__all__"
 
-    /** 服务端单文件上限 2GB（`uploadLimitByKind`，图片/视频同档）。 */
-    const val MAX_BYTES = 2L shl 30
+    /**
+     * 单文件上限的**兜底值** 2GB（服务端 `upload_max_file_bytes` 缺失 / ≤0 时的默认，图片/视频同档）。
+     * 实际上限由 app 侧从 `GET /server-config` 归一后经 [MediaPickerHost] 的 `maxBytes` 传进来
+     * （本模块不依赖 app，只收一个数）。
+     */
+    const val DEFAULT_MAX_BYTES = 2L shl 30
 
     /**
      * 选中态是**有序**的，不是 `Set`：格子右上角的编号 1..n 就是发送顺序，
@@ -75,8 +79,17 @@ object MediaPick {
     /**
      * 能不能选。`sizeBytes = 0` 是 MediaStore 里的坏行（文件已删、或正在写入），
      * 选了必然发失败——所以和「超上限」一样置灰，而不是让用户白等一次上传。
+     *
+     * 超上限只对**按原字节发出去的**判（[tooLarge]）：视频永远原样发；图片只有勾了「原图」才原样发。
+     * 压缩图（默认）发出去远小于原文件，按原字节置灰会把后台调小上限后「压完放得下」的照片也挡掉——
+     * 那种的超限由 app 侧压完后的上传预检兜住（iOS `IMMediaPickSession.isSelectableAsset:` 同：只判视频）。
      */
-    fun selectable(asset: MediaAsset): Boolean = asset.sizeBytes in 1..MAX_BYTES
+    fun selectable(asset: MediaAsset, maxBytes: Long = DEFAULT_MAX_BYTES, original: Boolean = false): Boolean =
+        asset.sizeBytes >= 1 && !tooLarge(asset, maxBytes, original)
+
+    /** 是否因超单文件上限而不可选（提示文案据此选「超过 N」还是「读不到」）。 */
+    fun tooLarge(asset: MediaAsset, maxBytes: Long = DEFAULT_MAX_BYTES, original: Boolean = false): Boolean =
+        (asset.isVideo || original) && asset.sizeBytes > maxBytes
 
     /**
      * 相册分桶。**「全部」恒在首位**，其余桶按**桶内最新一项的时间倒序**——

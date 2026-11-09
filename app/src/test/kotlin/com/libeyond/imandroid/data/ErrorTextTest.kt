@@ -29,5 +29,11 @@ class ErrorTextTest {
         assertEquals(R.string.err_500103, ErrorText.friendlyRes(ErrCode.TRANSCRIBE_BUSY))
     }
 
+    @Test fun `上传暂停走本地化；500001 500002 不映射（头像接口也回，文案不适用）`() {
+        assertEquals(R.string.err_500003, ErrorText.friendlyRes(ErrCode.UPLOAD_DISABLED))
+        assertNull(ErrorText.friendlyRes(ErrCode.FILE_TOO_LARGE))
+        assertNull(ErrorText.friendlyRes(ErrCode.FILE_TYPE_INVALID))
+    }
+
     @Test fun `未收录的码返回 null 回退服务端原文`() = assertNull(ErrorText.friendlyRes(999999))
 }

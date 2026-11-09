@@ -3,11 +3,13 @@ package com.libeyond.imandroid.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.libeyond.imandroid.data.ServerConfigStore
 import com.libeyond.imandroid.data.db.ConversationEntity
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.sdk.IMClient
@@ -102,6 +104,8 @@ internal fun ChatPickerLayers(
             onDismiss = onDismissPicker,
             onToast = onToast,
             log = PickerLog,
+            // 单文件上限跟服务端走（S3a `upload_max_file_bytes`，已归一、缺失 2GB）；选择器模块不认识 app，只收一个数
+            maxBytes = ServerConfigStore.limits.collectAsState().value.uploadMaxFileBytes,
         )
     }
 

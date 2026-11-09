@@ -46,6 +46,8 @@ internal fun ConversationEntity.toStripItem(): StripItem =
 @Composable
 internal fun SharePickBottomBar(
     selected: List<ConversationEntity>,
+    /** 一次最多选几个目标（server-config `forward_max_targets`），只用于空态提示文案。 */
+    maxTargets: Int,
     onRemove: (String) -> Unit,
     onSend: () -> Unit,
     modifier: Modifier = Modifier,
@@ -60,7 +62,7 @@ internal fun SharePickBottomBar(
         ) {
             if (selected.isEmpty()) {
                 Text(
-                    pluralStringResource(R.plurals.share_picker_bar_hint, Forward.MAX_TARGETS, Forward.MAX_TARGETS),
+                    pluralStringResource(R.plurals.share_picker_bar_hint, maxTargets, maxTargets),
                     color = c.textTertiary,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f).padding(horizontal = d.space4),

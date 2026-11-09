@@ -45,7 +45,7 @@ import com.libeyond.imandroid.ui.components.StripItem
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
- * 建群**第二步：群资料**（对齐 iOS `IMGroupCreateViewController`）：群头像圈 / 群名（30 rune 上限 + 计数）/
+ * 建群**第二步：群资料**（对齐 iOS `IMGroupCreateViewController`）：群头像圈 / 群名（[nameMaxLen] rune 上限 + 计数）/
  * 成员条（44dp 头像 + 名字 + 右上 ✕，最多画 30 个、其余折成「+N」；右边固定一颗「＋ 添加」回第一步）。
  * 右上「创建」。✕ 移除成员，**不能删到 0**（到 1 个时再点提示「至少选择一位好友」）。
  */
@@ -58,6 +58,8 @@ fun CreateGroupProfileScreen(
     /** 回第一步继续挑人（第一步还在栈里、勾选保留，不是新开一个选人页）。 */
     onAddMore: () -> Unit,
     maxMembers: Int,
+    /** 群名上限（rune，server-config `group_name_max_len`，缺失 = 30）；截断在调用方 [onNameChange] 里做。 */
+    nameMaxLen: Int,
     busy: Boolean,
     error: String,
     avatarUrl: String,
@@ -107,7 +109,7 @@ fun CreateGroupProfileScreen(
             IMTextField(name, onNameChange, stringResource(R.string.group_create_name_placeholder), enabled = !busy)
             Row(Modifier.fillMaxWidth().padding(top = d.space1), horizontalArrangement = Arrangement.End) {
                 Text(
-                    "${GroupNameDefault.runeLength(name)}/${GroupNameDefault.MAX_LENGTH}",
+                    "${GroupNameDefault.runeLength(name)}/$nameMaxLen",
                     color = c.textTertiary, style = MaterialTheme.typography.bodySmall,
                 )
             }

@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.libeyond.imandroid.data.ServerConfigStore
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -202,10 +204,14 @@ internal fun ChatMessageMenu(
     val clipboard = LocalClipboardManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val transcriber = com.libeyond.imandroid.ui.voice.LocalVoiceTranscriber.current
+    // 后台「系统设置」可改的撤回 / 编辑窗口（连上 / 回前台重拉）；菜单开着时值变了跟着变
+    val limits by ServerConfigStore.limits.collectAsState()
     val actions = MessageActions.availableFor(
         target, owner, conv.isGroup, iAmManager,
         hasTranscript = transcriber?.isExpanded(target.convSeq) == true,
         canPin = canPin,
+        recallWindowSec = limits.recallWindowSec,
+        editWindowSec = limits.editWindowSec,
         mediaGone = (target.contentType == ContentType.IMAGE || target.contentType == ContentType.VIDEO) &&
             SelectionActions.isExpiredMedia(target) { url, isVideo ->
                 client.downloads.stateOf(url, isVideo).phase == com.libeyond.imandroid.data.DownloadPhase.Expired

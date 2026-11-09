@@ -187,10 +187,25 @@ internal class MediaSendPipeline(
             )
             return true
         }
+        // 副本留着：策略放开后删掉重选也行，这里只是别白传一遍
+        if (rejectedByPolicy(p.clientMsgId, p.fileName ?: f.name, f.length(), p.contentType)) return true
         startFileUpload(
             p.clientMsgId, p.convId, p.to, f, p.fileName ?: f.name, mimeOfName(p.fileName ?: f.name), p.contentType,
             p.caption, p.groupId, p.mediaW, p.mediaH, p.duration, p.poster, p.thumb,
         )
+        return true
+    }
+
+    /**
+     * 上传策略预检（S3a，[UploadPrecheck]）的**流水线一侧**：界面入口在落行前已挡过一次（吐司、不落行），
+     * 这里兜的是落行之后才知道真实字节数的（压缩后的图、原图流式）、以及重试 / 冷启动续传 / 语音重传时
+     * 策略已经变了的。命中 = 把这条待发行标失败（码同服务端，气泡下显同一行说明），不上传。
+     */
+    private suspend fun rejectedByPolicy(cid: String, fileName: String, bytes: Long, contentType: String): Boolean {
+        val f = UploadPrecheck.checkCurrent(fileName, bytes, contentType == ContentType.VOICE)
+            ?: return false
+        log.i("upload_precheck_rejected", "cid" to cid, "reason" to UploadPrecheck.reason(f), "bytes" to bytes, "content_type" to contentType)
+        markFailed(cid, code = f.code, message = UploadPrecheck.message(f))
         return true
     }
 
@@ -312,6 +327,7 @@ internal class MediaSendPipeline(
             mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster, thumb = thumb,
             waveform = waveform,
         ).clientMsgId
+        if (rejectedByPolicy(cid, fileName, bytes.size.toLong(), contentType)) return
         uploading += cid
         // 整包上传：不可暂停、无字节进度（一次性 POST），只让气泡知道「在传」
         uploadProgress.uploading(cid, 0, bytes.size.toLong(), pausable = false)
@@ -391,6 +407,7 @@ internal class MediaSendPipeline(
             fileName = fileName, fileSize = totalBytes, caption = caption,
             mediaW = mediaW, mediaH = mediaH, duration = duration, poster = poster, thumb = thumb,
         ).clientMsgId
+        if (rejectedByPolicy(cid, fileName, totalBytes, contentType)) return
         // 对齐 iOS：≥ 分片阈值才走「私有副本 + 可暂停续传」；更小的一次性直传（不可暂停，失败重试从头）
         if (totalBytes >= ChunkedUploader.DEFAULT_CHUNK) {
             val f = store.newFile(cid, fileName)

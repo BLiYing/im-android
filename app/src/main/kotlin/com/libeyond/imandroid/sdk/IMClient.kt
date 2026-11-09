@@ -400,6 +400,7 @@ class IMClient(
 
     init {
         messages.start()
+        startServerConfigSync() // 部署级配置：连上即重拉（含重连），见 IMClientServerConfig.kt
 
         // 会话被服务端否定 → 清本地凭据。**不在这里跳 UI**（那是 UI 的事），
         // 但必须清凭据，否则下次冷启动又拿着一枚已死的 token 去探活。
@@ -544,6 +545,7 @@ class IMClient(
         downloadSettingsStore.forget()
         accountNotifySettingsStore.forget()
         chatFolderStore.forget()
+        com.libeyond.imandroid.data.ServerConfigStore.forget() // 下一次登录可能换了服务器
         // 不调 fcmTokenStore 的服务端 delete：会话正常退出登录时服务端按会话联删令牌（父任务简报
         // 明确约定），客户端不必每次登出都补一刀；forget() 只复位本地"已上报"状态，见其类注释。
         fcmTokenStore.forget()

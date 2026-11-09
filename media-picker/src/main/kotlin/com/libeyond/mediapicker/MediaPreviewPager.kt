@@ -52,11 +52,13 @@ internal fun MediaPreviewPager(
     sendOriginal: Boolean,
     onOriginalChange: (Boolean) -> Unit,
     onSend: () -> Unit,
+    maxBytes: Long = MediaPick.DEFAULT_MAX_BYTES,
 ) {
     if (assets.isEmpty()) return
     val s = LocalMediaPickerSkin.current
     val limitMsg = stringResource(R.string.mp_limit, MediaPick.LIMIT)
     val unreadableMsg = stringResource(R.string.mp_unreadable)
+    val tooLargeMsg = stringResource(R.string.mp_too_large, MediaPick.sizeLabel(maxBytes))
     val state = rememberPagerState(
         initialPage = startIndex.coerceIn(0, assets.lastIndex),
         pageCount = { assets.size },
@@ -110,8 +112,8 @@ internal fun MediaPreviewPager(
                     .clickable {
                         if (index == 0 && selected.size >= MediaPick.LIMIT) {
                             onToast(limitMsg)
-                        } else if (!MediaPick.selectable(current)) {
-                            onToast(unreadableMsg)
+                        } else if (index == 0 && !MediaPick.selectable(current, maxBytes, sendOriginal)) {
+                            onToast(if (MediaPick.tooLarge(current, maxBytes, sendOriginal)) tooLargeMsg else unreadableMsg)
                         } else {
                             onToggle(current)
                         }

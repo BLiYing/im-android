@@ -19,7 +19,6 @@ import com.libeyond.imandroid.data.SysEvents
 import com.libeyond.imandroid.data.ChatSelection
 import com.libeyond.imandroid.data.db.MessageEntity
 import com.libeyond.imandroid.data.db.SendState
-import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.api.LinkPreview
 import com.libeyond.imandroid.sdk.protocol.ContentType
 
@@ -220,7 +219,7 @@ internal fun ChatRowView(
             )
             if (albumRejectCode != null) {
                 RejectNote(
-                    text = Str.s(SendRejection.noteRes(albumRejectCode)!!),
+                    text = SendRejection.noteText(albumRejectCode).orEmpty(),
                     actionable = SendRejection.isActionable(albumRejectCode),
                     onAction = onAddFriend,
                 )
@@ -423,7 +422,7 @@ internal fun ChatRowView(
             }
             if (rejectRes != null) {
                 RejectNote(
-                    text = Str.s(rejectRes),
+                    text = SendRejection.noteText(r.msg.errorCode).orEmpty(),
                     actionable = SendRejection.isActionable(r.msg.errorCode),
                     onAction = onAddFriend,
                 )
