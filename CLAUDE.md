@@ -91,6 +91,7 @@ app/src/main/kotlin/com/libeyond/imandroid/
 BUILD_ONLY=1 ./scripts/test.sh   # 只编译
 ONLY=EnvelopeTest ./scripts/test.sh
 ./scripts/install-hooks.sh       # 每个 clone 跑一次，装 pre-commit
+./scripts/ui-smoke.sh            # 移动端冒烟：已连接设备上收 / 发一条并到服务端核对（需开发后端在跑、App 已登录）
 ```
 - **连后端**：debug 构建的 `BuildConfig.DEFAULT_HOST` 是 `10.0.2.2:8080`
   ——那是 Android 模拟器指向**宿主机**的固定回环地址（`127.0.0.1` 在模拟器里指模拟器自己）。
