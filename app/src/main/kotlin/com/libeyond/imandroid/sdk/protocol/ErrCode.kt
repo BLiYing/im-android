@@ -34,6 +34,13 @@ object ErrCode {
      * 见 PROTOCOL §6.16（`200005 AccountPendingDeletion`，`data.delete_at` 毫秒）。
      */
     const val ACCOUNT_PENDING_DELETION = 200005
+    /**
+     * 密码登录失败超限、暂时锁定（PROTOCOL §6.16，HTTP 429）；错误响应带 `data.retry_after_sec`。
+     * 2026-11-09 前同一场景回的是 [RATE_LIMITED]。
+     */
+    const val LOGIN_LOCKED = 200006
+    /** 管理员暂停了注册（S4）；注册页应先读 `GET /api/v1/public-config` 的 `register_enabled`。 */
+    const val REGISTER_CLOSED = 200007
     /** 两步验证（PROTOCOL §7.1）：密码对但需第二步，`data` 带 `ticket / methods / expires_in`。 */
     const val TWO_STEP_REQUIRED = 200020
     /** 动态码 / 恢复码不对、已用过或重放；登录第二步带 `data.attempts_left`。 */

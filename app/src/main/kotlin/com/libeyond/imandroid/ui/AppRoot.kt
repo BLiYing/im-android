@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.data.sendCallRecord
+import com.libeyond.imandroid.data.RegisterGate
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -78,6 +79,8 @@ fun AppRoot(client: IMClient) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var host by remember { mutableStateOf(client.host) }
+    // 登录页注册开关（S4，RegisterGate）：public-config 与提交注册回 200007 两路写同一份
+    var registerClosedFor by remember { mutableStateOf<String?>(null) }
     var endedNotice by remember { mutableStateOf("") }
     /** 冷静期账号登录被拒后暂存的凭据；非 null 时弹「恢复账号」。 */
     var pendingRestore by remember { mutableStateOf<PendingRestore?>(null) }
@@ -221,16 +224,20 @@ fun AppRoot(client: IMClient) {
                 },
             ),
             onRegister = { u, p, n ->
+                val reqHost = host
                 scope.launch {
                     busy = true; error = ""
                     try {
-                        client.host = host
+                        client.host = reqHost
                         client.register(u, p, n)
                         endedNotice = ""
                         accountDeleted = false
                         phase = Phase.Main
                     } catch (e: ApiException) {
-                        error = LoginError.friendly(e, appContext)
+                        // 200007：注册页立刻切到关闭态（内联提示 + 禁用提交），不再在错误行重复同一句
+                        val closed = RegisterGate.afterSubmitRejected(registerClosedFor, reqHost, e.code)
+                        if (closed != null) registerClosedFor = closed
+                        else error = LoginError.friendly(e, appContext)
                     } finally { busy = false }
                 }
             },
@@ -256,6 +263,8 @@ fun AppRoot(client: IMClient) {
             // 底部同意链接走应用内浏览器（LoginScreen 里读 LocalOpenLink，由上面的 WebLinkHost 提供）。
             // host 为空/非法拼不出链接时，与 iOS/关于我们页一致地显示「无法打开」，不静默吞掉。
             onLegalFailed = { error = legalOpenFailed },
+            registerClosedFor = registerClosedFor,
+            onRegisterConfig = { h, enabled -> registerClosedFor = RegisterGate.afterResult(registerClosedFor, h, enabled) },
         ) }
 
         Phase.Main -> {

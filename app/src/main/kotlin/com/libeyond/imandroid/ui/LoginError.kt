@@ -2,6 +2,7 @@ package com.libeyond.imandroid.ui
 
 import android.content.Context
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.ErrorText
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.protocol.ErrCode
 
@@ -45,6 +46,9 @@ object LoginError {
             ErrCode.ACCOUNT_PENDING_DELETION -> strings.get(R.string.err_200005)
             ErrCode.PARAM_INVALID -> e.message.ifEmpty { strings.get(R.string.login_error_param_invalid) }
             ErrCode.RATE_LIMITED -> strings.get(R.string.err_100002)
+            // 密码登录失败超限（S4）：与 ErrorText.friendlyText 共用同一实现（分钟数 / 缺 data 回通用 100002 文案）
+            ErrCode.LOGIN_LOCKED -> ErrorText.loginLockedText(e.data) { id, args -> strings.get(id, *args) }
+            ErrCode.REGISTER_CLOSED -> strings.get(R.string.err_200007)
             else -> e.message.ifEmpty { strings.get(R.string.err_request_failed, e.code.toString()) }
         }
     }

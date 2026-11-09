@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +42,9 @@ import com.libeyond.imandroid.data.AboutLinkValues
 import com.libeyond.imandroid.data.AboutLinks
 import com.libeyond.imandroid.data.AboutLinksStore
 import com.libeyond.imandroid.data.LanguageStore
+import com.libeyond.imandroid.data.RegisterGate
 import com.libeyond.imandroid.sdk.api.AboutLinksApi
+import com.libeyond.imandroid.sdk.api.PublicConfigApi
 import com.libeyond.imandroid.ui.components.LocalOpenLink
 import kotlinx.coroutines.delay
 import com.composables.icons.lucide.Lucide
@@ -89,6 +92,10 @@ fun LoginScreen(
     onLegalFailed: () -> Unit = {},
     /** 两步验证第二步：非 null 时同页换成二步内容（页签 / 免密登录 / 表单隐藏）；null = 普通登录。 */
     twoStep: LoginTwoStepUi? = null,
+    /** 注册开关状态（[RegisterGate]，在 AppRoot：提交注册回 200007 也会写它）：明确关闭了注册的 host。 */
+    registerClosedFor: String? = null,
+    /** public-config 回包：宿主按 [RegisterGate.afterResult] 更新 [registerClosedFor]。 */
+    onRegisterConfig: (requestedHost: String, enabled: Boolean) -> Unit = { _, _ -> },
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -97,6 +104,9 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
     var showHost by remember { mutableStateOf(false) }
+    val registerClosed = rememberRegisterClosed(
+        host, active = tab == LoginTab.Register && twoStep == null, registerClosedFor, onRegisterConfig,
+    )
 
     Column(
         modifier = Modifier
@@ -181,6 +191,20 @@ fun LoginScreen(
                 )
             }
 
+            if (tab == LoginTab.Register && registerClosed) {
+                // 管理员暂停注册（S4）：提前告知并禁用提交；服务端 /register 照样回 200007 兜底
+                Text(
+                    stringResource(R.string.err_200007),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = c.danger,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(d.radiusCard))
+                        .background(c.dangerSoft)
+                        .padding(d.space3),
+                )
+            }
+
             IMErrorText(error)
 
             if (tab == LoginTab.Password) {
@@ -194,7 +218,7 @@ fun LoginScreen(
                 IMPrimaryButton(
                     text = stringResource(R.string.login_button_register),
                     onClick = { onRegister(username.trim(), password, nickname.trim()) },
-                    enabled = username.isNotBlank() && password.isNotBlank() && nickname.isNotBlank(),
+                    enabled = !registerClosed && username.isNotBlank() && password.isNotBlank() && nickname.isNotBlank(),
                     loading = busy,
                 )
             }
@@ -233,6 +257,30 @@ fun LoginScreen(
 }
 
 private const val LINKS_FETCH_DEBOUNCE_MS = 600L
+
+/**
+ * 注册页可见时按输入框里的地址读 `public-config`（S4），返回「该地址明确关闭了注册」。
+ *
+ * 防串台：结果按**发起时的 host** 记账（[RegisterGate]，状态在宿主），只有与当前 host 相同才生效——
+ * 改地址时 LaunchedEffect 会取消在途请求，但就算回包抢在取消前落地，也只会记在旧 host 名下、不影响新地址。
+ * 失败 / 字段缺失由 [PublicConfigApi.registerEnabled] 当作开放。
+ */
+@Composable
+private fun rememberRegisterClosed(
+    host: String,
+    active: Boolean,
+    closedFor: String?,
+    onConfig: (requestedHost: String, enabled: Boolean) -> Unit,
+): Boolean {
+    val report by rememberUpdatedState(onConfig)
+    LaunchedEffect(host, active) {
+        if (!active || host.isBlank()) return@LaunchedEffect
+        // host 输入框每敲一个字都会变：防抖后再拉
+        delay(LINKS_FETCH_DEBOUNCE_MS)
+        report(host, PublicConfigApi.anonymous(host, BuildConfig.USE_TLS).registerEnabled())
+    }
+    return RegisterGate.isClosed(closedFor, host)
+}
 
 /**
  * 「继续即表示同意《服务条款》和《隐私政策》」：复用 about.terms / about.privacy_policy 作链接文案

@@ -20,7 +20,7 @@ internal fun Throwable.userMessage(fallback: String): String {
     val api = this as? ApiException ?: return fallback
     if (api.isTransport) return Str.s(R.string.common_error_network_unavailable_detail, fallback)
     // 有本地化文案的码先走本地化（服务端 message 是英文）；没收录的才回退服务端原文
-    ErrorText.friendlyRes(api.code)?.let { return Str.s(it) }
+    ErrorText.friendlyText(api)?.let { return it }
     return api.message.ifBlank { fallback }
 }
 

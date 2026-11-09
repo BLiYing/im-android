@@ -67,9 +67,14 @@ class HttpClient(
         val requestId = newRequestId()
         val url = absoluteUrl ?: buildUrl(path, query)
 
-        val builder = Request.Builder()
-            .url(url)
-            .header(HEADER_REQUEST_ID, requestId)
+        // 登录页的 host 是用户手敲的（`10.0.2.2:`、带空格……）：OkHttp 对非法 URL 抛 IllegalArgumentException，
+        // 不收成 ApiException 的话只 catch ApiException 的调用方（public-config 防抖拉取、登录/注册）会直接崩。
+        val builder = try {
+            Request.Builder().url(url)
+        } catch (e: IllegalArgumentException) {
+            log.w("http_bad_url", "method" to method, "path" to path, "reqId" to requestId)
+            throw ApiException(ApiException.TRANSPORT, "服务器地址无效", requestId, cause = e)
+        }.header(HEADER_REQUEST_ID, requestId)
 
         if (authenticated) {
             tokenProvider()?.let { builder.header("Authorization", "Bearer $it") }

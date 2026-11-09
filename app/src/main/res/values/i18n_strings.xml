@@ -832,6 +832,8 @@
     <string name="err_200003">账号已被封禁</string>
     <string name="err_200004">用户名已被注册</string>
     <string name="err_200005">该账号已申请注销，请使用密码登录以恢复</string>
+    <string name="err_200006">登录失败次数过多，请 %1$s 分钟后再试</string>
+    <string name="err_200007">管理员已暂停注册新账号</string>
     <string name="err_200010">已有导出任务正在进行</string>
     <string name="err_200011">24 小时内只能导出一次</string>
     <string name="err_200101">你们已经是好友了</string>

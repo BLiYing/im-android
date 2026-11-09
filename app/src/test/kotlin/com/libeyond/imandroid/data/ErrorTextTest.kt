@@ -4,6 +4,10 @@ import com.libeyond.imandroid.R
 import com.libeyond.imandroid.sdk.protocol.ErrCode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.sdk.http.ApiException
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import org.junit.Test
 
 /** 业务码 → 本地化文案（对齐 iOS `IMFriendlyMessageForCode`）。 */
@@ -36,4 +40,34 @@ class ErrorTextTest {
     }
 
     @Test fun `未收录的码返回 null 回退服务端原文`() = assertNull(ErrorText.friendlyRes(999999))
+
+    private fun lockData(v: JsonPrimitive) = buildJsonObject { put("retry_after_sec", v) }
+
+    @Test fun `锁定分钟数 = max(1, ceil(秒÷60))；接受小数与 0；缺失或非数字为 null`() {
+        assertEquals(15L, ErrorText.loginLockMinutes(lockData(JsonPrimitive(900))))
+        assertEquals(16L, ErrorText.loginLockMinutes(lockData(JsonPrimitive(901))))
+        assertEquals(1L, ErrorText.loginLockMinutes(lockData(JsonPrimitive(59))))
+        assertEquals(1L, ErrorText.loginLockMinutes(lockData(JsonPrimitive(1))))
+        assertEquals(1L, ErrorText.loginLockMinutes(lockData(JsonPrimitive(0))))
+        assertEquals(1L, ErrorText.loginLockMinutes(lockData(JsonPrimitive(0.5))))
+        assertEquals(2L, ErrorText.loginLockMinutes(lockData(JsonPrimitive(60.5))))
+        assertEquals(1L, ErrorText.loginLockMinutes(lockData(JsonPrimitive(60.0))))
+        assertNull(ErrorText.loginLockMinutes(lockData(JsonPrimitive(-1))))
+        assertNull(ErrorText.loginLockMinutes(lockData(JsonPrimitive("x"))))
+        assertNull("字符串形式的数字不算数字", ErrorText.loginLockMinutes(lockData(JsonPrimitive("120"))))
+        assertNull(ErrorText.loginLockMinutes(lockData(JsonPrimitive(true))))
+        assertNull(ErrorText.loginLockMinutes(buildJsonObject {}))
+        assertNull(ErrorText.loginLockMinutes(null))
+    }
+
+    @Test fun `注册暂停走本地化`() = assertEquals(R.string.err_200007, ErrorText.friendlyRes(ErrCode.REGISTER_CLOSED))
+
+    @Test fun `friendlyText：200006 带分钟数，无 data 回通用 100002 文案而非服务端原文`() {
+        val e = ApiException(ErrCode.LOGIN_LOCKED, "too many failed logins", data = lockData(JsonPrimitive(120)))
+        assertEquals(Str.s(R.string.err_200006, 2L), ErrorText.friendlyText(e))
+        assertEquals(Str.s(R.string.err_100002), ErrorText.friendlyText(ApiException(ErrCode.LOGIN_LOCKED, "too many failed logins")))
+        assertEquals(Str.s(R.string.err_100002), ErrorText.friendlyText(ApiException(ErrCode.LOGIN_LOCKED, "x", data = lockData(JsonPrimitive("x")))))
+        assertEquals(Str.s(R.string.err_200007), ErrorText.friendlyText(ApiException(ErrCode.REGISTER_CLOSED, "x")))
+        assertNull(ErrorText.friendlyText(ApiException(999999, "x")))
+    }
 }

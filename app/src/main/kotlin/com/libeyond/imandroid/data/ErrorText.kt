@@ -2,7 +2,14 @@ package com.libeyond.imandroid.data
 
 import androidx.annotation.StringRes
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.i18n.Str
+import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.protocol.ErrCode
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
+import kotlin.math.ceil
 
 /**
  * 业务错误码 → 本地化文案（对齐 iOS `IMFriendlyMessageForCode`）。服务端 `message` 是英文
@@ -23,6 +30,8 @@ object ErrorText {
         ErrCode.EXPORT_BUSY -> R.string.err_200010
         ErrCode.EXPORT_COOLDOWN -> R.string.err_200011
         ErrCode.USER_ALREADY_EXISTS -> R.string.err_200004
+        ErrCode.REGISTER_CLOSED -> R.string.err_200007
+        // 200006 LOGIN_LOCKED 不在这里：文案带分钟数参数，走 [friendlyText]
         ErrCode.RECIPIENT_NOT_FOUND -> R.string.chat_reject_recipient_deleted
         ErrCode.ACCOUNT_MUTED -> R.string.err_300004
         ErrCode.GROUP_MUTED -> R.string.chat_input_disabled_mute_all
@@ -55,5 +64,33 @@ object ErrorText {
         ErrCode.TRANSCRIBE_BUSY -> R.string.err_500103
         ErrCode.RATE_LIMITED -> R.string.err_100002
         else -> null
+    }
+
+    /**
+     * 带参数的码也能处理的版本：[ErrCode.LOGIN_LOCKED] 走 [loginLockedText]（永不为 null）；其余同 [friendlyRes]。
+     */
+    fun friendlyText(e: ApiException): String? =
+        if (e.code == ErrCode.LOGIN_LOCKED) loginLockedText(e.data) { id, args -> Str.s(id, *args) }
+        else friendlyRes(e.code)?.let { Str.s(it) }
+
+    /**
+     * 200006 文案的**唯一实现**（`LoginError` 与 [friendlyText] 都调它；三端规则一致）：
+     * 带合法 `retry_after_sec` → err_200006（N 分钟）；缺失 / 非数字 → 通用 err_100002，**不**回退服务端英文。
+     * [get] 负责按 resId + 参数取文案（生产用 Context / Str，单测可注入）。
+     */
+    fun loginLockedText(data: JsonElement?, get: (resId: Int, args: Array<out Any>) -> String): String =
+        loginLockMinutes(data)?.let { get(R.string.err_200006, arrayOf(it)) }
+            ?: get(R.string.err_100002, emptyArray())
+
+    /**
+     * 200006 错误响应 `data.retry_after_sec` → 提示里的分钟数：`max(1, ceil(秒/60))`（PROTOCOL §8；
+     * 59 秒说「0 分钟」是错的）。接受整数或小数且 ≥ 0；缺失 / 非数字（含字符串形式的数字）/ 负数 / 非有限值返回 null。
+     */
+    fun loginLockMinutes(data: JsonElement?): Long? {
+        val p = (data as? JsonObject)?.get("retry_after_sec") as? JsonPrimitive ?: return null
+        if (p.isString) return null
+        val sec = p.doubleOrNull ?: return null
+        if (!sec.isFinite() || sec < 0) return null
+        return maxOf(1L, ceil(sec / 60).toLong())
     }
 }

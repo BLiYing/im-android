@@ -866,6 +866,8 @@
     <string name="err_200003">This account has been banned</string>
     <string name="err_200004">This username is already taken</string>
     <string name="err_200005">This account is scheduled for deletion. Sign in with your password to restore it.</string>
+    <string name="err_200006">Too many failed sign-in attempts. Try again in %1$s min.</string>
+    <string name="err_200007">New account registration is currently paused by the administrator.</string>
     <string name="err_200010">An export is already in progress</string>
     <string name="err_200011">You can export only once every 24 hours</string>
     <string name="err_200101">You’re already friends</string>

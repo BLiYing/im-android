@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui
 
 import com.libeyond.imandroid.R
+import com.libeyond.imandroid.data.ErrorText
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.protocol.ErrCode
@@ -85,5 +86,35 @@ class LoginErrorTest {
         val msg = LoginError.friendly(ApiException(ErrCode.ACCOUNT_PENDING_DELETION, "account pending deletion"), strings)
         assertEquals(Str.s(R.string.err_200005), msg)
         assertFalse(msg.contains("pending deletion"))
+    }
+
+    @Test
+    fun `登录锁定按 retry_after_sec 向上取整成分钟且至少 1`() {
+        fun locked(sec: Long) = ApiException(
+            ErrCode.LOGIN_LOCKED, "too many failed logins",
+            data = kotlinx.serialization.json.buildJsonObject { put("retry_after_sec", kotlinx.serialization.json.JsonPrimitive(sec)) },
+        )
+        assertEquals(Str.s(R.string.err_200006, 15L), LoginError.friendly(locked(900), strings))
+        assertEquals(Str.s(R.string.err_200006, 2L), LoginError.friendly(locked(61), strings))
+        assertEquals(Str.s(R.string.err_200006, 1L), LoginError.friendly(locked(1), strings))
+        assertTrue(LoginError.friendly(locked(61), strings).contains("2"))
+    }
+
+    @Test
+    fun `登录锁定没带 data 用通用 100002 文案，不回退服务端原文，且与 ErrorText 同一实现`() {
+        val noData = ApiException(ErrCode.LOGIN_LOCKED, "too many failed logins")
+        assertEquals(Str.s(R.string.err_100002), LoginError.friendly(noData, strings))
+        assertEquals(ErrorText.friendlyText(noData), LoginError.friendly(noData, strings))
+        val frac = ApiException(
+            ErrCode.LOGIN_LOCKED, "x",
+            data = kotlinx.serialization.json.buildJsonObject { put("retry_after_sec", kotlinx.serialization.json.JsonPrimitive(60.5)) },
+        )
+        assertEquals(Str.s(R.string.err_200006, 2L), LoginError.friendly(frac, strings))
+        assertEquals(ErrorText.friendlyText(frac), LoginError.friendly(frac, strings))
+    }
+
+    @Test
+    fun `注册暂停走本地化`() {
+        assertEquals(Str.s(R.string.err_200007), LoginError.friendly(ApiException(ErrCode.REGISTER_CLOSED, "registration closed"), strings))
     }
 }
