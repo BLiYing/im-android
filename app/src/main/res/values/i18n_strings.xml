@@ -2133,8 +2133,10 @@
     <string name="upload_precheck_too_large">文件超过 %1$s，无法发送</string>
     <string name="web_conv_menu_mute">免打扰</string>
     <string name="web_conv_menu_unmute">取消免打扰</string>
+    <string name="web_login_error_rtc_insecure">当前页面是 https，音视频地址须以 wss:// 开头</string>
     <string name="web_login_nickname_placeholder">注册用，可中文，≤32 字</string>
     <string name="web_login_password_placeholder">≥ 6 位</string>
+    <string name="web_login_rtc_config_hint">填写音视频地址（ws:// 或 wss://）。留空恢复默认。</string>
     <string name="web_login_title">IM Web 登录</string>
     <string name="web_login_username_placeholder">a-z、0-9、下划线，≥5 位</string>
     <string name="webview_link_unopenable">打不开这个链接</string>
