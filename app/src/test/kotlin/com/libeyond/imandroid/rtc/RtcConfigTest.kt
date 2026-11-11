@@ -29,6 +29,27 @@ class RtcConfigTest {
     }
 
     @Test
+    fun ws_url_normalization() {
+        assertEquals("ws://192.168.1.12:8787/v1/ws", RtcConfig.normalizedWsUrl(" ws://192.168.1.12:8787/v1/ws "))
+        assertEquals("WSS://rtc.example.com/v1/ws", RtcConfig.normalizedWsUrl("WSS://rtc.example.com/v1/ws"))
+        assertNull(RtcConfig.normalizedWsUrl(null))
+        assertNull(RtcConfig.normalizedWsUrl(""))
+        assertNull(RtcConfig.normalizedWsUrl("http://h/v1/ws"))
+        assertNull(RtcConfig.normalizedWsUrl("ws://"))
+        assertNull(RtcConfig.normalizedWsUrl("ws://h /v1/ws"))
+        assertNull(RtcConfig.normalizedWsUrl("192.168.1.12:8787"))
+    }
+
+    @Test
+    fun override_wins_over_build_default() {
+        assertEquals("wss://o/v1/ws", RtcConfig.resolve("wss://o/v1/ws", "ws://b/v1/ws").wsUrl)
+        assertEquals("ws://b/v1/ws", RtcConfig.resolve(null, " ws://b/v1/ws ").wsUrl)
+        // 覆盖值坏了（理论上写入前已校验）也回退默认，不把通话整体弄成不可用
+        assertEquals("ws://b/v1/ws", RtcConfig.resolve("garbage", "ws://b/v1/ws").wsUrl)
+        assertFalse(RtcConfig.resolve(null, "").isUsable)
+    }
+
+    @Test
     fun ids_follow_protocol_rules() {
         assertNull(RtcIds.problem("uid", "10001"))
         assertNotNull(RtcIds.problem("uid", ""))

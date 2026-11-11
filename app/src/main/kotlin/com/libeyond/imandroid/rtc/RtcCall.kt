@@ -166,7 +166,7 @@ object RtcCall : RtcHostBridge {
         rtcApi: RtcApi,
         profiles: RtcProfileResolver? = null,
         invites: com.imrtc.uikit.IMInviteMemberProvider? = null,
-        config: RtcConfig = RtcConfig.fromBuild(),
+        config: RtcConfig = RtcConfig.load(),
     ) {
         if (engine != null && this.uid == uid && this.deviceId == deviceId) return
         teardown()
@@ -343,11 +343,11 @@ object RtcCall : RtcHostBridge {
 
     private fun mediaType(video: Boolean) = if (video) "video" else "audio"
 
-    // 联调期专用诊断：local.properties 缺配置只会在开发机上出现，不译（同 IMLog 只给开发看的口径）。
+    // 联调期专用诊断：缺信令地址只会在开发机上出现，不译（同 IMLog 只给开发看的口径）。
     private fun unavailableReason(): String? = when {
         engine != null -> null
-        !RtcConfig.fromBuild().isUsable ->
-            "通话未配置：local.properties 缺 " + RtcConfig.fromBuild().missing.joinToString("、")
+        !RtcConfig.load().isUsable ->
+            "通话未配置：缺音视频地址（local.properties 的 rtc.wsUrl，或退出登录后长按登录页 Logo 填写）"
         else -> Str.s(R.string.rtc_error_not_started)
     }
 

@@ -2,6 +2,7 @@ package com.libeyond.imandroid.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -96,6 +98,8 @@ fun LoginScreen(
     registerClosedFor: String? = null,
     /** public-config 回包：宿主按 [RegisterGate.afterResult] 更新 [registerClosedFor]。 */
     onRegisterConfig: (requestedHost: String, enabled: Boolean) -> Unit = { _, _ -> },
+    /** 「长按 Logo ▸ 配置地址」点保存：更新 host 并立即持久化（不等登录）。默认只更新页面状态（预览用）。 */
+    onHostSave: (String) -> Unit = onHostChange,
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
@@ -104,6 +108,8 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
     var showHost by remember { mutableStateOf(false) }
+    var showEndpoints by remember { mutableStateOf(false) }
+    val canConfigEndpoints = !busy && twoStep == null
     val registerClosed = rememberRegisterClosed(
         host, active = tab == LoginTab.Register && twoStep == null, registerClosedFor, onRegisterConfig,
     )
@@ -120,12 +126,15 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(d.space3),
     ) {
-        // —— Logo ——
+        // —— Logo：长按配置服务器 / 音视频地址（对齐 iOS logoLongPressed:）——
         Box(
             modifier = Modifier
                 .size(80.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(c.accent),
+                .background(c.accent)
+                .pointerInput(canConfigEndpoints) {
+                    if (canConfigEndpoints) detectTapGestures(onLongPress = { showEndpoints = true })
+                },
             contentAlignment = Alignment.Center,
         ) {
             Image(
@@ -140,6 +149,10 @@ fun LoginScreen(
             style = MaterialTheme.typography.headlineSmall,
             color = c.textPrimary,
         )
+
+        if (showEndpoints && canConfigEndpoints) {
+            LoginEndpointDialog(host = host, onDismiss = { showEndpoints = false }, onHostSave = onHostSave)
+        }
 
         if (twoStep != null) {
             LoginTwoStepPane(busy = busy, error = error, failTick = twoStep.failTick, onSubmit = twoStep.onSubmit, onBack = twoStep.onBack, onEdit = twoStep.onEdit)

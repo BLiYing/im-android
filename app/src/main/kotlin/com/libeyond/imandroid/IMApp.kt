@@ -39,6 +39,7 @@ class IMApp : Application(), coil.ImageLoaderFactory {
         LanguageStore.init(this)
         AppearanceStore.init(this)
         PowerSavingStore.init(this)
+        com.libeyond.imandroid.rtc.RtcEndpointStore.init(this)
         Str.install(ContextStringResolver(this))
         NotificationSettingsStore.init(this)
         FcmPreference.init(this)

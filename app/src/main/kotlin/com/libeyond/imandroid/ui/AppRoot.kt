@@ -257,6 +257,8 @@ fun AppRoot(client: IMClient) {
             },
             host = host,
             onHostChange = { host = it },
+            // 配置弹窗点保存：立即写入本机（IMClient.host → SessionStore），不等登录/注册才落盘
+            onHostSave = { host = it; client.host = it },
             busy = busy,
             error = if (error.isNotEmpty()) error else endedNotice,
             devLoginEnabled = BuildConfig.DEBUG,
