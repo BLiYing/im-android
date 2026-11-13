@@ -25,6 +25,9 @@ class ErrorTextTest {
         assertEquals("内容包含不允许发送的词语", ErrorText.friendlyText(ApiException(ErrCode.CONTENT_BLOCKED, "content blocked")))
     }
 
+    /** 200049 漏到页面上时不露服务端英文（PHONE_AUTH_DESIGN §15.2）。 */
+    @Test fun `ProofRequired 走本地化`() = assertEquals(R.string.proof_title, ErrorText.friendlyRes(ErrCode.PROOF_REQUIRED))
+
     @Test fun `被拉黑用模糊文案`() = assertEquals(R.string.err_200102, ErrorText.friendlyRes(ErrCode.FRIEND_BLOCKED))
 
     @Test fun `无权限与入群待审刻意不映射`() {

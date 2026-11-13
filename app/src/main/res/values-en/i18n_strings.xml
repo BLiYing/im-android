@@ -1799,6 +1799,7 @@
     <string name="ps_row_export_data">Export my data</string>
     <string name="ps_row_last_seen">Last seen</string>
     <string name="ps_row_passkey">Passkey</string>
+    <string name="ps_row_phone_discover">Find me by phone number</string>
     <string name="ps_row_phone_number">Phone number</string>
     <string name="ps_row_two_factor">Two-step verification</string>
     <string name="ps_section_account_protection">Account protection</string>
@@ -1811,7 +1812,8 @@
     <string name="ps_visibility_everyone">Everyone</string>
     <string name="ps_visibility_last_seen_footer">Choose who can see your online status and when you were last online. You can always see your own.</string>
     <string name="ps_visibility_nobody">Nobody</string>
-    <string name="ps_visibility_phone_footer">Choose who can see your phone number on your profile. Nobody by default. Finding you by number is not affected.</string>
+    <string name="ps_visibility_phone_footer">Choose who can see your login phone number on your profile. Nobody by default. Who can find you by number is set under “Find me by phone number”.</string>
+    <string name="ps_visibility_phone_discover_footer">Choose who can find you by entering your login phone number in Add Friends. Finding you by username is not affected.</string>
     <string name="ps_visibility_save_failed">Couldn\'t save. Please try again.</string>
     <string name="ps_who_can_see_footer">These settings control how much others can see on your profile.</string>
     <string name="push_call_action_answer">Answer</string>
@@ -2068,11 +2070,14 @@
     <string name="security_password_toast_set">Password set</string>
     <string name="security_password_unset">Not set</string>
     <string name="security_phone">Login phone</string>
-    <string name="security_phone_bind_footer">After adding a phone number you can log in with it and an SMS code. It is only used for logging in and is never shown to others.</string>
+    <string name="security_phone_bind_footer">After adding a phone number you can log in with it and an SMS code. Choose who can see it and who can find you by it in Privacy and Security.</string>
     <string name="security_phone_bind_title">Add phone number</string>
     <string name="security_phone_change_footer">Once the new number is verified, the old one can no longer be used to log in.</string>
     <string name="security_phone_change_title">Change phone number</string>
     <string name="security_phone_current">Current number %1$s</string>
+    <string name="security_phone_legacy_bind">Use it</string>
+    <string name="security_phone_legacy_dismiss">Don’t show again</string>
+    <string name="security_phone_legacy_prompt">You added %1$s to your profile earlier. Use it as your login phone?</string>
     <string name="security_phone_new_placeholder">New phone number</string>
     <string name="security_phone_next">Next</string>
     <string name="security_phone_next_hint">Next, you’ll confirm it’s you</string>

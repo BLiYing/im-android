@@ -84,7 +84,7 @@ class ExportApi(private val http: HttpClient) {
         private const val BASE = "/api/v1/users/me/exports"
 
         fun startBody(proof: Proof, includeMedia: Boolean, formats: List<String>): JsonObject = buildJsonObject {
-            put("proof", proof.toJson())
+            putProof(proof)
             put("include_media", includeMedia)
             put("formats", buildJsonArray { formats.forEach { add(JsonPrimitive(it)) } })
         }

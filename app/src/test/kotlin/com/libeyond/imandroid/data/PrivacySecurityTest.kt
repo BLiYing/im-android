@@ -35,7 +35,7 @@ class PrivacySecurityTest {
                 listOf("已屏蔽的用户", "登录密码"),
                 listOf("两步验证", "通行密钥", "邮箱登录"),
                 listOf("自动删除消息"),
-                listOf("手机号码", "上次上线", "头像", "个人简介"),
+                listOf("手机号码", "通过手机号找到我", "上次上线", "头像", "个人简介"),
                 listOf("清除所有对话", "导出我的数据"),
             ),
             groups.map { g -> g.rows.map { it.title } },
@@ -49,8 +49,8 @@ class PrivacySecurityTest {
         assertEquals("关闭", values["通行密钥"])
         assertEquals("", values["邮箱登录"])
         assertEquals("", values["自动删除消息"]) // 活行：右值由页面按 GET /users/me/privacy 填
-        // 谁能看到四行都是活行：右值由页面按 GET /users/me/privacy 填，表里留空（生日不做，已删）
-        assertEquals(listOf("", "", "", ""), groups[3].rows.map { it.value })
+        // 谁能看到五行都是活行：右值由页面按 GET /users/me/privacy 填，表里留空（生日不做，已删）
+        assertEquals(listOf("", "", "", "", ""), groups[3].rows.map { it.value })
         assertEquals("", values["清除所有对话"])
     }
 
@@ -64,7 +64,7 @@ class PrivacySecurityTest {
         assertEquals(PrivacyAction.AutoDelete, autoDelete.action)
         assertFalse(autoDelete.isPlaceholder)
         val who = groups[3].rows
-        assertEquals(listOf(PrivacyAction.Phone, PrivacyAction.LastSeen, PrivacyAction.Avatar, PrivacyAction.Bio), who.map { it.action })
+        assertEquals(listOf(PrivacyAction.Phone, PrivacyAction.PhoneDiscover, PrivacyAction.LastSeen, PrivacyAction.Avatar, PrivacyAction.Bio), who.map { it.action })
         assertTrue(who.none { it.isPlaceholder })
         // 数据组：「清除所有对话」「导出我的数据」都是活行
         val data = groups[4].rows
@@ -116,7 +116,7 @@ class PrivacySecurityTest {
                 PrivacyTint.Red, PrivacyTint.Blue,
                 PrivacyTint.Gray, PrivacyTint.Purple, PrivacyTint.Teal,
                 PrivacyTint.Orange,
-                PrivacyTint.Green, PrivacyTint.Blue, PrivacyTint.Purple, PrivacyTint.Yellow,
+                PrivacyTint.Green, PrivacyTint.Teal, PrivacyTint.Blue, PrivacyTint.Purple, PrivacyTint.Yellow,
                 PrivacyTint.Danger, PrivacyTint.Blue, // 清除所有对话：danger 底（破坏性）
             ),
             groups.flatMap { g -> g.rows.map { it.tint } },

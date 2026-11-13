@@ -63,6 +63,20 @@ class PrivacyVisibilityTest {
         assertEquals("contacts", phone.getValue("phone_visibility").jsonPrimitive.content)
     }
 
+    /** 「通过手机号找到我」（PHONE_AUTH_DESIGN §15.1）：老服务端缺字段按 everyone；PUT 只带 phone_discover。 */
+    @Test
+    fun phone_discover_defaults_everyone_and_put_only_its_field() {
+        val j = Json { ignoreUnknownKeys = true }
+        val old = j.decodeFromString(PrivacySettings.serializer(), """{"auto_delete_default_sec":0}""")
+        assertEquals(Visibility.Everyone, Visibility.parse(old.phoneDiscover))
+        val now = j.decodeFromString(PrivacySettings.serializer(), """{"phone_visibility":"nobody","phone_discover":"contacts"}""")
+        assertEquals(Visibility.Contacts, Visibility.parse(now.phoneDiscover))
+        assertEquals(Visibility.Nobody, Visibility.parse(now.phoneVisibility))
+        val body = PrivacyApi.body(phoneDiscover = "nobody")
+        assertEquals(setOf("phone_discover"), body.keys)
+        assertEquals("nobody", body.getValue("phone_discover").jsonPrimitive.content)
+    }
+
     @Test
     fun choose_success_commits() = runBlocking {
         val f = VisibilityField(Visibility.Contacts)

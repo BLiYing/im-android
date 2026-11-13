@@ -120,4 +120,12 @@ class PhoneAuthRulesTest {
         assertEquals("13622220201", PhoneAuthRules.loginIdentFor("86", "136 2222-0201", "86"))
         assertEquals("+85251234567", PhoneAuthRules.loginIdentFor("852", "5123 4567", "86"))
     }
+
+    /** PHONE_AUTH_DESIGN §15.2：免确认至少还剩 15 秒才跳过弹层。 */
+    @Test fun `免确认阈值 15 秒`() {
+        assertFalse(PhoneAuthRules.canSkipProof(0))
+        assertFalse(PhoneAuthRules.canSkipProof(14))
+        assertTrue(PhoneAuthRules.canSkipProof(15))
+        assertTrue(PhoneAuthRules.canSkipProof(600))
+    }
 }

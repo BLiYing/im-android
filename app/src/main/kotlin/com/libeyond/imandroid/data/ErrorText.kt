@@ -72,6 +72,9 @@ object ErrorText {
         ErrCode.SMS_DAILY_CAP -> R.string.err_200046
         ErrCode.PHONE_NOT_REGISTERED -> R.string.err_200047
         ErrCode.PHONE_TICKET_INVALID -> R.string.err_200048
+        // 200049 一般由确认身份弹层兜住（ProofController 退回弹层）；漏到页面上时（如请求途中已离开页面）给「确认是你本人」，
+        // 不露服务端英文。还没有专门的 err_200049 文案键。
+        ErrCode.PROOF_REQUIRED -> R.string.proof_title
         ErrCode.RATE_LIMITED -> R.string.err_100002
         ErrCode.CONTENT_BLOCKED -> R.string.err_100004
         else -> null

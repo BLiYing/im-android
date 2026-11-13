@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.sdk.api
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -11,9 +12,17 @@ import kotlinx.serialization.json.put
  * recovery-codes、绑定 / 更换手机号。请求体里只传 `proof`，不再传旧的顶层 `password` / `old_password`。
  *
  * [toString] 打码：这两个值都不能进日志。
+ *
+ * [None] = 空证明（PHONE_AUTH_DESIGN §15.2「最近验证过免确认」）：请求体里**既不带 `proof` 也不带旧的顶层 `password`**，
+ * 由服务端按本会话最近一次验证身份的时刻放行，否则回 `200049`。请求体一律经 [putProof] 写。
  */
 sealed interface Proof {
-    fun toJson(): JsonObject
+    /** `proof` 字段的值；[None] = null（不写这个字段）。 */
+    fun toJson(): JsonObject?
+
+    data object None : Proof {
+        override fun toJson(): JsonObject? = null
+    }
 
     data class Password(val password: String) : Proof {
         override fun toJson(): JsonObject = buildJsonObject { put("password", password) }
@@ -25,4 +34,9 @@ sealed interface Proof {
         override fun toJson(): JsonObject = buildJsonObject { put("sms_code", code) }
         override fun toString() = "Proof.SmsCode(***)"
     }
+}
+
+/** 写 `proof` 字段；[Proof.None] 什么都不写（服务端只认「没有 proof」为空证明）。 */
+fun JsonObjectBuilder.putProof(proof: Proof) {
+    proof.toJson()?.let { put("proof", it) }
 }

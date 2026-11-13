@@ -44,6 +44,8 @@ fun PrivacySecurityHost(
     /** 「清除所有对话」二级页由「我」页路由（`MePage.ClearAllConversations`）承载。 */
     onOpenClearAll: () -> Unit,
     initialSub: SettingsSub = SettingsSub.None,
+    /** 登录手机号绑定 / 更换成功：资料卡 `phone` 随之变了（PHONE_AUTH_DESIGN §15.1），持有「我」资料卡的宿主重拉。 */
+    onLoginPhoneChanged: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     /** 登录密码 / 登录手机号 / 各确认身份弹层（PHONE_AUTH_DESIGN §6 / §7）：本页下共用同一份 `GET /users/me/security`。 */
@@ -53,7 +55,7 @@ fun PrivacySecurityHost(
     /** 邮箱登录同理：状态与请求在控制器里，行右值也读它。 */
     val email = remember(client) { EmailController(client, security) }
     val password = remember(client) { PasswordController(client, security) }
-    val phoneBind = remember(client) { PhoneBindController(client, security) }
+    val phoneBind = remember(client) { PhoneBindController.of(client, security) { onLoginPhoneChanged() } }
 
     var page by remember { mutableStateOf((initialSub as? SettingsSub.Privacy)?.page ?: PrivacyPage.Main) }
     /** 黑名单。容器页的计数与列表页**共用这一份**：进列表页时先显上次的，拉回来再换。 */
@@ -66,17 +68,19 @@ fun PrivacySecurityHost(
     var autoDefault by remember { mutableStateOf<Int?>(null) }
     var autoShown by remember { mutableStateOf<Int?>(null) }
     var autoSaving by remember { mutableStateOf(false) }
-    /** 「谁能看到」四项（同一份 `GET /users/me/privacy`）；`visRev` 只用来在字段变化后触发重组。 */
+    /** 「谁能看到」五项（同一份 `GET /users/me/privacy`）；`visRev` 只用来在字段变化后触发重组。 */
     val lastSeenField = remember { VisibilityField() }
     val avatarField = remember { VisibilityField() }
     val bioField = remember { VisibilityField() }
     val phoneField = remember { VisibilityField() }
+    val phoneDiscoverField = remember { VisibilityField() }
     var visRev by remember { mutableStateOf(0) }
     fun fieldOf(k: VisibilityKind) = when (k) {
         VisibilityKind.LastSeen -> lastSeenField
         VisibilityKind.Avatar -> avatarField
         VisibilityKind.Bio -> bioField
         VisibilityKind.Phone -> phoneField
+        VisibilityKind.PhoneDiscover -> phoneDiscoverField
     }
 
     suspend fun reloadBlocked() {
@@ -126,6 +130,7 @@ fun PrivacySecurityHost(
                     VisibilityKind.Avatar -> client.privacy.setAvatarVisibility(level.wire)
                     VisibilityKind.Bio -> client.privacy.setBioVisibility(level.wire)
                     VisibilityKind.Phone -> client.privacy.setPhoneVisibility(level.wire)
+                    VisibilityKind.PhoneDiscover -> client.privacy.setPhoneDiscover(level.wire)
                 }
             }
             visRev++
@@ -156,6 +161,7 @@ fun PrivacySecurityHost(
             avatarField.load(Visibility.parse(it.avatarVisibility))
             bioField.load(Visibility.parse(it.bioVisibility))
             phoneField.load(Visibility.parse(it.phoneVisibility))
+            phoneDiscoverField.load(Visibility.parse(it.phoneDiscover))
             visRev++
         }
     }
@@ -185,10 +191,12 @@ fun PrivacySecurityHost(
                     avatarLabel = visRev.let { avatarField.committed?.label.orEmpty() },
                     bioLabel = visRev.let { bioField.committed?.label.orEmpty() },
                     phoneLabel = visRev.let { phoneField.committed?.label.orEmpty() },
+                    phoneDiscoverLabel = visRev.let { phoneDiscoverField.committed?.label.orEmpty() },
                     onOpenLastSeen = { lastSeenField.resetShown(); page = PrivacyPage.LastSeen },
                     onOpenAvatar = { avatarField.resetShown(); page = PrivacyPage.Avatar },
                     onOpenBio = { bioField.resetShown(); page = PrivacyPage.Bio },
                     onOpenPhone = { phoneField.resetShown(); page = PrivacyPage.Phone },
+                    onOpenPhoneDiscover = { phoneDiscoverField.resetShown(); page = PrivacyPage.PhoneDiscover },
                     twoStepLabel = TwoStepRules.rowLabel(twoStep.rowEnabled),
                     onOpenTwoStep = { page = PrivacyPage.TwoStep },
                     emailLabel = EmailRules.rowLabel(email.status),
@@ -219,11 +227,12 @@ fun PrivacySecurityHost(
                 )
             }
 
-            PrivacyPage.LastSeen, PrivacyPage.Avatar, PrivacyPage.Bio, PrivacyPage.Phone -> {
+            PrivacyPage.LastSeen, PrivacyPage.Avatar, PrivacyPage.Bio, PrivacyPage.Phone, PrivacyPage.PhoneDiscover -> {
                 val kind = when (p) {
                     PrivacyPage.LastSeen -> VisibilityKind.LastSeen
                     PrivacyPage.Avatar -> VisibilityKind.Avatar
                     PrivacyPage.Bio -> VisibilityKind.Bio
+                    PrivacyPage.PhoneDiscover -> VisibilityKind.PhoneDiscover
                     else -> VisibilityKind.Phone
                 }
                 BackHandler { page = PrivacyPage.Main }
@@ -233,12 +242,14 @@ fun PrivacySecurityHost(
                         VisibilityKind.Avatar -> R.string.ps_row_avatar
                         VisibilityKind.Bio -> R.string.ps_row_bio
                         VisibilityKind.Phone -> R.string.ps_row_phone_number
+                        VisibilityKind.PhoneDiscover -> R.string.ps_row_phone_discover
                     }),
                     footer = stringResource(when (kind) {
                         VisibilityKind.LastSeen -> R.string.ps_visibility_last_seen_footer
                         VisibilityKind.Avatar -> R.string.ps_visibility_avatar_footer
                         VisibilityKind.Bio -> R.string.ps_visibility_bio_footer
                         VisibilityKind.Phone -> R.string.ps_visibility_phone_footer
+                        VisibilityKind.PhoneDiscover -> R.string.ps_visibility_phone_discover_footer
                     }),
                     current = visRev.let { fieldOf(kind).shown },
                     onSelect = { saveVisibility(kind, it) },

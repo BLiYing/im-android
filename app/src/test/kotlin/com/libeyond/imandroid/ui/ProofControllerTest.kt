@@ -35,8 +35,10 @@ class ProofControllerTest {
 
     @Before fun setUp() { IMLog.useSinksForTest(); Str.install(XmlStringResolver()) }
 
+    private var clock = 1_000_000L
+
     private fun TestScope.ctl(fetch: suspend () -> SecurityStatus): Pair<ProofController, SecurityState> {
-        val sec = SecurityState(fetch, now = { 1_000_000L })
+        val sec = SecurityState(fetch, now = { clock })
         return ProofController(this, sec) { VerifyCodeResult(resendAfter = 60, phoneMasked = "+86 136****0201") } to sec
     }
 
@@ -191,5 +193,89 @@ class ProofControllerTest {
         p.sendCode(); advanceUntilIdle()
         assertTrue(sec.verifyTimer.sentOnce)
         assertEquals("+86 136****0201", p.phoneMasked)
+    }
+
+    // —— 最近验证过免确认（PHONE_AUTH_DESIGN §15.2）——
+
+    @Test fun `免确认还剩 15 秒以上 不弹层 直接发空证明`() = runTest {
+        val (p, _) = ctl { both.copy(recentAuthSec = 15) }
+        var sent: Proof? = null
+        var ok: String? = null
+        p.submit(call = { pr -> sent = pr; "done" }, onOk = { ok = it }, onPageError = { throw AssertionError() })
+        advanceUntilIdle()
+        assertFalse(p.visible)
+        assertEquals(Proof.None, sent)
+        assertEquals("done", ok)
+    }
+
+    @Test fun `免确认只剩 14 秒 照常弹层`() = runTest {
+        val (p, _) = ctl { both.copy(recentAuthSec = 14) }
+        var calls = 0
+        p.submit(call = { calls++ }, onOk = {}, onPageError = {})
+        advanceUntilIdle()
+        assertTrue(p.visible)
+        assertEquals(0, calls)
+    }
+
+    @Test fun `旧值的免确认秒数扣掉流逝的时间`() = runTest {
+        val (p, sec) = ctl { both.copy(recentAuthSec = 60) }
+        sec.refresh()
+        clock += 46_000 // 还剩 14 秒
+        assertEquals(14, sec.recentAuthLeft())
+        var calls = 0
+        p.submit(call = { calls++ }, onOk = {}, onPageError = {})
+        assertTrue(p.visible)
+        assertEquals(0, calls)
+    }
+
+    @Test fun `空证明回 200049 退回弹层 用用户给的证明重发`() = runTest {
+        var server = 300 // 本地以为还剩 300 秒，服务端已重启清零（回 200049，之后重取也是 0）
+        val (p, sec) = ctl { both.copy(recentAuthSec = server) }
+        val sent = mutableListOf<Proof>()
+        var ok = 0
+        var page = 0
+        p.submit(
+            call = { pr -> sent += pr; if (pr == Proof.None) { server = 0; throw api(ErrCode.PROOF_REQUIRED) } else "ok" },
+            onOk = { ok++ }, onPageError = { page++ },
+        )
+        advanceUntilIdle()
+        assertTrue("200049 要弹层", p.visible)
+        assertEquals(0, page)
+        assertEquals(0, sec.recentAuthLeft())
+        p.onPassword("pw"); p.confirm(); advanceUntilIdle()
+        assertEquals(listOf(Proof.None, Proof.Password("pw")), sent)
+        assertEquals(1, ok)
+        assertFalse(p.visible)
+        // 证明通过后本地记上免确认，下一次敏感操作不再弹层
+        assertTrue(sec.recentAuthLeft() >= 15)
+    }
+
+    /** 服务端窗口从校验证明时起算：本地按发请求时刻记，请求耗时不算进窗口。 */
+    @Test fun `证明通过后本地窗口从发请求时起算`() = runTest {
+        val (p, sec) = ctl { both }
+        p.submit(call = { clock += 20_000; "ok" }, onOk = {}, onPageError = {})
+        advanceUntilIdle(); p.onPassword("pw"); p.confirm(); advanceUntilIdle()
+        assertEquals(580, sec.recentAuthLeft())
+    }
+
+    @Test fun `空证明的其它错误直接交页面 不弹层`() = runTest {
+        val (p, _) = ctl { both.copy(recentAuthSec = 300) }
+        var page: Throwable? = null
+        val e = api(ErrCode.NO_PERMISSION)
+        p.submit(call = { throw e }, onOk = {}, onPageError = { page = it })
+        advanceUntilIdle()
+        assertFalse(p.visible)
+        assertEquals(e, page)
+    }
+
+    @Test fun `空证明在途时离开页面 回 200049 不再弹层`() = runTest {
+        val (p, _) = ctl { both.copy(recentAuthSec = 300) }
+        val gate = CompletableDeferred<Unit>()
+        p.submit(call = { gate.await(); throw api(ErrCode.PROOF_REQUIRED) }, onOk = {}, onPageError = {})
+        advanceUntilIdle()
+        assertTrue(p.busy)
+        p.clear()
+        gate.complete(Unit); advanceUntilIdle()
+        assertFalse(p.visible)
     }
 }

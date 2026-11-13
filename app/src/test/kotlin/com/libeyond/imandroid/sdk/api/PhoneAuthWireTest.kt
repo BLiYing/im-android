@@ -80,6 +80,39 @@ class PhoneAuthWireTest {
         assertTrue(old.passwordSet); assertFalse(old.phoneBound); assertFalse(old.smsAvailable)
     }
 
+    /** PHONE_AUTH_DESIGN §15：recent_auth_sec / legacy_phone；老服务端缺省 = 0 / null。 */
+    @Test fun `security 状态 免确认秒数与旧号码`() {
+        val st = decode(json("""{"phone_bound":false,"password_set":true,"sms_available":true,"recent_auth_sec":540,"legacy_phone":{"country_code":"86","phone":"13712340002","masked":"+86 137****0002"}}"""), SecurityStatus.serializer())
+        assertEquals(540, st.recentAuthSec)
+        assertEquals(LegacyPhone("86", "13712340002", "+86 137****0002"), st.legacyPhone)
+        assertFalse(st.legacyPhone.toString().contains("13712340002"))
+        val old = decode(json("{}"), SecurityStatus.serializer())
+        assertEquals(0, old.recentAuthSec); assertNull(old.legacyPhone)
+    }
+
+    /** 空证明：既不带 proof 也不带旧的顶层 password（服务端只认「没有」为空证明）。七个接口共用 putProof。 */
+    @Test fun `空证明 请求体不带 proof 与 password`() {
+        val bodies = listOf(
+            SecurityApi.bindPhoneBody(Proof.None, "86", "13622220002", "000000"),
+            EmailApi.unbindBody(Proof.None),
+            EmailApi.sendBody("a@b.c", Proof.None, "zh-Hans"),
+            TwoStepApi.setupBody(Proof.None),
+            TwoStepApi.verifyBody(Proof.None, "123456"),
+            ExportApi.startBody(Proof.None, false, listOf("json")),
+        )
+        for (b in bodies) {
+            assertFalse(b.toString(), "proof" in b.keys)
+            assertFalse(b.toString(), "password" in b.keys)
+        }
+        assertEquals(setOf("country_code", "phone", "code"), bodies.first().keys)
+        assertTrue("proof" in TwoStepApi.setupBody(Proof.Password("p")).keys)
+    }
+
+    /** 资料编辑不再发 phone（服务端忽略，资料卡 phone = 登录手机号，PHONE_AUTH_DESIGN §15.1）。 */
+    @Test fun `资料更新请求体不带 phone`() {
+        assertEquals(setOf("nickname", "avatar_url", "bio"), ProfileApi.updateBody("n", "u", "b").keys)
+    }
+
     @Test fun `proof 打码`() {
         assertFalse(Proof.Password("secret").toString().contains("secret"))
         assertFalse(Proof.SmsCode("123456").toString().contains("123456"))

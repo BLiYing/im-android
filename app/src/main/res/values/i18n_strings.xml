@@ -1748,6 +1748,7 @@
     <string name="ps_row_export_data">导出我的数据</string>
     <string name="ps_row_last_seen">上次上线</string>
     <string name="ps_row_passkey">通行密钥</string>
+    <string name="ps_row_phone_discover">通过手机号找到我</string>
     <string name="ps_row_phone_number">手机号码</string>
     <string name="ps_row_two_factor">两步验证</string>
     <string name="ps_section_account_protection">账号保护</string>
@@ -1760,7 +1761,8 @@
     <string name="ps_visibility_everyone">所有人</string>
     <string name="ps_visibility_last_seen_footer">决定谁能看到你的在线状态和上次上线时间。你自己始终可见。</string>
     <string name="ps_visibility_nobody">无人</string>
-    <string name="ps_visibility_phone_footer">决定谁能在你的资料页看到手机号码。默认无人可见；通过手机号找到你的方式不受影响。</string>
+    <string name="ps_visibility_phone_footer">决定谁能在你的资料页看到你的登录手机号。默认无人可见；谁能通过手机号找到你，在「通过手机号找到我」里设置。</string>
+    <string name="ps_visibility_phone_discover_footer">决定谁能在「添加朋友」里输入你的登录手机号找到你。通过用户名找到你不受影响。</string>
     <string name="ps_visibility_save_failed">设置失败，请稍后重试</string>
     <string name="ps_who_can_see_footer">这些设置决定他人在你的资料页看到多少。</string>
     <string name="push_call_action_answer">接听</string>
@@ -2011,11 +2013,14 @@
     <string name="security_password_toast_set">密码已设置</string>
     <string name="security_password_unset">未设置</string>
     <string name="security_phone">登录手机号</string>
-    <string name="security_phone_bind_footer">绑定后可以用手机号和短信验证码登录。手机号只用于登录，不会向其他人显示。</string>
+    <string name="security_phone_bind_footer">绑定后可以用手机号和短信验证码登录。谁能看到它、谁能通过它找到你，在「隐私与安全」里设置。</string>
     <string name="security_phone_bind_title">绑定手机号</string>
     <string name="security_phone_change_footer">验证新手机号后，原手机号将不能再用于登录。</string>
     <string name="security_phone_change_title">更换手机号</string>
     <string name="security_phone_current">当前手机号 %1$s</string>
+    <string name="security_phone_legacy_bind">绑定</string>
+    <string name="security_phone_legacy_dismiss">不再提示</string>
+    <string name="security_phone_legacy_prompt">你曾在资料中填写过 %1$s，是否绑定为登录手机号？</string>
     <string name="security_phone_new_placeholder">新手机号</string>
     <string name="security_phone_next">下一步</string>
     <string name="security_phone_next_hint">下一步需要确认是你本人</string>

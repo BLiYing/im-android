@@ -22,6 +22,7 @@ import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Mail
 import com.composables.icons.lucide.Phone
+import com.composables.icons.lucide.UserSearch
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Timer
@@ -66,10 +67,12 @@ fun PrivacySecurityScreen(
     avatarLabel: String,
     bioLabel: String,
     phoneLabel: String,
+    phoneDiscoverLabel: String,
     onOpenLastSeen: () -> Unit,
     onOpenAvatar: () -> Unit,
     onOpenBio: () -> Unit,
     onOpenPhone: () -> Unit,
+    onOpenPhoneDiscover: () -> Unit,
     /** 「两步验证」行的右值（开启 / 关闭；还没取到为空串）与点击。 */
     twoStepLabel: String,
     onOpenTwoStep: () -> Unit,
@@ -106,6 +109,7 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.Avatar -> onOpenAvatar
                                 PrivacyAction.Bio -> onOpenBio
                                 PrivacyAction.Phone -> onOpenPhone
+                                PrivacyAction.PhoneDiscover -> onOpenPhoneDiscover
                                 PrivacyAction.ExportData -> onOpenExportData
                                 PrivacyAction.ClearAll -> onOpenClearAll
                                 PrivacyAction.TwoStep -> onOpenTwoStep
@@ -122,6 +126,7 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.Avatar -> avatarLabel
                                 PrivacyAction.Bio -> bioLabel
                                 PrivacyAction.Phone -> phoneLabel
+                                PrivacyAction.PhoneDiscover -> phoneDiscoverLabel
                                 PrivacyAction.TwoStep -> twoStepLabel
                                 PrivacyAction.Email -> emailLabel
                                 PrivacyAction.ChangePassword -> passwordLabel
@@ -147,6 +152,7 @@ private fun iconOf(icon: PrivacyIcon): ImageVector = when (icon) {
     PrivacyIcon.Mail -> Lucide.Mail
     PrivacyIcon.Timer -> Lucide.Timer
     PrivacyIcon.Phone -> Lucide.Phone
+    PrivacyIcon.PhoneDiscover -> Lucide.UserSearch
     PrivacyIcon.LastSeen -> Lucide.Eye
     PrivacyIcon.Avatar -> Lucide.CircleUserRound
     PrivacyIcon.Bio -> Lucide.AlignLeft

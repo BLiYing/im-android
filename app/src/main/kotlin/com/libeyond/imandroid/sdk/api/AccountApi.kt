@@ -24,7 +24,7 @@ class AccountApi(private val http: HttpClient) {
      * 群主会被拒（100103 + `owned_groups`）——这一拒**不会**用掉验证码，转让后可拿同一个码重交。
      */
     suspend fun delete(proof: Proof) {
-        http.call("POST", "/api/v1/account/delete", buildJsonObject { put("proof", proof.toJson()) })
+        http.call("POST", "/api/v1/account/delete", buildJsonObject { putProof(proof) })
     }
 
     /** 冷静期内凭原密码恢复。免鉴权，服务端须套登录同款限流。 */

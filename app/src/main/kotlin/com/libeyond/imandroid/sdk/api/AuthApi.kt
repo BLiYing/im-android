@@ -144,7 +144,7 @@ class AuthApi(private val http: HttpClient, private val device: DeviceIdentity) 
 
     companion object {
         internal fun changePasswordBody(proof: Proof, newPassword: String): JsonObject = buildJsonObject {
-            put("proof", proof.toJson())
+            putProof(proof)
             put("new_password", newPassword)
         }
     }

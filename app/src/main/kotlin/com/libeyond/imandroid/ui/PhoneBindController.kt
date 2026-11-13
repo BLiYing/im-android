@@ -7,10 +7,25 @@ import com.libeyond.imandroid.data.EmailRules
 import com.libeyond.imandroid.data.PhoneAuthRules
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.PhoneAuthApi
+import com.libeyond.imandroid.sdk.api.Proof
+import com.libeyond.imandroid.sdk.api.PublicConfig
+import com.libeyond.imandroid.sdk.api.ResendHint
 import com.libeyond.imandroid.sdk.api.SmsScene
+import com.libeyond.imandroid.sdk.api.VerifyCodeResult
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.logging.IMLog
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+
+/** [PhoneBindController] 用到的网络能力（抽出来便于单测；生产实现见 [PhoneBindController.of]）。 */
+interface PhoneBindBackend {
+    val scope: CoroutineScope
+    suspend fun config(): PublicConfig?
+    suspend fun sendBindCode(countryCode: String, phone: String): ResendHint
+    suspend fun bindPhone(proof: Proof, countryCode: String, phone: String, code: String): String
+    suspend fun verifyCode(): VerifyCodeResult
+    suspend fun dismissLegacyPhone()
+}
 
 /**
  * 「隐私与安全 ▸ 登录手机号」绑定 / 更换（PHONE_AUTH_DESIGN §6.3 / §6.4）：
@@ -19,15 +34,26 @@ import kotlinx.coroutines.launch
  * 两个验证码都是服务端先校验、全部通过才用掉：错在 proof 上留在弹层里重输，错在新号码验证码上收起弹层、
  * 红字显在页面上——**都不清**已填的号码与验证码。**日志里不写号码与验证码**。
  */
-class PhoneBindController(private val client: IMClient, private val sec: SecurityState) {
+class PhoneBindController(
+    private val backend: PhoneBindBackend,
+    private val sec: SecurityState,
+    /**
+     * 绑定 / 更换成功：资料卡的 `phone` 就是登录手机号（PHONE_AUTH_DESIGN §15.1），持有「我」资料卡的地方要重拉，
+     * 否则「我」页 / 我的资料还显示旧号码或不显示。
+     */
+    private val onBound: () -> Unit = {},
+    now: () -> Long = { android.os.SystemClock.elapsedRealtime() },
+) {
     private val log = IMLog.tag("IM.Phone")
 
     /** 新号码 + 发到新号码的验证码；倒计时按号码计。 */
-    val form = PhoneCodeForm()
+    val form = PhoneCodeForm(now)
     var error by mutableStateOf(""); private set
     /** 红字指向验证码那一格（否则指向号码 / 整页）。 */
     var codeError by mutableStateOf(false); private set
-    val proof = ProofController.of(client, sec)
+    val proof = ProofController(backend.scope, sec) { backend.verifyCode() }
+    /** 资料里自填过的旧号码提示（§15.1）。 */
+    val legacy = LegacyPhonePrompt(sec, backend.scope) { backend.dismissLegacyPhone() }
 
     val changing: Boolean get() = sec.status?.phoneBound == true
     val busy: Boolean get() = proof.busy
@@ -43,15 +69,25 @@ class PhoneBindController(private val client: IMClient, private val sec: Securit
      */
     fun open() {
         reset()
-        client.scope.launch { client.publicConfig.fetch()?.let { form.onCountryCode(PhoneAuthRules.defaultCountryCode(it)) } }
+        backend.scope.launch {
+            // 已点「绑定」预填了旧号码的国家码：晚到的默认值不覆盖
+            backend.config()?.let { if (!legacy.prefilled) form.onCountryCode(PhoneAuthRules.defaultCountryCode(it)) }
+        }
     }
 
     /** 离开：清表单与确认身份弹层（含保留的验证码）。 */
-    fun reset() { form.onPhone(""); form.clearCode(); error = ""; codeError = false; proof.clear() }
+    fun reset() {
+        // 点过「绑定」预填了旧号码的国家码：离开时还原，免得下次进页取不到 public-config 时沿用它
+        if (legacy.prefilled) form.onCountryCode(PhoneAuthRules.DEFAULT_COUNTRY_CODE)
+        form.onPhone(""); form.clearCode(); error = ""; codeError = false; proof.clear(); legacy.reset()
+    }
+
+    /** 旧号码提示「绑定」：预填并清掉页面上针对上一个号码的红字。 */
+    fun prefillLegacy() { legacy.bind(form); error = ""; codeError = false }
 
     fun sendCode() {
         error = ""
-        form.send(client.scope, { cc, p -> client.phoneAuth.sendCode(SmsScene.Bind, cc, p, EmailRules.lang()) }) { e ->
+        form.send(backend.scope, { cc, p -> backend.sendBindCode(cc, p) }) { e ->
             if (e == null) log.i("bind_code_sent") else fail(e, "bind_code_failed", codeField = false, text = sendFailureText(e))
         }
     }
@@ -63,11 +99,13 @@ class PhoneBindController(private val client: IMClient, private val sec: Securit
         val wasBound = changing
         error = ""
         proof.submit(
-            call = { pr -> client.security.bindPhone(pr, cc, p, c) },
+            call = { pr -> backend.bindPhone(pr, cc, p, c) },
             onOk = { masked ->
                 log.i("phone_bound", "changed" to wasBound)
-                sec.update { it.copy(phoneBound = true, phoneMasked = masked.ifEmpty { it.phoneMasked }) }
+                // 绑定成功服务端顺带清掉资料里的旧号码（§15.1）
+                sec.update { it.copy(phoneBound = true, phoneMasked = masked.ifEmpty { it.phoneMasked }, legacyPhone = null) }
                 form.onPhone(""); form.clearCode()
+                onBound()
                 onDone(wasBound)
             },
             onPageError = { e ->
@@ -82,5 +120,22 @@ class PhoneBindController(private val client: IMClient, private val sec: Securit
         log.w(event, "code" to ((e as? ApiException)?.code ?: 0))
         codeError = codeField
         error = text
+    }
+
+    companion object {
+        fun of(client: IMClient, sec: SecurityState, onBound: () -> Unit) = PhoneBindController(
+            backend = object : PhoneBindBackend {
+                override val scope get() = client.scope
+                override suspend fun config() = client.publicConfig.fetch()
+                override suspend fun sendBindCode(countryCode: String, phone: String): ResendHint =
+                    client.phoneAuth.sendCode(SmsScene.Bind, countryCode, phone, EmailRules.lang())
+                override suspend fun bindPhone(proof: Proof, countryCode: String, phone: String, code: String) =
+                    client.security.bindPhone(proof, countryCode, phone, code)
+                override suspend fun verifyCode() = client.security.verifyCode(EmailRules.lang())
+                override suspend fun dismissLegacyPhone() = client.security.dismissLegacyPhone()
+            },
+            sec = sec,
+            onBound = onBound,
+        )
     }
 }

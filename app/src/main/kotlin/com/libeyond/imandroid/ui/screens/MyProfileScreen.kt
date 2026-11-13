@@ -48,11 +48,13 @@ import com.libeyond.imandroid.ui.components.IMTextField
 import com.libeyond.imandroid.ui.components.IMTopBar
 import com.libeyond.imandroid.ui.theme.IMTheme
 
-/** 编辑表单的四个输入框（状态由 Host 持有，本页只读写它）。 */
+/**
+ * 编辑表单的三个输入框（状态由 Host 持有，本页只读写它）。
+ * 没有手机号：资料卡的手机号就是登录手机号，只读展示，绑定 / 更换在「隐私与安全」（PHONE_AUTH_DESIGN §15.1）。
+ */
 data class ProfileForm(
     val nickname: String = "",
     val username: String = "",
-    val phone: String = "",
     val bio: String = "",
 )
 
@@ -228,10 +230,6 @@ private fun EditBody(
             keyboardType = KeyboardType.Ascii,
         ),
     ) { onChange(form.copy(username = it)) }
-    Spacer(Modifier.height(d.space3))
-    Field(stringResource(R.string.settings_info_phone), form.phone, KeyboardOptions(keyboardType = KeyboardType.Phone)) {
-        onChange(form.copy(phone = it))
-    }
     Spacer(Modifier.height(d.space3))
     BioField(form.bio) { onChange(form.copy(bio = ProfileEdit.flattenBio(it))) }
     }

@@ -1,5 +1,6 @@
 package com.libeyond.imandroid.ui
 
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -103,6 +104,12 @@ fun MeHost(
                 onBack = { page = MePage.List },
                 onOpenExportData = { sub = SettingsSub.None; page = MePage.ExportData }, // 清 sub：返回时隐私页回首层，不被深链残留的子页带走
                 onOpenClearAll = { sub = SettingsSub.None; page = MePage.ClearAllConversations },
+                // 资料卡的手机号 = 登录手机号（PHONE_AUTH_DESIGN §15.1）：绑定 / 更换后立刻重拉，不等回到列表页
+                onLoginPhoneChanged = {
+                    client.scope.launch {
+                        runCatchingCancellable { client.contacts.me() }.onSuccess { me = it; client.cacheMyProfile(it) }
+                    }
+                },
             )
             MePage.ClearAllConversations -> ClearAllConversationsHost(
                 client = client,

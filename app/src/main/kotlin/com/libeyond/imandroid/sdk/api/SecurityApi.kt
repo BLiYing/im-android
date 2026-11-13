@@ -18,7 +18,21 @@ data class SecurityStatus(
     @SerialName("phone_masked") val phoneMasked: String = "",
     @SerialName("password_set") val passwordSet: Boolean = true,
     @SerialName("sms_available") val smsAvailable: Boolean = false,
+    /** 本会话「最近验证过免确认」还剩几秒（0 = 要确认；老服务端没有 = 0，照旧弹层）。PHONE_AUTH_DESIGN §15.2。 */
+    @SerialName("recent_auth_sec") val recentAuthSec: Int = 0,
+    /** 资料里曾自填、还没绑定的号码（仅未绑定登录手机号时下发），「登录手机号」页据此提示绑定。§15.1。 */
+    @SerialName("legacy_phone") val legacyPhone: LegacyPhone? = null,
 )
+
+/** `legacy_phone`：本人自己的号码，下发明文用于预填；展示用 [masked]。 */
+@Serializable
+data class LegacyPhone(
+    @SerialName("country_code") val countryCode: String = "",
+    val phone: String = "",
+    val masked: String = "",
+) {
+    override fun toString() = "LegacyPhone(+$countryCode ***)"
+}
 
 /** `POST /users/me/verify-code` 回包：发到本人已绑定号码。 */
 @Serializable
@@ -43,6 +57,9 @@ class SecurityApi(private val http: HttpClient) {
     suspend fun verifyCode(lang: String): VerifyCodeResult =
         decode(http.call("POST", "$BASE/verify-code", buildJsonObject { put("lang", lang) }), VerifyCodeResult.serializer())
 
+    /** 「不再提示」：清掉资料里自填的旧号码（幂等）。 */
+    suspend fun dismissLegacyPhone() { http.call("DELETE", "$BASE/legacy-phone") }
+
     /**
      * 绑定 / 更换登录手机号。[code] 是发到**新号码**的 `bind` 场景验证码；[proof] 证明是本人。
      * 两个验证码先校验、全部通过才用掉；出错时 `data.field` 标明是哪个（[PhoneAuthApi.errorField]）。
@@ -55,7 +72,7 @@ class SecurityApi(private val http: HttpClient) {
         private const val BASE = "/api/v1/users/me"
 
         internal fun bindPhoneBody(proof: Proof, countryCode: String, phone: String, code: String): JsonObject = buildJsonObject {
-            put("proof", proof.toJson()); put("country_code", countryCode); put("phone", phone); put("code", code)
+            putProof(proof); put("country_code", countryCode); put("phone", phone); put("code", code)
         }
     }
 }

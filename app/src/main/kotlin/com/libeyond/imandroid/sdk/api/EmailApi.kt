@@ -62,12 +62,12 @@ class EmailApi(private val http: HttpClient) {
         private const val BASE = "/api/v1/users/me/email"
 
         internal fun sendBody(email: String, proof: Proof, lang: String): JsonObject = buildJsonObject {
-            put("email", email); put("proof", proof.toJson()); put("lang", lang)
+            put("email", email); putProof(proof); put("lang", lang)
         }
         internal fun verifyBody(email: String, code: String, lang: String): JsonObject = buildJsonObject {
             put("email", email); put("code", code); put("lang", lang)
         }
-        internal fun unbindBody(proof: Proof): JsonObject = buildJsonObject { put("proof", proof.toJson()) }
+        internal fun unbindBody(proof: Proof): JsonObject = buildJsonObject { putProof(proof) }
 
         /** 失败响应 `data.<key>` 的整数（`attempts_left` / `retry_after_sec`）；没有或不是整数返回 null。 */
         fun intField(e: ApiException, key: String): Int? = try {

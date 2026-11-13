@@ -122,6 +122,13 @@ object PhoneAuthRules {
         }
     }
 
+    /**
+     * 「最近验证过免确认」（§15.2）：免确认还剩 ≥ [RECENT_AUTH_MIN_SEC] 秒才不弹层、直接发空证明。
+     * 留 15 秒余量是为了别在请求路上过期；真过期了服务端回 `200049`，再正常弹层。
+     * [secondsLeft] = 取 security 时的 `recent_auth_sec` 减去之后流逝的秒数（`SecurityState.recentAuthLeft`）。
+     */
+    fun canSkipProof(secondsLeft: Int): Boolean = secondsLeft >= RECENT_AUTH_MIN_SEC
+
     /** 只有一种方式时不显示分段控件。 */
     fun showProofSegments(tabs: List<ProofTab>): Boolean = tabs.size > 1
 
@@ -144,6 +151,13 @@ object PhoneAuthRules {
         else -> PhoneRowTap.Bind
     }
 
+    /**
+     * 「登录手机号」页的旧号码提示（§15.1）：服务端只在未绑定时下发 `legacy_phone`，这里再按「未绑定、能绑（短信可用）、
+     * 本页没点过绑定 / 不再提示」兜一层。
+     */
+    fun showLegacyPrompt(st: SecurityStatus?, handled: Boolean): Boolean =
+        !handled && st != null && !st.phoneBound && st.smsAvailable && st.legacyPhone?.phone?.isNotEmpty() == true
+
     /** 「登录密码」行点进去：没设密码 → 设置；有 → 修改（状态未知按修改，即改造前的行为）。 */
     fun passwordPageMode(st: SecurityStatus?): PasswordPageMode =
         if (st?.passwordSet == false) PasswordPageMode.Set else PasswordPageMode.Change
@@ -159,6 +173,10 @@ object PhoneAuthRules {
     }
 
     const val CODE_LEN = 6
+    /** 免确认至少还剩这么多秒才跳过弹层（§15.2）。 */
+    const val RECENT_AUTH_MIN_SEC = 15
+    /** 服务端免确认窗口（PROTOCOL §7.3「10 分钟内」）：本端刚用证明通过后本地先记上，下次取 security 时以服务端为准。 */
+    const val RECENT_AUTH_WINDOW_SEC = 600
     private const val MASK_MIN_LEN = 7
     const val DEFAULT_COUNTRY_CODE = "86"
 }

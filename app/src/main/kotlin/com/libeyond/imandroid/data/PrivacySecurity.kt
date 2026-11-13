@@ -11,10 +11,10 @@ import com.libeyond.imandroid.i18n.Str
  * 三端这张表逐字一致，抄错一行由 `PrivacySecurityTest` 当场抓。
  * 图标与底色用语义名，到 Lucide / `IMTheme.settingsIcons` 的映射在页面里（本层不能 import 它们）。
  *
- * 第一组两行、「自动删除消息」与「谁能看到」四行是真功能；其余是**灰置占位**（点了提示开发中；目前只剩通行密钥）。占位行照样列出来，
+ * 第一组两行、「自动删除消息」与「谁能看到」五行是真功能；其余是**灰置占位**（点了提示开发中；目前只剩通行密钥）。占位行照样列出来，
  * 理由与「我」页相同：删掉会让三端这一页长得不一样，用户换个端就找不到东西。
  */
-enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, LastSeen, Avatar, Bio, Trash, Export, Smartphone }
+enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, PhoneDiscover, LastSeen, Avatar, Bio, Trash, Export, Smartphone }
 
 /** 图标底色（iOS `UIColor.system*`）。 */
 enum class PrivacyTint { Danger, Red, Blue, Gray, Purple, Teal, Orange, Green, Yellow, Pink }
@@ -23,7 +23,7 @@ enum class PrivacyTint { Danger, Red, Blue, Gray, Purple, Teal, Orange, Green, Y
  * 点一行做什么。`ChangePassword` = 「登录密码」行（设置 / 修改，PHONE_AUTH_DESIGN §6）；
  * `LoginPhone` = 「登录手机号」（与「谁能看到」里资料手机号的 `Phone` 是两回事）。
  */
-enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone, ExportData, ClearAll, TwoStep, Email, LoginPhone, ComingSoon }
+enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone, PhoneDiscover, ExportData, ClearAll, TwoStep, Email, LoginPhone, ComingSoon }
 
 data class PrivacyRow(
     val title: String,
@@ -90,6 +90,8 @@ object PrivacySecurity {
             footer = Str.s(R.string.ps_who_can_see_footer),
             rows = listOf(
                 PrivacyRow(Str.s(R.string.ps_row_phone_number), PrivacyIcon.Phone, PrivacyTint.Green, action = PrivacyAction.Phone),
+                // 「通过手机号找到我」（PHONE_AUTH_DESIGN §15.1）：紧跟「手机号码」
+                PrivacyRow(Str.s(R.string.ps_row_phone_discover), PrivacyIcon.PhoneDiscover, PrivacyTint.Teal, action = PrivacyAction.PhoneDiscover),
                 // 活行：右值 = 当前档位名，由页面按 GET /users/me/privacy 填（[Visibility.label]）
                 PrivacyRow(Str.s(R.string.ps_row_last_seen), PrivacyIcon.LastSeen, PrivacyTint.Blue, action = PrivacyAction.LastSeen),
                 PrivacyRow(Str.s(R.string.ps_row_avatar), PrivacyIcon.Avatar, PrivacyTint.Purple, action = PrivacyAction.Avatar),

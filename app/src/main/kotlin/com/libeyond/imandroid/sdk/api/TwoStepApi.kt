@@ -98,10 +98,10 @@ class TwoStepApi(private val http: HttpClient) {
     companion object {
         private const val BASE = "/api/v1/users/me/two-step"
 
-        internal fun setupBody(proof: Proof): JsonObject = buildJsonObject { put("proof", proof.toJson()) }
+        internal fun setupBody(proof: Proof): JsonObject = buildJsonObject { putProof(proof) }
         internal fun enableBody(code: String): JsonObject = buildJsonObject { put("code", code) }
         internal fun verifyBody(proof: Proof, code: String): JsonObject = buildJsonObject {
-            put("proof", proof.toJson())
+            putProof(proof)
             put("code", code)
         }
         internal fun loginBody(ticket: String, code: String): JsonObject = buildJsonObject {

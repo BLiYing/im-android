@@ -87,6 +87,10 @@ fun SecurityPhonePage(ctl: PhoneBindController, sec: SecurityState, onToast: (St
             }
         },
         onBack = leave,
+        legacyPrompt = if (ctl.legacy.visible) Str.s(R.string.security_phone_legacy_prompt, ctl.legacy.masked) else null,
+        legacyBusy = ctl.legacy.dismissing || ctl.busy,
+        onLegacyBind = ctl::prefillLegacy,
+        onLegacyDismiss = { ctl.legacy.dismiss(onToast) },
     )
     ProofSheetHost(ctl.proof)
 }

@@ -27,7 +27,7 @@ import kotlinx.coroutines.withContext
 /**
  * 我的资料：只读 ↔ 编辑双态、改头像、保存。
  *
- * 保存的**两段式**与 iOS 一致：先 `PUT /users/me` 存昵称/头像/手机/签名，
+ * 保存的**两段式**与 iOS 一致：先 `PUT /users/me` 存昵称/头像/签名（手机号只读，= 登录手机号），
  * 再（仅当真改了）`POST /users/me/username` 改公开句柄。
  * 后者失败**不回滚前者**——资料确实已经存上了，谎称"保存失败"更糟；
  * 只提示原因、留在页内让用户改个名再试。
@@ -59,7 +59,7 @@ fun MyProfileHost(
     val seedForm = remember { form }
     /**
      * /users/me 拉到了没有。**没拉到不许保存**：本机副本只存昵称 / 句柄 / 头像（MyProfileCodec），
-     * 手机号与签名是空的——这时保存会把服务端的手机号和签名整个清掉（PUT 是整体替换）。
+     * 签名是空的——这时保存会把服务端的签名整个清掉（PUT 是整体替换）。
      */
     var loaded by remember { mutableStateOf(false) }
     /**
@@ -81,7 +81,7 @@ fun MyProfileHost(
         form = formOf(c)
     }
 
-    /** 迟到的权威资料：用户动过的字段保留他的输入，没动过的（含本机副本里本就空着的手机号 / 签名）取服务端值。 */
+    /** 迟到的权威资料：用户动过的字段保留他的输入，没动过的（含本机副本里本就空着的签名）取服务端值。 */
     fun merge(c: UserCard) {
         val f = formOf(c)
         current = c
@@ -89,7 +89,6 @@ fun MyProfileHost(
         form = ProfileForm(
             nickname = if (form.nickname == seedForm.nickname) f.nickname else form.nickname,
             username = if (form.username == seedForm.username) f.username else form.username,
-            phone = if (form.phone == seedForm.phone) f.phone else form.phone,
             bio = if (form.bio == seedForm.bio) f.bio else form.bio,
         )
         if (avatarUrl == card?.avatarUrl.orEmpty()) avatarUrl = c.avatarUrl
@@ -127,7 +126,7 @@ fun MyProfileHost(
 
     fun save() {
         if (saving) return
-        // 见 loaded：没拉到权威资料前保存会清掉手机号与签名。拉失败了就把失败原因再说一遍，而不是一直「加载中」
+        // 见 loaded：没拉到权威资料前保存会清掉签名。拉失败了就把失败原因再说一遍，而不是一直「加载中」
         if (!loaded) { toast = error.ifEmpty { Str.s(R.string.common_loading) }; return }
         val nickErr = ProfileEdit.nicknameError(form.nickname)
         if (nickErr != null) { error = nickErr; return }
@@ -145,7 +144,6 @@ fun MyProfileHost(
                 client.profile.update(
                     nickname = form.nickname.trim(),
                     avatarUrl = avatarUrl,
-                    phone = form.phone.trim(),
                     bio = form.bio.trim(),
                 )
             }.onFailure { error = it.userMessage(Str.s(R.string.common_save_failed)) }
@@ -213,6 +211,5 @@ fun MyProfileHost(
 private fun formOf(c: UserCard) = ProfileForm(
     nickname = c.nickname,
     username = c.username,
-    phone = c.phone,
     bio = c.bio,
 )

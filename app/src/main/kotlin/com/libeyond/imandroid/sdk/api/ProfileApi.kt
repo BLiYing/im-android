@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.sdk.api
 
 import com.libeyond.imandroid.sdk.http.HttpClient
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -9,7 +10,8 @@ import kotlinx.serialization.json.put
  * Web `imSdk.updateProfile`）。读自己用 [ContactApi.me]，写走这里。
  *
  * **昵称与用户名是两个东西、两个接口**：
- *  - 昵称（nickname）随便填，跟 avatar/phone/bio 一起走 `PUT /users/me`；
+ *  - 昵称（nickname）随便填，跟 avatar/bio 一起走 `PUT /users/me`（手机号不在此列：资料卡的 `phone` 就是已验证的
+ *    登录手机号，只能在「隐私与安全 ▸ 登录手机号」绑定 / 更换，服务端忽略这里的 `phone`，PHONE_AUTH_DESIGN §15.1）；
  *  - 用户名（username）是公开句柄，别人搜到我、也是登录名，规则严格，
  *    单独走 `POST /users/me/username`。
  */
@@ -17,24 +19,12 @@ class ProfileApi(private val http: HttpClient) {
 
     /**
      * 更新本人资料。**服务端是 PUT 整体替换**（`handleUpdateMyProfile`）——
-     * 没传的字段等于清空，所以调用方必须把当前值一起传回来。
+     * 昵称 / 头像 / 签名没传等于清空，所以调用方必须把当前值一起传回来。
      * 这与会话设置的「整体替换三项」是同一个坑（MainScreen 的 `settings()` 注释）。
+     * 例外：`phone` 服务端忽略（PHONE_AUTH_DESIGN §15.1），**不要**再加回请求体；`tags` 缺省 = 保持原值。
      */
-    suspend fun update(
-        nickname: String,
-        avatarUrl: String,
-        phone: String,
-        bio: String,
-    ): UserCard {
-        // 不再发 tags：服务端缺省 = 保持原值，发空数组会把老标签清掉（PROFILE_BIO_DESIGN §4.2）
-        val body = buildJsonObject {
-            put("nickname", nickname)
-            put("avatar_url", avatarUrl)
-            put("phone", phone)
-            put("bio", bio)
-        }
-        return decode(http.call("PUT", "/api/v1/users/me", body), UserCard.serializer())
-    }
+    suspend fun update(nickname: String, avatarUrl: String, bio: String): UserCard =
+        decode(http.call("PUT", "/api/v1/users/me", updateBody(nickname, avatarUrl, bio)), UserCard.serializer())
 
     /**
      * 修改公开句柄。**只在用户真改了才调**——每次保存都发，会把「用户名已被占用」
@@ -48,4 +38,13 @@ class ProfileApi(private val http: HttpClient) {
             http.call("POST", "/api/v1/users/me/username", buildJsonObject { put("username", username) }),
             UserCard.serializer(),
         )
+
+    companion object {
+        /** 不再发 tags（服务端缺省 = 保持原值，发空数组会把老标签清掉，PROFILE_BIO_DESIGN §4.2）；也不发 phone（见类注释）。 */
+        internal fun updateBody(nickname: String, avatarUrl: String, bio: String): JsonObject = buildJsonObject {
+            put("nickname", nickname)
+            put("avatar_url", avatarUrl)
+            put("bio", bio)
+        }
+    }
 }

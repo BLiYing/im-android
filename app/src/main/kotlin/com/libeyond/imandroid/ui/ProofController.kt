@@ -34,20 +34,31 @@ import kotlinx.coroutines.launch
  */
 class SecurityState(
     private val fetch: suspend () -> SecurityStatus,
-    now: () -> Long = { SystemClock.elapsedRealtime() },
+    private val now: () -> Long = { SystemClock.elapsedRealtime() },
 ) {
     var status by mutableStateOf<SecurityStatus?>(null); private set
     val verifyTimer = ResendTimer(now)
+    /** 「最近验证过免确认」到期时刻（[now] 基准）：取到 security 时按 `recent_auth_sec` 算，本地已知的变化走 [setRecentAuth]。 */
+    private var recentAuthUntil = 0L
 
     /** 重取；失败返回异常（[status] 不动）。 */
     suspend fun refresh(): Throwable? =
         runCatchingCancellable { fetch() }
-            .onSuccess { status = it }
+            .onSuccess { status = it; setRecentAuth(it.recentAuthSec) }
             .onFailure { IMLog.tag("IM.Security").w("security_status_failed", "code" to ((it as? ApiException)?.code ?: 0)) }
             .exceptionOrNull()
 
     /** 本地已知的变化（刚设了密码 / 绑了手机）先改上，不等重取。 */
     fun update(f: (SecurityStatus) -> SecurityStatus) { status = status?.let(f) }
+
+    /** 「最近验证过免确认」还剩几秒（没取到 = 0）。 */
+    fun recentAuthLeft(): Int = ((recentAuthUntil - now()) / 1000).coerceAtLeast(0).toInt()
+
+    /** 免确认从现在起还剩 [sec] 秒：取到 security / 刚用证明通过（服务端已记下）/ 服务端说要确认（`200049`，记 0）。 */
+    fun setRecentAuth(sec: Int, from: Long = now()) { recentAuthUntil = from + sec.coerceAtLeast(0) * 1000L }
+
+    /** 当前时刻（[now] 基准），给 [setRecentAuth] 的 `from` 用。 */
+    fun clock(): Long = now()
 
     companion object {
         fun of(client: IMClient) = SecurityState({ client.security.status() })
@@ -59,6 +70,9 @@ class SecurityState(
  *
  * 统一入口 [submit]：弹层 → 用户确认 → 请求 → 成功先 [succeeded] 再回调；失败先 [reject]（证明本身的问题留在弹层里重输），
  * 不是证明的问题就 [dismiss] 再交给页面。
+ *
+ * 「最近验证过免确认」（PHONE_AUTH_DESIGN §15.2）：[submit] 取到状态后若免确认还剩 ≥ 15 秒（[PhoneAuthRules.canSkipProof]）
+ * **不弹层**，直接用 [Proof.None] 发请求；回 `200049`（边界上刚好过期）再正常弹层、用用户给的证明重发。
  *
  * 页签按 [SecurityState.status] 决定（[PhoneAuthRules.proofTabs]）：有旧值就**立即**用旧值弹出、后台重取校正；
  * 一次都没取到时先取（[opening] 忙态），取不到**不弹层**、给 [openFailure] 提示——退化成只有密码页签会把没设密码的账号卡死。
@@ -94,29 +108,51 @@ class ProofController(
     val busy: Boolean get() = opening || submitting
 
     /**
-     * 统一入口：弹层取到证明后调 [call]（挂在本控制器的 scope，请求途中离开页面不取消）；
+     * 统一入口：取到证明后调 [call]（挂在本控制器的 scope，请求途中离开页面不取消）；
      * 成功 → [succeeded] 后 [onOk]；证明错 → 留在弹层；其余 → [dismiss]（验证码保留）后 [onPageError]。
+     * 免确认窗口内先不弹层、用 [Proof.None] 直接发（见类注释）。
      */
     fun <T> submit(call: suspend (Proof) -> T, onOk: (T) -> Unit, onPageError: (Throwable) -> Unit) {
-        open { p ->
-            if (submitting) return@open
-            submitting = true; error = ""
-            scope.launch {
-                val r = try { runCatchingCancellable { call(p) } } finally { submitting = false }
-                r.onSuccess { succeeded(); onOk(it) }
-                    .onFailure { e -> if (!reject(e)) { dismiss(); onPageError(e) } }
+        lateinit var attempt: (Proof) -> Unit
+        attempt = { p ->
+            if (!submitting) {
+                submitting = true; error = ""
+                scope.launch {
+                    // 服务端的免确认窗口从校验证明时起算：按发请求的时刻记，别把请求耗时算进本地窗口
+                    val sentAt = sec.clock()
+                    val r = try { runCatchingCancellable { call(p) } } finally { submitting = false }
+                    r.onSuccess {
+                        if (p != Proof.None) sec.setRecentAuth(PhoneAuthRules.RECENT_AUTH_WINDOW_SEC, from = sentAt)
+                        succeeded(); onOk(it)
+                    }.onFailure { e ->
+                        // 空证明回 200049（边界上刚好过期 / 服务端重启）：弹层重来；途中已离开页面（onProof 已清）则照常交页面
+                        if (p == Proof.None && (e as? ApiException)?.code == ErrCode.PROOF_REQUIRED && onProof === attempt) fallBackToSheet(attempt)
+                        else if (!reject(e)) { dismiss(); onPageError(e) }
+                    }
+                }
             }
         }
+        open(allowSkip = true, then = attempt)
     }
 
-    /** 打开弹层；用户点「确认」时回调 [then]。已在打开 / 已显示 / 在提交时忽略。 */
-    fun open(then: (Proof) -> Unit) {
+    private fun fallBackToSheet(attempt: (Proof) -> Unit) {
+        log.i("proof_required_fallback")
+        sec.setRecentAuth(0)
+        onProof = null
+        open(then = attempt)
+    }
+
+    /**
+     * 打开弹层；用户点「确认」时回调 [then]。已在打开 / 已显示 / 在提交时忽略。
+     * 取状态：有旧值立即用（弹出后后台重取校正页签），没有先取；取不到不弹层、给 [openFailure]。
+     * [allowSkip] 且在免确认窗口内（[PhoneAuthRules.canSkipProof]）→ 不弹层，直接回调 [Proof.None]。
+     */
+    fun open(allowSkip: Boolean = false, then: (Proof) -> Unit) {
         if (busy || visible) return
         onProof = then; error = ""; openFailure = null
         sec.status?.let { cached ->
-            show(cached)
             // 刚在别处设了密码 / 绑了手机：后台重取，页签跟着校正
-            scope.launch { if (sec.refresh() == null && visible) sec.status?.let(::applyTabs) }
+            if (proceed(cached, then, allowSkip)) scope.launch { if (sec.refresh() == null && visible) sec.status?.let(::applyTabs) }
             return
         }
         opening = true
@@ -125,13 +161,24 @@ class ProofController(
             val st = sec.status
             when {
                 onProof !== then -> Unit // 取的途中已离开页面（[clear]）
-                st != null -> show(st)
+                st != null -> proceed(st, then, allowSkip)
                 else -> {
                     onProof = null
                     openFailure = failure?.userMessage(Str.s(R.string.net_error_unreachable)) ?: Str.s(R.string.net_error_unreachable)
                 }
             }
         }
+    }
+
+    /** 免确认 → 直接回调空证明（返回 false）；否则弹层（返回 true）。 */
+    private fun proceed(st: SecurityStatus, then: (Proof) -> Unit, allowSkip: Boolean): Boolean {
+        if (allowSkip && PhoneAuthRules.canSkipProof(sec.recentAuthLeft())) {
+            log.i("proof_skipped_recent_auth")
+            then(Proof.None)
+            return false
+        }
+        show(st)
+        return true
     }
 
     private fun show(st: SecurityStatus) { applyTabs(st); visible = true }

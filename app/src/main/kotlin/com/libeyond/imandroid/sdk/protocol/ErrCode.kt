@@ -74,7 +74,7 @@ object ErrCode {
     const val EMAIL_UNAVAILABLE = 200036
     const val EMAIL_SEND_FAILED = 200037
 
-    // --- 手机号与短信验证码 2000(40-48)（PROTOCOL §7.3）---
+    // --- 手机号与短信验证码 2000(40-49)（PROTOCOL §7.3）---
     /** 未配置通道 / 号码不在测试号码里 / 本人未绑定手机号。 */
     const val SMS_UNAVAILABLE = 200040
     const val PHONE_INVALID = 200041
@@ -89,6 +89,8 @@ object ErrCode {
     const val PHONE_NOT_REGISTERED = 200047
     /** `register_ticket` / `restore_ticket` 过期或已用。 */
     const val PHONE_TICKET_INVALID = 200048
+    /** 没带 proof 且本会话 10 分钟内没验证过身份（PHONE_AUTH_DESIGN §15.2）：端上据此弹确认身份弹层。 */
+    const val PROOF_REQUIRED = 200049
 
     // --- 好友 2001xx ---
     const val FRIEND_ALREADY_FRIENDS = 200101
