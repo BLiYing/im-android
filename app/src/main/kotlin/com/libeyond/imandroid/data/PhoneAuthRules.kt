@@ -109,15 +109,16 @@ object PhoneAuthRules {
 
     /**
      * 弹层页签：没设密码只有验证码；没绑手机或短信不可用只有密码；都有时「密码 / 短信验证码」。
-     * 两者都不满足的组合按不变量不会出现，兜底给密码。状态未知时**不弹层**（`ProofController.open`）：
-     * 退化成只有密码页签会把没设密码的账号卡死。
+     * 没设密码、短信又不可用（短信通道关了 / 未绑手机）→ 空：没有可用的验证方式，弹层只提示 `proof_sms_unavailable`、不可确认
+     * ——不能退回只给密码框，用户根本没有密码。状态未知时**不弹层**（`ProofController.open`），理由同上。
      */
     fun proofTabs(st: SecurityStatus): List<ProofTab> {
         val sms = st.phoneBound && st.smsAvailable
         return when {
             !st.passwordSet && sms -> listOf(ProofTab.Sms)
             st.passwordSet && sms -> listOf(ProofTab.Password, ProofTab.Sms)
-            else -> listOf(ProofTab.Password)
+            st.passwordSet -> listOf(ProofTab.Password)
+            else -> emptyList()
         }
     }
 

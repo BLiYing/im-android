@@ -1733,6 +1733,7 @@
     <string name="proof_confirm">确认</string>
     <string name="proof_load_failed">无法确认验证方式，请检查网络后重试</string>
     <string name="proof_password_placeholder">当前密码</string>
+    <string name="proof_sms_unavailable">短信服务暂不可用，暂时无法确认是你本人，请稍后再试</string>
     <string name="proof_tab_password">密码</string>
     <string name="proof_tab_sms">短信验证码</string>
     <string name="proof_title">确认是你本人</string>

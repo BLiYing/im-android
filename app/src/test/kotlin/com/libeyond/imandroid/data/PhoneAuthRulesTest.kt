@@ -66,6 +66,8 @@ class PhoneAuthRulesTest {
         assertEquals(listOf(ProofTab.Sms), PhoneAuthRules.proofTabs(both.copy(passwordSet = false)))
         assertEquals(listOf(ProofTab.Password), PhoneAuthRules.proofTabs(both.copy(phoneBound = false)))
         assertEquals(listOf(ProofTab.Password), PhoneAuthRules.proofTabs(both.copy(smsAvailable = false)))
+        // 没设密码 + 短信不可用：没有可用方式（不给假密码框）
+        assertEquals(emptyList<ProofTab>(), PhoneAuthRules.proofTabs(both.copy(passwordSet = false, smsAvailable = false)))
         assertTrue(PhoneAuthRules.showProofSegments(PhoneAuthRules.proofTabs(both)))
         assertFalse(PhoneAuthRules.showProofSegments(listOf(ProofTab.Sms)))
         assertTrue(PhoneAuthRules.canConfirmProof(ProofTab.Password, "x", "", false))

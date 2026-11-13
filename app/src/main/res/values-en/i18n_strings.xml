@@ -1784,6 +1784,7 @@
     <string name="proof_confirm">Confirm</string>
     <string name="proof_load_failed">Couldn’t check how to verify you. Check your connection and try again.</string>
     <string name="proof_password_placeholder">Current password</string>
+    <string name="proof_sms_unavailable">SMS is unavailable right now, so we can’t verify it’s you. Try again later.</string>
     <string name="proof_tab_password">Password</string>
     <string name="proof_tab_sms">SMS code</string>
     <string name="proof_title">Confirm it’s you</string>

@@ -76,7 +76,7 @@ fun IdentityProofSheet(
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || !busyNow })
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
-    val canConfirm = PhoneAuthRules.canConfirmProof(tab, password, code, busy)
+    val canConfirm = tabs.isNotEmpty() && PhoneAuthRules.canConfirmProof(tab, password, code, busy)
     fun hideThen(after: () -> Unit) {
         scope.launch { state.hide() }.invokeOnCompletion { after() }
     }
@@ -103,7 +103,12 @@ fun IdentityProofSheet(
             } else {
                 Spacer(Modifier.height(d.space3))
             }
-            if (tab == ProofTab.Sms && phoneMasked.isNotEmpty()) {
+            if (tabs.isEmpty()) { // 没设密码、短信又不可用：没有可用的验证方式
+                Text(
+                    stringResource(R.string.proof_sms_unavailable), color = c.danger, style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = d.space4, end = d.space4, bottom = d.space2),
+                )
+            } else if (tab == ProofTab.Sms && phoneMasked.isNotEmpty()) {
                 Text(
                     stringResource(R.string.security_code_sent_to, phoneMasked), color = c.textSecondary,
                     style = MaterialTheme.typography.bodySmall,
@@ -112,7 +117,7 @@ fun IdentityProofSheet(
             }
             val shape = RoundedCornerShape(d.radiusCard)
             // 白底上需要边界：输入组带 1dp separator 描边（稿 2-9）
-            Column(Modifier.fillMaxWidth().clip(shape).background(c.cardBackground).border(1.dp, c.separator, shape)) {
+            if (tabs.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(shape).background(c.cardBackground).border(1.dp, c.separator, shape)) {
                 if (tab == ProofTab.Password) {
                     PasswordRow(
                         value = password, onValueChange = onPassword,

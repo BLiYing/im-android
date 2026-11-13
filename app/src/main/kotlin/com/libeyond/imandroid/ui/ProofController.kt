@@ -138,7 +138,7 @@ class ProofController(
 
     private fun applyTabs(st: SecurityStatus) {
         tabs = PhoneAuthRules.proofTabs(st)
-        if (tab !in tabs) tab = tabs.first()
+        if (tab !in tabs) tab = tabs.firstOrNull() ?: tab // 空 = 没有可用方式：tab 无意义，弹层不画输入
     }
 
     fun selectTab(t: ProofTab) { if (t in tabs) { tab = t; error = "" } }
@@ -146,7 +146,7 @@ class ProofController(
     fun onCode(v: String) { code = PhoneAuthRules.sanitizeCode(v); error = "" }
 
     fun confirm() {
-        if (!PhoneAuthRules.canConfirmProof(tab, password, code, busy = submitting)) return
+        if (tabs.isEmpty() || !PhoneAuthRules.canConfirmProof(tab, password, code, busy = submitting)) return
         error = ""
         onProof?.invoke(if (tab == ProofTab.Password) Proof.Password(password) else Proof.SmsCode(code))
     }
