@@ -342,6 +342,7 @@ iOS：`Modules/Contacts/IMContactsViewController.m` 的 `entries` + `entryColors
 | 好友行左滑：删除 / 拉黑 | 有 | 已补（2026-09-09，见 §4.5.1；真机核对过左滑/拉黑/解除/删除确认） | ✅ |
 | 群列表副标题 | 「我是群主」/「群主 X」 | 同（**不是人数**——`GET /groups` 的 `Summary` 根本不下发 `member_count`） | ✅ |
 | 公众号 / 服务号 | 占位吐司 | 同 | ✅ |
+| 首页结构（2026-11-13 改版，`../IMServer/docs/design/ORG_DIRECTORY_DESIGN.md` §7） | 入口区（群聊 / 新的朋友 / 我的好友）+「最近联系」；好友 A–Z 列表移入「我的好友」页 | 同：`ContactsScreen` 留入口 + 最近联系（取数 `data/RecentContacts.kt`），好友列表 / 索引尺 / 左滑整体搬到 `ui/screens/FriendListScreen.kt`（`ContactsPage.Friends`）；入口行都带 chevron，「我的好友」右值 = 好友数。上面几行里的「好友分组 / 左滑」现指「我的好友」页 | ✅ |
 
 ### 4.5.1 好友分组 / 索引尺 / 左滑（2026-09-09）
 

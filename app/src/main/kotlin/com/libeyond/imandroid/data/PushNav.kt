@@ -44,6 +44,8 @@ enum class ChatsPage(val depth: Int) {
 enum class ContactsPage(val depth: Int) {
     List(PushNav.ROOT_DEPTH),
     NewFriends(1),
+    /** 「我的好友」：原通讯录首页的好友 A–Z 列表（ORG_DIRECTORY_DESIGN §7）。 */
+    Friends(1),
     Search(1),
     Groups(1),
     Profile(1),

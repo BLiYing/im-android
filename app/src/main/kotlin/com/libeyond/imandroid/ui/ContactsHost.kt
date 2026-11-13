@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,7 +19,10 @@ import com.libeyond.imandroid.sdk.api.UserCard
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.data.FriendAction
+import com.libeyond.imandroid.data.RecentContacts
 import com.libeyond.imandroid.data.recentAdded
+import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.flow.emptyFlow
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.i18n.Str
@@ -26,12 +30,13 @@ import com.libeyond.imandroid.ui.components.IMConfirmDialog
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.PushTransition
 import com.libeyond.imandroid.ui.screens.ContactsScreen
+import com.libeyond.imandroid.ui.screens.FriendListScreen
 import com.libeyond.imandroid.ui.screens.GroupListScreen
 import com.libeyond.imandroid.ui.screens.NewFriendsScreen
 import kotlinx.coroutines.launch
 
 /**
- * 通讯录接线层：好友列表 / 新的朋友 / 群聊 / 资料页。
+ * 通讯录接线层：首页（入口 + 最近联系）/ 我的好友 / 新的朋友 / 群聊 / 资料页。
  * 「添加朋友」「建群」两页的状态在 [AddFriendHost] / [CreateGroupHost]——消息页 ＋ 菜单也进这两页。
  *
  * @param onOpenChat 点好友发消息——由 [MainScreen] 负责真正打开聊天页。
@@ -58,7 +63,7 @@ fun ContactsHost(
     var groupsLoading by remember { mutableStateOf(false) }
     // 点好友先进**资料页**，不直接进聊天（三端统一的微信式口径）
     var profileOf by remember { mutableStateOf<FriendEntry?>(null) }
-    /** 资料页从哪一页进来的：返回落回那一页（从「新的朋友」进的要回「新的朋友」，不是通讯录首页）。 */
+    /** 资料页从哪一页进来的：返回落回那一页（从「新的朋友」「我的好友」进的要回原页，不是通讯录首页）。 */
     var profileOrigin by remember { mutableStateOf(ContactsPage.List) }
     /** 正在同意 / 拒绝的申请方 userId：防连点（同一人同时发两次请求）。 */
     var busyIds by remember { mutableStateOf(emptySet<String>()) }
@@ -68,7 +73,9 @@ fun ContactsHost(
     /** 通讯录搜索词：放 Host 层，进二级页（资料 / 加好友）再返回不丢。 */
     var searchQuery by remember { mutableStateOf("") }
     /** 通讯录列表滚动位置：放 Host 层，进二级页再返回不回顶。 */
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listState = rememberLazyListState()
+    /** 「我的好友」列表滚动位置：同上，进好友资料页再返回不回顶。 */
+    val friendListState = rememberLazyListState()
     /**
      * 左滑「删除」待确认的那位好友（null = 没有）。
      *
@@ -143,6 +150,32 @@ fun ContactsHost(
     val addedRecent = remember(friends) { recentAdded(friends, System.currentTimeMillis()) }
     LaunchedEffect(pending.size, friendsLoaded) { if (friendsLoaded) onPendingCount(pending.size) }
 
+    // 「最近联系」：直接读本地会话表（与消息页同一个数据源，收发消息 / 删会话即跟着变），不额外拉接口
+    val conversations by remember(owner) {
+        if (owner.isEmpty()) emptyFlow() else client.repo.observeConversations(owner)
+    }.collectAsState(initial = emptyList())
+    val recent = remember(conversations, owner) { RecentContacts.pick(conversations, owner) }
+
+    /** 「我的好友」页的左滑动作。 */
+    fun runFriendAction(f: FriendEntry, a: FriendAction) {
+        when (a) {
+            // 破坏性 + 不可撤销 → 先确认
+            FriendAction.Delete -> confirmRemove = f
+            FriendAction.Block -> scope.launch {
+                runCatchingCancellable { client.contacts.block(f.userId) }
+                    .onSuccess { toast = Str.s(R.string.common_blocked) }
+                    .onFailure { toast = it.userMessage(Str.s(R.string.friend_block_failed_toast)) }
+                reload()
+            }
+            FriendAction.Unblock -> scope.launch {
+                runCatchingCancellable { client.contacts.unblock(f.userId) }
+                    .onSuccess { toast = Str.s(R.string.friend_block_undone) }
+                    .onFailure { toast = it.userMessage(Str.s(R.string.common_action_failed)) }
+                reload()
+            }
+        }
+    }
+
     /** 同意 / 拒绝：忙态防连点，失败给吐司（原先 runCatching 吞错，点了没反应）。 */
     fun answerRequest(f: FriendEntry, call: suspend () -> Unit) {
         if (f.userId in busyIds) return
@@ -162,10 +195,10 @@ fun ContactsHost(
         BackHandler { page = page.parent }
     }
 
-    // 从「新的朋友」进的资料页比它深一层，才是 push（同深度会变成淡入淡出）
+    // 从「新的朋友」「我的好友」进的资料页比它们深一层，才是 push（同深度会变成淡入淡出）
     PushTransition(
         targetState = page,
-        depthOf = { if (it == ContactsPage.Profile && profileOrigin == ContactsPage.NewFriends) 2 else it.depth },
+        depthOf = { if (it == ContactsPage.Profile && profileOrigin != ContactsPage.List) 2 else it.depth },
     ) { p ->
         when (p) {
             ContactsPage.List -> TabRoot(bottomBar) {
@@ -175,25 +208,13 @@ fun ContactsHost(
                     onQueryChange = { searchQuery = it },
                     friends = accepted,
                     pendingCount = pending.size,
+                    // 好友表（网络或离线快照）都还没有时不画数字，免得先闪一个 0
+                    friendCount = if (friendsLoaded || friends.isNotEmpty()) accepted.size else null,
+                    onOpenFriends = { page = ContactsPage.Friends },
+                    recent = recent,
+                    // 最近联系点行**直接进聊天**（设计 §7.1）；会话行就是消息页点的那一行
+                    onOpenRecent = onOpenChat,
                     onOpenNewFriends = { page = ContactsPage.NewFriends },
-                    onFriendAction = { f, a ->
-                        when (a) {
-                            // 破坏性 + 不可撤销 → 先确认
-                            FriendAction.Delete -> confirmRemove = f
-                            FriendAction.Block -> scope.launch {
-                                runCatchingCancellable { client.contacts.block(f.userId) }
-                                    .onSuccess { toast = Str.s(R.string.common_blocked) }
-                                    .onFailure { toast = it.userMessage(Str.s(R.string.friend_block_failed_toast)) }
-                                reload()
-                            }
-                            FriendAction.Unblock -> scope.launch {
-                                runCatchingCancellable { client.contacts.unblock(f.userId) }
-                                    .onSuccess { toast = Str.s(R.string.friend_block_undone) }
-                                    .onFailure { toast = it.userMessage(Str.s(R.string.common_action_failed)) }
-                                reload()
-                            }
-                        }
-                    },
                     onAddFriend = { addFriendQuery = ""; page = ContactsPage.Search },
                     groups = groups,
                     onOpenGroup = { g -> onOpenChat(client.groupConversationStubFor(g.convId, g.name, g.avatarUrl)) },
@@ -202,11 +223,19 @@ fun ContactsHost(
                         page = ContactsPage.Groups
                         loadGroups()
                     },
-                    onComingSoon = { name -> toast = Str.s(R.string.contacts_coming_soon, name) },
-                    // **先进资料页，不直接进聊天**（微信式，三端统一：群成员行、通讯录行都是这个口径）
+                    // 搜索结果点好友：**先进资料页，不直接进聊天**（微信式，三端统一：群成员行、通讯录行都是这个口径）
                     onOpenFriend = { f -> profileOf = f; profileOrigin = ContactsPage.List; page = ContactsPage.Profile },
                 )
             }
+
+            ContactsPage.Friends -> FriendListScreen(
+                friends = accepted,
+                listState = friendListState,
+                // **先进资料页，不直接进聊天**；返回落回本页（profileOrigin）
+                onOpenFriend = { f -> profileOf = f; profileOrigin = ContactsPage.Friends; page = ContactsPage.Profile },
+                onFriendAction = ::runFriendAction,
+                onBack = { page = ContactsPage.List },
+            )
 
             ContactsPage.Groups -> GroupListScreen(
                 groups = groups,
