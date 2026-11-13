@@ -138,6 +138,31 @@ class SysEventsTest {
     }
 
     @Test
+    fun `手机号绑定更换与重设密码通知 打码号码代入 设备行可缺`() {
+        val args = SysEvents.encodeArgs(mapOf("at" to "x", "phone_masked" to "+86 136****0001", "device" to "OPPO"))
+        val bound = SysEvents.noticeText("phone_bound", args)!!.lines()
+        assertEquals("你的账号已于 x 绑定登录手机号 +86 136****0001。", bound[0])
+        assertEquals("· 操作设备：OPPO", bound[1])
+        assertEquals(3, bound.size)
+        val changed = SysEvents.noticeText("phone_changed", SysEvents.encodeArgs(mapOf("at" to "x", "phone_masked" to "+86 136****0002")))!!.lines()
+        assertEquals("你的账号已于 x 将登录手机号更换为 +86 136****0002。", changed[0])
+        assertEquals(2, changed.size)
+        val reset = SysEvents.noticeText("password_reset", SysEvents.encodeArgs(mapOf("at" to "x")))!!.lines()
+        assertEquals("你的账号密码已于 x 通过短信验证码重设，所有设备已下线。", reset[0])
+        assertEquals(2, reset.size)
+    }
+
+    @Test
+    fun `首次设置密码通知 headline 加可选设备行加 footer`() {
+        val lines = SysEvents.noticeText("password_set", SysEvents.encodeArgs(mapOf("at" to "x", "device" to "OPPO")))!!.lines()
+        assertEquals("你的账号已于 x 设置了登录密码，之后可以用手机号和密码登录。", lines[0])
+        assertEquals("· 操作设备：OPPO", lines[1])
+        assertEquals("如非本人操作，请立即用短信验证码重设密码并检查已登录设备。", lines[2])
+        assertEquals(3, lines.size)
+        assertEquals(2, SysEvents.noticeText("password_set", SysEvents.encodeArgs(mapOf("at" to "x")))!!.lines().size)
+    }
+
+    @Test
     fun `邮箱解绑通知 无邮箱参数 设备行可缺`() {
         val lines = SysEvents.noticeText("email_unbound", SysEvents.encodeArgs(mapOf("at" to "x", "device" to "Pixel")))!!.lines()
         assertEquals("你的账号已于 x 解除登录邮箱绑定。", lines[0])

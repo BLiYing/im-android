@@ -23,6 +23,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Mail
 import com.composables.icons.lucide.Phone
 import com.composables.icons.lucide.ShieldCheck
+import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Timer
 import com.composables.icons.lucide.Trash2
 import com.libeyond.imandroid.data.PrivacyAction
@@ -51,6 +52,12 @@ fun PrivacySecurityScreen(
     onBack: () -> Unit,
     onOpenBlocked: () -> Unit,
     onOpenChangePassword: () -> Unit,
+    /** 「登录密码」行右值（已设置 / 未设置；还没取到为空串）。 */
+    passwordLabel: String,
+    /** 「登录手机号」行：是否出现、右值（打码号码 / 未绑定）、点击。 */
+    showLoginPhone: Boolean,
+    loginPhoneLabel: String,
+    onOpenLoginPhone: () -> Unit,
     /** 「自动删除消息」行的右值（账号默认档位；还没拉到为空串）与点击。 */
     autoDeleteLabel: String,
     onOpenAutoDelete: () -> Unit,
@@ -81,7 +88,7 @@ fun PrivacySecurityScreen(
         IMTopBar(title = PrivacySecurity.TITLE, onLeft = onBack)
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            PrivacySecurity.groups.forEach { group ->
+            PrivacySecurity.groups(showLoginPhone).forEach { group ->
                 // 有组头的，组头自带上边距；没有的（第一组）补一段，与「数据和存储」同口径
                 if (group.header.isEmpty()) Spacer(Modifier.height(d.sectionGap))
                 IMSectionHeader(group.header)
@@ -103,6 +110,7 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.ClearAll -> onOpenClearAll
                                 PrivacyAction.TwoStep -> onOpenTwoStep
                                 PrivacyAction.Email -> onOpenEmail
+                                PrivacyAction.LoginPhone -> onOpenLoginPhone
                                 PrivacyAction.ComingSoon -> soon
                             },
                             icon = iconOf(row.icon),
@@ -116,6 +124,8 @@ fun PrivacySecurityScreen(
                                 PrivacyAction.Phone -> phoneLabel
                                 PrivacyAction.TwoStep -> twoStepLabel
                                 PrivacyAction.Email -> emailLabel
+                                PrivacyAction.ChangePassword -> passwordLabel
+                                PrivacyAction.LoginPhone -> loginPhoneLabel
                                 else -> row.value
                             },
                             muted = row.isPlaceholder,
@@ -142,6 +152,7 @@ private fun iconOf(icon: PrivacyIcon): ImageVector = when (icon) {
     PrivacyIcon.Bio -> Lucide.AlignLeft
     PrivacyIcon.Trash -> Lucide.Trash2
     PrivacyIcon.Export -> Lucide.FileUp
+    PrivacyIcon.Smartphone -> Lucide.Smartphone
 }
 
 @Composable
@@ -155,4 +166,5 @@ private fun tintOf(tint: PrivacyTint, ic: IMSettingsIconColors): Color = when (t
     PrivacyTint.Orange -> ic.orange
     PrivacyTint.Green -> ic.green
     PrivacyTint.Yellow -> ic.yellow
+    PrivacyTint.Pink -> ic.pink
 }

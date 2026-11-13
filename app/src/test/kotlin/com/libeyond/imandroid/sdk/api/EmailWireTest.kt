@@ -2,6 +2,7 @@ package com.libeyond.imandroid.sdk.api
 
 import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -13,13 +14,14 @@ import org.junit.Test
 class EmailWireTest {
 
     @Test fun `请求体字段名与服务端一致`() {
-        val s = EmailApi.sendBody("a@b.com", "pw", "zh-Hans")
-        assertEquals(setOf("email", "password", "lang"), s.keys)
+        val s = EmailApi.sendBody("a@b.com", Proof.Password("pw"), "zh-Hans")
+        assertEquals(setOf("email", "proof", "lang"), s.keys)
+        assertEquals("pw", s.getValue("proof").jsonObject.getValue("password").jsonPrimitive.content)
         assertEquals("zh-Hans", s.getValue("lang").jsonPrimitive.content)
         val v = EmailApi.verifyBody("a@b.com", "123456", "en")
         assertEquals(setOf("email", "code", "lang"), v.keys)
         assertEquals("123456", v.getValue("code").jsonPrimitive.content)
-        assertEquals(setOf("password"), EmailApi.unbindBody("pw").keys)
+        assertEquals(setOf("proof"), EmailApi.unbindBody(Proof.SmsCode("123456")).keys)
     }
 
     @Test fun `状态应答 已绑定 未绑定 不可用`() {

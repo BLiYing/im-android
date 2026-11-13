@@ -5,7 +5,7 @@ import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.protocol.ErrCode
 
 /** 两步验证页的步骤（隐私页 ▸ 两步验证 内部导航）。 */
-enum class TwoStepStep { Intro, Password, Bind, Codes, Status, Disable, Regen }
+enum class TwoStepStep { Intro, Bind, Codes, Status, Disable, Regen }
 
 /** 错误分类：按业务码分，**不 parse 服务端文案**。 */
 enum class TwoStepErrorKind { WrongPassword, CodeInvalid, Expired, RateLimited, Unavailable, AlreadyEnabled, NotEnabled, Other }
@@ -63,8 +63,9 @@ object TwoStepRules {
     /** 提交给服务端的 `code`：恢复码模式给归一化后的串，否则给 6 位。 */
     fun submitCode(input: String, recoveryMode: Boolean): String = if (recoveryMode) normalizeRecovery(input) else input
 
-    fun canSubmitVerify(password: String, input: String, recoveryMode: Boolean): Boolean =
-        password.isNotEmpty() && if (recoveryMode) isRecoveryComplete(input) else isTotpComplete(input)
+    /** 关闭 / 重新生成恢复码页的按钮：码填完整即可（身份证明点了之后在确认身份弹层里输，PHONE_AUTH_DESIGN §7.2）。 */
+    fun canSubmitVerify(input: String, recoveryMode: Boolean): Boolean =
+        if (recoveryMode) isRecoveryComplete(input) else isTotpComplete(input)
 
     /** Base32 密钥按 4 位一组、空格分隔、大写展示。 */
     fun groupSecret(secret: String): String = secret.filterNot { it.isWhitespace() }.uppercase().chunked(4).joinToString(" ")
@@ -99,7 +100,7 @@ object TwoStepRules {
 
     /** 返回键去向；null = 退出两步验证（回隐私页）。Codes 另走确认，不在此表。 */
     fun backTarget(step: TwoStepStep): TwoStepStep? = when (step) {
-        TwoStepStep.Password, TwoStepStep.Bind -> TwoStepStep.Intro
+        TwoStepStep.Bind -> TwoStepStep.Intro
         TwoStepStep.Disable, TwoStepStep.Regen -> TwoStepStep.Status
         TwoStepStep.Codes -> TwoStepStep.Status
         TwoStepStep.Intro, TwoStepStep.Status -> null

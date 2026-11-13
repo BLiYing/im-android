@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.sdk.session
 
 import android.content.Context
+import android.content.SharedPreferences
 
 /**
  * 登录会话的本地持久化。
@@ -18,9 +19,9 @@ import android.content.Context
  * SharedPreferences——它在应用私有目录里，未 root 的设备上其它应用读不到。
  * 要再加一层就用 Android Keystore 自己包，**列在 TODO 里，别假装已经加密了**。
  */
-class SessionStore(context: Context) {
+class SessionStore internal constructor(private val prefs: SharedPreferences) {
 
-    private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    constructor(context: Context) : this(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE))
 
     var token: String?
         get() = prefs.getString(KEY_TOKEN, null)
@@ -35,9 +36,23 @@ class SessionStore(context: Context) {
         get() = prefs.getString(KEY_UID, null)
         set(v) = prefs.edit().apply { if (v == null) remove(KEY_UID) else putString(KEY_UID, v) }.apply()
 
+    /**
+     * 公开句柄。**读写都过 [handleOrNull]**：老版本把用户输入的登录名（可能是邮箱 / 手机号）存进来过，
+     * 冷启动恢复与续期不经过登录响应、不会改写它——这里读到不像句柄的存量值一律当空并当场清掉，
+     * 否则「转发自 @alice@example.com」会在进「我」页校正之前发出去。
+     */
     var username: String?
-        get() = prefs.getString(KEY_USERNAME, null)
-        set(v) = prefs.edit().apply { if (v == null) remove(KEY_USERNAME) else putString(KEY_USERNAME, v) }.apply()
+        get() {
+            val raw = prefs.getString(KEY_USERNAME, null) ?: return null
+            // 本版本起写入的都来自服务端（带 [KEY_USERNAME_TRUSTED]）；没有标记的是老版本存的输入值，再挡掉手机号形态
+            val trusted = prefs.getBoolean(KEY_USERNAME_TRUSTED, false)
+            return handleOrNull(raw)?.takeIf { trusted || !looksLikePhone(it) }
+                ?: run { prefs.edit().remove(KEY_USERNAME).remove(KEY_USERNAME_TRUSTED).apply(); null }
+        }
+        set(v) = prefs.edit().apply {
+            val h = handleOrNull(v)
+            if (h == null) remove(KEY_USERNAME).remove(KEY_USERNAME_TRUSTED) else putString(KEY_USERNAME, h).putBoolean(KEY_USERNAME_TRUSTED, true)
+        }.apply()
 
     /**
      * 服务器地址。**必须与凭据一起持久化**：token 存了而 host 没存，重启后就会拿着
@@ -51,13 +66,25 @@ class SessionStore(context: Context) {
 
     val isLoggedIn: Boolean get() = !token.isNullOrEmpty() && !uid.isNullOrEmpty()
 
-    fun save(token: String, uid: String, refreshToken: String?, username: String?) {
+    /**
+     * 登录成功（密码 / 两步验证第二步 / 验证码 / 完善资料）后写入会话。
+     *
+     * [username] 是**服务端响应里**的公开用户名，**整体覆盖**：没给（老服务端 / 取不到）就清掉旧值，
+     * 宁可让「我的公开名」退回「未命名用户」，也不能沿用上一个账号的名字，更不能用用户输入的登录名兜底
+     * （那可能是手机号 / 邮箱，会经「转发自 @…」发给别人）。
+     */
+    fun saveLogin(token: String, uid: String, refreshToken: String?, username: String?) {
+        saveRefreshed(token, uid, refreshToken)
+        this.username = username
+    }
+
+    /** 续期成功后写入：续期响应不带用户名，**不动** [username]。 */
+    fun saveRefreshed(token: String, uid: String, refreshToken: String?) {
         this.token = token
         this.uid = uid
         // refresh_token 是**可选**的：会话登记降级时服务端不下发。
         // 这时不能把已有的那枚抹掉——否则一次降级登录就让本机永久失去续期能力。
         if (!refreshToken.isNullOrEmpty()) this.refreshToken = refreshToken
-        if (!username.isNullOrEmpty()) this.username = username
     }
 
     /**
@@ -66,7 +93,7 @@ class SessionStore(context: Context) {
      * 清掉会让用户每次退出后都要重填一遍内网 IP。
      */
     fun clear() {
-        prefs.edit().remove(KEY_TOKEN).remove(KEY_REFRESH).remove(KEY_UID).remove(KEY_USERNAME).remove(KEY_MY_PROFILE).commit() // 同步落盘：apply 异步，进程在落盘前被杀会让已死 token / 已注销账号的登录态复活
+        prefs.edit().remove(KEY_TOKEN).remove(KEY_REFRESH).remove(KEY_UID).remove(KEY_USERNAME).remove(KEY_USERNAME_TRUSTED).remove(KEY_MY_PROFILE).commit() // 同步落盘：apply 异步，进程在落盘前被杀会让已死 token / 已注销账号的登录态复活
     }
 
     /**
@@ -101,15 +128,28 @@ class SessionStore(context: Context) {
         prefs.edit().putBoolean(KEY_MSGOP_CONVERGED + uid, true).apply()
     }
 
-    private companion object {
-        const val PREFS = "im_session"
-        const val KEY_TOKEN = "token"
-        const val KEY_REFRESH = "refresh_token"
-        const val KEY_UID = "uid"
-        const val KEY_USERNAME = "username"
-        const val KEY_HOST = "host"
-        const val KEY_MY_PROFILE = "my_profile"
-        const val KEY_PENDING_LOGOUT = "pending_logout"
-        const val KEY_MSGOP_CONVERGED = "msgop_converged_"
+    companion object {
+        /** 服务端用户名规则 `^[a-z0-9_]{5,32}$`（PROTOCOL §11）；不符合（含 `@` / `+` / 空）返回 null。 */
+        private val HANDLE = Regex("^[a-z0-9_]{5,32}$")
+        fun handleOrNull(v: String?): String? = v?.trim()?.takeIf { HANDLE.matches(it) }
+
+        /** 登录名解析里会被当成手机号的形态（5–15 位纯数字，PROTOCOL §7.3）：老版本存量值里出现即视为手机号。 */
+        private val PHONE_LIKE = Regex("^[0-9]{5,15}$")
+        fun looksLikePhone(v: String): Boolean = PHONE_LIKE.matches(v)
+
+        /** 我的公开名：`@句柄`，没有可信句柄时「未命名用户」（见 `IMClient.myPublicName`）。 */
+        fun publicName(handle: String?): String = handleOrNull(handle)?.let { "@$it" } ?: "未命名用户"
+
+        private const val PREFS = "im_session"
+        private const val KEY_TOKEN = "token"
+        private const val KEY_REFRESH = "refresh_token"
+        private const val KEY_UID = "uid"
+        private const val KEY_USERNAME = "username"
+        /** 存的用户名来自服务端（登录响应 / 本人资料），不是老版本存下的输入值。 */
+        private const val KEY_USERNAME_TRUSTED = "username_from_server"
+        private const val KEY_HOST = "host"
+        private const val KEY_MY_PROFILE = "my_profile"
+        private const val KEY_PENDING_LOGOUT = "pending_logout"
+        private const val KEY_MSGOP_CONVERGED = "msgop_converged_"
     }
 }

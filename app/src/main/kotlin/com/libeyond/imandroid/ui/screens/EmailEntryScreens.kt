@@ -38,16 +38,14 @@ import com.libeyond.imandroid.ui.theme.IMTheme
 import kotlinx.coroutines.delay
 
 /**
- * ② 填邮箱 + 当前密码（绑定 / 更换同页，标题与 footer 不同）。
+ * ② 填邮箱（绑定 / 更换同页，标题与 footer 不同）；点「发送验证码」后在确认身份弹层里证明是本人。
  * 邮箱框：Email 键盘、关纠错 / 自动大写；**任何错误都不清输入**。
  */
 @Composable
 fun EmailFormScreen(
     changing: Boolean,
     email: String,
-    password: String,
     onEmail: (String) -> Unit,
-    onPassword: (String) -> Unit,
     error: String,
     busy: Boolean,
     onSubmit: () -> Unit,
@@ -55,21 +53,12 @@ fun EmailFormScreen(
 ) {
     val d = IMTheme.dimens
     val emailFocus = remember { FocusRequester() }
-    val pwFocus = remember { FocusRequester() }
-    // 从验证码页「更换邮箱」回来邮箱已填好：直接聚焦密码框
-    LaunchedEffect(Unit) { runCatching { (if (email.isEmpty()) emailFocus else pwFocus).requestFocus() } }
-    val can = EmailRules.canSend(email, password, busy)
+    LaunchedEffect(Unit) { runCatching { emailFocus.requestFocus() } }
+    val can = EmailRules.canSend(email, busy)
     TwoStepPage(stringResource(if (changing) R.string.email_action_change else R.string.email_action_bind), onBack) {
         Spacer(Modifier.height(d.sectionGap))
         IMSettingsGroup {
-            EmailInputRow(email, onEmail, !busy, emailFocus, onNext = { pwFocus.requestFocus() })
-            IMRowDivider(insetStart = d.space4)
-            PasswordRow(
-                value = password, onValueChange = onPassword,
-                placeholder = stringResource(R.string.email_field_password),
-                isError = false, enabled = !busy, focusRequester = pwFocus,
-                imeAction = ImeAction.Done, onImeAction = { if (can) onSubmit() },
-            )
+            EmailInputRow(email, onEmail, !busy, emailFocus, onNext = { if (can) onSubmit() })
         }
         TwoStepNote(error, error = true)
         TwoStepNote(stringResource(if (changing) R.string.email_change_footer else R.string.email_bind_footer))

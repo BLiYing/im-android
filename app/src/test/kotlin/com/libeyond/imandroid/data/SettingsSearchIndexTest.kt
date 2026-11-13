@@ -79,7 +79,8 @@ class SettingsSearchIndexTest {
     }
 
     @Test fun matchesAcrossPathAndTitleConcatenation() {
-        assertEquals(listOf("privacy_password"), hits("隐私与安全 › 修改密码"))
+        assertEquals(listOf("privacy_password"), hits("隐私与安全 › 登录密码"))
+        assertEquals(listOf("privacy_password"), hits("修改密码")) // 旧行名作同义词
     }
 
     @Test fun routesPointToTheRightPages() {

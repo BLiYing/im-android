@@ -1,6 +1,7 @@
 package com.libeyond.imandroid.sdk.api
 
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -17,9 +18,11 @@ class ChangePasswordWireTest {
 
     @Test
     fun `请求体字段名与服务端一致`() {
-        val body = AuthApi.changePasswordBody("old-pw", "new-pw")
-        assertEquals(setOf("old_password", "new_password"), body.keys)
-        assertEquals("old-pw", body.getValue("old_password").jsonPrimitive.content)
+        val body = AuthApi.changePasswordBody(Proof.Password("old-pw"), "new-pw")
+        assertEquals(setOf("proof", "new_password"), body.keys)
+        assertEquals("old-pw", body.getValue("proof").jsonObject.getValue("password").jsonPrimitive.content)
+        val sms = AuthApi.changePasswordBody(Proof.SmsCode("000000"), "new-pw")
+        assertEquals(setOf("sms_code"), sms.getValue("proof").jsonObject.keys)
         assertEquals("new-pw", body.getValue("new_password").jsonPrimitive.content)
     }
 

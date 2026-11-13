@@ -79,8 +79,6 @@ fun AppRoot(client: IMClient) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var host by remember { mutableStateOf(client.host) }
-    // 登录页注册开关（S4，RegisterGate）：public-config 与提交注册回 200007 两路写同一份
-    var registerClosedFor by remember { mutableStateOf<String?>(null) }
     var endedNotice by remember { mutableStateOf("") }
     /** 冷静期账号登录被拒后暂存的凭据；非 null 时弹「恢复账号」。 */
     var pendingRestore by remember { mutableStateOf<PendingRestore?>(null) }
@@ -88,6 +86,18 @@ fun AppRoot(client: IMClient) {
     val twoStep = remember { LoginTwoStep() }
     /** 本机刚完成注销：之后到的 WS 被踢信号不能覆盖「冷静期」提示。 */
     var accountDeleted by remember { mutableStateOf(false) }
+    val appContext = LocalContext.current.applicationContext
+    /** 登录页的手机号部分（页签 / 验证码登录 / 完善资料 / 忘记密码，PHONE_AUTH_DESIGN §4–§5）。 */
+    val phoneLogin = remember(client) {
+        LoginPhoneController.of(client, appContext.getSharedPreferences(LoginPhoneController.PREFS, android.content.Context.MODE_PRIVATE))
+    }
+    val loginHooks = remember(phoneLogin) {
+        object : LoginHooks {
+            override fun loggedIn() { endedNotice = ""; error = ""; accountDeleted = false; phase = Phase.Main }
+            override fun twoStep(challenge: TwoStepChallenge) { twoStep.begin(challenge) }
+            override fun restore(pending: PendingRestore) { pendingRestore = pending }
+        }
+    }
 
     // —— 冷启动恢复会话（只跑一次）——
     LaunchedEffect(Unit) {
@@ -126,7 +136,6 @@ fun AppRoot(client: IMClient) {
 
     // im-rtc 通话的生命周期跟着 IM 登录态走：进主界面上线，回登录页（退出 / 被踢 / 被封）下线。
     // 只在 Login 停、Restoring 不动：Activity 重建时 phase 会回到 Restoring，那不是退出，不能挂掉在途通话。
-    val appContext = LocalContext.current.applicationContext
     val legalOpenFailed = stringResource(R.string.about_open_failed)
     LaunchedEffect(phase) {
         when (phase) {
@@ -150,7 +159,7 @@ fun AppRoot(client: IMClient) {
                     invites = RtcProfileResolver.inviteProviderFor(client, profiles),
                 )
             }
-            Phase.Login -> { RtcCall.onCallRecord = null; RtcCall.stop() }
+            Phase.Login -> { RtcCall.onCallRecord = null; RtcCall.stop(); phoneLogin.resetForms() }
             Phase.Restoring -> Unit
         }
     }
@@ -161,19 +170,22 @@ fun AppRoot(client: IMClient) {
             onDismiss = { pendingRestore = null },
             onRestore = {
                 pendingRestore = null
+                // 验证码登录命中冷静期：凭一次性 restore_ticket 恢复（登录用的码已用掉，不自动重发，见 restoreWithTicket）
+                if (p.ticket != null) { phoneLogin.restoreWithTicket(host, p.ticket); return@RestoreAccountDialog }
                 scope.launch {
                     busy = true; error = ""
                     try {
                         client.host = host
                         client.account.restore(p.username, p.password)
                         client.login(p.username, p.password)
+                        phoneLogin.commitTab()
                         endedNotice = ""
                         accountDeleted = false
                         phase = Phase.Main
                     } catch (e: ApiException) {
                         // 恢复后的免重输登录同样可能要两步验证：转入二步页，别当普通错误吐服务端英文
                         val challenge = TwoStepChallenge.from(e)
-                        if (challenge != null) twoStep.begin(challenge, p.username)
+                        if (challenge != null) twoStep.begin(challenge)
                         else error = LoginError.friendly(e, appContext)
                     } finally { busy = false }
                 }
@@ -193,12 +205,13 @@ fun AppRoot(client: IMClient) {
                     try {
                         client.host = host
                         client.login(u, p)
+                        phoneLogin.commitTab()
                         endedNotice = ""
                         accountDeleted = false
                         phase = Phase.Main
                     } catch (e: ApiException) {
                         val challenge = TwoStepChallenge.from(e)
-                        if (challenge != null) twoStep.begin(challenge, u)
+                        if (challenge != null) twoStep.begin(challenge)
                         else if (e.code == ErrCode.ACCOUNT_PENDING_DELETION && p.isNotEmpty()) {
                             pendingRestore = PendingRestore(u, p, AccountApi.deleteAtMillis(e.data))
                         } else error = LoginError.friendly(e, appContext)
@@ -214,7 +227,8 @@ fun AppRoot(client: IMClient) {
                     if (ch != null && !busy) scope.launch {
                         busy = true; error = ""
                         try {
-                            client.loginTwoStep(twoStep.username, ch.ticket, code)
+                            client.loginTwoStep(ch.ticket, code)
+                            phoneLogin.commitTab()
                             twoStep.drop(); endedNotice = ""; accountDeleted = false
                             phase = Phase.Main
                         } catch (e: ApiException) {
@@ -235,8 +249,8 @@ fun AppRoot(client: IMClient) {
                         phase = Phase.Main
                     } catch (e: ApiException) {
                         // 200007：注册页立刻切到关闭态（内联提示 + 禁用提交），不再在错误行重复同一句
-                        val closed = RegisterGate.afterSubmitRejected(registerClosedFor, reqHost, e.code)
-                        if (closed != null) registerClosedFor = closed
+                        val closed = RegisterGate.afterSubmitRejected(phoneLogin.registerClosedFor, reqHost, e.code)
+                        if (closed != null) phoneLogin.registerClosedFor = closed
                         else error = LoginError.friendly(e, appContext)
                     } finally { busy = false }
                 }
@@ -265,8 +279,9 @@ fun AppRoot(client: IMClient) {
             // 底部同意链接走应用内浏览器（LoginScreen 里读 LocalOpenLink，由上面的 WebLinkHost 提供）。
             // host 为空/非法拼不出链接时，与 iOS/关于我们页一致地显示「无法打开」，不静默吞掉。
             onLegalFailed = { error = legalOpenFailed },
-            registerClosedFor = registerClosedFor,
-            onRegisterConfig = { h, enabled -> registerClosedFor = RegisterGate.afterResult(registerClosedFor, h, enabled) },
+            phone = phoneLogin,
+            onSmsLogin = { error = ""; phoneLogin.submitSms(host, loginHooks) },
+            onCompleteProfile = { phoneLogin.completeProfile(host, loginHooks) },
         ) }
 
         Phase.Main -> {
@@ -308,8 +323,11 @@ fun AppRoot(client: IMClient) {
                     phase = Phase.Login
                 }
             }
+            // 注销页的确认身份弹层挂在这一层（见 LocalDeleteAccountProof）：Phase 离开 Main 即随组合丢弃
+            val deleteProof = remember(client) { ProofController.of(client, SecurityState.of(client)) }
             CompositionLocalProvider(
                 LocalAccountDeleted provides onAccountDeleted,
+                LocalDeleteAccountProof provides deleteProof,
                 LocalMediaGate provides MediaGateEnv(
                     downloads = client.downloads,
                     settings = { client.downloadSettings },

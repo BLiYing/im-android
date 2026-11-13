@@ -10,14 +10,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DeleteAccountRulesTest {
-    @Test fun emptyPasswordDisablesButton() {
-        assertFalse(DeleteAccountRules.canSubmit("", false, emptyList<OwnedGroup>()))
-        assertTrue(DeleteAccountRules.canSubmit("x", false, emptyList<OwnedGroup>()))
-    }
-
-    @Test fun submittingOrOwnedGroupsBlock() {
-        assertFalse(DeleteAccountRules.canSubmit("x", true, emptyList<OwnedGroup>()))
-        assertFalse(DeleteAccountRules.canSubmit("x", false, listOf(OwnedGroup("c1", "群A"))))
+    @Test fun onlySubmittingBlocks() {
+        // 密码改在确认身份弹层里输；群主阻断后转让完可拿同一个验证码重交，按钮不再因此禁用
+        assertTrue(DeleteAccountRules.canSubmit(false))
+        assertFalse(DeleteAccountRules.canSubmit(true))
     }
 
     @Test fun listsAtMostThreeGroupsAndCountsRest() {

@@ -12,11 +12,16 @@ import kotlinx.serialization.json.put
 
 private const val LOGOUT_REFRESH_PATH = "/api/v1/logout/refresh"
 
-/** `POST /login` 与 `POST /token/refresh` 的返回。 */
+/** `POST /login`（及 `/login/two-step`、`/login/sms`、`/register/phone`）与 `POST /token/refresh` 的返回。 */
 @Serializable
 data class LoginResult(
     val token: String,
     val uid: String,
+    /**
+     * 账号当前的公开用户名（PROTOCOL §7.3：所有登录成功响应都带，取不到时省略；续期响应不带）。
+     * 本机存的 `username` **只认这个**：用户输入的登录名可能是手机号 / 邮箱，存下来会经「转发自 @…」发给别人。
+     */
+    val username: String? = null,
     @SerialName("expires_in") val expiresIn: Int = 0,
     /** **可选**：会话登记降级时服务端不下发，端上不能假定必然存在。 */
     @SerialName("refresh_token") val refreshToken: String? = null,
@@ -127,17 +132,19 @@ class AuthApi(private val http: HttpClient, private val device: DeviceIdentity) 
      * ② **轮换本机这枚续期凭据**，新的放在 [ChangePasswordResult.refreshToken] 里——
      *    这是凭据唯一的轮换点，调用方必须就地替换（见 `IMClient.changePassword`）。
      *
-     * 失败码：200002 旧密码错 / 100001 新密码不合规（<6 或 >72 字节）/ 200003 账号被封。
+     * 账号此前没有密码（`password_set=false`）时这是「设置密码」：只能用 [Proof.SmsCode]，**不**下线其它设备。
+     *
+     * 失败码：200002 旧密码错 / 200043·200044 验证码错·过期 / 100001 新密码不合规（<6 或 >72 字节）/ 200003 账号被封。
      */
-    suspend fun changePassword(oldPassword: String, newPassword: String): ChangePasswordResult =
+    suspend fun changePassword(proof: Proof, newPassword: String): ChangePasswordResult =
         decode(
-            http.call("POST", "/api/v1/users/me/password", changePasswordBody(oldPassword, newPassword)),
+            http.call("POST", "/api/v1/users/me/password", changePasswordBody(proof, newPassword)),
             ChangePasswordResult.serializer(),
         )
 
     companion object {
-        internal fun changePasswordBody(oldPassword: String, newPassword: String): JsonObject = buildJsonObject {
-            put("old_password", oldPassword)
+        internal fun changePasswordBody(proof: Proof, newPassword: String): JsonObject = buildJsonObject {
+            put("proof", proof.toJson())
             put("new_password", newPassword)
         }
     }

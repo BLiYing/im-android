@@ -108,6 +108,11 @@ fun IMTextField(
     keyboard: KeyboardOptions = KeyboardOptions.Default,
     /** false＝多行（群简介/群公告这类长文本），撑到 [minLines]~[maxLines] 行、允许换行。 */
     singleLine: Boolean = true,
+    /** 右侧行内控件（验证码框的「获取验证码」文字按钮）。 */
+    trailing: (@Composable () -> Unit)? = null,
+    isError: Boolean = false,
+    /** 框内占位（如验证码框的「6 位数字」）；空串不画。 */
+    placeholder: String = "",
 ) {
     val c = IMTheme.colors
     TextField(
@@ -121,6 +126,9 @@ fun IMTextField(
         enabled = enabled,
         keyboardOptions = keyboard,
         visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+        trailingIcon = trailing,
+        isError = isError,
+        placeholder = if (placeholder.isEmpty()) null else ({ Text(placeholder, color = c.textTertiary) }),
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(IMTheme.dimens.radiusCard),
         colors = TextFieldDefaults.colors(
@@ -132,6 +140,10 @@ fun IMTextField(
             cursorColor = c.accent,
             focusedIndicatorColor = c.accent,
             unfocusedIndicatorColor = c.separator,
+            errorContainerColor = c.pageBackground,
+            errorIndicatorColor = c.danger,
+            errorCursorColor = c.danger,
+            errorTextColor = c.textPrimary,
         ),
     )
 }

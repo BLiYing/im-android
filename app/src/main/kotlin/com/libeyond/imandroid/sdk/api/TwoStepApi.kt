@@ -78,30 +78,30 @@ class TwoStepApi(private val http: HttpClient) {
 
     suspend fun status(): TwoStepStatus = decode(http.call("GET", BASE), TwoStepStatus.serializer())
 
-    /** 验密码后生成待确认密钥；已开启 `200024`，服务端无密钥 `200025`。再次调用会换新密钥。 */
-    suspend fun setup(password: String): TwoStepSetup =
-        decode(http.call("POST", "$BASE/setup", setupBody(password)), TwoStepSetup.serializer())
+    /** 验身份（密码或短信验证码）后生成待确认密钥；已开启 `200024`，服务端无密钥 `200025`。再次调用会换新密钥。 */
+    suspend fun setup(proof: Proof): TwoStepSetup =
+        decode(http.call("POST", "$BASE/setup", setupBody(proof)), TwoStepSetup.serializer())
 
     /** 用动态码确认；成功即已启用，恢复码仅此一次明文。 */
     suspend fun enable(code: String): RecoveryCodes =
         decode(http.call("POST", "$BASE/enable", enableBody(code)), RecoveryCodes.serializer())
 
     /** [code] 为 6 位动态码或恢复码。 */
-    suspend fun disable(password: String, code: String) {
-        http.call("POST", "$BASE/disable", verifyBody(password, code))
+    suspend fun disable(proof: Proof, code: String) {
+        http.call("POST", "$BASE/disable", verifyBody(proof, code))
     }
 
     /** 重新生成恢复码（旧码全部作废）。[code] 同 [disable]。 */
-    suspend fun regenerate(password: String, code: String): RecoveryCodes =
-        decode(http.call("POST", "$BASE/recovery-codes", verifyBody(password, code)), RecoveryCodes.serializer())
+    suspend fun regenerate(proof: Proof, code: String): RecoveryCodes =
+        decode(http.call("POST", "$BASE/recovery-codes", verifyBody(proof, code)), RecoveryCodes.serializer())
 
     companion object {
         private const val BASE = "/api/v1/users/me/two-step"
 
-        internal fun setupBody(password: String): JsonObject = buildJsonObject { put("password", password) }
+        internal fun setupBody(proof: Proof): JsonObject = buildJsonObject { put("proof", proof.toJson()) }
         internal fun enableBody(code: String): JsonObject = buildJsonObject { put("code", code) }
-        internal fun verifyBody(password: String, code: String): JsonObject = buildJsonObject {
-            put("password", password)
+        internal fun verifyBody(proof: Proof, code: String): JsonObject = buildJsonObject {
+            put("proof", proof.toJson())
             put("code", code)
         }
         internal fun loginBody(ticket: String, code: String): JsonObject = buildJsonObject {

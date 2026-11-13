@@ -24,7 +24,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,9 +43,11 @@ import com.libeyond.imandroid.data.AboutLinkValues
 import com.libeyond.imandroid.data.AboutLinks
 import com.libeyond.imandroid.data.AboutLinksStore
 import com.libeyond.imandroid.data.LanguageStore
-import com.libeyond.imandroid.data.RegisterGate
+import com.libeyond.imandroid.data.LoginMode
+import com.libeyond.imandroid.data.PhoneAuthRules
+import com.libeyond.imandroid.ui.LoginPane
+import com.libeyond.imandroid.ui.LoginPhoneController
 import com.libeyond.imandroid.sdk.api.AboutLinksApi
-import com.libeyond.imandroid.sdk.api.PublicConfigApi
 import com.libeyond.imandroid.ui.components.LocalOpenLink
 import kotlinx.coroutines.delay
 import com.composables.icons.lucide.Lucide
@@ -61,9 +62,6 @@ import com.libeyond.imandroid.ui.components.IMTextField
 import com.libeyond.imandroid.ui.theme.IMAppTheme
 import com.libeyond.imandroid.ui.theme.IMTheme
 import com.libeyond.imandroid.ui.theme.IMThemeMode
-
-/** 登录页的两个页签，与 Web 的「密码 / 扫码」结构对齐（扫码待 QR P1 接）。 */
-enum class LoginTab { Password, Register }
 
 /** 登录二步页的外部状态与回调（ticket 与请求在 `AppRoot`，这里只有展示所需）。 */
 class LoginTwoStepUi(
@@ -94,25 +92,39 @@ fun LoginScreen(
     onLegalFailed: () -> Unit = {},
     /** 两步验证第二步：非 null 时同页换成二步内容（页签 / 免密登录 / 表单隐藏）；null = 普通登录。 */
     twoStep: LoginTwoStepUi? = null,
-    /** 注册开关状态（[RegisterGate]，在 AppRoot：提交注册回 200007 也会写它）：明确关闭了注册的 host。 */
-    registerClosedFor: String? = null,
-    /** public-config 回包：宿主按 [RegisterGate.afterResult] 更新 [registerClosedFor]。 */
-    onRegisterConfig: (requestedHost: String, enabled: Boolean) -> Unit = { _, _ -> },
     /** 「长按 Logo ▸ 配置地址」点保存：更新 host 并立即持久化（不等登录）。默认只更新页面状态（预览用）。 */
     onHostSave: (String) -> Unit = onHostChange,
+    /**
+     * 手机号部分（PHONE_AUTH_DESIGN §4 / §5：页签、验证码登录、完善资料、忘记密码、用户名注册入口）。
+     * null = 只有密码登录（预览用）。
+     */
+    phone: LoginPhoneController? = null,
+    onSmsLogin: () -> Unit = {},
+    onCompleteProfile: () -> Unit = {},
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
-    var tab by remember { mutableStateOf(LoginTab.Password) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
     var showHost by remember { mutableStateOf(false) }
     var showEndpoints by remember { mutableStateOf(false) }
     val canConfigEndpoints = !busy && twoStep == null
-    val registerClosed = rememberRegisterClosed(
-        host, active = tab == LoginTab.Register && twoStep == null, registerClosedFor, onRegisterConfig,
-    )
+    val pane = phone?.pane ?: LoginPane.Main
+    // 注册是否被暂停（S4）从同一份 public-config 推导（[LoginPhoneController.registerClosedFor]，按发起时的 host 记账）
+    val registerClosed = phone?.registerClosed(host) == true
+    // public-config（短信可用 / 地区 / 注册方式 / 注册开关）：按输入框里的地址防抖后读；进用户名注册页再读一次（开关可能刚改）
+    if (phone != null) {
+        LaunchedEffect(host, pane == LoginPane.Register) {
+            if (host.isBlank()) return@LaunchedEffect
+            delay(LINKS_FETCH_DEBOUNCE_MS)
+            phone.loadConfig(host)
+        }
+        // 忘记密码重设成功：回密码登录页并预填手机号
+        LaunchedEffect(phone.prefillIdent) { phone.prefillIdent?.let { username = it; password = ""; phone.prefillIdent = null } }
+    }
+    val tabs = PhoneAuthRules.loginTabs(phone?.config)
+    val tab = phone?.shownTab ?: LoginMode.Password
 
     Column(
         modifier = Modifier
@@ -144,11 +156,14 @@ fun LoginScreen(
                 colorFilter = ColorFilter.tint(c.onAccent),
             )
         }
-        Text(
-            text = "IM",
-            style = MaterialTheme.typography.headlineSmall,
-            color = c.textPrimary,
-        )
+        // 子页（用户名注册 / 完善资料 / 忘记密码）自带标题，不再叠一个「IM」（稿 2-3 / 2-4）
+        if (twoStep != null || pane == LoginPane.Main) {
+            Text(
+                text = "IM",
+                style = MaterialTheme.typography.headlineSmall,
+                color = c.textPrimary,
+            )
+        }
 
         if (showEndpoints && canConfigEndpoints) {
             LoginEndpointDialog(host = host, onDismiss = { showEndpoints = false }, onHostSave = onHostSave)
@@ -159,141 +174,81 @@ fun LoginScreen(
             return@Column
         }
 
-        // —— 页签 ——
-        Row(
-            modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(d.space2),
-        ) {
-            LoginTab.entries.forEach { t ->
-                val selected = t == tab
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(d.radiusCard))
-                        .background(if (selected) c.accentSoft else c.cardBackground)
-                        .clickable { tab = t }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
+        when {
+            phone != null && pane == LoginPane.Register -> LoginRegisterPane(
+                username, { username = it }, password, { password = it }, nickname, { nickname = it },
+                registerClosed = registerClosed, error = error, busy = busy,
+                onSubmit = { onRegister(username.trim(), password, nickname.trim()) },
+                onBack = { phone.open(LoginPane.Main) },
+            )
+            phone != null && pane == LoginPane.Complete -> LoginCompletePane(phone, onCompleteProfile)
+            phone != null && pane == LoginPane.Reset -> LoginResetPane(phone, host)
+            else -> {
+                // —— 页签：短信可用时「验证码登录 / 密码登录」，否则没有页签条 ——
+                if (phone != null && PhoneAuthRules.showLoginTabBar(tabs)) LoginTabBar(tabs, tab, phone::selectTab)
+
+                Column(
+                    modifier = Modifier.widthIn(max = LOGIN_FORM_MAX).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(d.space3),
                 ) {
-                    Text(
-                        text = stringResource(if (t == LoginTab.Password) R.string.login_button_login else R.string.login_tab_register),
-                        color = if (selected) c.accent else c.textSecondary,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    if (phone != null && tab == LoginMode.Sms) {
+                        LoginSmsForm(phone, host, onSmsLogin, notice = error)
+                    } else {
+                        // 登录名：用户名 / 邮箱 / 手机号，原样传给 /login、不预检（服务端解析，PROTOCOL §7.3）
+                        // 一开始输入就钉住页签（配置晚到不再把人切到验证码登录）
+                        IMTextField(username, { username = it; phone?.touch() }, stringResource(R.string.login_ident_placeholder), enabled = !busy)
+                        IMTextField(password, { password = it; phone?.touch() }, stringResource(R.string.login_password), isPassword = true, enabled = !busy)
+                        IMErrorText(error)
+                        LoginNotice(error, phone?.notice.orEmpty())
+                        IMPrimaryButton(
+                            text = stringResource(R.string.login_button_login),
+                            onClick = { phone?.notice = ""; onLogin(username.trim(), password) },
+                            enabled = username.isNotBlank() && password.isNotBlank(),
+                            loading = busy,
+                        )
+                        if (devLoginEnabled) {
+                            IMSecondaryButton(
+                                text = stringResource(R.string.login_dev_login),
+                                onClick = { onDevLogin(username.trim()) },
+                                enabled = username.isNotBlank() && !busy,
+                            )
+                        }
+                    }
+                    LoginLinksRow(
+                        showForgot = phone != null && PhoneAuthRules.showForgotPassword(phone.config),
+                        onForgot = { phone?.open(LoginPane.Reset) },
+                        showRegister = phone != null && PhoneAuthRules.showUsernameRegister(phone.config),
+                        onRegister = { phone?.open(LoginPane.Register) },
                     )
+
+                    // —— 服务器地址（开发期常要改，收在一个可折叠行里）——
+                    Text(
+                        text = if (showHost) stringResource(R.string.login_server_address) else stringResource(R.string.login_server_summary, host),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = c.textSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().clickable { showHost = !showHost },
+                    )
+                    if (showHost) {
+                        IMTextField(host, onHostChange, "host:port", enabled = !busy)
+                        Text(
+                            "模拟器连宿主机用 10.0.2.2:8080（127.0.0.1 在模拟器里指模拟器自己）；" +
+                                "真机填开发机内网 IP，并把该 IP 加进 network_security_config.xml",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.textTertiary,
+                        )
+                    }
                 }
             }
         }
 
-        Column(
-            modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(d.space3),
-        ) {
-            // 登录态可填用户名或邮箱（原样发送、保持文本键盘）；注册态仍只收用户名
-            IMTextField(
-                username, { username = it },
-                stringResource(if (tab == LoginTab.Password) R.string.login_identifier_label else R.string.settings_info_username),
-                enabled = !busy,
-            )
-            IMTextField(password, { password = it }, stringResource(R.string.login_password), isPassword = true, enabled = !busy)
-            if (tab == LoginTab.Register) {
-                IMTextField(nickname, { nickname = it }, stringResource(R.string.login_nickname), enabled = !busy)
-                Text(
-                    stringResource(R.string.login_register_format_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = c.textTertiary,
-                )
-            }
-
-            if (tab == LoginTab.Register && registerClosed) {
-                // 管理员暂停注册（S4）：提前告知并禁用提交；服务端 /register 照样回 200007 兜底
-                Text(
-                    stringResource(R.string.err_200007),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = c.danger,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(d.radiusCard))
-                        .background(c.dangerSoft)
-                        .padding(d.space3),
-                )
-            }
-
-            IMErrorText(error)
-
-            if (tab == LoginTab.Password) {
-                IMPrimaryButton(
-                    text = stringResource(R.string.login_button_login),
-                    onClick = { onLogin(username.trim(), password) },
-                    enabled = username.isNotBlank() && password.isNotBlank(),
-                    loading = busy,
-                )
-            } else {
-                IMPrimaryButton(
-                    text = stringResource(R.string.login_button_register),
-                    onClick = { onRegister(username.trim(), password, nickname.trim()) },
-                    enabled = !registerClosed && username.isNotBlank() && password.isNotBlank() && nickname.isNotBlank(),
-                    loading = busy,
-                )
-            }
-
-            if (devLoginEnabled && tab == LoginTab.Password) {
-                IMSecondaryButton(
-                    text = stringResource(R.string.login_dev_login),
-                    onClick = { onDevLogin(username.trim()) },
-                    enabled = username.isNotBlank() && !busy,
-                )
-            }
-
-            // —— 服务器地址（开发期常要改，收在一个可折叠行里）——
-            Text(
-                text = if (showHost) stringResource(R.string.login_server_address) else stringResource(R.string.login_server_summary, host),
-                style = MaterialTheme.typography.bodyMedium,
-                color = c.textSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().clickable { showHost = !showHost },
-            )
-            if (showHost) {
-                IMTextField(host, onHostChange, "host:port", enabled = !busy)
-                Text(
-                    "模拟器连宿主机用 10.0.2.2:8080（127.0.0.1 在模拟器里指模拟器自己）；" +
-                        "真机填开发机内网 IP，并把该 IP 加进 network_security_config.xml",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = c.textTertiary,
-                )
-            }
-        }
-
         // 底部隐式同意提示（三端一致，ABOUT_LEGAL_DESIGN 批②）：点「登录/注册」即视为同意，无勾选框。
-        // 二步页在上方已 return@Column，不显示。
+        // 二步页在上方已 return@Column，不显示；注册 / 完善资料 / 忘记密码子页照常显示。
         LoginAgreeFooter(host = host, onFailed = onLegalFailed)
     }
 }
 
 private const val LINKS_FETCH_DEBOUNCE_MS = 600L
-
-/**
- * 注册页可见时按输入框里的地址读 `public-config`（S4），返回「该地址明确关闭了注册」。
- *
- * 防串台：结果按**发起时的 host** 记账（[RegisterGate]，状态在宿主），只有与当前 host 相同才生效——
- * 改地址时 LaunchedEffect 会取消在途请求，但就算回包抢在取消前落地，也只会记在旧 host 名下、不影响新地址。
- * 失败 / 字段缺失由 [PublicConfigApi.registerEnabled] 当作开放。
- */
-@Composable
-private fun rememberRegisterClosed(
-    host: String,
-    active: Boolean,
-    closedFor: String?,
-    onConfig: (requestedHost: String, enabled: Boolean) -> Unit,
-): Boolean {
-    val report by rememberUpdatedState(onConfig)
-    LaunchedEffect(host, active) {
-        if (!active || host.isBlank()) return@LaunchedEffect
-        // host 输入框每敲一个字都会变：防抖后再拉
-        delay(LINKS_FETCH_DEBOUNCE_MS)
-        report(host, PublicConfigApi.anonymous(host, BuildConfig.USE_TLS).registerEnabled())
-    }
-    return RegisterGate.isClosed(closedFor, host)
-}
 
 /**
  * 「继续即表示同意《服务条款》和《隐私政策》」：复用 about.terms / about.privacy_policy 作链接文案

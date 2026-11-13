@@ -26,11 +26,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DownloadProgress
@@ -49,9 +47,8 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
 
-/** 配置态的表单值（密码 / 开关 / 格式勾选），由 `ExportDataHost` 持有。 */
+/** 配置态的表单值（开关 / 格式勾选），由 `ExportDataHost` 持有。身份证明在确认身份弹层里输。 */
 data class ExportForm(
-    val password: String = "",
     val includeMedia: Boolean = false,
     val html: Boolean = true,
     val json: Boolean = true,
@@ -121,8 +118,7 @@ private fun ConfigBody(
     onStart: () -> Unit,
 ) {
     val d = IMTheme.dimens
-    val canStart = ExportRules.canStart(form.password, form.html, form.json, submitting)
-    val focus = remember { FocusRequester() }
+    val canStart = ExportRules.canStart(form.html, form.json, submitting)
     if (view.expiredNote) IMSectionFooter(stringResource(R.string.export_expired), Modifier.padding(top = d.space3))
     IMSectionFooter(stringResource(R.string.export_intro), Modifier.padding(top = d.space3))
     Spacer(Modifier.height(d.space3))
@@ -140,15 +136,6 @@ private fun ConfigBody(
         CheckRow(stringResource(R.string.export_format_html), form.html, !submitting) { onFormChange(form.copy(html = it)) }
         IMRowDivider(d.space4)
         CheckRow(stringResource(R.string.export_format_json), form.json, !submitting) { onFormChange(form.copy(json = it)) }
-    }
-    Spacer(Modifier.height(d.sectionGap))
-    IMSettingsGroup {
-        PasswordRow(
-            value = form.password, onValueChange = { onFormChange(form.copy(password = it)) },
-            placeholder = stringResource(R.string.export_password_placeholder),
-            isError = false, enabled = !submitting, focusRequester = focus,
-            imeAction = ImeAction.Done, onImeAction = { if (canStart) onStart() },
-        )
     }
     if (error.isNotEmpty()) ErrorLine(error)
     Spacer(Modifier.height(d.space4 + d.space1))

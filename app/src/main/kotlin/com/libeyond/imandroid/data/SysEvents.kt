@@ -127,7 +127,7 @@ object SysEvents {
         }
 
     /**
-     * 系统通知单聊（新设备登录 / 改密 / 两步验证恢复码 / 邮箱绑定·更换·解绑 / 被踢下线 / 导出完成）→ 多行文本，行结构对齐服务端 `buildXxxNoticeText`。
+     * 系统通知单聊（新设备登录 / 改密 / 设置密码 / 重设密码 / 两步验证恢复码 / 邮箱绑定·更换·解绑 / 手机号绑定·更换 / 被踢下线 / 导出完成）→ 多行文本，行结构对齐服务端 `buildXxxNoticeText`。
      * 非这几个事件 → null，调用方显示 `content`。
      */
     fun noticeText(event: String?, argsJson: String?): String? {
@@ -176,6 +176,18 @@ object SysEvents {
                 R.string.sys_notice_email_changed_headline, R.string.sys_notice_email_changed_device_line, R.string.sys_notice_email_changed_footer)
             "email_unbound" -> emailNotice(at, null, arg("device"),
                 R.string.sys_notice_email_unbound_headline, R.string.sys_notice_email_unbound_device_line, R.string.sys_notice_email_unbound_footer)
+            // 手机号三事件（PROTOCOL §7.3）：参数里只有打码号码 `phone_masked`（代入键里的 {phone}）
+            // 首次设置密码（PROTOCOL §7.3；修改已有密码仍是 password_changed）：headline + 可选设备行 + footer
+            "password_set" -> buildList {
+                add(Str.s(R.string.sys_notice_password_set_headline, at))
+                if (arg("device").isNotEmpty()) add(Str.s(R.string.sys_notice_password_set_device_line, arg("device")))
+                add(Str.s(R.string.sys_notice_password_set_footer))
+            }
+            "password_reset" -> listOf(Str.s(R.string.sys_notice_password_reset_headline, at), Str.s(R.string.sys_notice_password_reset_footer))
+            "phone_bound" -> emailNotice(at, arg("phone_masked"), arg("device"),
+                R.string.sys_notice_phone_bound_headline, R.string.sys_notice_phone_bound_device_line, R.string.sys_notice_phone_bound_footer)
+            "phone_changed" -> emailNotice(at, arg("phone_masked"), arg("device"),
+                R.string.sys_notice_phone_changed_headline, R.string.sys_notice_phone_changed_device_line, R.string.sys_notice_phone_changed_footer)
             "device_kicked" -> buildList {
                 val device = arg("target_device").ifEmpty { Str.s(R.string.common_unknown_device_kicked) }
                 add(Str.s(R.string.sys_notice_device_kicked_headline, device))
@@ -205,7 +217,7 @@ object SysEvents {
         return lines.joinToString("\n")
     }
 
-    /** 邮箱事件通知：headline（时间 [+ 脱敏邮箱]）/ 设备行（有设备名才出）/ footer。 */
+    /** 邮箱 / 手机号事件通知：headline（时间 [+ 脱敏邮箱 / 打码号码]）/ 设备行（有设备名才出）/ footer。 */
     private fun emailNotice(at: String, masked: String?, device: String, @StringRes headline: Int, @StringRes deviceLine: Int, @StringRes footer: Int): List<String> =
         buildList {
             add(if (masked == null) Str.s(headline, at) else Str.s(headline, at, masked))

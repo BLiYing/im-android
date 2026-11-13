@@ -68,12 +68,11 @@ class ExportRulesTest {
         assertEquals(24, ExportRules.cooldownHours(86_400))
     }
 
-    @Test fun `按钮可用性 密码空或无格式或提交中均置灰`() {
-        assertTrue(ExportRules.canStart("pw", html = true, json = false, submitting = false))
-        assertTrue(ExportRules.canStart("pw", html = false, json = true, submitting = false))
-        assertFalse(ExportRules.canStart("", html = true, json = true, submitting = false))
-        assertFalse(ExportRules.canStart("pw", html = false, json = false, submitting = false))
-        assertFalse(ExportRules.canStart("pw", html = true, json = true, submitting = true))
+    @Test fun `按钮可用性 无格式或提交中均置灰`() {
+        assertTrue(ExportRules.canStart(html = true, json = false, submitting = false))
+        assertTrue(ExportRules.canStart(html = false, json = true, submitting = false))
+        assertFalse(ExportRules.canStart(html = false, json = false, submitting = false))
+        assertFalse(ExportRules.canStart(html = true, json = true, submitting = true))
     }
 
     @Test fun `格式顺序与进度比例与文件名`() {

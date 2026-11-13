@@ -94,4 +94,14 @@ class ChangePasswordRulesTest {
     fun `没有专门文案的码交给调用方兜底`() {
         assertNull(ChangePasswordRules.feedbackFor(ErrCode.INTERNAL))
     }
+
+    /** 改密切到短信方式：仍会下线其它设备（说明要在）；helper 不能提「与旧密码不同」（不知道旧密码）。 */
+    @Test
+    fun `短信方式改密的说明 下线提示两种方式都有 helper 只说长度`() {
+        assertTrue(ChangePasswordRules.showLogoutOthersNote(PasswordPageMode.Change))
+        assertFalse(ChangePasswordRules.showLogoutOthersNote(PasswordPageMode.Set))
+        assertEquals("新密码至少 6 位", ChangePasswordRules.helper(PasswordPageMode.Change, PasswordProofMode.Sms))
+        assertEquals(ChangePasswordRules.HELPER, ChangePasswordRules.helper(PasswordPageMode.Change, PasswordProofMode.OldPassword))
+        assertEquals("设置密码后，可以用手机号和密码登录。", ChangePasswordRules.helper(PasswordPageMode.Set, PasswordProofMode.Sms))
+    }
 }

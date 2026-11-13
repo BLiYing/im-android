@@ -9,9 +9,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.libeyond.imandroid.R
-import com.libeyond.imandroid.data.ChangePasswordRules
 import com.libeyond.imandroid.data.EmailRules
-import com.libeyond.imandroid.data.PasswordFeedback
+import com.libeyond.imandroid.data.PhoneAuthRules
+import com.libeyond.imandroid.data.PhoneRowTap
 import com.libeyond.imandroid.data.PrivacyPage
 import com.libeyond.imandroid.data.PrivacySecurity
 import com.libeyond.imandroid.data.SettingsSub
@@ -22,18 +22,14 @@ import com.libeyond.imandroid.data.VisibilityKind
 import com.libeyond.imandroid.i18n.Str
 import com.libeyond.imandroid.sdk.IMClient
 import com.libeyond.imandroid.sdk.api.FriendEntry
-import com.libeyond.imandroid.sdk.http.ApiException
 import com.libeyond.imandroid.ui.components.IMToast
 import com.libeyond.imandroid.ui.components.PushTransition
 import androidx.compose.ui.res.stringResource
 import com.libeyond.imandroid.ui.screens.AutoDeleteScreen
 import com.libeyond.imandroid.ui.screens.BlockedUsersScreen
-import com.libeyond.imandroid.ui.screens.ChangePasswordScreen
 import com.libeyond.imandroid.ui.screens.PrivacySecurityScreen
 import com.libeyond.imandroid.ui.screens.VisibilityScreen
 import kotlinx.coroutines.launch
-
-private data class PasswordForm(val old: String = "", val new: String = "", val confirm: String = "")
 
 /**
  * 隐私与安全（对齐 iOS `IMPrivacySecurityViewController` → `IMBlockedListViewController` /
@@ -50,10 +46,14 @@ fun PrivacySecurityHost(
     initialSub: SettingsSub = SettingsSub.None,
 ) {
     val scope = rememberCoroutineScope()
+    /** 登录密码 / 登录手机号 / 各确认身份弹层（PHONE_AUTH_DESIGN §6 / §7）：本页下共用同一份 `GET /users/me/security`。 */
+    val security = remember(client) { SecurityState.of(client) }
     /** 两步验证的状态 / 动作；留在这里（而不是 TwoStepHost 里）才能跨「进页 / 返回 / 再进」存活，请求途中返回不丢结果。 */
-    val twoStep = remember(client) { TwoStepController(client) }
+    val twoStep = remember(client) { TwoStepController(client, security) }
     /** 邮箱登录同理：状态与请求在控制器里，行右值也读它。 */
-    val email = remember(client) { EmailController(client) }
+    val email = remember(client) { EmailController(client, security) }
+    val password = remember(client) { PasswordController(client, security) }
+    val phoneBind = remember(client) { PhoneBindController(client, security) }
 
     var page by remember { mutableStateOf((initialSub as? SettingsSub.Privacy)?.page ?: PrivacyPage.Main) }
     /** 黑名单。容器页的计数与列表页**共用这一份**：进列表页时先显上次的，拉回来再换。 */
@@ -61,9 +61,6 @@ fun PrivacySecurityHost(
     var blockedError by remember { mutableStateOf("") }
     /** 正在取消屏蔽的 user_id。**按人去重**：只挡同一行连点，别人的行照常可滑（iOS 同）。不参与渲染，故不是状态。 */
     val unblocking = remember { mutableSetOf<String>() }
-    var form by remember { mutableStateOf(PasswordForm()) }
-    var pwdError by remember { mutableStateOf<PasswordFeedback.Inline?>(null) }
-    var submitting by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
     /** 账号默认的自动删除档位（`GET /users/me/privacy`）；还没拉到为 null。`autoShown` 是选择页上打勾的那个（乐观，失败回滚）。 */
     var autoDefault by remember { mutableStateOf<Int?>(null) }
@@ -136,47 +133,23 @@ fun PrivacySecurityHost(
         }
     }
 
-    fun submitPassword() {
-        if (submitting) return
-        ChangePasswordRules.validate(form.old, form.new, form.confirm)?.let { pwdError = it; return }
-        val (old, new) = form.old to form.new
-        pwdError = null
-        submitting = true
-        // 挂 client.scope 而不是页面作用域：成功应答里带着轮换出的新续期凭据，
-        // 请求途中返回上一页若把协程取消了，服务端照样改密并作废旧凭据，本机却没接住新的（见 IMClient.changePassword）
-        client.scope.launch {
-            runCatchingCancellable { client.changePassword(old, new) }
-                .onSuccess {
-                    form = PasswordForm()
-                    if (page == PrivacyPage.ChangePassword) page = PrivacyPage.Main
-                    toast = ChangePasswordRules.SUCCESS_TOAST
-                }
-                .onFailure { e ->
-                    val code = (e as? ApiException)?.code
-                    val fb = code?.let(ChangePasswordRules::feedbackFor)
-                        ?: PasswordFeedback.Toast(e.userMessage(ChangePasswordRules.FALLBACK))
-                    when (fb) {
-                        is PasswordFeedback.Inline -> pwdError = fb
-                        is PasswordFeedback.Toast -> toast = fb.message
-                    }
-                }
-            submitting = false
+    fun openLoginPhone() {
+        val st = security.status ?: return
+        when (PhoneAuthRules.phoneRowTap(st)) {
+            PhoneRowTap.SmsUnavailable -> toast = Str.s(R.string.err_200040)
+            else -> { phoneBind.open(); page = PrivacyPage.LoginPhone }
         }
     }
 
-    fun leavePassword() {
-        // 密码不在内存里多留；提交中则保留，结果回来时还要用
-        if (!submitting) { form = PasswordForm(); pwdError = null }
-        page = PrivacyPage.Main
-    }
-
     // 回到容器页都重取两步验证状态（行右值随之刷新；多端之间进页重取）；失败当关闭、不弹错
-    LaunchedEffect(page) { if (page == PrivacyPage.Main) { twoStep.refresh(); email.refresh() } }
+    LaunchedEffect(page) { if (page == PrivacyPage.Main) { twoStep.refresh(); email.refresh(); security.refresh() } }
+    // 从设置搜索直达「登录密码」时没经过容器页：先取一次，才知道是设置还是修改
+    LaunchedEffect(page) { if (page == PrivacyPage.ChangePassword && security.status == null) security.refresh() }
     // 每回到容器页 / 进列表页都重拉（iOS 两页的 viewWillAppear 同）
     LaunchedEffect(page) { if (page == PrivacyPage.Main || page == PrivacyPage.Blocked) reloadBlocked() }
     // 进隐私页 / 选择页都取最新的账号默认档位（不推帧，别的端改了靠重新进页刷新）；失败保留已有值
     LaunchedEffect(page) {
-        if (page == PrivacyPage.Blocked || page == PrivacyPage.ChangePassword || page == PrivacyPage.TwoStep || page == PrivacyPage.Email) return@LaunchedEffect
+        if (page == PrivacyPage.Blocked || page == PrivacyPage.ChangePassword || page == PrivacyPage.TwoStep || page == PrivacyPage.Email || page == PrivacyPage.LoginPhone) return@LaunchedEffect
         runCatchingCancellable { client.privacy.get() }.onSuccess {
             autoDefault = it.autoDeleteDefaultSec; if (!autoSaving) autoShown = it.autoDeleteDefaultSec
             lastSeenField.load(Visibility.parse(it.lastSeenVisibility))
@@ -196,6 +169,16 @@ fun PrivacySecurityHost(
                     onBack = onBack,
                     onOpenBlocked = { page = PrivacyPage.Blocked },
                     onOpenChangePassword = { page = PrivacyPage.ChangePassword },
+                    passwordLabel = when (security.status?.passwordSet) {
+                        true -> stringResource(R.string.security_password_set)
+                        false -> stringResource(R.string.security_password_unset)
+                        null -> ""
+                    },
+                    showLoginPhone = PhoneAuthRules.showPhoneRow(security.status),
+                    loginPhoneLabel = security.status?.let { st ->
+                        if (st.phoneBound) st.phoneMasked else stringResource(R.string.security_phone_unbound)
+                    }.orEmpty(),
+                    onOpenLoginPhone = ::openLoginPhone,
                     autoDeleteLabel = PrivacySecurity.autoDeleteLabel(autoDefault),
                     onOpenAutoDelete = { autoShown = autoDefault; page = PrivacyPage.AutoDelete },
                     lastSeenLabel = visRev.let { lastSeenField.committed?.label.orEmpty() },
@@ -267,22 +250,9 @@ fun PrivacySecurityHost(
 
             PrivacyPage.Email -> EmailHost(email, onExit = { page = PrivacyPage.Main })
 
-            PrivacyPage.ChangePassword -> {
-                BackHandler { leavePassword() }
-                ChangePasswordScreen(
-                    oldPassword = form.old,
-                    newPassword = form.new,
-                    confirmPassword = form.confirm,
-                    // 一改动就清红字（iOS `fieldChanged:`）：给一次重来的机会，但不清输入
-                    onOldChange = { form = form.copy(old = it); pwdError = null },
-                    onNewChange = { form = form.copy(new = it); pwdError = null },
-                    onConfirmChange = { form = form.copy(confirm = it); pwdError = null },
-                    error = pwdError,
-                    submitting = submitting,
-                    onSubmit = { submitPassword() },
-                    onBack = { leavePassword() },
-                )
-            }
+            PrivacyPage.ChangePassword -> SecurityPasswordPage(password, onToast = { toast = it }, onExit = { page = PrivacyPage.Main })
+
+            PrivacyPage.LoginPhone -> SecurityPhonePage(phoneBind, security, onToast = { toast = it }, onExit = { page = PrivacyPage.Main })
         }
     }
 

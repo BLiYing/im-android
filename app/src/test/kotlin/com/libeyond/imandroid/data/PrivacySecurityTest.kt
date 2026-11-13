@@ -11,7 +11,7 @@ import org.junit.Test
  */
 class PrivacySecurityTest {
 
-    private val groups = PrivacySecurity.groups
+    private val groups = PrivacySecurity.groups()
 
     @Test
     fun `五组的组头与组尾`() {
@@ -19,7 +19,7 @@ class PrivacySecurityTest {
         assertEquals(
             listOf(
                 "已屏蔽的用户不能给你发消息，也看不到你的资料。",
-                "绑定第二因子后，即使密码泄露也无法登录你的账号。",
+                "开启两步验证可防止手机号被盗用后账号被登录。",
                 "你发起的新会话默认开启自动删除；开启后对话双方（群聊为全体成员）同时生效。",
                 "这些设置决定他人在你的资料页看到多少。",
                 "",
@@ -32,7 +32,7 @@ class PrivacySecurityTest {
     fun `各行标题与顺序`() {
         assertEquals(
             listOf(
-                listOf("已屏蔽的用户", "修改密码"),
+                listOf("已屏蔽的用户", "登录密码"),
                 listOf("两步验证", "通行密钥", "邮箱登录"),
                 listOf("自动删除消息"),
                 listOf("手机号码", "上次上线", "头像", "个人简介"),
@@ -83,6 +83,20 @@ class PrivacySecurityTest {
         }
         assertEquals(listOf(PrivacyIcon.Passkey), rest.map { it.icon })
         assertTrue(rest.all { it.isPlaceholder && it.action == PrivacyAction.ComingSoon })
+    }
+
+    /** 「登录手机号」在「账号保护」组第一行，图标手机、底色 pink（PHONE_AUTH_DESIGN §6）；不显示时整行不在。 */
+    @Test
+    fun `登录手机号行 显示时在账号保护组第一行`() {
+        val withPhone = PrivacySecurity.groups(showLoginPhone = true)
+        val row = withPhone[1].rows.first()
+        assertEquals("登录手机号", row.title)
+        assertEquals(PrivacyAction.LoginPhone, row.action)
+        assertEquals(PrivacyIcon.Smartphone, row.icon)
+        assertEquals(PrivacyTint.Pink, row.tint)
+        assertFalse(row.isPlaceholder)
+        assertEquals(listOf("登录手机号", "两步验证", "通行密钥", "邮箱登录"), withPhone[1].rows.map { it.title })
+        assertEquals(listOf("两步验证", "通行密钥", "邮箱登录"), groups[1].rows.map { it.title })
     }
 
     /** 行右值 = 账号默认档位；还没拉到（null）留空，别显「关闭」误导。 */

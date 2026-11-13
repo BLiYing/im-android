@@ -53,10 +53,25 @@ import com.libeyond.imandroid.ui.components.IMRowDivider
 import com.libeyond.imandroid.ui.components.IMSectionFooter
 import com.libeyond.imandroid.ui.components.IMSettingsGroup
 import com.libeyond.imandroid.ui.components.IMTopBar
+import com.libeyond.imandroid.ui.components.SendCodeButton
+import com.libeyond.imandroid.ui.components.SettingsInputRow
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 private val EYE_TOUCH = 40.dp
 private val EYE_GLYPH = 20.dp
+
+/**
+ * 用短信验证码证明身份时第一组的内容（设置密码 / 忘记旧密码改密，PHONE_AUTH_UX_SKETCH 2-6 / 2-7）。
+ * [note] 是「验证码将发送至 …」（空串不画）。
+ */
+class PasswordCodeUi(
+    val code: String,
+    val onCodeChange: (String) -> Unit,
+    val note: String,
+    val sendText: String,
+    val sendEnabled: Boolean,
+    val onSend: () -> Unit,
+)
 
 /**
  * 修改密码（对齐 iOS `IMChangePasswordViewController`）：旧密码一组、新密码 + 确认一组，
@@ -77,32 +92,64 @@ fun ChangePasswordScreen(
     submitting: Boolean,
     onSubmit: () -> Unit,
     onBack: () -> Unit,
+    title: String = ChangePasswordRules.TITLE,
+    /** 非 null = 用短信验证码证明身份：第一组换成验证码行（设置密码 / 忘记旧密码）。 */
+    codeUi: PasswordCodeUi? = null,
+    /** 第一组下的说明（「其它设备将下线」）；空串不画（设置密码不踢其它设备）。两种证明方式都画在第一组下。 */
+    footer: String = ChangePasswordRules.FOOTER,
+    /** 新密码组下的说明（设置密码时是「设置后可以用手机号和密码登录」）。 */
+    helper: String = ChangePasswordRules.HELPER,
+    submitText: String = ChangePasswordRules.TITLE,
+    /** 主按钮下的切换链接（「忘记旧密码？用短信验证码修改」/「用旧密码修改」）；null 不画。 */
+    switchText: String? = null,
+    onSwitch: () -> Unit = {},
 ) {
     val c = IMTheme.colors
     val d = IMTheme.dimens
     val oldFocus = remember { FocusRequester() }
     val newFocus = remember { FocusRequester() }
     val confirmFocus = remember { FocusRequester() }
-    val canSubmit = ChangePasswordRules.canSubmit(oldPassword, newPassword, confirmPassword) && !submitting
+    val canSubmit = !submitting && if (codeUi != null) {
+        ChangePasswordRules.canSubmitWithCode(codeUi.code, newPassword, confirmPassword)
+    } else {
+        ChangePasswordRules.canSubmit(oldPassword, newPassword, confirmPassword)
+    }
 
-    // 进页即聚焦旧密码框（iOS `becomeFirstResponder`）。只在进入时一次，故 key 用 Unit
-    LaunchedEffect(Unit) { oldFocus.requestFocus() }
+    // 进页 / 切换证明方式即聚焦第一格（iOS `becomeFirstResponder`）
+    LaunchedEffect(codeUi == null) { runCatching { oldFocus.requestFocus() } }
 
     Column(Modifier.fillMaxSize().background(c.groupedBackground).statusBarsPadding()) {
-        IMTopBar(title = ChangePasswordRules.TITLE, onLeft = onBack)
+        IMTopBar(title = title, onLeft = onBack)
 
         // imePadding：键盘弹起时按钮要能滚到键盘上面（iOS 调 contentInset 同理）
         Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())) {
-            Spacer(Modifier.height(d.sectionGap))
-            IMSettingsGroup {
-                PasswordRow(
-                    value = oldPassword, onValueChange = onOldChange,
-                    placeholder = stringResource(R.string.password_field_old),
-                    isError = error?.field == PasswordField.Old, enabled = !submitting,
-                    focusRequester = oldFocus, imeAction = ImeAction.Next, onImeAction = { newFocus.requestFocus() },
-                )
+            if (codeUi != null) {
+                Spacer(Modifier.height(d.space2))
+                if (codeUi.note.isNotEmpty()) TwoStepNote(codeUi.note)
+                Spacer(Modifier.height(d.space2))
+                IMSettingsGroup {
+                    SettingsInputRow(
+                        value = codeUi.code, onValueChange = codeUi.onCodeChange,
+                        placeholder = stringResource(R.string.login_sms_code_six_digits),
+                        keyboardType = KeyboardType.NumberPassword, enabled = !submitting,
+                        modifier = if (error?.field == PasswordField.Code) Modifier.border(1.dp, c.danger) else Modifier,
+                        focusRequester = oldFocus,
+                        trailing = { SendCodeButton(codeUi.sendText, codeUi.sendEnabled && !submitting, codeUi.onSend) },
+                    )
+                }
+                if (footer.isNotEmpty()) IMSectionFooter(footer)
+            } else {
+                Spacer(Modifier.height(d.sectionGap))
+                IMSettingsGroup {
+                    PasswordRow(
+                        value = oldPassword, onValueChange = onOldChange,
+                        placeholder = stringResource(R.string.password_field_old),
+                        isError = error?.field == PasswordField.Old, enabled = !submitting,
+                        focusRequester = oldFocus, imeAction = ImeAction.Next, onImeAction = { newFocus.requestFocus() },
+                    )
+                }
+                if (footer.isNotEmpty()) IMSectionFooter(footer)
             }
-            IMSectionFooter(ChangePasswordRules.FOOTER)
 
             Spacer(Modifier.height(d.sectionGap))
             IMSettingsGroup {
@@ -131,19 +178,23 @@ fun ChangePasswordScreen(
                 )
             }
             Text(
-                text = ChangePasswordRules.HELPER,
+                text = helper,
                 color = c.textSecondary,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(start = d.space4 * 2, end = d.space4 * 2, top = d.space2),
             )
             Spacer(Modifier.height(d.space4 + d.space1))
             IMPrimaryButton(
-                text = ChangePasswordRules.TITLE,
+                text = submitText,
                 onClick = onSubmit,
                 modifier = Modifier.padding(horizontal = d.space4),
                 enabled = canSubmit,
                 loading = submitting,
             )
+            if (switchText != null) {
+                Spacer(Modifier.height(d.space1))
+                TwoStepLink(switchText, { if (!submitting) onSwitch() }, Modifier.padding(horizontal = d.space4))
+            }
             Spacer(Modifier.height(d.sectionGap))
         }
     }

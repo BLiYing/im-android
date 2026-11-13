@@ -11,7 +11,6 @@ import com.libeyond.imandroid.data.messageAt
 import com.libeyond.imandroid.data.PresenceStore
 import com.libeyond.imandroid.data.db.RoomTx
 import com.libeyond.imandroid.data.db.ConversationEntity
-import androidx.room.withTransaction
 import com.libeyond.imandroid.data.db.IMDatabase
 import com.libeyond.imandroid.sdk.api.ContactApi
 import com.libeyond.imandroid.sdk.api.FavoriteApi
@@ -82,10 +81,11 @@ class IMClient(
     /** 本机缓存的本人资料（上次 `GET /users/me` 成功的结果）；没有 / 换号 → null。「我」页头部断网兜底用。 */
     fun cachedMyProfile(): UserCard? = MyProfileCodec.decode(session.uid.orEmpty(), session.myProfileJson)
 
-    /** 拉到或改完本人资料后调用，覆盖本机副本。 */
+    /** 拉到或改完本人资料后调用，覆盖本机副本；顺带校正本机存的公开用户名（服务端给的，见 [myPublicName]）。 */
     fun cacheMyProfile(card: UserCard) {
         val uid = session.uid.orEmpty().ifEmpty { return }
         session.myProfileJson = MyProfileCodec.encode(uid, card)
+        if (card.username.isNotBlank()) session.username = card.username
     }
 
     /**
@@ -114,6 +114,12 @@ class IMClient(
     )
 
     private val auth = AuthApi(http, device)
+    /** 手机号与短信验证码（PROTOCOL §7.3）里登录前的接口：发码 / 验证码登录 / 完善资料 / 重设密码 / restore_ticket。 */
+    val phoneAuth = com.libeyond.imandroid.sdk.api.PhoneAuthApi(http, device)
+    /** `GET /users/me/security`、`verify-code`、绑定 / 更换登录手机号。 */
+    val security = com.libeyond.imandroid.sdk.api.SecurityApi(http)
+    /** 当前服务器的 `public-config`（已登录页面用；登录页按输入框地址走 `PublicConfigApi.anonymous`）。 */
+    val publicConfig = com.libeyond.imandroid.sdk.api.PublicConfigApi(http)
     /** 已登录设备。**公开**：既是 [TokenSession] 的探活接口，也是「我」页设备管理页的数据源。 */
     val devices = DevicesApi(http)
     val conversationsApi = ConversationsApi(http)
@@ -382,20 +388,15 @@ class IMClient(
     /**
      * 我的**公开显示名**——会被写进发出去的字节的地方一律用它（转发溯源、合并转发条目名…）。
      *
-     * 三条纪律（IMServer docs/UI.md 隐私红线 + im-web useForward.ts 的事故记录）：
+     * 四条纪律（IMServer docs/UI.md 隐私红线 + im-web useForward.ts 的事故记录）：
      * ① 绝不能带备注：备注只在本机渲染成立；
      * ② 绝不能写死「我」：那是**看的人**才成立的称呼，而这串字会烧进发出去的内容
      *    （im-web 2026-09-05 实测：收件人看到一排「我」）；
-     * ③ 末级不落 uid——10 位随机内部 ID 摆在「转发自」后面既难看也无意义。
-     *
-     * **当前限制**：本端还没缓存自己的昵称（ 不下发，也没做自身资料的自取），
-     * 所以取的是 。句柄是公开的，纪律不破，只是不如昵称好看。
-     * 接自身资料缓存后改成「昵称 → @句柄 → 未命名用户」，与 im-web  对齐。
+     * ③ 末级不落 uid——10 位随机内部 ID 摆在「转发自」后面既难看也无意义；
+     * ④ 句柄**只认服务端给的**（登录响应的 `username` / 本人资料），绝不用用户输入的登录名——
+     *    那可能是手机号或邮箱（2026-11-13 A2 审查：手机号 + 密码登录后转发，收件人看到「转发自 @1380013…」）。
      */
-    fun myPublicName(): String {
-        val u = session.username
-        return if (u.isNullOrBlank()) "未命名用户" else "@$u"
-    }
+    fun myPublicName(): String = SessionStore.publicName(session.username)
     val isLoggedIn: Boolean get() = session.isLoggedIn
 
     init {
@@ -479,17 +480,20 @@ class IMClient(
     }
 
     /** 冷启动恢复会话。 */
-    suspend fun restore(): RestoreOutcome = tokens.restore()
+    suspend fun restore(): RestoreOutcome = tokens.restore().also { r ->
+        // 会话还活着（含刚续期）：后台拉一次本人资料，把老版本存下的登录名（可能是邮箱）校正成服务端句柄
+        if (r == RestoreOutcome.Alive || r == RestoreOutcome.Refreshed) scope.launch { runCatching { contacts.me() }.onSuccess(::cacheMyProfile) }
+    }
 
-    /** 账号密码登录。成功后立即连 WS。 */
-    suspend fun login(username: String, password: String?) = finishLogin(auth.login(username, password), username)
+    /** 账号密码登录（[username] 是登录名：用户名 / 邮箱 / 手机号）。成功后立即连 WS。 */
+    suspend fun login(username: String, password: String?) = finishLogin(auth.login(username, password))
 
     /** 登录第二步（两步验证）：成功后走与 [login] 完全相同的收尾。 */
-    suspend fun loginTwoStep(username: String, ticket: String, code: String) =
-        finishLogin(auth.loginTwoStep(ticket, code), username)
+    suspend fun loginTwoStep(ticket: String, code: String) = finishLogin(auth.loginTwoStep(ticket, code))
 
-    private suspend fun finishLogin(r: com.libeyond.imandroid.sdk.api.LoginResult, username: String) {
-        tokens.adopt(r.token, r.uid, r.refreshToken, username)
+    /** 所有登录路径的收尾。本机存的用户名**只取响应里的**（[com.libeyond.imandroid.sdk.api.LoginResult.username]）。 */
+    internal suspend fun finishLogin(r: com.libeyond.imandroid.sdk.api.LoginResult) {
+        tokens.adopt(r.token, r.uid, r.refreshToken, r.username)
         log.i("login_ok", "uid" to r.uid)
         downloads.syncOpenedOwner() // 「看过」登记按账号换成这个账号的
         socket.connect()
@@ -509,11 +513,11 @@ class IMClient(
      * 整段 [NonCancellable]：`HttpClient` 走阻塞的 OkHttp `execute`，取消打不断请求——服务端照样改密、
      * 照样作废旧凭据，而协程若在应答回来时已被取消，新凭据就丢在半路。
      */
-    suspend fun changePassword(oldPassword: String, newPassword: String) {
+    suspend fun changePassword(proof: com.libeyond.imandroid.sdk.api.Proof, newPassword: String) {
         // 发起时的账号：应答晚于「退出登录 / 换号」回来时据此拒写（见 adoptRotatedRefreshToken）
         val startedUid = tokens.uid
         withContext(NonCancellable) {
-            val r = auth.changePassword(oldPassword, newPassword)
+            val r = auth.changePassword(proof, newPassword)
             tokens.adoptRotatedRefreshToken(r.refreshToken, startedUid)
             log.i("password_changed", "rotated" to !r.refreshToken.isNullOrEmpty())
         }
@@ -564,17 +568,7 @@ class IMClient(
      */
     suspend fun wipeLocalChatData(owner: String) {
         if (owner.isEmpty()) return
-        runCatching {
-            db.withTransaction {
-                db.messages().clearAccount(owner)
-                db.pending().clearAccount(owner)
-                db.conversations().clearAccount(owner)
-                db.ranges().clearAccount(owner)
-                db.ranges().clearFloorAccount(owner)
-                db.friendLocal().clear(owner)
-                db.groupLocal().clear(owner)
-            }
-        }.onFailure { log.w("wipe_local_failed", "err" to it.javaClass.simpleName) }
+        runCatching { com.libeyond.imandroid.data.LocalWipe.database(db, owner) }.onFailure { log.w("wipe_local_failed", "err" to it.javaClass.simpleName) }
         // 库之外的本机落地物（媒体原件按 URL 存、非按账号，整个清，别的账号会重新下载）；不因库清理失败而跳过
         runCatching { com.libeyond.imandroid.data.LocalWipe.filesAndPrefs(appContext, owner) }
             .onFailure { log.w("wipe_files_failed", "err" to it.javaClass.simpleName) }

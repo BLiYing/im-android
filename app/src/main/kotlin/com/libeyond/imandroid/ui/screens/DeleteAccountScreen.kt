@@ -11,31 +11,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.libeyond.imandroid.R
 import com.libeyond.imandroid.data.DeleteAccountRules
 import com.libeyond.imandroid.data.DisplayName
 import com.libeyond.imandroid.sdk.api.OwnedGroup
-import com.libeyond.imandroid.ui.components.IMSettingsGroup
 import com.libeyond.imandroid.ui.theme.IMTheme
 
 /**
  * 注销账号二级页（IMServer `docs/design/DELETE_ACCOUNT_DESIGN.md` §3/§4 + 草图 DELETE_ACCOUNT_UX_SKETCH.html）。
  *
- * 纯展示：密码 / 错误 / 群主阻断名单 / 提交态由 `DeleteAccountHost` 持有。
- * 版式在共用的 [DangerConfirmPage]；这里只补页面独有的（群主阻断卡 + 密码框）。
+ * 纯展示：错误 / 群主阻断名单 / 提交态由 `DeleteAccountHost` 持有。身份证明在确认身份弹层里输（不再有页内密码框）。
+ * 版式在共用的 [DangerConfirmPage]；这里只补页面独有的群主阻断卡。
  */
 @Composable
 fun DeleteAccountScreen(
-    password: String,
-    onPasswordChange: (String) -> Unit,
     error: String,
     ownedGroups: List<OwnedGroup>,
     onOpenGroup: (OwnedGroup) -> Unit,
@@ -45,8 +39,7 @@ fun DeleteAccountScreen(
 ) {
     val d = IMTheme.dimens
     val blocked = ownedGroups.isNotEmpty()
-    val canSubmit = DeleteAccountRules.canSubmit(password, submitting, ownedGroups)
-    val focus = remember { FocusRequester() }
+    val canSubmit = DeleteAccountRules.canSubmit(submitting)
 
     DangerConfirmPage(
         title = stringResource(R.string.delete_account_title),
@@ -66,16 +59,6 @@ fun DeleteAccountScreen(
         if (blocked) {
             Spacer(Modifier.height(d.space3))
             OwnedGroupsCard(ownedGroups, onOpenGroup)
-        }
-        Spacer(Modifier.height(d.sectionGap))
-        IMSettingsGroup {
-            PasswordRow(
-                value = password, onValueChange = onPasswordChange,
-                placeholder = stringResource(R.string.delete_account_password_hint),
-                isError = false, enabled = !submitting && !blocked,
-                focusRequester = focus, imeAction = ImeAction.Done,
-                onImeAction = { if (canSubmit) onSubmit() },
-            )
         }
     }
 }

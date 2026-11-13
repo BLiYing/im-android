@@ -29,7 +29,7 @@ fun EmailHost(ctl: EmailController, onExit: () -> Unit) {
     // 进页：落到已知状态，再取一次最新值（多端之间以进页时的取值为准）
     LaunchedEffect(Unit) { ctl.open(); ctl.refresh() }
 
-    // 无论怎么离开（返回键 / 搜索跳转 / 被替换）都清掉内存里的密码与验证码
+    // 无论怎么离开（返回键 / 搜索跳转 / 被替换）都清掉内存里的身份证明与验证码
     DisposableEffect(ctl) { onDispose { ctl.reset() } }
 
     val back = { if (!ctl.back()) { ctl.reset(); onExit() } }
@@ -39,8 +39,7 @@ fun EmailHost(ctl: EmailController, onExit: () -> Unit) {
         when (s) {
             EmailStep.Intro -> EmailIntroScreen(unavailable = EmailRules.introDisabled(ctl.status), onStart = ctl::startForm, onBack = back)
             EmailStep.Form -> EmailFormScreen(
-                changing = ctl.isBound, email = ctl.email, password = ctl.password,
-                onEmail = ctl::onEmail, onPassword = ctl::onPassword,
+                changing = ctl.isBound, email = ctl.email, onEmail = ctl::onEmail,
                 error = ctl.error, busy = ctl.busy, onSubmit = ctl::submitSend, onBack = back,
             )
             EmailStep.Code -> EmailCodeScreen(
@@ -59,7 +58,7 @@ fun EmailHost(ctl: EmailController, onExit: () -> Unit) {
                 )
             }
             EmailStep.Unbind -> EmailUnbindScreen(
-                password = ctl.password, onPassword = ctl::onPassword, error = ctl.error, busy = ctl.busy,
+                error = ctl.error, busy = ctl.busy,
                 onSubmit = ctl::askUnbind, onBack = back,
             )
         }
@@ -72,6 +71,7 @@ fun EmailHost(ctl: EmailController, onExit: () -> Unit) {
             onConfirm = ctl::runUnbind, onDismiss = { ctl.confirmUnbind = false },
         )
     }
+    ProofSheetHost(ctl.proof)
     ctl.toast?.let { IMToast(it) { ctl.toast = null } }
 }
 

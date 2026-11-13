@@ -5,6 +5,7 @@ import com.libeyond.imandroid.sdk.http.HttpClient
 import com.libeyond.imandroid.sdk.logging.IMLog
 import com.libeyond.imandroid.sdk.protocol.ProtocolJson
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -84,10 +85,11 @@ class TwoStepWireTest {
     }
 
     @Test fun `请求体字段名与服务端一致`() {
-        assertEquals(setOf("password"), TwoStepApi.setupBody("p").keys)
+        assertEquals(setOf("proof"), TwoStepApi.setupBody(Proof.Password("p")).keys)
         assertEquals(setOf("code"), TwoStepApi.enableBody("123456").keys)
-        val v = TwoStepApi.verifyBody("p", "123456")
-        assertEquals(setOf("password", "code"), v.keys)
+        val v = TwoStepApi.verifyBody(Proof.SmsCode("000000"), "123456")
+        assertEquals(setOf("proof", "code"), v.keys)
+        assertEquals("000000", v.getValue("proof").jsonObject.getValue("sms_code").jsonPrimitive.content)
         assertEquals("123456", v.getValue("code").jsonPrimitive.content)
         // 第二步不带设备字段（设备取自第一步）
         assertEquals(setOf("ticket", "code"), TwoStepApi.loginBody("t", "c").keys)

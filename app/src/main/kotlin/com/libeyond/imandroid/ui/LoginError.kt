@@ -39,17 +39,14 @@ object LoginError {
             // 「用户名是对的、只是密码错了」，本端刻意用「用户名或密码错误」防用户名被枚举出来，
             // 这是既有的安全考量，不因为接上多语言就悄悄改掉。
             ErrCode.WRONG_PASSWORD -> strings.get(R.string.login_error_wrong_username_or_password)
-            ErrCode.USER_NOT_FOUND -> strings.get(R.string.err_200001)
-            ErrCode.USER_ALREADY_EXISTS -> strings.get(R.string.err_200004)
-            ErrCode.ACCOUNT_BANNED -> strings.get(R.string.err_200003)
             // 冷静期账号：有密码走恢复弹窗（AppRoot），走到这里的是免密路径——给本地化指引，不显示服务端英文原文
             ErrCode.ACCOUNT_PENDING_DELETION -> strings.get(R.string.err_200005)
             ErrCode.PARAM_INVALID -> e.message.ifEmpty { strings.get(R.string.login_error_param_invalid) }
-            ErrCode.RATE_LIMITED -> strings.get(R.string.err_100002)
             // 密码登录失败超限（S4）：与 ErrorText.friendlyText 共用同一实现（分钟数 / 缺 data 回通用 100002 文案）
             ErrCode.LOGIN_LOCKED -> ErrorText.loginLockedText(e.data) { id, args -> strings.get(id, *args) }
-            ErrCode.REGISTER_CLOSED -> strings.get(R.string.err_200007)
-            else -> e.message.ifEmpty { strings.get(R.string.err_request_failed, e.code.toString()) }
+            // 其余码 → 文案只有一张表（ErrorText.friendlyRes，含 200001/200003/200004/200007/100002 与短信 2000xx），这里不再列
+            else -> ErrorText.friendlyRes(e.code)?.let { strings.get(it) }
+                ?: e.message.ifEmpty { strings.get(R.string.err_request_failed, e.code.toString()) }
         }
     }
 

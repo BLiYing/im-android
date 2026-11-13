@@ -43,10 +43,9 @@ class EmailRulesTest {
     }
 
     @Test fun `发送按钮 两格有内容才可点 格式错不置灰`() {
-        assertTrue(EmailRules.canSend("alice@example", "pw", busy = false)) // 格式错照样可点，点后红字
-        assertFalse(EmailRules.canSend("", "pw", false))
-        assertFalse(EmailRules.canSend("a@b.com", "", false))
-        assertFalse(EmailRules.canSend("a@b.com", "pw", true))
+        assertTrue(EmailRules.canSend("alice@example", busy = false)) // 格式错照样可点，点后红字
+        assertFalse(EmailRules.canSend(" ", false))
+        assertFalse(EmailRules.canSend("a@b.com", true))
     }
 
     @Test fun `业务码映射`() {

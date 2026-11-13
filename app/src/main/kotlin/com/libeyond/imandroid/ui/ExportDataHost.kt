@@ -48,13 +48,13 @@ private const val POLL_MS = 2000L
 fun ExportDataHost(client: IMClient, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    val proof = remember(client) { ProofController.of(client, SecurityState.of(client)) }
     var job by remember { mutableStateOf<ExportJob?>(null) }
     var loaded by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf("") }
-    // 配置变更 / 进程重建后保留表单（密码不落 saved state）与「重试」「冷却」这类本地态
+    // 配置变更 / 进程重建后保留表单与「重试」「冷却」这类本地态
     var form by rememberSaveable(stateSaver = ExportFormSaver) { mutableStateOf(ExportForm()) }
     var error by remember { mutableStateOf("") }
-    var submitting by remember { mutableStateOf(false) }
     var cancelling by remember { mutableStateOf(false) }
     val dlState by client.exportDownloads.state.collectAsState()
     val dlProgress by client.exportDownloads.progress.collectAsState()
@@ -95,27 +95,26 @@ fun ExportDataHost(client: IMClient, onBack: () -> Unit) {
         while (true) { delay(POLL_MS); refresh() } // 单次失败静默，下一拍再试；协程随页面离开取消
     }
 
+    // 密码错 / 验证码错：留在弹层里重输；其余收起弹层，在页面上显示
     fun start() {
-        if (!ExportRules.canStart(form.password, form.html, form.json, submitting)) return
-        submitting = true
+        if (!ExportRules.canStart(form.html, form.json, proof.busy)) return
         error = ""
-        scope.launch {
-            runCatchingCancellable { client.dataExport.start(form.password, form.includeMedia, ExportRules.formats(form.html, form.json)) }
-                .onSuccess { job = it; loaded = true; retrying = false; form = form.copy(password = "") }
-                .onFailure { e ->
-                    val api = e as? ApiException
-                    when (api?.code) {
-                        ErrCode.WRONG_PASSWORD -> error = Str.s(R.string.err_200002) // 内联红字，输入保留
-                        ErrCode.EXPORT_BUSY -> { toast = Str.s(R.string.err_200010); refresh() }
-                        ErrCode.EXPORT_COOLDOWN -> {
-                            val sec = ExportApi.retryAfterSec(api.data) ?: (ExportRules.COOLDOWN_MS / 1000)
-                            cooldownUntil = System.currentTimeMillis() + sec * 1000
-                        }
-                        else -> error = e.userMessage(Str.s(R.string.err_request_failed, "export_start"))
+        val (media, formats) = form.includeMedia to ExportRules.formats(form.html, form.json)
+        proof.submit(
+            call = { p -> client.dataExport.start(p, media, formats) },
+            onOk = { job = it; loaded = true; retrying = false },
+            onPageError = { e ->
+                val api = e as? ApiException
+                when (api?.code) {
+                    ErrCode.EXPORT_BUSY -> { toast = Str.s(R.string.err_200010); scope.launch { refresh() } }
+                    ErrCode.EXPORT_COOLDOWN -> {
+                        val sec = ExportApi.retryAfterSec(api.data) ?: (ExportRules.COOLDOWN_MS / 1000)
+                        cooldownUntil = System.currentTimeMillis() + sec * 1000
                     }
+                    else -> error = e.userMessage(Str.s(R.string.err_request_failed, "export_start"))
                 }
-            submitting = false
-        }
+            },
+        )
     }
 
     fun cancel() {
@@ -145,7 +144,7 @@ fun ExportDataHost(client: IMClient, onBack: () -> Unit) {
     ExportDataScreen(
         view = view, form = form,
         onFormChange = { form = it; error = "" },
-        error = error, submitting = submitting, downloading = downloading, downloadProgress = dlProgress, cancelling = cancelling,
+        error = error, submitting = proof.busy, downloading = downloading, downloadProgress = dlProgress, cancelling = cancelling,
         onStart = ::start, onCancel = ::cancel,
         onDownload = {
             if (!downloading) {
@@ -159,10 +158,11 @@ fun ExportDataHost(client: IMClient, onBack: () -> Unit) {
         onReload = { scope.launch { refresh() } },
         onBack = onBack,
     )
+    ProofSheetHost(proof)
     toast?.let { IMToast(it) { toast = null } }
 }
 
-/** 表单的 saved-state 编码：不含密码。 */
+/** 表单的 saved-state 编码。 */
 private val ExportFormSaver = listSaver<ExportForm, Boolean>(
     save = { listOf(it.includeMedia, it.html, it.json) },
     restore = { ExportForm(includeMedia = it[0], html = it[1], json = it[2]) },

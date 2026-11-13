@@ -11,6 +11,7 @@
     <string name="about_title">关于我们</string>
     <string name="about_version">版本</string>
     <string name="about_version_copied">已复制版本信息</string>
+    <string name="account_restore_sms_done">账号已恢复，请重新获取验证码登录</string>
     <string name="appearance_bubble_radius_title">信息框圆角</string>
     <string name="appearance_chat_theme">聊天主题</string>
     <string name="appearance_font_size_title">字体大小</string>
@@ -612,6 +613,7 @@
     <string name="common_share">分享</string>
     <string name="common_status">状态</string>
     <string name="common_stop">停止</string>
+    <string name="common_submitting">提交中…</string>
     <string name="common_system_notice">系统通知</string>
     <string name="common_tap_to_retry">点击重试</string>
     <string name="common_type">类型</string>
@@ -654,7 +656,7 @@
     <string name="contacts_entry_my_friends">我的好友</string>
     <string name="contacts_entry_official_account">公众号</string>
     <string name="contacts_entry_service_account">服务号</string>
-    <string name="contacts_friends_empty">还没有好友，上面搜索用户添加吧</string>
+    <string name="contacts_friends_empty">还没有好友，可以在通讯录首页添加</string>
     <string name="contacts_friends_header_count">好友（%1$d）</string>
     <string name="contacts_friends_header_filtered">好友（%1$d/%2$d）</string>
     <string name="contacts_friends_section_label">好友</string>
@@ -1357,6 +1359,7 @@
     <string name="login_sms_code_resend">重新获取</string>
     <string name="login_sms_code_resend_in">%1$d 秒后重发</string>
     <string name="login_sms_code_send">获取验证码</string>
+    <string name="login_sms_code_six_digits">6 位数字</string>
     <string name="login_submitting">登录中…</string>
     <string name="login_tab_password">密码登录</string>
     <string name="login_tab_qr">扫码登录</string>
@@ -1579,6 +1582,9 @@
     <string name="notify_body_contact">[名片]</string>
     <string name="notify_body_default">[消息]</string>
     <string name="notify_body_missed_call">[未接来电]</string>
+    <string name="password_err_old_required">请输入当前密码</string>
+    <string name="password_err_same_as_old">新密码不能与当前密码相同</string>
+    <string name="password_err_wrong_old">当前密码不正确</string>
     <string name="password_error_account_banned">账号已被封禁，无法修改密码</string>
     <string name="password_error_empty_old">请输入旧密码</string>
     <string name="password_error_generic_failed">修改密码失败，请稍后再试</string>
@@ -1725,6 +1731,7 @@
     <string name="profile_username_invalid_format">用户名只能是小写字母、数字、下划线，5–32 位</string>
     <string name="profile_username_required">用户名不能为空</string>
     <string name="proof_confirm">确认</string>
+    <string name="proof_load_failed">无法确认验证方式，请检查网络后重试</string>
     <string name="proof_password_placeholder">当前密码</string>
     <string name="proof_tab_password">密码</string>
     <string name="proof_tab_sms">短信验证码</string>
@@ -1955,6 +1962,7 @@
     <string name="register_complete_hint">填写昵称即可完成注册，这是别人看到的名字。</string>
     <string name="register_complete_submit">完成</string>
     <string name="register_complete_title">完善资料</string>
+    <string name="register_complete_verified">%1$s 已验证</string>
     <string name="reset_confirm_password">再次输入新密码</string>
     <string name="reset_done">密码已重设，请用新密码登录</string>
     <string name="reset_footer">重设后，所有设备都需要重新登录。</string>
@@ -2009,6 +2017,7 @@
     <string name="security_phone_current">当前手机号 %1$s</string>
     <string name="security_phone_new_placeholder">新手机号</string>
     <string name="security_phone_next">下一步</string>
+    <string name="security_phone_next_hint">下一步需要确认是你本人</string>
     <string name="security_phone_toast_bound">手机号已绑定</string>
     <string name="security_phone_toast_changed">手机号已更换</string>
     <string name="security_phone_unbound">未绑定</string>
@@ -2126,6 +2135,9 @@
     <string name="sys_notice_password_changed_headline">你的账号密码已于 %1$s 修改成功。</string>
     <string name="sys_notice_password_reset_footer">如非本人操作，说明你的手机号可能已被他人掌握，请立即重设密码并开启两步验证。</string>
     <string name="sys_notice_password_reset_headline">你的账号密码已于 %1$s 通过短信验证码重设，所有设备已下线。</string>
+    <string name="sys_notice_password_set_device_line">· 操作设备：%1$s</string>
+    <string name="sys_notice_password_set_footer">如非本人操作，请立即用短信验证码重设密码并检查已登录设备。</string>
+    <string name="sys_notice_password_set_headline">你的账号已于 %1$s 设置了登录密码，之后可以用手机号和密码登录。</string>
     <string name="sys_notice_phone_bound_device_line">· 操作设备：%1$s</string>
     <string name="sys_notice_phone_bound_footer">如非本人操作，请立即修改密码并检查已登录设备。</string>
     <string name="sys_notice_phone_bound_headline">你的账号已于 %1$s 绑定登录手机号 %2$s。</string>
@@ -2200,7 +2212,7 @@
     <string name="twostep_toast_regenerated">已生成新的恢复码</string>
     <string name="twostep_use_code">改用验证码</string>
     <string name="twostep_use_recovery">改用恢复码</string>
-    <string name="twostep_verify_pw_footer">为保护账号，开启前需要确认你的密码。</string>
+    <string name="twostep_verify_pw_footer">为保护账号，开启前需要先确认是你本人。</string>
     <string name="twostep_verify_pw_title">验证密码</string>
     <string name="upload_precheck_blocked_type">管理员已禁止发送安装包和可执行文件</string>
     <string name="upload_precheck_too_large">文件超过 %1$s，无法发送</string>

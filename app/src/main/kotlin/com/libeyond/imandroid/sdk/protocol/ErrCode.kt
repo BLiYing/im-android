@@ -74,6 +74,22 @@ object ErrCode {
     const val EMAIL_UNAVAILABLE = 200036
     const val EMAIL_SEND_FAILED = 200037
 
+    // --- 手机号与短信验证码 2000(40-48)（PROTOCOL §7.3）---
+    /** 未配置通道 / 号码不在测试号码里 / 本人未绑定手机号。 */
+    const val SMS_UNAVAILABLE = 200040
+    const val PHONE_INVALID = 200041
+    const val PHONE_TAKEN = 200042
+    /** 验证码不对；`data.attempts_left`。 */
+    const val SMS_CODE_INVALID = 200043
+    /** 过期 / 尝试耗尽 / 无待验证请求；`data.retry_after_sec`。 */
+    const val SMS_CODE_EXPIRED = 200044
+    const val SMS_SEND_FAILED = 200045
+    const val SMS_DAILY_CAP = 200046
+    /** 仅忘记密码：号码没有可用账号。 */
+    const val PHONE_NOT_REGISTERED = 200047
+    /** `register_ticket` / `restore_ticket` 过期或已用。 */
+    const val PHONE_TICKET_INVALID = 200048
+
     // --- 好友 2001xx ---
     const val FRIEND_ALREADY_FRIENDS = 200101
     const val FRIEND_BLOCKED = 200102

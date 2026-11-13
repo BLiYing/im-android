@@ -15,13 +15,16 @@ data class OwnedGroup(val convId: String, val name: String)
 
 /**
  * 注销账号 / 冷静期恢复（PROTOCOL §6.16.1）：
- * `POST /account/delete {password}`（需鉴权）、`POST /account/restore {username,password}`（免鉴权，等同登录）。
+ * `POST /account/delete {proof}`（需鉴权）、`POST /account/restore {username,password}`（免鉴权，等同登录）。
  */
 class AccountApi(private val http: HttpClient) {
 
-    /** 校验密码后进入 7 天冷静期并吊销本账号全部会话。群主会被拒（100103 + `owned_groups`）。 */
-    suspend fun delete(password: String) {
-        http.call("POST", "/api/v1/account/delete", buildJsonObject { put("password", password) })
+    /**
+     * 校验身份（密码或短信验证码）后进入 7 天冷静期并吊销本账号全部会话。
+     * 群主会被拒（100103 + `owned_groups`）——这一拒**不会**用掉验证码，转让后可拿同一个码重交。
+     */
+    suspend fun delete(proof: Proof) {
+        http.call("POST", "/api/v1/account/delete", buildJsonObject { put("proof", proof.toJson()) })
     }
 
     /** 冷静期内凭原密码恢复。免鉴权，服务端须套登录同款限流。 */

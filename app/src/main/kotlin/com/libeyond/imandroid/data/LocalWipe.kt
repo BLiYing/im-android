@@ -1,6 +1,8 @@
 package com.libeyond.imandroid.data
 
 import android.content.Context
+import androidx.room.withTransaction
+import com.libeyond.imandroid.data.db.IMDatabase
 import java.io.File
 
 /**
@@ -18,6 +20,19 @@ object LocalWipe {
 
     /** 按账号分键的偏好（文件名 → 键）：只删被注销账号的键，同机其它账号的不动。 */
     val OWNER_KEYED_PREFS = mapOf("im_viewed_media" to "viewed.", "im_chat_folders" to "folders.")
+
+    /** 本库里 [owner] 的聊天缓存（单库多账号靠 ownerUid 隔离，同机其它账号不动），一个事务。 */
+    suspend fun database(db: IMDatabase, owner: String) {
+        db.withTransaction {
+            db.messages().clearAccount(owner)
+            db.pending().clearAccount(owner)
+            db.conversations().clearAccount(owner)
+            db.ranges().clearAccount(owner)
+            db.ranges().clearFloorAccount(owner)
+            db.friendLocal().clear(owner)
+            db.groupLocal().clear(owner)
+        }
+    }
 
     fun filesAndPrefs(context: Context, owner: String) {
         // 删完立刻重建空目录：MediaCache / VoiceRecorder 只在构造时 mkdirs，本进程内接着登录不能写到不存在的目录

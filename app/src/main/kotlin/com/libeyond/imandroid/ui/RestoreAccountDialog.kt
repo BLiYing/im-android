@@ -8,8 +8,13 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
 
-/** 登录遇到「账号冷静期」时暂存的凭据与到期时间（用于「恢复账号」后继续登录）。 */
-data class PendingRestore(val username: String, val password: String, val deleteAtMillis: Long?)
+/**
+ * 登录遇到「账号冷静期」时暂存的凭据与到期时间（用于「恢复账号」后继续登录）。
+ * 验证码登录命中时没有用户名密码，带的是一次性 [ticket]（`200005` 的 `data.restore_ticket`，PROTOCOL §7.3）。
+ */
+data class PendingRestore(val username: String, val password: String, val deleteAtMillis: Long?, val ticket: String? = null) {
+    override fun toString() = "PendingRestore(***)"
+}
 
 /** 冷静期内重新登录的恢复弹窗（DELETE_ACCOUNT_DESIGN §3.5）。恢复为非破坏性操作，按钮不画红。 */
 @Composable

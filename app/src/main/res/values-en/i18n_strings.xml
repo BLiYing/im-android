@@ -11,6 +11,7 @@
     <string name="about_title">About</string>
     <string name="about_version">Version</string>
     <string name="about_version_copied">Version info copied</string>
+    <string name="account_restore_sms_done">Your account is restored. Get a new code to log in.</string>
     <string name="appearance_bubble_radius_title">Message corner radius</string>
     <string name="appearance_chat_theme">Chat theme</string>
     <string name="appearance_font_size_title">Font size</string>
@@ -638,6 +639,7 @@
     <string name="common_share">Share</string>
     <string name="common_status">Status</string>
     <string name="common_stop">Stop</string>
+    <string name="common_submitting">Submitting…</string>
     <string name="common_system_notice">System notifications</string>
     <string name="common_tap_to_retry">Tap to retry</string>
     <string name="common_type">Type</string>
@@ -682,7 +684,7 @@
     <string name="contacts_entry_my_friends">My friends</string>
     <string name="contacts_entry_official_account">Official accounts</string>
     <string name="contacts_entry_service_account">Service accounts</string>
-    <string name="contacts_friends_empty">No friends yet — search above to add one</string>
+    <string name="contacts_friends_empty">No friends yet. Add people from the Contacts page.</string>
     <string name="contacts_friends_header_count">Friends (%1$d)</string>
     <string name="contacts_friends_header_filtered">Friends (%1$d/%2$d)</string>
     <string name="contacts_friends_section_label">Friends</string>
@@ -1403,6 +1405,7 @@
     <string name="login_sms_code_resend">Resend</string>
     <string name="login_sms_code_resend_in">Resend in %1$ds</string>
     <string name="login_sms_code_send">Get code</string>
+    <string name="login_sms_code_six_digits">6 digits</string>
     <string name="login_submitting">Logging in…</string>
     <string name="login_tab_password">Password login</string>
     <string name="login_tab_qr">QR code login</string>
@@ -1626,6 +1629,9 @@
     <string name="notify_body_contact">[Contact]</string>
     <string name="notify_body_default">[Message]</string>
     <string name="notify_body_missed_call">[Missed call]</string>
+    <string name="password_err_old_required">Enter your current password</string>
+    <string name="password_err_same_as_old">The new password must be different from the current one</string>
+    <string name="password_err_wrong_old">Your current password is incorrect</string>
     <string name="password_error_account_banned">This account is banned and can\'t change its password</string>
     <string name="password_error_empty_old">Enter your old password</string>
     <string name="password_error_generic_failed">Couldn\'t change the password. Please try again later.</string>
@@ -1776,6 +1782,7 @@
     <string name="profile_username_invalid_format">Username can only contain lowercase letters, numbers, and underscores, 5–32 characters</string>
     <string name="profile_username_required">Username can\'t be empty</string>
     <string name="proof_confirm">Confirm</string>
+    <string name="proof_load_failed">Couldn’t check how to verify you. Check your connection and try again.</string>
     <string name="proof_password_placeholder">Current password</string>
     <string name="proof_tab_password">Password</string>
     <string name="proof_tab_sms">SMS code</string>
@@ -2011,6 +2018,7 @@
     <string name="register_complete_hint">Enter a nickname to finish signing up. This is the name others will see.</string>
     <string name="register_complete_submit">Done</string>
     <string name="register_complete_title">Complete your profile</string>
+    <string name="register_complete_verified">%1$s verified</string>
     <string name="reset_confirm_password">Enter the new password again</string>
     <string name="reset_done">Password reset. Log in with your new password.</string>
     <string name="reset_footer">After resetting, every device needs to log in again.</string>
@@ -2066,6 +2074,7 @@
     <string name="security_phone_current">Current number %1$s</string>
     <string name="security_phone_new_placeholder">New phone number</string>
     <string name="security_phone_next">Next</string>
+    <string name="security_phone_next_hint">Next, you’ll confirm it’s you</string>
     <string name="security_phone_toast_bound">Phone number added</string>
     <string name="security_phone_toast_changed">Phone number changed</string>
     <string name="security_phone_unbound">Not set</string>
@@ -2186,6 +2195,9 @@
     <string name="sys_notice_password_changed_headline">Your account password was changed successfully at %1$s.</string>
     <string name="sys_notice_password_reset_footer">If this wasn’t you, someone may have access to your phone number. Reset your password now and turn on two-step verification.</string>
     <string name="sys_notice_password_reset_headline">Your account password was reset with an SMS code at %1$s. All devices have been signed out.</string>
+    <string name="sys_notice_password_set_device_line">· Device: %1$s</string>
+    <string name="sys_notice_password_set_footer">If this wasn’t you, reset your password with an SMS code right away and review your signed-in devices.</string>
+    <string name="sys_notice_password_set_headline">Your account set a login password at %1$s. You can now log in with your phone number and password.</string>
     <string name="sys_notice_phone_bound_device_line">· Device: %1$s</string>
     <string name="sys_notice_phone_bound_footer">If this wasn’t you, change your password right away and review your signed-in devices.</string>
     <string name="sys_notice_phone_bound_headline">Your account added the login phone %2$s at %1$s.</string>
@@ -2260,7 +2272,7 @@
     <string name="twostep_toast_regenerated">New recovery codes generated</string>
     <string name="twostep_use_code">Use authenticator code</string>
     <string name="twostep_use_recovery">Use a recovery code</string>
-    <string name="twostep_verify_pw_footer">To protect your account, please confirm your password before turning this on.</string>
+    <string name="twostep_verify_pw_footer">To protect your account, you’ll first confirm it’s you.</string>
     <string name="twostep_verify_pw_title">Verify password</string>
     <string name="upload_precheck_blocked_type">The administrator doesn’t allow sending installers or executable files</string>
     <string name="upload_precheck_too_large">This file is larger than %1$s and can’t be sent</string>

@@ -14,13 +14,16 @@ import com.libeyond.imandroid.i18n.Str
  * 第一组两行、「自动删除消息」与「谁能看到」四行是真功能；其余是**灰置占位**（点了提示开发中；目前只剩通行密钥）。占位行照样列出来，
  * 理由与「我」页相同：删掉会让三端这一页长得不一样，用户换个端就找不到东西。
  */
-enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, LastSeen, Avatar, Bio, Trash, Export }
+enum class PrivacyIcon { Blocked, Key, TwoStep, Passkey, Mail, Timer, Phone, LastSeen, Avatar, Bio, Trash, Export, Smartphone }
 
 /** 图标底色（iOS `UIColor.system*`）。 */
-enum class PrivacyTint { Danger, Red, Blue, Gray, Purple, Teal, Orange, Green, Yellow }
+enum class PrivacyTint { Danger, Red, Blue, Gray, Purple, Teal, Orange, Green, Yellow, Pink }
 
-/** 点一行做什么。 */
-enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone, ExportData, ClearAll, TwoStep, Email, ComingSoon }
+/**
+ * 点一行做什么。`ChangePassword` = 「登录密码」行（设置 / 修改，PHONE_AUTH_DESIGN §6）；
+ * `LoginPhone` = 「登录手机号」（与「谁能看到」里资料手机号的 `Phone` 是两回事）。
+ */
+enum class PrivacyAction { Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone, ExportData, ClearAll, TwoStep, Email, LoginPhone, ComingSoon }
 
 data class PrivacyRow(
     val title: String,
@@ -47,19 +50,26 @@ object PrivacySecurity {
     val BLOCKED_EMPTY_SUBTITLE: String get() = Str.s(R.string.blocked_empty_subtitle)
     val UNBLOCK: String get() = Str.s(R.string.blocked_unblock)
 
-    // 惰性求值：**禁止在顶层 val 初始化时求值文案**，改成 get()，每次访问现烤，切语言立刻生效。
-    val groups: List<PrivacyGroup> get() = listOf(
+    /**
+     * 页面结构。每次调用现烤文案（**禁止在顶层 val 初始化时求值文案**，切语言要立刻生效）。
+     * [showLoginPhone]：「账号保护」组第一行「登录手机号」是否出现（[PhoneAuthRules.showPhoneRow]）。
+     */
+    fun groups(showLoginPhone: Boolean = false): List<PrivacyGroup> = listOf(
         PrivacyGroup(
             footer = BLOCKED_HINT,
             rows = listOf(
                 PrivacyRow(BLOCKED_TITLE, PrivacyIcon.Blocked, PrivacyTint.Red, action = PrivacyAction.Blocked),
-                PrivacyRow(Str.s(R.string.settings_change_password), PrivacyIcon.Key, PrivacyTint.Blue, action = PrivacyAction.ChangePassword),
+                // 原「修改密码」行改名「登录密码」，位置与图标不变；右值 已设置 / 未设置 由页面按 GET /users/me/security 填
+                PrivacyRow(Str.s(R.string.security_password), PrivacyIcon.Key, PrivacyTint.Blue, action = PrivacyAction.ChangePassword),
             ),
         ),
         PrivacyGroup(
             header = Str.s(R.string.ps_section_account_protection),
-            footer = Str.s(R.string.ps_account_protection_footer),
-            rows = listOf(
+            footer = Str.s(R.string.security_protect_footer),
+            rows = listOfNotNull(
+                // 活行：右值 = 打码号码 / 未绑定；短信不可用且没绑定时不出现（没法绑）
+                PrivacyRow(Str.s(R.string.security_phone), PrivacyIcon.Smartphone, PrivacyTint.Pink, action = PrivacyAction.LoginPhone)
+                    .takeIf { showLoginPhone },
                 // 活行：右值 = 开启 / 关闭，由页面按 GET /users/me/two-step 填（[TwoStepRules.rowLabel]）
                 PrivacyRow(Str.s(R.string.ps_row_two_factor), PrivacyIcon.TwoStep, PrivacyTint.Gray, action = PrivacyAction.TwoStep),
                 PrivacyRow(Str.s(R.string.ps_row_passkey), PrivacyIcon.Passkey, PrivacyTint.Purple, Str.s(R.string.common_off)),

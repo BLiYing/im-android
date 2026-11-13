@@ -54,15 +54,8 @@ fun TwoStepHost(client: IMClient, ctl: TwoStepController, onExit: () -> Unit) {
 
     PushTransition(targetState = ctl.step, depthOf = { stepDepth(it) }) { s ->
         when (s) {
-            TwoStepStep.Intro -> TwoStepIntroScreen(onStart = { ctl.goto(TwoStepStep.Password) }, onBack = back)
-            TwoStepStep.Password -> TwoStepVerifyScreen(
-                title = stringResource(R.string.twostep_verify_pw_title), footer = stringResource(R.string.twostep_verify_pw_footer),
-                submitText = stringResource(R.string.twostep_action_continue),
-                password = ctl.password, onPassword = ctl::onPassword,
-                showCode = false, code = "", onCode = {}, recoveryMode = false, onToggleRecovery = {},
-                error = ctl.error, busy = ctl.busy, canSubmit = ctl.password.isNotEmpty(), danger = false,
-                onSubmit = ctl::submitSetup, onBack = back,
-            )
+            // 「开启」先弹确认身份弹层（不再有单独的验密码页）
+            TwoStepStep.Intro -> TwoStepIntroScreen(onStart = ctl::startSetup, onBack = back, busy = ctl.busy, error = ctl.error)
             TwoStepStep.Bind -> ctl.setup?.let { su ->
                 TwoStepBindScreen(
                     otpauthUri = su.otpauthUri, secret = su.secret,
@@ -102,11 +95,10 @@ fun TwoStepHost(client: IMClient, ctl: TwoStepController, onExit: () -> Unit) {
                     title = stringResource(if (disable) R.string.twostep_disable_title else R.string.twostep_regen_title),
                     footer = stringResource(if (disable) R.string.twostep_disable_footer else R.string.twostep_regen_footer),
                     submitText = stringResource(if (disable) R.string.twostep_disable_row else R.string.twostep_regen_submit),
-                    password = ctl.password, onPassword = ctl::onPassword,
-                    showCode = true, code = ctl.code, onCode = ctl::onCode,
+                    code = ctl.code, onCode = ctl::onCode,
                     recoveryMode = ctl.recoveryMode, onToggleRecovery = ctl::toggleRecovery,
                     error = ctl.error, busy = ctl.busy,
-                    canSubmit = TwoStepRules.canSubmitVerify(ctl.password, ctl.code, ctl.recoveryMode), danger = disable,
+                    canSubmit = TwoStepRules.canSubmitVerify(ctl.code, ctl.recoveryMode), danger = disable,
                     onSubmit = ctl::submitVerify, onBack = back,
                 )
             }
@@ -127,13 +119,14 @@ fun TwoStepHost(client: IMClient, ctl: TwoStepController, onExit: () -> Unit) {
             onConfirm = ctl::runDisable, onDismiss = { ctl.confirmDisable = false },
         )
     }
+    ProofSheetHost(ctl.proof)
     ctl.toast?.let { IMToast(it) { ctl.toast = null } }
 }
 
 /** 页深：Intro/Status = 0，流程页 = 1，恢复码页 = 2（决定推入 / 退出的转场方向）。 */
 private fun stepDepth(s: TwoStepStep): Int = when (s) {
     TwoStepStep.Intro, TwoStepStep.Status -> 0
-    TwoStepStep.Password, TwoStepStep.Disable, TwoStepStep.Regen -> 1
+    TwoStepStep.Disable, TwoStepStep.Regen -> 1
     TwoStepStep.Bind -> 2
     TwoStepStep.Codes -> 3
 }

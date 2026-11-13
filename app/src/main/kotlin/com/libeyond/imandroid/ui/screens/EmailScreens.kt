@@ -11,14 +11,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -87,30 +83,18 @@ fun EmailBoundScreen(email: String, sinceLabel: String, onChange: () -> Unit, on
     }
 }
 
-/** 解绑密码页：一个密码框 + footer（解除后的影响）+ 红色主按钮；二次确认弹窗在 Host。 */
+/** 解绑页：footer（解除后的影响）+ 红色主按钮；二次确认弹窗与确认身份弹层在 Host。 */
 @Composable
 fun EmailUnbindScreen(
-    password: String,
-    onPassword: (String) -> Unit,
     error: String,
     busy: Boolean,
     onSubmit: () -> Unit,
     onBack: () -> Unit,
 ) {
     val d = IMTheme.dimens
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    val can = password.isNotEmpty() && !busy
+    val can = !busy
     TwoStepPage(stringResource(R.string.email_action_unbind), onBack) {
         Spacer(Modifier.height(d.sectionGap))
-        IMSettingsGroup {
-            PasswordRow(
-                value = password, onValueChange = onPassword,
-                placeholder = stringResource(R.string.email_field_password),
-                isError = false, enabled = !busy, focusRequester = focus,
-                imeAction = ImeAction.Done, onImeAction = { if (can) onSubmit() },
-            )
-        }
         TwoStepNote(error, error = true)
         TwoStepNote(stringResource(R.string.email_unbind_body))
         Spacer(Modifier.height(d.space4 + d.space1))

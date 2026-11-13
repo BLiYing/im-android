@@ -35,14 +35,15 @@ import com.libeyond.imandroid.ui.components.IMSettingsGroup
 import com.libeyond.imandroid.ui.components.IMSettingsRow
 import com.libeyond.imandroid.ui.theme.IMTheme
 
-/** 介绍页（关闭态）：盾牌 + 两段说明 + 「开启两步验证」。 */
+/** 介绍页（关闭态）：盾牌 + 两段说明 + 「开启两步验证」（点了先弹确认身份弹层）。 */
 @Composable
-fun TwoStepIntroScreen(onStart: () -> Unit, onBack: () -> Unit) {
+fun TwoStepIntroScreen(onStart: () -> Unit, onBack: () -> Unit, busy: Boolean = false, error: String = "") {
     val d = IMTheme.dimens
     TwoStepPage(stringResource(R.string.twostep_title), onBack) {
         TwoStepHero(stringResource(R.string.twostep_title), stringResource(R.string.twostep_intro_body))
+        TwoStepNote(error, error = true)
         Spacer(Modifier.height(28.dp))
-        IMPrimaryButton(stringResource(R.string.twostep_intro_start), onStart, Modifier.padding(horizontal = d.space4))
+        IMPrimaryButton(stringResource(R.string.twostep_intro_start), onStart, Modifier.padding(horizontal = d.space4), loading = busy)
         Spacer(Modifier.height(d.sectionGap))
     }
 }
@@ -102,7 +103,7 @@ private fun RecoveryRow(remaining: Int, onClick: () -> Unit) {
 }
 
 /**
- * 「密码（+码）」验证页，三处共用：开启前验密码（[showCode] = false）、重新生成恢复码、关闭。
+ * 「动态码 / 恢复码」验证页，两处共用：重新生成恢复码、关闭。点主按钮后再弹确认身份弹层（密码或短信验证码）。
  * 码框可切「改用恢复码」。值 / 错误 / 忙态全由 Host 持有（请求挂 `client.scope`，返回再进来不丢结果）。
  */
 @Composable
@@ -110,9 +111,6 @@ fun TwoStepVerifyScreen(
     title: String,
     footer: String,
     submitText: String,
-    password: String,
-    onPassword: (String) -> Unit,
-    showCode: Boolean,
     code: String,
     onCode: (String) -> Unit,
     recoveryMode: Boolean,
@@ -125,37 +123,22 @@ fun TwoStepVerifyScreen(
     onBack: () -> Unit,
 ) {
     val d = IMTheme.dimens
-    val pwFocus = remember { FocusRequester() }
     val codeFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { pwFocus.requestFocus() }
-    LaunchedEffect(recoveryMode) { if (showCode && code.isEmpty() && password.isNotEmpty()) codeFocus.requestFocus() }
+    LaunchedEffect(recoveryMode) { runCatching { codeFocus.requestFocus() } }
     TwoStepPage(title, onBack) {
         Spacer(Modifier.height(d.sectionGap))
         IMSettingsGroup {
-            PasswordRow(
-                value = password, onValueChange = onPassword,
-                placeholder = stringResource(R.string.twostep_field_password),
-                isError = error.isNotEmpty() && !showCode, enabled = !busy,
-                focusRequester = pwFocus,
-                imeAction = if (showCode) androidx.compose.ui.text.input.ImeAction.Next else androidx.compose.ui.text.input.ImeAction.Done,
-                onImeAction = { if (showCode) codeFocus.requestFocus() else if (canSubmit && !busy) onSubmit() },
-            )
-            if (showCode) {
-                IMRowDivider(insetStart = d.space4)
-                CodeRow(
-                    value = code, onChange = onCode, recovery = recoveryMode,
-                    placeholder = stringResource(if (recoveryMode) R.string.twostep_field_recovery else R.string.twostep_field_code),
-                    enabled = !busy, focusRequester = codeFocus,
-                    onDone = { if (canSubmit && !busy) onSubmit() },
-                )
-            }
-        }
-        if (showCode) {
-            TwoStepLink(
-                stringResource(if (recoveryMode) R.string.twostep_use_code else R.string.twostep_use_recovery),
-                onToggleRecovery, Modifier.padding(horizontal = d.space4),
+            CodeRow(
+                value = code, onChange = onCode, recovery = recoveryMode,
+                placeholder = stringResource(if (recoveryMode) R.string.twostep_field_recovery else R.string.twostep_field_code),
+                enabled = !busy, focusRequester = codeFocus,
+                onDone = { if (canSubmit && !busy) onSubmit() },
             )
         }
+        TwoStepLink(
+            stringResource(if (recoveryMode) R.string.twostep_use_code else R.string.twostep_use_recovery),
+            onToggleRecovery, Modifier.padding(horizontal = d.space4),
+        )
         TwoStepNote(error, error = true)
         TwoStepNote(footer)
         Spacer(Modifier.height(d.space4 + d.space1))

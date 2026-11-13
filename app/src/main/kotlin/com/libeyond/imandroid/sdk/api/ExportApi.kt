@@ -62,8 +62,8 @@ data class ExportDownloadUrl(val url: String = "", @SerialName("expires_in") val
 /** 导出我的数据（DATA_EXPORT_DESIGN §2）。 */
 class ExportApi(private val http: HttpClient) {
 
-    suspend fun start(password: String, includeMedia: Boolean, formats: List<String>): ExportJob =
-        decode(http.call("POST", BASE, startBody(password, includeMedia, formats)), ExportJob.serializer())
+    suspend fun start(proof: Proof, includeMedia: Boolean, formats: List<String>): ExportJob =
+        decode(http.call("POST", BASE, startBody(proof, includeMedia, formats)), ExportJob.serializer())
 
     /** 最近一个任务；从没导出过为 null（`data:null`）。 */
     suspend fun latest(): ExportJob? = decodeOrNull(http.call("GET", "$BASE/latest"), ExportJob.serializer())
@@ -83,8 +83,8 @@ class ExportApi(private val http: HttpClient) {
     companion object {
         private const val BASE = "/api/v1/users/me/exports"
 
-        fun startBody(password: String, includeMedia: Boolean, formats: List<String>): JsonObject = buildJsonObject {
-            put("password", password)
+        fun startBody(proof: Proof, includeMedia: Boolean, formats: List<String>): JsonObject = buildJsonObject {
+            put("proof", proof.toJson())
             put("include_media", includeMedia)
             put("formats", buildJsonArray { formats.forEach { add(JsonPrimitive(it)) } })
         }

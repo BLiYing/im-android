@@ -28,8 +28,8 @@ data class EmailStatus(
 @Serializable
 data class EmailSendResult(
     @SerialName("expires_in") val expiresIn: Int = 600,
-    @SerialName("resend_after") val resendAfter: Int = 60,
-)
+    @SerialName("resend_after") override val resendAfter: Int = DEFAULT_RESEND_SEC,
+) : ResendHint
 
 /** `verify` 成功回包。 */
 @Serializable
@@ -46,28 +46,28 @@ class EmailApi(private val http: HttpClient) {
 
     suspend fun status(): EmailStatus = decode(http.call("GET", BASE), EmailStatus.serializer())
 
-    /** 验密码后发验证码（绑定 / 更换共用）。[lang]：`en` / `zh-Hans`，决定邮件语言。 */
-    suspend fun sendCode(email: String, password: String, lang: String): EmailSendResult =
-        decode(http.call("POST", "$BASE/send-code", sendBody(email, password, lang)), EmailSendResult.serializer())
+    /** 验身份（密码或短信验证码）后发验证码（绑定 / 更换共用）。[lang]：`en` / `zh-Hans`，决定邮件语言。 */
+    suspend fun sendCode(email: String, proof: Proof, lang: String): EmailSendResult =
+        decode(http.call("POST", "$BASE/send-code", sendBody(email, proof, lang)), EmailSendResult.serializer())
 
     suspend fun verify(email: String, code: String, lang: String): EmailBound =
         decode(http.call("POST", "$BASE/verify", verifyBody(email, code, lang)), EmailBound.serializer())
 
-    /** 解绑只要密码，不要邮箱验证码（邮箱可能已收不到）。 */
-    suspend fun unbind(password: String) {
-        http.call("POST", "$BASE/unbind", unbindBody(password))
+    /** 解绑只要身份证明，不要邮箱验证码（邮箱可能已收不到）。 */
+    suspend fun unbind(proof: Proof) {
+        http.call("POST", "$BASE/unbind", unbindBody(proof))
     }
 
     companion object {
         private const val BASE = "/api/v1/users/me/email"
 
-        internal fun sendBody(email: String, password: String, lang: String): JsonObject = buildJsonObject {
-            put("email", email); put("password", password); put("lang", lang)
+        internal fun sendBody(email: String, proof: Proof, lang: String): JsonObject = buildJsonObject {
+            put("email", email); put("proof", proof.toJson()); put("lang", lang)
         }
         internal fun verifyBody(email: String, code: String, lang: String): JsonObject = buildJsonObject {
             put("email", email); put("code", code); put("lang", lang)
         }
-        internal fun unbindBody(password: String): JsonObject = buildJsonObject { put("password", password) }
+        internal fun unbindBody(proof: Proof): JsonObject = buildJsonObject { put("proof", proof.toJson()) }
 
         /** 失败响应 `data.<key>` 的整数（`attempts_left` / `retry_after_sec`）；没有或不是整数返回 null。 */
         fun intField(e: ApiException, key: String): Int? = try {

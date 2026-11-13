@@ -68,9 +68,9 @@ object ExportRules {
         return exp in 1..nowMs
     }
 
-    /** 「开始导出」可用：密码非空、至少勾一种格式、不在提交中。 */
-    fun canStart(password: String, html: Boolean, json: Boolean, submitting: Boolean): Boolean =
-        password.isNotEmpty() && (html || json) && !submitting
+    /** 「开始导出」可用：至少勾一种格式、不在提交中（身份证明改在确认身份弹层里输，PHONE_AUTH_DESIGN §7.2）。 */
+    fun canStart(html: Boolean, json: Boolean, submitting: Boolean): Boolean =
+        (html || json) && !submitting
 
     /** 选中的格式（固定顺序 html, json）。 */
     fun formats(html: Boolean, json: Boolean): List<String> =

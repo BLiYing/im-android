@@ -62,11 +62,10 @@ class TwoStepRulesTest {
     @Test fun `提交码 恢复码模式归一化 动态码原样`() {
         assertEquals("k7m2q9xw3p", TwoStepRules.submitCode("K7M2Q-9XW3P", recoveryMode = true))
         assertEquals("123456", TwoStepRules.submitCode("123456", recoveryMode = false))
-        assertTrue(TwoStepRules.canSubmitVerify("pw", "123456", false))
-        assertFalse(TwoStepRules.canSubmitVerify("", "123456", false))
-        assertFalse(TwoStepRules.canSubmitVerify("pw", "12345", false))
-        assertTrue(TwoStepRules.canSubmitVerify("pw", "K7M2Q-9XW3P", true))
-        assertFalse(TwoStepRules.canSubmitVerify("pw", "123456", true))
+        assertTrue(TwoStepRules.canSubmitVerify("123456", false))
+        assertFalse(TwoStepRules.canSubmitVerify("12345", false))
+        assertTrue(TwoStepRules.canSubmitVerify("K7M2Q-9XW3P", true))
+        assertFalse(TwoStepRules.canSubmitVerify("123456", true))
     }
 
     @Test fun `密钥 4 位一组 复制时无分隔`() {

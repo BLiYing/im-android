@@ -10,7 +10,7 @@ enum class SettingsGlyph { Bookmark, Phone, Laptop, IdCard, Bell, Lock, HardDriv
 enum class SettingsTint { Blue, Green, Orange, Red, Gray, Yellow, Purple, Teal }
 
 /** 「隐私与安全」内部页（原先是 PrivacySecurityHost 的私有枚举，搜索落点需要从外面指定）。 */
-enum class PrivacyPage { Main, Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone, TwoStep, Email }
+enum class PrivacyPage { Main, Blocked, ChangePassword, AutoDelete, LastSeen, Avatar, Bio, Phone, TwoStep, Email, LoginPhone }
 
 /**
  * 二级页内的落点（[SettingsRoute.page] 之下再深的那几层）。`None` = 只开到「我」页的一级页。
@@ -102,8 +102,10 @@ object SettingsSearchIndex {
         // 隐私与安全
         add(SettingsSearchEntry("privacy_blocked", Str.s(R.string.blocked_title), listOf(privacy, Str.s(R.string.blocked_title)), SettingsGlyph.Ban, SettingsTint.Red,
             SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.Blocked))))
-        add(SettingsSearchEntry("privacy_password", Str.s(R.string.settings_change_password), listOf(privacy, Str.s(R.string.settings_change_password)), SettingsGlyph.Key, SettingsTint.Blue,
-            SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.ChangePassword))))
+        // 行名改为「登录密码」（PHONE_AUTH_DESIGN §6）；「修改密码」留作同义词，老用户照旧搜得到
+        add(SettingsSearchEntry("privacy_password", Str.s(R.string.security_password), listOf(privacy, Str.s(R.string.security_password)), SettingsGlyph.Key, SettingsTint.Blue,
+            SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.ChangePassword)),
+            aliases = listOf(Str.s(R.string.settings_change_password), Str.s(R.string.security_password_set_title))))
 
         add(SettingsSearchEntry("privacy_two_step", Str.s(R.string.ps_row_two_factor), listOf(privacy, Str.s(R.string.ps_row_two_factor)), SettingsGlyph.ShieldCheck, SettingsTint.Gray,
             SettingsRoute(MePage.Privacy, SettingsSub.Privacy(PrivacyPage.TwoStep))))

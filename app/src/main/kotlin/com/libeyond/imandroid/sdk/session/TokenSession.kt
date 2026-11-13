@@ -139,7 +139,7 @@ class TokenSession(
         }
         try {
             val r = auth.refresh(cred)
-            store.save(r.token, r.uid, r.refreshToken, null)
+            store.saveRefreshed(r.token, r.uid, r.refreshToken)
             IMLog.currentUid = r.uid
             log.i("session_refreshed", "uid" to r.uid)
             RefreshOutcome.Ok
@@ -154,9 +154,9 @@ class TokenSession(
         }
     }
 
-    /** 登录成功后写入会话。 */
+    /** 登录成功后写入会话（[username] 只认服务端响应里的，见 [SessionStore.saveLogin]）。 */
     fun adopt(token: String, uid: String, refreshToken: String?, username: String?) {
-        store.save(token, uid, refreshToken, username)
+        store.saveLogin(token, uid, refreshToken, username)
         IMLog.currentUid = uid
     }
 

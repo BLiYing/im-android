@@ -11,13 +11,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LoginTwoStepTest {
-    private fun flow() = LoginTwoStep().also { it.begin(TwoStepChallenge("tk"), "twostep01") }
+    private fun flow() = LoginTwoStep().also { it.begin(TwoStepChallenge("tk")) }
 
     @Test fun `开始后进二步页 丢弃后 ticket 与用户名都没了`() {
         val f = flow()
         assertTrue(f.active); assertEquals("tk", f.challenge!!.ticket)
         f.drop()
-        assertFalse(f.active); assertNull(f.challenge); assertEquals("", f.username)
+        assertFalse(f.active); assertNull(f.challenge)
     }
 
     @Test fun `码错留在本页 failTick 加一 剩余次数小于等于 2 才提示`() {

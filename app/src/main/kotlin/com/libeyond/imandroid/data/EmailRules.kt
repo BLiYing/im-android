@@ -20,8 +20,6 @@ enum class EmailErrorKind {
 object EmailRules {
     /** 邮箱总长上限（与服务端 §3.4 一致；权威校验在服务端）。 */
     const val MAX_LEN = 254
-    /** `send-code` 回包没带 `resend_after` 时的重发间隔（秒）。 */
-    const val DEFAULT_RESEND_SEC = 60
     /** 验证码错时，剩余次数 ≤ 此值才提示。 */
     const val ATTEMPTS_HINT_MAX = 2
 
@@ -37,9 +35,11 @@ object EmailRules {
         return '.' in s.substring(at + 1)
     }
 
-    /** 「发送验证码」按钮可点：两格都有内容（格式不合规留到点击后红字，不在这里置灰）。 */
-    fun canSend(email: String, password: String, busy: Boolean): Boolean =
-        !busy && email.isNotBlank() && password.isNotEmpty()
+    /**
+     * 「发送验证码」按钮可点：邮箱有内容（格式不合规留到点击后红字，不在这里置灰）。
+     * 身份证明点了之后在确认身份弹层里输（PHONE_AUTH_DESIGN §7.2）。
+     */
+    fun canSend(email: String, busy: Boolean): Boolean = !busy && email.isNotBlank()
 
     /** 请求语言：`en` / `zh-Hans`（与 App 当前文案同源）。 */
     fun lang(): String = if (Str.languageTag == "en") "en" else "zh-Hans"

@@ -62,6 +62,16 @@ object ErrorText {
         ErrCode.TRANSCRIBE_DISABLED -> R.string.err_500101
         ErrCode.TRANSCRIBE_FAILED -> R.string.err_500102
         ErrCode.TRANSCRIBE_BUSY -> R.string.err_500103
+        // 短信验证码（带参数的 attempts_left / retry_after_sec 版本在 [SmsErrors]）
+        ErrCode.SMS_UNAVAILABLE -> R.string.err_200040
+        ErrCode.PHONE_INVALID -> R.string.err_200041
+        ErrCode.PHONE_TAKEN -> R.string.err_200042
+        ErrCode.SMS_CODE_INVALID -> R.string.err_200043
+        ErrCode.SMS_CODE_EXPIRED -> R.string.err_200044
+        ErrCode.SMS_SEND_FAILED -> R.string.err_200045
+        ErrCode.SMS_DAILY_CAP -> R.string.err_200046
+        ErrCode.PHONE_NOT_REGISTERED -> R.string.err_200047
+        ErrCode.PHONE_TICKET_INVALID -> R.string.err_200048
         ErrCode.RATE_LIMITED -> R.string.err_100002
         ErrCode.CONTENT_BLOCKED -> R.string.err_100004
         else -> null

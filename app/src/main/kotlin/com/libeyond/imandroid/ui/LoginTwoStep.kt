@@ -18,15 +18,14 @@ import com.libeyond.imandroid.sdk.http.ApiException
 class LoginTwoStep {
     /** 非 null = 正在二步页。 */
     var challenge by mutableStateOf<TwoStepChallenge?>(null); private set
-    var username by mutableStateOf(""); private set
     /** 每次提交被拒 +1，二步页据此清空并重新聚焦输入框。 */
     var failTick by mutableIntStateOf(0); private set
 
     val active: Boolean get() = challenge != null
 
-    fun begin(c: TwoStepChallenge, user: String) { challenge = c; username = user; failTick = 0 }
+    fun begin(c: TwoStepChallenge) { challenge = c; failTick = 0 }
 
-    fun drop() { challenge = null; username = ""; failTick = 0 }
+    fun drop() { challenge = null; failTick = 0 }
 
     /** 提交被拒后的处置：ticket 失效回密码页（[Outcome.BackToPassword]）；其余留在本页并清空输入。 */
     fun onRejected(e: ApiException): Outcome {

@@ -46,8 +46,8 @@ class ExportApiTest {
     }
 
     @Test fun `发起请求体字段名与格式数组`() {
-        val b = ExportApi.startBody("pw", true, listOf("html", "json"))
-        assertEquals("pw", b["password"]!!.jsonPrimitive.content)
+        val b = ExportApi.startBody(Proof.Password("pw"), true, listOf("html", "json"))
+        assertEquals("pw", b["proof"]!!.jsonObject["password"]!!.jsonPrimitive.content)
         assertEquals("true", b["include_media"]!!.jsonPrimitive.content)
         assertEquals(listOf("html", "json"), b["formats"]!!.jsonArray.map { it.jsonPrimitive.content })
     }
